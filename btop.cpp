@@ -142,7 +142,8 @@ namespace State {
 	atomic<bool> MenuActive(false);
 };
 
-namespace Fx { //? Collection of escape codes for text style and formatting
+//* Collection of escape codes for text style and formatting
+namespace Fx {
 	const string e = "\x1b[";		//* Escape sequence start
 	const string r = e + "0m";		//* Reset foreground/background color and text effects
 	const string b = e + "1m";		//* Bold on
@@ -159,70 +160,109 @@ namespace Fx { //? Collection of escape codes for text style and formatting
 	const string us = e + "29m";	//* Strike / crossed-out off
 };
 
-namespace Mv { //? Collection of escape codes and functions for cursor manipulation
-	string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}	//* Move cursor to line, column
+//* Collection of escape codes and functions for cursor manipulation
+namespace Mv {
+	string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}		//* Move cursor to line, column
 	string r(int x){ return Fx::e + to_string(x) + "C";}											//* Move cursor right x columns
 	string l(int x){ return Fx::e + to_string(x) + "D";}											//* Move cursor left x columns
 	string u(int x){ return Fx::e + to_string(x) + "A";}											//* Move cursor up x lines
-	string d(int x) { return Fx::e + to_string(x) + "B";}										//* Move cursor down x lines
-	const string save = Fx::e + "s";																	//* Save cursor position
+	string d(int x) { return Fx::e + to_string(x) + "B";}											//* Move cursor down x lines
+	const string save = Fx::e + "s";																//* Save cursor position
 	const string restore = Fx::e + "u";																//* Restore saved cursor postion
 };
 
 //? --------------------------------------- FUNCTIONS, STRUCTS & CLASSES ----------------------------------------------
 
-inline size_t ulen(const string& str){ //? Return number of UTF8 characters in a string
+//* Return number of UTF8 characters in a string
+inline size_t ulen(const string& str){
 		size_t len = 0;
 		for (char c : str) if ((c & 0xC0) != 0x80) ++len;
 		return len;
 }
 
-string color_to_string(string hexa="", unsigned r=0, unsigned g=0, unsigned b=0, string depth="fg"){
-	//? Generate escape sequence for 24-bit color and return as a string
-	//? Accepted arguments: hexa="#000000" to "#ffffff" for color, or "#00" to "#ff" for greyscale
-	//? Or: r=0-255, g=0-255, b=0-255
-	//? depth=string "fg" or "bg" for either a foreground color or a background color
-	depth = (depth == "fg") ? "38" : "48";
+//* Convert 24-bit color to 256 color
+int truecolor_to_256(unsigned r, unsigned g, unsigned b){
+	if (r / 11 == g / 11 && g / 11 == b / 11) {
+		return 232 + r / 11;
+	} else {
+		return round((float)(r / 51)) * 36 + round((float)(g / 51)) * 6 + round((float)(b / 51)) + 16;
+	}
+}
+
+//* Generate escape sequence for 24-bit or 256 color and return as a string
+//* Args	hexa: ["#000000"-"#ffffff"] for color, ["#00"-"#ff"] for greyscale
+//*			t_to_256: [true|false] convert 24bit value to 256 color value
+//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
+string hex_to_color(string hexa="", bool t_to_256=false, string depth="fg"){
 	if (hexa.size() > 1){
 		hexa.erase(0, 1);
 		for (auto& c : hexa) if (!isxdigit(c)) return "";
+		depth = (depth == "fg") ? "38" : "48";
+		string pre = Fx::e + depth + ";";
+		pre += (t_to_256) ? "5;" : "2;";
 
 		if (hexa.size() == 2){
-			string h_str = ";" + to_string(stoi(hexa, 0, 16));
-			return Fx::e + depth + ";2" + h_str + h_str + h_str + "m";
+			unsigned h_int = stoi(hexa, 0, 16);
+			if (t_to_256){
+				return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
+			} else {
+				string h_str = to_string(h_int);
+				return pre + h_str + h_str + h_str + h_str + "m";
+			}
 		}
 		else if (hexa.size() == 6){
-			return Fx::e + depth + ";2" + ";" +
-			to_string(stoi(hexa.substr(0, 2), 0, 16)) + ";" +
-			to_string(stoi(hexa.substr(2, 2), 0, 16)) + ";" +
-			to_string(stoi(hexa.substr(4, 2), 0, 16)) + "m";
+			if (t_to_256){
+				return pre + to_string(truecolor_to_256(
+					stoi(hexa.substr(0, 2), 0, 16),
+					stoi(hexa.substr(0, 2), 0, 16),
+					stoi(hexa.substr(0, 2), 0, 16))) + "m";
+			} else {
+				return pre +
+					to_string(stoi(hexa.substr(0, 2), 0, 16)) + ";" +
+					to_string(stoi(hexa.substr(2, 2), 0, 16)) + ";" +
+					to_string(stoi(hexa.substr(4, 2), 0, 16)) + "m";
+			}
 		}
-	} else if (r && g && b){
-		r = (r > 255) ? 255 : r;
-		g = (g > 255) ? 255 : g;
-		b = (b > 255) ? 255 : b;
-		return Fx::e + depth + ";2" + ";" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 	}
 	return "";
 }
 
-string ltrim(string str, string t_str = " "){ //? Left-trim <t_str> from <str> and return string
+//* Generate escape sequence for 24-bit or 256 color and return as a string
+//* Args	r: [0-255], g: [0-255], b: [0-255]
+//*			t_to_256: [true|false] convert 24bit value to 256 color value
+//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
+string dec_to_color(unsigned r=0, unsigned g=0, unsigned b=0, bool t_to_256=false, string depth="fg"){
+	depth = (depth == "fg") ? "38" : "48";
+	string pre = Fx::e + depth + ";";
+	pre += (t_to_256) ? "5;" : "2;";
+	r = (r > 255) ? 255 : r;
+	g = (g > 255) ? 255 : g;
+	b = (b > 255) ? 255 : b;
+	if (t_to_256) return pre + to_string(truecolor_to_256(r, g, b)) + "m";
+	else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
+}
+
+//* Left-trim <t_str> from <str> and return string
+string ltrim(string str, string t_str = " "){
 	size_t t_str_size = t_str.size();
 	while (str.substr(0, t_str_size) == t_str) str.erase(0, t_str_size);
 	return str;
 }
 
-string rtrim(string str, string t_str = " "){ //? Right-trim <t_str> from <str> and return string
+//* Right-trim <t_str> from <str> and return string
+string rtrim(string str, string t_str = " "){
 	size_t t_str_size = t_str.size();
 	while (str.substr(str.size() - t_str_size, t_str_size) == t_str) str.erase(str.size() - t_str_size, t_str_size);
 	return str;
 }
 
-string trim(string str, string t_str = " "){ //? Left-right-trim <t_str> from <str> and return string
+//* Left-right-trim <t_str> from <str> and return string
+string trim(string str, string t_str = " "){
 	return ltrim(rtrim(str, t_str), t_str);
 }
 
-vector<string> ssplit(string str, string delim = " ", int times = 0){ //? Split <string> at <delim> <times> (0 for unlimited) times and return vector
+//* Split <string> at <delim> <times> (0 for unlimited) times and return vector
+vector<string> ssplit(string str, string delim = " ", int times = 0){
 	vector<string> out;
 	if (str != "" && delim != ""){
 		size_t pos = 0;
@@ -267,7 +307,7 @@ public:
 	const string alt_screen = Fx::e + "?1049h";										//* Switch to alternate screen
 	const string normal_screen = Fx::e + "?1049l";									//* Switch to normal screen
 	const string clear = Fx::e + "2J" + Fx::e + "0;0f";								//* Clear screen and set cursor to position 0,0
-	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; 	//* Enable reporting of mouse position on click and release
+	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //* Enable reporting of mouse position on click and release
 	const string mouse_off = "\033[?1002l"; 										//* Disable mouse reporting
 	const string mouse_direct_on = "\033[?1003h";									//* Enable reporting of mouse position at any movement
 	const string mouse_direct_off = "\033[?1003l";									//* Disable direct mouse reporting
@@ -323,7 +363,7 @@ public:
 
 C_Term Term; //* Make C_Term globally available as Term
 
-struct C_Key {
+struct C_Key { //? Functions and variables for handling keyboard and mouse input
 	string last = "";
 
 	const map<string, string> KEY_ESCAPES = {
@@ -362,11 +402,14 @@ struct C_Key {
 		{"[24~",	"f12"}
 	};
 
-	bool wait(unsigned timeout_ms=0){
+	//? Wait <timeout> ms for input on stdin and return true if available
+	//? <timeout> = 0 to just check for input
+	//? <timeout> = -1 for infinite wait
+	bool wait(int timeout=0){
 		struct pollfd pls[1];
 		pls[ 0 ].fd = STDIN_FILENO;
 		pls[ 0 ].events = POLLIN | POLLPRI;
-		return poll(pls, 1, timeout_ms) > 0;
+		return poll(pls, 1, timeout) > 0;
 	}
 
 	string get(){
@@ -382,8 +425,8 @@ struct C_Key {
 		return key;
 	}
 
-	string operator()(unsigned timeout_ms=0){
-		if (this->wait(timeout_ms)) {
+	string operator()(int timeout=0){
+		if (this->wait(timeout)) {
 			return this->get();
 		} else {
 		return "";
@@ -391,19 +434,26 @@ struct C_Key {
 	}
 };
 
-C_Key Key;
+C_Key Key; //* Make C_Key globally available as Key
 
 class C_Theme {
 	map<string, string> c;
 	map<string, vector<string>> g;
 
+	//* Generate theme from <source> map, default to DEFAULT_THEME on missing or malformatted values
 	map<string,string> generate(map<string, string>& source){
-		//? Generate theme from <source> map, default to DEFAULT_THEME on missing or malformatted values
 		map<string, string> out;
+		vector<string> t_rgb;
 		for (auto& item : DEFAULT_THEME) {
-			if (source.count(item.first)) out[item.first] = color_to_string(source.at(item.first));
+			if (source.count(item.first)) {
+				if (source.at(item.first)[0] == '#') out[item.first] = hex_to_color(source.at(item.first));
+				else {
+					t_rgb = ssplit(source.at(item.first), " ");
+					out[item.first] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]));
+				}
+			}
 			else out[item.first] = "";
-			if (out[item.first] == "") out[item.first] = color_to_string(item.second);
+			if (out[item.first] == "") out[item.first] = hex_to_color(item.second);
 		}
 		return out;
 	}
@@ -438,10 +488,12 @@ struct C_Banner {
 	C_Banner(){
 		size_t z = 0;
 		string b_color, bg, fg, out, oc, letter;
+		int bg_i;
 		this->banner_str = "";
 		for (auto line: BANNER_SRC) {
-			fg = color_to_string(line[0]);
-			bg = color_to_string("#" + to_string(80-z*6));
+			fg = hex_to_color(line[0]);
+			bg_i = 120-z*12;
+			bg = dec_to_color(bg_i, bg_i, bg_i);
 			for (unsigned i = 0; i < line[1].size(); i += 3) {
 				if (line[1][i] == ' '){
 					letter = ' ';
@@ -585,7 +637,7 @@ int main(int argc, char **argv){
 	// }
 
 	if (tests>3){
-		auto nbcolor = color_to_string(DEFAULT_THEME.at("net_box"));
+		auto nbcolor = hex_to_color(DEFAULT_THEME.at("net_box"));
 		auto nbcolor_rgb = c_to_rgb(nbcolor);
 		auto nbcolor_man = ssplit(nbcolor, ";");
 		cout << nbcolor << "Some color" << Fx::r << " Normal Color" << endl;
@@ -593,7 +645,7 @@ int main(int argc, char **argv){
 		cout << "R:" << nbcolor_rgb.at("r") << " G:" << nbcolor_rgb.at("g") << " B:" << nbcolor_rgb.at("b") << endl;
 		cout << "MANUAL R:" << nbcolor_man.at(2) << " G:" << nbcolor_man.at(3) << " B:" << nbcolor_man.at(4) << endl;
 
-		auto ccc = color_to_string("", 100, 255, 100);
+		auto ccc = dec_to_color(100, 255, 100);
 		cout << "\n" << ccc << "Testing..." << Fx::r << " normal." << endl;
 	}
 
