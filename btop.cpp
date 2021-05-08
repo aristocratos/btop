@@ -97,7 +97,7 @@ const map<string, string> DEFAULT_THEME = {
 	{ "process_end", "#d45454" }
 };
 
-map<string, map<string, vector<string>>> MENUS = {
+const map<string, map<string, vector<string>>> MENUS = {
 	{ "options", {
 		{ "normal",
 			{ "┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",
@@ -136,13 +136,17 @@ map<string, map<string, vector<string>>> MENUS = {
 	} }
 };
 
+#define Bool bool()
+#define Int int()
+#define String string()
+
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
 namespace State {
 	atomic<bool> MenuActive(false);
 };
 
-//* Collection of escape codes for text style and formatting
+//? Collection of escape codes for text style and formatting
 namespace Fx {
 	const string e = "\x1b[";		//* Escape sequence start
 	const string r = e + "0m";		//* Reset foreground/background color and text effects
@@ -160,7 +164,7 @@ namespace Fx {
 	const string us = e + "29m";	//* Strike / crossed-out off
 };
 
-//* Collection of escape codes and functions for cursor manipulation
+//? Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}		//* Move cursor to line, column
 	string r(int x){ return Fx::e + to_string(x) + "C";}											//* Move cursor right x columns
@@ -173,14 +177,48 @@ namespace Mv {
 
 //? --------------------------------------- FUNCTIONS, STRUCTS & CLASSES ----------------------------------------------
 
-//* Return number of UTF8 characters in a string
+//? A simple argument parser
+void argumentParser(int argc, char **argv){
+	string argument;
+	for(int i = 1; i < argc; i++) {
+		argument = argv[i];
+		if (argument == "-v" || argument == "--version") {
+			cout << "btop version: " << VERSION << endl;
+			exit(0);
+		} else if (argument == "-h" || argument == "--help") {
+			cout << "help here" << endl;
+			exit(0);
+		} else {
+			cout << " Unknown argument: " << argument << "\n" <<
+			" Use -h or --help for help." <<  endl;
+			exit(1);
+		}
+	}
+}
+
+//? Return number of UTF8 characters in a string
 inline size_t ulen(const string& str){
 		size_t len = 0;
 		for (char c : str) if ((c & 0xC0) != 0x80) ++len;
 		return len;
 }
 
-//* Convert 24-bit color to 256 color
+//? Return current time since epoch in milliseconds
+uint64_t time_ms(){
+	return chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+}
+
+//? Check if a string is a valid bool value
+bool isbool(string str){
+	return (str == "true") | (str == "false") | (str == "True") | (str == "False");
+}
+
+//? Check if a string is a valid integer value
+bool isint(string str){
+	return all_of(str.begin(), str.end(), ::isdigit);
+}
+
+//? Convert 24-bit colors to 256 colors using 6x6x6 color cube
 int truecolor_to_256(unsigned r, unsigned g, unsigned b){
 	if (r / 11 == g / 11 && g / 11 == b / 11) {
 		return 232 + r / 11;
@@ -189,11 +227,11 @@ int truecolor_to_256(unsigned r, unsigned g, unsigned b){
 	}
 }
 
-//* Generate escape sequence for 24-bit or 256 color and return as a string
-//* Args	hexa: ["#000000"-"#ffffff"] for color, ["#00"-"#ff"] for greyscale
-//*			t_to_256: [true|false] convert 24bit value to 256 color value
-//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-string hex_to_color(string hexa="", bool t_to_256=false, string depth="fg"){
+//? Generate escape sequence for 24-bit or 256 color and return as a string
+//? Args	hexa: ["#000000"-"#ffffff"] for color, ["#00"-"#ff"] for greyscale
+//?			t_to_256: [true|false] convert 24bit value to 256 color value
+//? 		depth: ["fg"|"bg"] for either a foreground color or a background color
+string hex_to_color(string hexa, bool t_to_256=false, string depth="fg"){
 	if (hexa.size() > 1){
 		hexa.erase(0, 1);
 		for (auto& c : hexa) if (!isxdigit(c)) return "";
@@ -207,15 +245,15 @@ string hex_to_color(string hexa="", bool t_to_256=false, string depth="fg"){
 				return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 			} else {
 				string h_str = to_string(h_int);
-				return pre + h_str + h_str + h_str + h_str + "m";
+				return pre + h_str + ";" + h_str + ";" + h_str + "m";
 			}
 		}
 		else if (hexa.size() == 6){
 			if (t_to_256){
 				return pre + to_string(truecolor_to_256(
 					stoi(hexa.substr(0, 2), 0, 16),
-					stoi(hexa.substr(0, 2), 0, 16),
-					stoi(hexa.substr(0, 2), 0, 16))) + "m";
+					stoi(hexa.substr(2, 2), 0, 16),
+					stoi(hexa.substr(4, 2), 0, 16))) + "m";
 			} else {
 				return pre +
 					to_string(stoi(hexa.substr(0, 2), 0, 16)) + ";" +
@@ -227,11 +265,11 @@ string hex_to_color(string hexa="", bool t_to_256=false, string depth="fg"){
 	return "";
 }
 
-//* Generate escape sequence for 24-bit or 256 color and return as a string
-//* Args	r: [0-255], g: [0-255], b: [0-255]
-//*			t_to_256: [true|false] convert 24bit value to 256 color value
-//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-string dec_to_color(unsigned r=0, unsigned g=0, unsigned b=0, bool t_to_256=false, string depth="fg"){
+//? Generate escape sequence for 24-bit or 256 color and return as a string
+//? Args	r: [0-255], g: [0-255], b: [0-255]
+//?			t_to_256: [true|false] convert 24bit value to 256 color value
+//? 		depth: ["fg"|"bg"] for either a foreground color or a background color
+string dec_to_color(unsigned r, unsigned g, unsigned b, bool t_to_256=false, string depth="fg"){
 	depth = (depth == "fg") ? "38" : "48";
 	string pre = Fx::e + depth + ";";
 	pre += (t_to_256) ? "5;" : "2;";
@@ -242,26 +280,24 @@ string dec_to_color(unsigned r=0, unsigned g=0, unsigned b=0, bool t_to_256=fals
 	else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 }
 
-//* Left-trim <t_str> from <str> and return string
+//? Left-trim <t_str> from <str> and return string
 string ltrim(string str, string t_str = " "){
-	size_t t_str_size = t_str.size();
-	while (str.substr(0, t_str_size) == t_str) str.erase(0, t_str_size);
+	while (str.starts_with(t_str)) str.erase(0, t_str.size());
 	return str;
 }
 
-//* Right-trim <t_str> from <str> and return string
+//? Right-trim <t_str> from <str> and return string
 string rtrim(string str, string t_str = " "){
-	size_t t_str_size = t_str.size();
-	while (str.substr(str.size() - t_str_size, t_str_size) == t_str) str.erase(str.size() - t_str_size, t_str_size);
+	while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
 	return str;
 }
 
-//* Left-right-trim <t_str> from <str> and return string
+//? Left-right-trim <t_str> from <str> and return string
 string trim(string str, string t_str = " "){
 	return ltrim(rtrim(str, t_str), t_str);
 }
 
-//* Split <string> at <delim> <times> (0 for unlimited) times and return vector
+//? Split <string> at <delim> <times> (0 for unlimited) times and return vector
 vector<string> ssplit(string str, string delim = " ", int times = 0){
 	vector<string> out;
 	if (str != "" && delim != ""){
@@ -279,7 +315,8 @@ vector<string> ssplit(string str, string delim = " ", int times = 0){
 	return out;
 }
 
-map<string, int> c_to_rgb(string c_string){ //? Return a map of "r", "g", "b", 0-255 values for a 24-bit color escape string
+//? Return a map of "r", "g", "b", 0-255 values for a 24-bit color escape string
+map<string, int> c_to_rgb(string c_string){
 	map<string, int> rgb = {{"r", 0}, {"g", 0}, {"b", 0}};
 	if (c_string.size() >= 14){
 		c_string.erase(0, 7);
@@ -293,7 +330,8 @@ map<string, int> c_to_rgb(string c_string){ //? Return a map of "r", "g", "b", 0
 	return rgb;
 }
 
-class C_Term { //? Collection of escape codes and functions for terminal manipulation
+//? Collection of escape codes and functions for terminal manipulation
+class C_Term {
 	bool initialized = false;
 	struct termios initial_settings;
 public:
@@ -308,24 +346,27 @@ public:
 	const string normal_screen = Fx::e + "?1049l";									//* Switch to normal screen
 	const string clear = Fx::e + "2J" + Fx::e + "0;0f";								//* Clear screen and set cursor to position 0,0
 	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //* Enable reporting of mouse position on click and release
-	const string mouse_off = "\033[?1002l"; 										//* Disable mouse reporting
-	const string mouse_direct_on = "\033[?1003h";									//* Enable reporting of mouse position at any movement
-	const string mouse_direct_off = "\033[?1003l";									//* Disable direct mouse reporting
+	const string mouse_off = Fx::e + "?1002l"; 										//* Disable mouse reporting
+	const string mouse_direct_on = Fx::e + "?1003h";									//* Enable reporting of mouse position at any movement
+	const string mouse_direct_off = Fx::e + "?1003l";									//* Disable direct mouse reporting
 
-	bool init(){ //? Save terminal options and check valid tty
-		if (!this->initialized){
-			this->initialized = (bool)isatty(STDIN_FILENO);
-			if (this->initialized) this->initialized = (0 == tcgetattr(STDIN_FILENO, &this->initial_settings));
-			if (this->initialized) cin.sync_with_stdio();
+	//? Save terminal options and check valid tty
+	bool init(){
+		if (!initialized){
+			initialized = (bool)isatty(STDIN_FILENO);
+			if (initialized) initialized = (0 == tcgetattr(STDIN_FILENO, &initial_settings));
+			if (initialized) cin.sync_with_stdio();
 		}
 		return initialized;
 	}
 
-	void restore(){ //? Restore terminal options
-		if (this->initialized) tcsetattr(STDIN_FILENO, TCSANOW, &this->initial_settings);
+	//? Restore terminal options
+	void restore(){
+		if (initialized) tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
 	}
 
-	bool linebuffered(bool on=true){ //? Toggle need for return key when reading input
+	//? Toggle need for return key when reading input
+	bool linebuffered(bool on=true){
 		struct termios settings;
 		if (tcgetattr(STDIN_FILENO, &settings)) return false;
 		if (on) settings.c_lflag |= ICANON;
@@ -336,7 +377,8 @@ public:
 		return true;
 	}
 
-	bool echo(bool on=true){ //? Toggle terminal input echo
+	//? Toggle terminal input echo
+	bool echo(bool on=true){
 		struct termios settings;
 		if (tcgetattr(STDIN_FILENO, &settings)) return false;
 		if (on) settings.c_lflag |= ECHO;
@@ -344,28 +386,102 @@ public:
 		return 0 == tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 	}
 
-	bool refresh(){ //? Refresh variables holding current terminal width and height and return true if resized
+	//? Refresh variables holding current terminal width and height and return true if resized
+	bool refresh(){
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-		this->resized = (this->width != w.ws_col || this->height != w.ws_row) ? true : false;
-		this->width = w.ws_col;
-		this->height = w.ws_row;
+		resized = (width != w.ws_col || height != w.ws_row) ? true : false;
+		width = w.ws_col;
+		height = w.ws_row;
 		return resized;
 	}
 
 	C_Term() {
-		this->init();
-		this->refresh();
-		this->resized = false;
+		init();
+		refresh();
+		resized = false;
 	}
 
 };
 
 C_Term Term; //* Make C_Term globally available as Term
 
-struct C_Key { //? Functions and variables for handling keyboard and mouse input
-	string last = "";
+class C_Config {
+	map<string, string> strings = {
+		{"color_theme", "Default"},
+		{"shown_boxes", "cpu mem net proc"},
+		{"proc_sorting", "cpu lazy"},
+		{"cpu_graph_upper", "total"},
+		{"cpu_graph_lower", "total"},
+		{"cpu_sensor", "Auto"},
+		{"temp_scale", "celsius"},
+		{"draw_clock", "%X"},
+		{"custom_cpu_name", ""},
+		{"disks_filter", ""},
+		{"io_graph_speeds", ""},
+		{"net_download", "10M"},
+		{"net_upload", "10M"},
+		{"net_iface", ""},
+		{"log_level", "WARNING"}
+	};
+	map<string, bool> bools = {
+		{"theme_background", true},
+		{"truecolor", true},
+		{"proc_reversed", false},
+		{"proc_tree", false},
+		{"proc_colors", true},
+		{"proc_gradient", true},
+		{"proc_per_core", false},
+		{"proc_mem_bytes", true},
+		{"cpu_invert_lower", true},
+		{"cpu_single_graph", false},
+		{"show_uptime", true},
+		{"check_temp", true},
+		{"show_coretemp", true},
+		{"show_cpu_freq", true},
+		{"background_update", true},
+		{"update_check", true},
+		{"mem_graphs", true},
+		{"show_swap", true},
+		{"swap_disk", true},
+		{"show_disks", true},
+		{"only_physical", true},
+		{"use_fstab", false},
+		{"show_io_stat", true},
+		{"io_mode", false},
+		{"io_graph_combined", false},
+		{"net_color_fixed", false},
+		{"net_auto", true},
+		{"net_sync", false},
+		{"show_battery", true},
+		{"show_init", false}
+	};
+	map<string, int> ints = {
+		{"update_ms", 2000},
+		{"proc_update_mult", 2},
+		{"tree_depth", 3}
+	};
+public:
+	C_Config(){
+		bools["truecolor"] = "true";
+		strings["color_theme"] = "Default";
+		ints["tree_depth"] = 3;
+	}
+	bool operator()(bool b_type, string name){
+		return bools.at(name);
+	}
+	int operator()(int i_type, string name){
+		return ints.at(name);
+	}
+	string operator()(string s_type, string name){
+		return strings.at(name);
+	}
+};
 
+C_Config Config;
+
+//? Functions and variables for handling keyboard and mouse input
+class C_Key {
 	const map<string, string> KEY_ESCAPES = {
 		{"\033",	"escape"},
 		{"\n",		"enter"},
@@ -402,9 +518,6 @@ struct C_Key { //? Functions and variables for handling keyboard and mouse input
 		{"[24~",	"f12"}
 	};
 
-	//? Wait <timeout> ms for input on stdin and return true if available
-	//? <timeout> = 0 to just check for input
-	//? <timeout> = -1 for infinite wait
 	bool wait(int timeout=0){
 		struct pollfd pls[1];
 		pls[ 0 ].fd = STDIN_FILENO;
@@ -414,23 +527,33 @@ struct C_Key { //? Functions and variables for handling keyboard and mouse input
 
 	string get(){
 		string key = "";
-		while (this->wait() && key.size() < 100) key += cin.get();
+		while (wait() && key.size() < 100) key += cin.get();
 		if (key != ""){
-			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
-			if (this->KEY_ESCAPES.count(key)) key = this->KEY_ESCAPES.at(key);
+			if (key.starts_with(Fx::e)) key.erase(0, 1);
+			if (KEY_ESCAPES.count(key)) key = KEY_ESCAPES.at(key);
 			else if (ulen(key) > 1) key = "";
-
-			this->last = key;
 		}
 		return key;
 	}
+public:
+	string last = "";
 
-	string operator()(int timeout=0){
-		if (this->wait(timeout)) {
-			return this->get();
+	//? Wait <timeout> ms for input on stdin and return true if available
+	//? 0 to just check for input
+	//? -1 for infinite wait
+	bool operator()(int timeout){
+		if (wait(timeout)) {
+			last = get();
+			return true;
 		} else {
-		return "";
+			last = "";
+			return false;
 		}
+	}
+
+	//? Return last entered key
+	string operator()(){
+		return last;
 	}
 };
 
@@ -440,57 +563,68 @@ class C_Theme {
 	map<string, string> c;
 	map<string, vector<string>> g;
 
-	//* Generate theme from <source> map, default to DEFAULT_THEME on missing or malformatted values
 	map<string,string> generate(map<string, string>& source){
 		map<string, string> out;
 		vector<string> t_rgb;
+		string depth;
 		for (auto& item : DEFAULT_THEME) {
+			depth = (item.first.ends_with("bg")) ? "bg" : "fg";
 			if (source.count(item.first)) {
-				if (source.at(item.first)[0] == '#') out[item.first] = hex_to_color(source.at(item.first));
+				if (source.at(item.first)[0] == '#') out[item.first] = hex_to_color(source.at(item.first), !Config(Bool, "truecolor"), depth);
 				else {
 					t_rgb = ssplit(source.at(item.first), " ");
-					out[item.first] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]));
+					out[item.first] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !Config(Bool, "truecolor"), depth);
 				}
 			}
 			else out[item.first] = "";
-			if (out[item.first] == "") out[item.first] = hex_to_color(item.second);
+			if (out[item.first] == "") out[item.first] = hex_to_color(item.second, !Config(Bool, "truecolor"), depth);
 		}
 		return out;
 	}
 
 public:
 
-	void swap(map<string, string> source){
-		this->c = this->generate(source);
+	void swap(map<string, string>& source){
+		c = generate(source);
+		Term.fg = c.at("main_fg");
+		Term.bg = c.at("main_bg");
 	}
 
+	//? Generate theme from <source> map, default to DEFAULT_THEME on missing or malformatted values
 	C_Theme(map<string, string> source){
-		this->c = this->generate(source);
+		swap(source);
 	}
 
+	//? Return escape code for color <name>
 	auto operator()(string name){
-		return this->c.at(name);
+		return c.at(name);
 	}
 
+	//? Return vector of escape codes for color gradient <name>
 	auto gradient(string name){
-		return this->g.at(name);
+		return g.at(name);
 	}
 
+	//? Return map of decimal int's (r, g, b) for color <name>
 	auto rgb(string name){
-		return c_to_rgb(this->c.at(name));
+		return c_to_rgb(c.at(name));
 	}
 
 };
 
 struct C_Banner {
 	string banner_str;
+	int width;
 
 	C_Banner(){
 		size_t z = 0;
 		string b_color, bg, fg, out, oc, letter;
 		int bg_i;
-		this->banner_str = "";
+		int new_len;
+		banner_str = "";
 		for (auto line: BANNER_SRC) {
+			new_len = ulen(line[1]);
+			if (new_len > width) width = new_len;
 			fg = hex_to_color(line[0]);
 			bg_i = 120-z*12;
 			bg = dec_to_color(bg_i, bg_i, bg_i);
@@ -509,48 +643,26 @@ struct C_Banner {
 			z++;
 			if (z < BANNER_SRC.size()) out += Mv::l(ulen(line[1])) + Mv::d(1);
 		}
-		this->banner_str = out;
+		banner_str = out + Mv::r(18 - VERSION.size()) + Fx::i + dec_to_color(150, 150, 150) +
+			"v" + VERSION + Fx::r + Term.bg;
 	}
 
+	//? Returns the pre-generated btop++ banner
 	string operator() (){
-		return this->banner_str + Fx::r;
+		return banner_str + Term.fg;
 	}
 };
 
 C_Banner Banner;
 
-//? ------------------------------------------------- FUNCTIONS -------------------------------------------------------
-
-void argumentParser(int argc, char **argv){ //? A simple argument parser
-	string argument;
-	for(int i = 1; i < argc; i++) {
-		argument = argv[i];
-		if (argument == "-v" || argument == "--version") {
-			cout << "btop version: " << VERSION << endl;
-			exit(0);
-		} else if (argument == "-h" || argument == "--help") {
-			cout << "help here" << endl;
-			exit(0);
-		} else {
-			cout << " Unknown argument: " << argument << "\n" <<
-			" Use -h or --help for help." <<  endl;
-			exit(1);
-		}
-	}
-}
-
-uint64_t time_ms(){
-	return chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-}
-
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
 	int debug = 2;
-	int tests = 0;
-
-	// bool thread_test = false;
+	int tests = 8;
 
 	//? Init
+
+	cout.setf(std::ios::boolalpha);
 
 	if (argc > 1) argumentParser(argc, argv);
 
@@ -561,10 +673,20 @@ int main(int argc, char **argv){
 	Term.echo(false);
 	Term.linebuffered(false);
 
+	ios_base::sync_with_stdio(false);
+	cin.tie(NULL);
+
+	C_Theme Theme(DEFAULT_THEME);
+
+	cout << Theme("main_bg") << Term.clear << flush;
+	// bool thread_test = false;
+
 
 	if (debug < 2) cout << Term.alt_screen << Term.clear << Term.hide_cursor << flush;
 
-	C_Theme Theme(DEFAULT_THEME);
+	cout << Theme("main_fg") << endl;
+
+	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
 
 
 	//* Test MENUS
@@ -587,8 +709,21 @@ int main(int argc, char **argv){
 
 	//cout << korv2.size() << " " << ulen(korv2) << endl;
 
+	cout << Config(Bool, "truecolor") << endl;
+	cout << Config(Int, "tree_depth") << endl;
+	cout << Config(String, "color_theme") << endl;
+
 	//* Test theme
-	if (tests>0) for(auto& item : DEFAULT_THEME) cout << Theme(item.first) << item.first << endl;
+	int i = 0;
+	if (tests==0) for(auto& item : DEFAULT_THEME) {
+		cout << Theme(item.first) << item.first << ":" << Term.fg << Theme(item.first).erase(0, 1) << Term.bg << "  ";
+		if (++i == 4) {
+			i = 0;
+			cout << endl;
+		}
+	}
+
+	cout << Term.fg << endl;
 
 	// if (thread_test){
 	// 	int max = 50000;
@@ -632,21 +767,17 @@ int main(int argc, char **argv){
 	}
 
 
-	// if (tests>2){
-		cout << "        " << Banner() << endl;
-	// }
-
 	if (tests>3){
 		auto nbcolor = hex_to_color(DEFAULT_THEME.at("net_box"));
 		auto nbcolor_rgb = c_to_rgb(nbcolor);
 		auto nbcolor_man = ssplit(nbcolor, ";");
-		cout << nbcolor << "Some color" << Fx::r << " Normal Color" << endl;
+		cout << nbcolor << "Some color" << endl;
 		cout << "nbcolor_rgb size=" << nbcolor_rgb.size() << endl;
 		cout << "R:" << nbcolor_rgb.at("r") << " G:" << nbcolor_rgb.at("g") << " B:" << nbcolor_rgb.at("b") << endl;
 		cout << "MANUAL R:" << nbcolor_man.at(2) << " G:" << nbcolor_man.at(3) << " B:" << nbcolor_man.at(4) << endl;
 
 		auto ccc = dec_to_color(100, 255, 100);
-		cout << "\n" << ccc << "Testing..." << Fx::r << " normal." << endl;
+		cout << "\n" << ccc << "Testing..." << endl;
 	}
 
 
@@ -694,8 +825,8 @@ int main(int argc, char **argv){
 
 
 	if (debug == 0){
+		cout << Theme("main_fg");
 		cout << Mv::to(Term.height - 1, 0) << "Press q to exit! Timeout" << flush;
-		string chr;
 		string full;
 		int wt = 90;
 		bool qp = false;
@@ -704,13 +835,12 @@ int main(int argc, char **argv){
 			int wts = wt - wtm * 60;
 			wt--;
 			cout << Mv::to(Term.height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
-			if (Key.wait(1000)) chr = Key.get();
-			if (chr != ""){
-				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << chr.size() << " ULEN=" << ulen(chr) << " KEY=\"" << chr << "\" CODE=" << (int)chr.at(0) << "        " << flush;
-				full += chr;
+			//chr = Key(1000);
+			if (Key(1000)) {
+				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << Key().size() << " ULEN=" << ulen(Key()) << " KEY=\"" << Key() << "\" CODE=" << (int)Key().at(0) << "        " << flush;
+				full += Key();
 				cout << Mv::to(Term.height - 5, 1) << full << flush;
-				if (chr == "q") qp = true;
-				chr = "";
+				if (Key() == "q") qp = true;
 				wt++;
 			}
 		}
