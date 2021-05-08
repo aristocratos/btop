@@ -21,8 +21,6 @@ tab-size = 4
 
 #include <string>
 #include <map>
-#include <chrono>
-#include <thread>
 #include <iostream>
 
 #include <btop_globs.h>
@@ -78,16 +76,16 @@ class C_Input {
 		auto timer = 0;
 		while (timeout == -1 || timer * 10 <= timeout) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			sleep_ms(10);
 			if (timeout >= 0) ++timer;
 		}
 		return false;
 	}
 
 	string get(){
-		string key = "";
+		string key;
 		while (cin.rdbuf()->in_avail() > 0 && key.size() < 100) key += cin.get();
-		if (key != ""){
+		if (!key.empty()){
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";
@@ -98,12 +96,11 @@ class C_Input {
 public:
 
 	//* Wait <timeout> ms for input on stdin and return true if available
-	//* 0 to just check for input
 	//* -1 for infinite wait
 	bool operator()(int timeout){
 		if (wait(timeout)) {
 			last = get();
-			return last != "";
+			return !last.empty();
 		} else {
 			last = "";
 			return false;

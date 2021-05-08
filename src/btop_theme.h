@@ -129,7 +129,7 @@ class C_Theme {
 				}
 			}
 			else out[item.first] = "";
-			if (out[item.first] == "") out[item.first] = hex_to_color(item.second, !State::truecolor, depth);
+			if (out[item.first].empty()) out[item.first] = hex_to_color(item.second, !State::truecolor, depth);
 		}
 		return out;
 	}

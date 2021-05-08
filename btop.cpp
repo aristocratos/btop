@@ -16,8 +16,6 @@ indent = tab
 tab-size = 4
 */
 
-
-
 #include <iostream>
 #include <string>
 #include <cmath>
@@ -107,7 +105,6 @@ public:
 		string b_color, bg, fg, out, oc, letter;
 		int bg_i;
 		int new_len;
-		banner_str = "";
 		for (auto line: Global::Banner_src) {
 			new_len = ulen(line[1]);
 			if (new_len > width) width = new_len;
@@ -141,69 +138,77 @@ public:
 
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
-	int debug = 0;
-	int tests = 0;
 
 	//? Init
 
 	cout.setf(std::ios::boolalpha);
-
 	if (argc > 1) argumentParser(argc, argv);
 
+	//? Initialize terminal and set options
 	C_Term Term;
-
 	if (!Term.initialized) {
-		cout << "No terminal detected!" << endl;
+		cout << "ERROR: No tty detected!" << endl;
+		cout << "Sorry, btop++ needs an interactive shell to run." << endl;
 		exit(1);
 	}
 
+	//? Read config file if present
 	C_Config Config;
+
+	//? Generate the theme
 	C_Theme Theme(Global::Default_theme);
+
+	//? Create the btop++ banner
 	C_Banner Banner;
+
+	//? Initialize the Input class
 	C_Input Input;
 
-	cout << Theme("main_bg") << Term.clear << flush;
-	// bool thread_test = false;
 
+	//* ------------------------------------------------ TESTING ------------------------------------------------------
+
+	int debug = 2;
+	int tests = 0;
+
+	// cout << Theme("main_bg") << Term.clear << flush;
+	// bool thread_test = false;
 
 	if (debug < 2) cout << Term.alt_screen << Term.clear << Term.hide_cursor << flush;
 
 	cout << Theme("main_fg") << endl;
 
 	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
+	cout << string(50, '-') << Mv::l(50) << flush;
+	cout << rjustify("Terminal  Width=", 20) << trans("Korven s   kommer ") << Term.width << " Height=" << Term.height << endl;
 
 
 	//* Test MENUS
-	for (auto& outer : Global::Menus){
-		for (auto& inner : outer.second){
-			for (auto& item : inner.second){
-				cout << item << endl;
-			}
-		}
-	}
+	// for (auto& outer : Global::Menus){
+	// 	for (auto& inner : outer.second){
+	// 		for (auto& item : inner.second){
+	// 			cout << item << endl;
+	// 		}
+	// 	}
+	// }
 
 
-	string korv5 = "hejsan";
-	if (korv5.starts_with("hej")) cout << "hej" << endl;
 
-
-	//cout << korv2.size() << " " << ulen(korv2) << endl;
-
-	cout << Config(Bool, "truecolor") << endl;
-	cout << Config(Int, "tree_depth") << endl;
-	cout << Config(String, "color_theme") << endl;
+	// cout << Config(Bool, "truecolor") << endl;
+	// cout << Config(Int, "tree_depth") << endl;
+	// cout << Config(String, "color_theme") << endl;
 
 	//* Test theme
 	int i = 0;
-	if (tests==0) for(auto& item : Global::Default_theme) {
+	if (tests>0) for(auto& item : Global::Default_theme) {
 		cout << Theme(item.first) << item.first << ":" << Theme("main_fg") << Theme(item.first).erase(0, 2) << Fx::reset << "  ";
 		if (++i == 4) {
 			i = 0;
 			cout << endl;
 		}
+		cout << Fx::reset << endl;
 	}
 
-	cout << Fx::reset << endl;
+
 
 	// if (thread_test){
 	// 	int max = 50000;
@@ -278,7 +283,7 @@ int main(int argc, char **argv){
 
 
 	//if (tests>5){
-		cout << "Width=" << Term.width << " Height=" << Term.height << endl;
+
 	//}
 
 	// map<string, string> dict = {

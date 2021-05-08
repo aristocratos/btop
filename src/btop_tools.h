@@ -23,14 +23,18 @@ tab-size = 4
 #include <cmath>
 #include <vector>
 #include <map>
+#include <chrono>
+#include <thread>
+#include <algorithm>
 
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
 #include <btop_globs.h>
+#include <btop_config.h>
 
-using std::string, std::to_string, std::round, std::vector, std::map, std::cin;
+using std::string, std::to_string, std::round, std::vector, std::map, std::cin, std::max;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -38,32 +42,28 @@ using std::string, std::to_string, std::round, std::vector, std::map, std::cin;
 namespace Fx {
 	//* Escape sequence start
 	const string e = "\x1b[";
+
 	//* Bold on
 	const string b = e + "1m";
-	//* Bold off
-	const string ub = e + "22m";
+
 	//* Dark on
 	const string d = e + "2m";
-	//* Dark off
-	const string ud = e + "22m";
+
 	//* Italic on
 	const string i = e + "3m";
-	//* Italic off
-	const string ui = e + "23m";
+
 	//* Underline on
 	const string ul = e + "4m";
-	//* Underline off
-	const string uul = e + "24m";
+
 	//* Blink on
 	const string bl = e + "5m";
-	//* Blink off
-	const string ubl = e + "25m";
+
 	//* Strike / crossed-out on
 	const string s = e + "9m";
-	//* Strike / crossed-out off
-	const string us = e + "29m";
+
 	//* Reset foreground/background color and text effects
 	const string reset_base = e + "0m";
+
 	//* Reset text effects and restore default foregrund and background color < Changed by C_Theme
 	string reset = reset_base;
 };
@@ -72,16 +72,22 @@ namespace Fx {
 namespace Mv {
 	//* Move cursor to <line>, <column>
 	inline string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
+
 	//* Move cursor right <x> columns
 	inline string r(int x){ return Fx::e + to_string(x) + "C";}
+
 	//* Move cursor left <x> columns
 	inline string l(int x){ return Fx::e + to_string(x) + "D";}
+
 	//* Move cursor up x lines
 	inline string u(int x){ return Fx::e + to_string(x) + "A";}
+
 	//* Move cursor down x lines
 	inline string d(int x) { return Fx::e + to_string(x) + "B";}
+
 	//* Save cursor position
 	const string save = Fx::e + "s";
+
 	//* Restore saved cursor postion
 	const string restore = Fx::e + "u";
 };
@@ -127,22 +133,58 @@ string trim(string str, string t_str = " "){
 	return ltrim(rtrim(str, t_str), t_str);
 }
 
-//* Split <string> at <delim> <times> (0 for unlimited) times and return vector
+//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
 vector<string> ssplit(string str, string delim = " ", int times = 0){
 	vector<string> out;
-	if (str != "" && delim != ""){
+	if (!str.empty() && !delim.empty()){
 		size_t pos = 0;
 		int x = 0;
 		string tmp;
 		while ((pos = str.find(delim)) != string::npos){
 			tmp = str.substr(0, pos);
-			if (tmp != delim && tmp != "") out.push_back(tmp);
+			if (tmp != delim && !tmp.empty()) out.push_back(tmp);
 			str.erase(0, pos + delim.size());
 			if (times > 0 && ++x >= times) break;
 		}
 	}
 	out.push_back(str);
 	return out;
+}
+
+//* Put current thread to sleep for <ms> milliseconds
+void sleep_ms(unsigned ms) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
+
+//* Left justify string <str> if <x> is greater than <str> length
+string ljustify(string str, size_t x){
+	return str + string(max((int)(x - str.size()), 0), ' ');
+}
+
+//* Right justify string <str> if <x> is greater than <str> length
+string rjustify(string str, size_t x){
+	return string(max((int)(x - str.size()), 0), ' ') + str;
+}
+
+//* Trim trailing characters if string length is greatear than <x>
+string limit(string str, size_t x){
+	if (str.size() > x) str.resize(x);
+	return str;
+}
+
+//* Replace whitespaces " " with escape code for move right
+string trans(string str){
+	size_t pos;
+	string newstr;
+	while ((pos = str.find(' ')) != string::npos){
+		newstr.append(str.substr(0, pos));
+		str.erase(0, pos);
+		pos = 1;
+		while (pos < str.size() && str.at(pos) == ' ') pos++;
+		newstr.append(Mv::r(pos));
+		str.erase(0, pos);
+	}
+	return (newstr.empty()) ? str : newstr;
 }
 
 //? --------------------------------------------------- CLASSES -----------------------------------------------------
@@ -152,9 +194,9 @@ class C_Term {
 	struct termios initial_settings;
 public:
 	bool initialized = false;
-	int width = 0;
-	int height = 0;
 	bool resized = false;
+	unsigned width = 0;
+	unsigned height = 0;
 
 	//* Hide terminal cursor
 	const string hide_cursor = Fx::e + "?25l";
@@ -209,8 +251,8 @@ public:
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 		resized = (width != w.ws_col || height != w.ws_row) ? true : false;
-		width = w.ws_col;
-		height = w.ws_row;
+		State::width = width = w.ws_col;
+		State::height = height = w.ws_row;
 		return resized;
 	}
 

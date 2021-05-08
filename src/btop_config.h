@@ -39,6 +39,7 @@ using std::string, std::to_string, std::vector, std::map;
 namespace State {
 	bool truecolor = true;
 	string fg, bg;
+	unsigned width, height;
 }
 
 class C_Config {
