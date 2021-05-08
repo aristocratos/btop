@@ -16,12 +16,9 @@ indent = tab
 tab-size = 4
 */
 
-#include <cstdlib>
-#include <cstdio>
-#include <limits>
+
+
 #include <iostream>
-#include <sstream>
-#include <iomanip>
 #include <string>
 #include <cmath>
 #include <vector>
@@ -29,16 +26,15 @@ tab-size = 4
 #include <thread>
 #include <future>
 #include <atomic>
-#include <string_view>
-#include <chrono>
 #include <ranges>
 
 #include <unistd.h>
-#include <poll.h>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
+#include <btop_input.h>
+#include <btop_theme.h>
 
 #if defined(__linux__)
 	#define SYSTEM "linux"
@@ -100,141 +96,10 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-//* Functions and variables for handling keyboard and mouse input
-class C_Key {
-	const map<string, string> KEY_ESCAPES = {
-		{"\033",	"escape"},
-		{"\n",		"enter"},
-		{" ",		"space"},
-		{"\x7f",	"backspace"},
-		{"\x08",	"backspace"},
-		{"[A", 		"up"},
-		{"OA",		"up"},
-		{"[B", 		"down"},
-		{"OB",		"down"},
-		{"[D", 		"left"},
-		{"OD",		"left"},
-		{"[C", 		"right"},
-		{"OC",		"right"},
-		{"[2~",		"insert"},
-		{"[3~",		"delete"},
-		{"[H",		"home"},
-		{"[F",		"end"},
-		{"[5~",		"page_up"},
-		{"[6~",		"page_down"},
-		{"\t",		"tab"},
-		{"[Z",		"shift_tab"},
-		{"OP",		"f1"},
-		{"OQ",		"f2"},
-		{"OR",		"f3"},
-		{"OS",		"f4"},
-		{"[15~",	"f5"},
-		{"[17~",	"f6"},
-		{"[18~",	"f7"},
-		{"[19~",	"f8"},
-		{"[20~",	"f9"},
-		{"[21~",	"f10"},
-		{"[23~",	"f11"},
-		{"[24~",	"f12"}
-	};
-
-	bool wait(int timeout=0){
-		struct pollfd pls[1];
-		pls[ 0 ].fd = STDIN_FILENO;
-		pls[ 0 ].events = POLLIN | POLLPRI;
-		return poll(pls, 1, timeout) > 0;
-	}
-
-	string get(){
-		string key = "";
-		while (wait() && key.size() < 100) key += cin.get();
-		if (key != ""){
-			if (key.starts_with(Fx::e)) key.erase(0, 1);
-			if (KEY_ESCAPES.count(key)) key = KEY_ESCAPES.at(key);
-			else if (ulen(key) > 1) key = "";
-		}
-		return key;
-	}
-public:
-	string last = "";
-
-	//* Wait <timeout> ms for input on stdin and return true if available
-	//* 0 to just check for input
-	//* -1 for infinite wait
-	bool operator()(int timeout){
-		if (wait(timeout)) {
-			last = get();
-			return true;
-		} else {
-			last = "";
-			return false;
-		}
-	}
-
-	//* Return last entered key
-	string operator()(){
-		return last;
-	}
-};
-
-class C_Theme {
-	map<string, string> c;
-	map<string, vector<string>> g;
-	C_Config conf;
-
-	map<string,string> generate(map<string, string>& source){
-		map<string, string> out;
-		vector<string> t_rgb;
-		string depth;
-		for (auto& item : Global::Default_theme) {
-			depth = (item.first.ends_with("bg")) ? "bg" : "fg";
-			if (source.count(item.first)) {
-				if (source.at(item.first)[0] == '#') out[item.first] = hex_to_color(source.at(item.first), !State::truecolor, depth);
-				else {
-					t_rgb = ssplit(source.at(item.first), " ");
-					out[item.first] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !State::truecolor, depth);
-				}
-			}
-			else out[item.first] = "";
-			if (out[item.first] == "") out[item.first] = hex_to_color(item.second, !State::truecolor, depth);
-		}
-		return out;
-	}
-
-public:
-
-	//* Change to theme using <source> map
-	void change(map<string, string> source){
-		c = generate(source);
-		State::fg = c.at("main_fg");
-		State::bg = c.at("main_bg");
-		Fx::reset = Fx::reset_base + State::fg + State::bg;
-	}
-
-	//* Generate theme from <source> map, default to DEFAULT_THEME on missing or malformatted values
-	C_Theme(map<string, string> source){
-		change(source);
-	}
-
-	//* Return escape code for color <name>
-	auto operator()(string name){
-		return c.at(name);
-	}
-
-	//* Return vector of escape codes for color gradient <name>
-	auto gradient(string name){
-		return g.at(name);
-	}
-
-	//* Return map of decimal int's (r, g, b) for color <name>
-	auto rgb(string name){
-		return c_to_rgb(c.at(name));
-	}
-
-};
-
-struct C_Banner {
+class C_Banner {
 	string banner_str;
+
+public:
 	int width;
 
 	C_Banner(){
@@ -274,7 +139,6 @@ struct C_Banner {
 };
 
 
-
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
 	int debug = 0;
@@ -293,11 +157,10 @@ int main(int argc, char **argv){
 		exit(1);
 	}
 
-
 	C_Config Config;
 	C_Theme Theme(Global::Default_theme);
 	C_Banner Banner;
-	C_Key Key;
+	C_Input Input;
 
 	cout << Theme("main_bg") << Term.clear << flush;
 	// bool thread_test = false;
@@ -453,17 +316,17 @@ int main(int argc, char **argv){
 			wt--;
 			cout << Mv::to(Term.height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
 			//chr = Key(1000);
-			if (Key(1000)) {
-				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << Key().size() << " ULEN=" << ulen(Key()) << " KEY=\"" << Key() << "\" CODE=" << (int)Key().at(0) << "        " << flush;
-				full += Key();
+			if (Input(1000)) {
+				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << Input().size() << " ULEN=" << ulen(Input()) << " KEY=\"" << Input() << "\" CODE=" << (int)Input().at(0) << "        " << flush;
+				full += Input();
 				cout << Mv::to(Term.height - 5, 1) << full << flush;
-				if (Key() == "q") qp = true;
+				if (Input() == "q") qp = true;
 				wt++;
 			}
 		}
 	}
 
-	if (debug == 1) Key(-1);
+	if (debug == 1) Input(-1);
 	Term.restore();
 	if (debug < 2) cout << Term.normal_screen << Term.show_cursor << flush;
 	return 0;

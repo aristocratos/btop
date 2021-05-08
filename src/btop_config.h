@@ -19,16 +19,16 @@ tab-size = 4
 #ifndef _btop_config_included_
 #define _btop_config_included_
 
-
-#include <btop_tools.h>
 #include <string>
 #include <vector>
 #include <map>
 
-using std::string;
-using std::to_string;
-using std::vector;
-using std::map;
+#include <btop_tools.h>
+
+using std::string, std::to_string, std::vector, std::map;
+
+
+//? Classes, functions and variables for reading and writing the btop config file
 
 #define Bool bool()
 #define Int int()

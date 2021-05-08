@@ -109,6 +109,6 @@ namespace Global {
 				} }
 		} }
 	};
-	}
+}
 
 #endif
