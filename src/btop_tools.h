@@ -187,6 +187,23 @@ string trans(string str){
 	return (newstr.empty()) ? str : newstr;
 }
 
+string sec_to_dhms(unsigned sec){
+	string out;
+	unsigned d, h, m;
+	d = sec / (3600 * 24);
+	sec %= 3600 * 24;
+	h = sec / 3600;
+	sec %= 3600;
+	m = sec / 60;
+	sec %= 60;
+	if (d>0) out = to_string(d) + "d ";
+	out += (h<10) ? "0" + to_string(h) + ":" : to_string(h) + ":";
+	out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
+	out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
+	return out;
+}
+
+
 //? --------------------------------------------------- CLASSES -----------------------------------------------------
 
 //* Collection of escape codes and functions for terminal manipulation
@@ -287,5 +304,7 @@ public:
 		resized = false;
 	}
 };
+
+//? --------------------------------------------------- STRUCTS -------------------------------------------------------
 
 #endif

@@ -22,10 +22,14 @@ tab-size = 4
 #include <string>
 #include <map>
 #include <vector>
+#include <atomic>
 
-using std::string, std::vector, std::map;
+using std::string, std::vector, std::map, std::atomic;
 
 namespace Global {
+
+	atomic<bool> stop_all(false);
+
 	const map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
 		{ "main_fg", "#cc" },

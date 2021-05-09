@@ -21,10 +21,14 @@ tab-size = 4
 #include <cmath>
 #include <vector>
 #include <map>
+#include <tuple>
 #include <thread>
 #include <future>
 #include <atomic>
 #include <ranges>
+
+#include <fstream>
+#include <filesystem>
 
 #include <unistd.h>
 
@@ -36,6 +40,7 @@ tab-size = 4
 
 #if defined(__linux__)
 	#define SYSTEM "linux"
+	#include <sys/sysinfo.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
@@ -55,6 +60,7 @@ tab-size = 4
 #endif
 
 using namespace std;
+namespace fs = filesystem;
 
 
 //? ------------------------------------------------- GLOBALS ---------------------------------------------------------
@@ -135,6 +141,15 @@ public:
 	}
 };
 
+//* Threading test function
+string my_worker(int x){
+	for (int i = 0; i < 100 + (x * 100); i++){
+		sleep_ms(10);
+		if (Global::stop_all.load()) return "Thread stopped! x=" + to_string(x);
+	}
+	return "Thread done! x=" + to_string(x);
+}
+
 
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
@@ -171,15 +186,15 @@ int main(int argc, char **argv){
 	int tests = 0;
 
 	// cout << Theme("main_bg") << Term.clear << flush;
-	// bool thread_test = false;
+	bool thread_test = false;
 
 	if (debug < 2) cout << Term.alt_screen << Term.clear << Term.hide_cursor << flush;
 
 	cout << Theme("main_fg") << endl;
 
 	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
-	cout << string(50, '-') << Mv::l(50) << flush;
-	cout << rjustify("Terminal  Width=", 20) << trans("Korven s   kommer ") << Term.width << " Height=" << Term.height << endl;
+	cout << string(Term.width - 1, '-') << endl;
+
 
 
 	//* Test MENUS
@@ -198,6 +213,7 @@ int main(int argc, char **argv){
 	// cout << Config(String, "color_theme") << endl;
 
 	//* Test theme
+
 	int i = 0;
 	if (tests>0) for(auto& item : Global::Default_theme) {
 		cout << Theme(item.first) << item.first << ":" << Theme("main_fg") << Theme(item.first).erase(0, 2) << Fx::reset << "  ";
@@ -210,46 +226,76 @@ int main(int argc, char **argv){
 
 
 
-	// if (thread_test){
-	// 	int max = 50000;
-	// 	int count = max / 100;
-	// 	atomic<bool> running;
-	// 	running = true;
-	// 	thread ttg1(C_Theme::generate, DEFAULT_THEME);
+	if (thread_test){
 
-	// 	for (int i = 0; i < max; i++) {
-	// 		// C_Theme tt(DEFAULT_THEME);
-	// 		// tt.del();
-	// 		auto ttg1 = async(C_Theme::generate, DEFAULT_THEME);
-	// 		auto ttg2 = async(C_Theme::generate, DEFAULT_THEME);
-	// 		auto ttg3 = async(C_Theme::generate, DEFAULT_THEME);
-	// 		auto ttg4 = async(C_Theme::generate, DEFAULT_THEME);
-	// 		// ttg1.wait();
-	// 		// ttg2.wait();
-	// 		map<string, string> tt1 = ttg1.get();
-	// 		map<string, string> tt2 = ttg2.get();
-	// 		map<string, string> tt3 = ttg3.get();
-	// 		map<string, string> tt4 = ttg4.get();
-	// 		if (i >= count) {
-	// 			cout << Mv::restore << "(" << i * 100 / max << "%)" << flush;
-	// 			count += max / 100;
-	// 		}
-	// 	}
-	// }
+		map<int, future<string>> runners;
+		map<int, string> outputs;
 
+		for (int i = 0; i < 10; i++){
+			runners[i] = async(my_worker, i);
+		}
+		i = 0;
+		while (outputs.size() < 10){
 
-
-	if (tests>1){
-		string lk = "first second another lastone";
-
-		for (auto& it : ssplit(lk)){
-			cout << it << flush;
-			switch (it.front()) {
-				case 's': cout << " <=" << endl; break;
-				default: cout << endl;
+			for (int i = 0; i < 10; i++){
+				if (runners[i].valid() && runners[i].wait_for(chrono::milliseconds(10)) == future_status::ready) {
+					outputs[i] = runners[i].get();
+					cout << "Thread " << i << " : " << outputs[i] << endl;
+				}
 			}
+
+			// if (++i >= 10) i = 0;
+			if (outputs.size() >= 8) Global::stop_all.store(true);
 		}
 	}
+
+	struct sysinfo sinfo;
+	sysinfo(&sinfo);
+
+
+	cout << "Up for " << sec_to_dhms(sinfo.uptime) << endl;
+
+
+
+	int count = 0;
+	auto timestamp = time_ms();
+	string item, name, cmd;
+	vector<tuple<int, string, string>> plist;
+	for (auto& d: fs::directory_iterator("/proc")){
+		item = fs::path(d.path()).filename();
+		if (d.is_directory() && isdigit(item[0])) {
+			if (fs::is_regular_file((string)d.path() + "/comm")) {
+				ifstream pread((string)d.path() + "/comm");
+				getline(pread, name);
+				pread.close();
+			}
+			if (fs::is_regular_file((string)d.path() + "/cmdline")) {
+				ifstream pread((string)d.path() + "/cmdline");
+				getline(pread, cmd);
+				pread.close();
+			}
+			plist.push_back(make_tuple(stoi(item), name, cmd));
+		}
+	}
+	timestamp = time_ms() - timestamp;
+
+	auto timestamp2 = time_ms();
+	ranges::sort(plist, [](tuple<int, string, string>& a, tuple<int, string, string>& b) {return get<1>(a) < get<1>(b);});
+	timestamp2 = time_ms() - timestamp2;
+
+
+	int lc = 0;
+	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << "Command:" << "\n";
+	for (auto& [lpid, lname, lcmd] : plist){ //| views::reverse
+		cout << rjustify(to_string(lpid), 8) << " " << ljustify(limit(lname, 15), 16) << limit(lcmd, Term.width - 25) << "\n";
+		if (lc++ > 30) break;
+	}
+
+	cout << endl;
+
+	cout << "List generated in " << timestamp << "ms and sorted in " << timestamp2 << "ms" << endl;
+	cout << "Found " << plist.size() << " pids\n" << endl;
+
 
 
 	if (tests>3){
