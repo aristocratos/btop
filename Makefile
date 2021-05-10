@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/btop/doc
 CXX = g++
-CXXFLAGS = -std=c++20 -pthread
+CXXFLAGS = -std=c++20 -pthread -Wall -Wextra
 INCLUDES = -I./src
 
 btop: btop.cpp

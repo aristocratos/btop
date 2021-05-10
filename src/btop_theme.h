@@ -28,7 +28,7 @@ tab-size = 4
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using std::string, std::to_string, std::round, std::vector, std::map;
+using namespace std;
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 

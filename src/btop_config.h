@@ -25,7 +25,7 @@ tab-size = 4
 
 #include <btop_tools.h>
 
-using std::string, std::to_string, std::vector, std::map;
+using namespace std;
 
 
 //? Classes, functions and variables for reading and writing the btop config file

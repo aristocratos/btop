@@ -25,10 +25,6 @@ tab-size = 4
 #include <thread>
 #include <future>
 #include <atomic>
-#include <ranges>
-
-#include <fstream>
-#include <filesystem>
 
 #include <unistd.h>
 
@@ -41,6 +37,7 @@ tab-size = 4
 #if defined(__linux__)
 	#define SYSTEM "linux"
 	#include <sys/sysinfo.h>
+	#include <btop_linux.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
@@ -60,7 +57,6 @@ tab-size = 4
 #endif
 
 using namespace std;
-namespace fs = filesystem;
 
 
 //? ------------------------------------------------- GLOBALS ---------------------------------------------------------
@@ -190,7 +186,7 @@ int main(int argc, char **argv){
 
 	if (debug < 2) cout << Term.alt_screen << Term.clear << Term.hide_cursor << flush;
 
-	cout << Theme("main_fg") << endl;
+	cout << Theme("main_fg") << Term.clear << endl;
 
 	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
 	cout << string(Term.width - 1, '-') << endl;
@@ -257,44 +253,37 @@ int main(int argc, char **argv){
 
 
 
-	int count = 0;
+//------>>>>>>
+
 	auto timestamp = time_ms();
-	string item, name, cmd;
-	vector<tuple<int, string, string>> plist;
-	for (auto& d: fs::directory_iterator("/proc")){
-		item = fs::path(d.path()).filename();
-		if (d.is_directory() && isdigit(item[0])) {
-			if (fs::is_regular_file((string)d.path() + "/comm")) {
-				ifstream pread((string)d.path() + "/comm");
-				getline(pread, name);
-				pread.close();
-			}
-			if (fs::is_regular_file((string)d.path() + "/cmdline")) {
-				ifstream pread((string)d.path() + "/cmdline");
-				getline(pread, cmd);
-				pread.close();
-			}
-			plist.push_back(make_tuple(stoi(item), name, cmd));
-		}
-	}
+
+	// insert Processes call here
+
 	timestamp = time_ms() - timestamp;
 
 	auto timestamp2 = time_ms();
-	ranges::sort(plist, [](tuple<int, string, string>& a, tuple<int, string, string>& b) {return get<1>(a) < get<1>(b);});
+
+	// insert Processes call here
+
 	timestamp2 = time_ms() - timestamp2;
 
 
-	int lc = 0;
-	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << "Command:" << "\n";
-	for (auto& [lpid, lname, lcmd] : plist){ //| views::reverse
-		cout << rjustify(to_string(lpid), 8) << " " << ljustify(limit(lname, 15), 16) << limit(lcmd, Term.width - 25) << "\n";
-		if (lc++ > 30) break;
-	}
+	// int lc = 0;
+	// string ostring;
+	// cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 50) << " " << rjustify("User:", 10) << " " << rjustify("Group:", 10) << "\n";
+	// for (auto& [lpid, lname, lcmd, luser, lgroup] : plist){
+	// 	ostring += rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 50, true) + " " + rjustify(luser, 10) + " " + rjustify(lgroup, 10) + "\n";
+	// 	if (lc++ > Term.height - 30) break;
+	// }
 
-	cout << endl;
+	// cout << ostring << endl;
 
-	cout << "List generated in " << timestamp << "ms and sorted in " << timestamp2 << "ms" << endl;
-	cout << "Found " << plist.size() << " pids\n" << endl;
+	// cout << "List generated in " << timestamp << "ms first call and in " << timestamp2 << "ms second call" << endl;
+	// cout << "Found " << plist.size() << " pids\n" << endl;
+
+//-----<<<<<
+
+	//cout << pw->pw_name << "/" << gr->gr_name << endl;
 
 
 
@@ -358,7 +347,7 @@ int main(int argc, char **argv){
 	if (debug == 0){
 		cout << Theme("main_fg");
 		cout << Mv::to(Term.height - 1, 0) << "Press q to exit! Timeout" << flush;
-		string full;
+		string full, key;
 		int wt = 90;
 		bool qp = false;
 		while (!qp && wt >= 0){
@@ -368,10 +357,12 @@ int main(int argc, char **argv){
 			cout << Mv::to(Term.height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
 			//chr = Key(1000);
 			if (Input(1000)) {
-				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << Input().size() << " ULEN=" << ulen(Input()) << " KEY=\"" << Input() << "\" CODE=" << (int)Input().at(0) << "        " << flush;
-				full += Input();
+				key = Input();
+				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << key.size() << " ULEN=" << ulen(key) << " KEY=\"" << key << "\" CODE=" << (int)key.at(0) << "        " << flush;
+				full += key;
 				cout << Mv::to(Term.height - 5, 1) << full << flush;
-				if (Input() == "q") qp = true;
+				if (key == "q") qp = true;
+				key = "";
 				wt++;
 			}
 		}

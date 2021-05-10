@@ -26,7 +26,7 @@ tab-size = 4
 #include <btop_globs.h>
 #include <btop_tools.h>
 
-using std::string, std::map, std::cin;
+using namespace std;
 
 
 //* Class for handling keyboard and mouse input

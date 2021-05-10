@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,7 +34,7 @@ tab-size = 4
 #include <btop_globs.h>
 #include <btop_config.h>
 
-using std::string, std::to_string, std::round, std::vector, std::map, std::cin, std::max;
+using namespace std;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -95,10 +95,9 @@ namespace Mv {
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 //* Return number of UTF8 characters in a string
-inline size_t ulen(const string& str){
-		size_t len = 0;
-		for (char c : str) if ((c & 0xC0) != 0x80) ++len;
-		return len;
+size_t ulen(string s){
+	return std::count_if(s.begin(), s.end(),
+		[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
 }
 
 //* Return current time since epoch in milliseconds
@@ -156,19 +155,39 @@ void sleep_ms(unsigned ms) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
-//* Left justify string <str> if <x> is greater than <str> length
-string ljustify(string str, size_t x){
-	return str + string(max((int)(x - str.size()), 0), ' ');
+//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
+string ljustify(string str, size_t x, bool utf=false, bool lim=true){
+ 	if (!utf) {
+		if (lim && str.size() > x) str.resize(x);
+		return str + string(max((int)(x - str.size()), 0), ' ');
+	} else {
+		if (lim && ulen(str) > x) {
+			auto i = str.size();
+			while (ulen(str) > x) str.resize(--i);
+		}
+		return str + string(max((int)(x - ulen(str)), 0), ' ');
+	}
 }
 
-//* Right justify string <str> if <x> is greater than <str> length
-string rjustify(string str, size_t x){
-	return string(max((int)(x - str.size()), 0), ' ') + str;
+//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
+string rjustify(string str, size_t x, bool utf=false, bool lim=true){
+ 	if (!utf) {
+		if (lim && str.size() > x) str.resize(x);
+		return string(max((int)(x - str.size()), 0), ' ') + str;
+	} else {
+		if (lim && ulen(str) > x) {
+			auto i = str.size();
+			while (ulen(str) > x) str.resize(--i);
+		}
+		return string(max((int)(x - ulen(str)), 0), ' ') + str;
+	}
 }
 
-//* Trim trailing characters if string length is greatear than <x>
-string limit(string str, size_t x){
-	if (str.size() > x) str.resize(x);
+//* Trim trailing characters if utf8 string length is greatear than <x>
+string uresize(string str, size_t x){
+	auto i = str.size();
+	if (i < 1 || x < 1) return str;
+	while (ulen(str) > x) str.resize(--i);
 	return str;
 }
 
@@ -185,6 +204,12 @@ string trans(string str){
 		str.erase(0, pos);
 	}
 	return (newstr.empty()) ? str : newstr;
+}
+
+//* Clean string by replacing null byte '\0' with whitespace ' '
+string clean_nullbyte(string str){
+	while (str.find('\0') != string::npos) str.replace(str.find('\0'), 1, " ");
+	return str;
 }
 
 string sec_to_dhms(unsigned sec){

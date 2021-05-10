@@ -24,7 +24,7 @@ tab-size = 4
 #include <vector>
 #include <atomic>
 
-using std::string, std::vector, std::map, std::atomic;
+using namespace std;
 
 namespace Global {
 
