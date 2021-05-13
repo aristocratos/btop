@@ -36,7 +36,6 @@ tab-size = 4
 
 #if defined(__linux__)
 	#define SYSTEM "linux"
-	#include <sys/sysinfo.h>
 	#include <btop_linux.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
@@ -245,40 +244,49 @@ int main(int argc, char **argv){
 		}
 	}
 
-	struct sysinfo sinfo;
-	sysinfo(&sinfo);
 
 
-	cout << "Up for " << sec_to_dhms(sinfo.uptime) << endl;
+	cout << "Up for " << sec_to_dhms(round(system_uptime())) << endl;
 
 
 
 //------>>>>>>
 
+
 	auto timestamp = time_ms();
+	Processes Proc;
+
+	cout << "Total Processes init: " << time_ms() - timestamp << "ms" << endl;
+
+	sleep_ms(1000);
+
 
 	// insert Processes call here
 
-	timestamp = time_ms() - timestamp;
-
-	auto timestamp2 = time_ms();
-
-	// insert Processes call here
-
-	timestamp2 = time_ms() - timestamp2;
 
 
-	// int lc = 0;
-	// string ostring;
-	// cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 50) << " " << rjustify("User:", 10) << " " << rjustify("Group:", 10) << "\n";
-	// for (auto& [lpid, lname, lcmd, luser, lgroup] : plist){
-	// 	ostring += rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 50, true) + " " + rjustify(luser, 10) + " " + rjustify(lgroup, 10) + "\n";
-	// 	if (lc++ > Term.height - 30) break;
-	// }
+	unsigned lc;
+	string ostring;
+	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 48) << " " << rjustify("User:", 10) << "   " << rjustify("Cpu%", 4) << "\n" << Mv::save << flush;
 
-	// cout << ostring << endl;
+	while (Input() != "q") {
+		timestamp = time_ms();
+		auto plist = Proc.collect("cpu lazy", false);
+		timestamp = time_ms() - timestamp;
+		ostring.clear();
+		lc = 0;
+		for (auto& [lpid, lname, lcmd, luser, lcpu, lcpu_s] : plist){
+			(void) lcpu_s;
+			ostring += rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 48, true) + " " + rjustify(luser, 10) + "   ";
+			ostring += (lcpu > 100) ? rjustify(to_string(lcpu), 3) + " " : rjustify(to_string(lcpu), 4);
+			ostring += "\n";
+			if (lc++ > Term.height - 20) break;
+		}
+		cout << Mv::restore << ostring << endl;
+		cout << "Processes call took: " << timestamp << "ms." << endl;
+		Input(2000);
+	}
 
-	// cout << "List generated in " << timestamp << "ms first call and in " << timestamp2 << "ms second call" << endl;
 	// cout << "Found " << plist.size() << " pids\n" << endl;
 
 //-----<<<<<

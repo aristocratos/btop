@@ -26,6 +26,7 @@ tab-size = 4
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <fstream>
 
 #include <unistd.h>
 #include <termios.h>
@@ -206,12 +207,6 @@ string trans(string str){
 	return (newstr.empty()) ? str : newstr;
 }
 
-//* Clean string by replacing null byte '\0' with whitespace ' '
-string clean_nullbyte(string str){
-	while (str.find('\0') != string::npos) str.replace(str.find('\0'), 1, " ");
-	return str;
-}
-
 string sec_to_dhms(unsigned sec){
 	string out;
 	unsigned d, h, m;
@@ -226,6 +221,14 @@ string sec_to_dhms(unsigned sec){
 	out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
 	out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
 	return out;
+}
+
+double system_uptime(){
+	string upstr;
+	ifstream pread("/proc/uptime");
+	getline(pread, upstr, ' ');
+	pread.close();
+	return stod(upstr);
 }
 
 
