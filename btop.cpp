@@ -25,6 +25,7 @@ tab-size = 4
 #include <thread>
 #include <future>
 #include <atomic>
+#include <filesystem>
 
 #include <unistd.h>
 
@@ -35,26 +36,20 @@ tab-size = 4
 #include <btop_theme.h>
 
 #if defined(__linux__)
-	#define SYSTEM "linux"
 	#include <btop_linux.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
-		#define SYSTEM "bsd"
-	#else
-		#define SYSTEM "unknown"
+		// #include <btop_bsd.h>
 	#endif
 #elif defined(__APPLE__) && defined(__MACH__)
 	#include <TargetConditionals.h>
 	#if TARGET_OS_MAC == 1
-		#define SYSTEM "osx"
-	#else
-		#define SYSTEM "unknown"
+		// #include <btop_osx.h>
     #endif
-#else
-    #define SYSTEM "unknown"
 #endif
 
+namespace fs = std::filesystem;
 using namespace std;
 
 
@@ -99,7 +94,7 @@ class C_Banner {
 	string banner_str;
 
 public:
-	int width;
+	int width = 0;
 
 	C_Banner(){
 		size_t z = 0;
@@ -112,7 +107,7 @@ public:
 			fg = hex_to_color(line[0]);
 			bg_i = 120-z*12;
 			bg = dec_to_color(bg_i, bg_i, bg_i);
-			for (unsigned i = 0; i < line[1].size(); i += 3) {
+			for (uint i = 0; i < line[1].size(); i += 3) {
 				if (line[1][i] == ' '){
 					letter = ' ';
 					i -= 2;
@@ -125,7 +120,7 @@ public:
 				oc = b_color;
 			}
 			z++;
-			if (z < Global::Banner_src.size()) out += Mv::l(ulen(line[1])) + Mv::d(1);
+			if (z < Global::Banner_src.size()) out += Mv::l(new_len) + Mv::d(1);
 		}
 		banner_str = out + Mv::r(18 - Global::Version.size()) + Fx::i + dec_to_color(0,0,0, State::truecolor, "bg") + dec_to_color(150, 150, 150) + "v" + Global::Version;
 	}
@@ -154,6 +149,15 @@ int main(int argc, char **argv){
 	cout.setf(std::ios::boolalpha);
 	if (argc > 1) argumentParser(argc, argv);
 
+	//? Init for Linux
+	if (Global::SYSTEM == "linux") {
+		Global::proc_path = (fs::is_directory(fs::path("/proc"))) ? fs::path("/proc") : Global::proc_path;
+		if (Global::proc_path.empty()) {
+			cout << "ERROR: Proc filesystem not detected!" << endl;
+			exit(1);
+		}
+	}
+
 	//? Initialize terminal and set options
 	C_Term Term;
 	if (!Term.initialized) {
@@ -174,7 +178,6 @@ int main(int argc, char **argv){
 	//? Initialize the Input class
 	C_Input Input;
 
-
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 	int debug = 2;
@@ -189,6 +192,7 @@ int main(int argc, char **argv){
 
 	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
 	cout << string(Term.width - 1, '-') << endl;
+
 
 
 
@@ -264,10 +268,10 @@ int main(int argc, char **argv){
 	// insert Processes call here
 
 
-
-	unsigned lc;
+	uint lc;
 	string ostring;
-	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 48) << " " << rjustify("User:", 10) << "   " << rjustify("Cpu%", 4) << "\n" << Mv::save << flush;
+	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 69) << " Threads: " <<
+			ljustify("User:", 10) << " " << rjustify("MemB", 5) << " " << rjustify("Cpu%", 14) << "\n" << Mv::save << flush;
 
 	while (Input() != "q") {
 		timestamp = time_ms();
@@ -275,9 +279,10 @@ int main(int argc, char **argv){
 		timestamp = time_ms() - timestamp;
 		ostring.clear();
 		lc = 0;
-		for (auto& [lpid, lname, lcmd, luser, lcpu, lcpu_s] : plist){
+		for (auto& [lpid, lname, lcmd, lthread, luser, lmem, lcpu, lcpu_s] : plist){
 			(void) lcpu_s;
-			ostring += rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 48, true) + " " + rjustify(luser, 10) + "   ";
+			ostring += 	rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 66, true) + " " +
+						rjustify(to_string(lthread), 5) + " " + ljustify(luser, 10) + " " + rjustify(floating_humanizer(lmem, true, 1), 5) + string(11, ' ');
 			ostring += (lcpu > 100) ? rjustify(to_string(lcpu), 3) + " " : rjustify(to_string(lcpu), 4);
 			ostring += "\n";
 			if (lc++ > Term.height - 20) break;

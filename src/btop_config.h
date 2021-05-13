@@ -39,7 +39,7 @@ using namespace std;
 namespace State {
 	bool truecolor = true;
 	string fg, bg;
-	unsigned width, height;
+	uint width, height;
 }
 
 class C_Config {

@@ -113,6 +113,11 @@ namespace Global {
 				} }
 		} }
 	};
+
+	//? Units for floating_humanizer function
+	const vector<string> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+	const vector<string> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
+
 }
 
 #endif

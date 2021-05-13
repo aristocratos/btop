@@ -42,7 +42,7 @@ using namespace std;
 //* Collection of escape codes for text style and formatting
 namespace Fx {
 	//* Escape sequence start
-	const string e = "\x1b[";
+	const string e = "\033[";
 
 	//* Bold on
 	const string b = e + "1m";
@@ -96,9 +96,9 @@ namespace Mv {
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 //* Return number of UTF8 characters in a string
-size_t ulen(string s){
+inline size_t ulen(string s){
 	return std::count_if(s.begin(), s.end(),
-		[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
+		[](char& c) { return (c & 0xC0) != 0x80; } );
 }
 
 //* Return current time since epoch in milliseconds
@@ -152,7 +152,7 @@ vector<string> ssplit(string str, string delim = " ", int times = 0){
 }
 
 //* Put current thread to sleep for <ms> milliseconds
-void sleep_ms(unsigned ms) {
+void sleep_ms(uint ms) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
@@ -207,9 +207,9 @@ string trans(string str){
 	return (newstr.empty()) ? str : newstr;
 }
 
-string sec_to_dhms(unsigned sec){
+string sec_to_dhms(uint sec){
 	string out;
-	unsigned d, h, m;
+	uint d, h, m;
 	d = sec / (3600 * 24);
 	sec %= 3600 * 24;
 	h = sec / 3600;
@@ -231,6 +231,41 @@ double system_uptime(){
 	return stod(upstr);
 }
 
+//* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed
+//* bit=True or defaults to bytes
+//* start=int to set 1024 multiplier starting unit
+//* short=True always returns 0 decimals and shortens unit to 1 character
+string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool bit=false, bool per_second=false){
+	string out;
+	uint mult = (bit) ? 8 : 1;
+	auto& units = (bit) ? Global::Units_bit : Global::Units_byte;
+
+	value *= 100 * mult;
+
+	while (value >= 102400){
+		value >>= 10;
+		if (value < 100){
+			out = to_string(value);
+			break;
+		}
+		start++;
+	}
+	if (out.empty()) {
+		out = to_string(value);
+		if (out.size() == 4 && start > 0) { out.pop_back(); out.insert(2, ".");}
+		else if (out.size() == 3 && start > 0) out.insert(1, ".");
+		else if (out.size() >= 2) out.resize(out.size() - 2);
+	}
+	if (shorten){
+			if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
+			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
+			out.push_back(units[start][0]);
+	}
+	else out += " " + units[start];
+
+	if (per_second) out += (bit) ? "ps" : "/s";
+	return out;
+}
 
 //? --------------------------------------------------- CLASSES -----------------------------------------------------
 
@@ -240,8 +275,8 @@ class C_Term {
 public:
 	bool initialized = false;
 	bool resized = false;
-	unsigned width = 0;
-	unsigned height = 0;
+	uint width = 0;
+	uint height = 0;
 
 	//* Hide terminal cursor
 	const string hide_cursor = Fx::e + "?25l";

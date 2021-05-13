@@ -33,7 +33,7 @@ using namespace std;
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 //* Convert 24-bit colors to 256 colors using 6x6x6 color cube
-int truecolor_to_256(unsigned r, unsigned g, unsigned b){
+int truecolor_to_256(uint r, uint g, uint b){
 	if (r / 11 == g / 11 && g / 11 == b / 11) {
 		return 232 + r / 11;
 	} else {
@@ -54,7 +54,7 @@ string hex_to_color(string hexa, bool t_to_256=false, string depth="fg"){
 		pre += (t_to_256) ? "5;" : "2;";
 
 		if (hexa.size() == 2){
-			unsigned h_int = stoi(hexa, 0, 16);
+			uint h_int = stoi(hexa, 0, 16);
 			if (t_to_256){
 				return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 			} else {
@@ -83,7 +83,7 @@ string hex_to_color(string hexa, bool t_to_256=false, string depth="fg"){
 //* Args	r: [0-255], g: [0-255], b: [0-255]
 //*			t_to_256: [true|false] convert 24bit value to 256 color value
 //* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-string dec_to_color(unsigned r, unsigned g, unsigned b, bool t_to_256=false, string depth="fg"){
+string dec_to_color(uint r, uint g, uint b, bool t_to_256=false, string depth="fg"){
 	depth = (depth == "fg") ? "38" : "48";
 	string pre = Fx::e + depth + ";";
 	pre += (t_to_256) ? "5;" : "2;";
