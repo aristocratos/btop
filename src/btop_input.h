@@ -29,59 +29,68 @@ tab-size = 4
 using namespace std;
 
 
-//* Class for handling keyboard and mouse input
-class C_Input {
-
-	string last = "";
-
-	//* Map for translating key codes to readable values
-	const map<string, string> Key_escapes = {
-		{"\033",	"escape"},
-		{"\n",		"enter"},
-		{" ",		"space"},
-		{"\x7f",	"backspace"},
-		{"\x08",	"backspace"},
-		{"[A", 		"up"},
-		{"OA",		"up"},
-		{"[B", 		"down"},
-		{"OB",		"down"},
-		{"[D", 		"left"},
-		{"OD",		"left"},
-		{"[C", 		"right"},
-		{"OC",		"right"},
-		{"[2~",		"insert"},
-		{"[3~",		"delete"},
-		{"[H",		"home"},
-		{"[F",		"end"},
-		{"[5~",		"page_up"},
-		{"[6~",		"page_down"},
-		{"\t",		"tab"},
-		{"[Z",		"shift_tab"},
-		{"OP",		"f1"},
-		{"OQ",		"f2"},
-		{"OR",		"f3"},
-		{"OS",		"f4"},
-		{"[15~",	"f5"},
-		{"[17~",	"f6"},
-		{"[18~",	"f7"},
-		{"[19~",	"f8"},
-		{"[20~",	"f9"},
-		{"[21~",	"f10"},
-		{"[23~",	"f11"},
-		{"[24~",	"f12"}
+//* Functions and variables for handling keyboard and mouse input
+namespace Input {
+	namespace {
+		//* Map for translating key codes to readable values
+		const map<string, string> Key_escapes = {
+			{"\033",	"escape"},
+			{"\n",		"enter"},
+			{" ",		"space"},
+			{"\x7f",	"backspace"},
+			{"\x08",	"backspace"},
+			{"[A", 		"up"},
+			{"OA",		"up"},
+			{"[B", 		"down"},
+			{"OB",		"down"},
+			{"[D", 		"left"},
+			{"OD",		"left"},
+			{"[C", 		"right"},
+			{"OC",		"right"},
+			{"[2~",		"insert"},
+			{"[3~",		"delete"},
+			{"[H",		"home"},
+			{"[F",		"end"},
+			{"[5~",		"page_up"},
+			{"[6~",		"page_down"},
+			{"\t",		"tab"},
+			{"[Z",		"shift_tab"},
+			{"OP",		"f1"},
+			{"OQ",		"f2"},
+			{"OR",		"f3"},
+			{"OS",		"f4"},
+			{"[15~",	"f5"},
+			{"[17~",	"f6"},
+			{"[18~",	"f7"},
+			{"[19~",	"f8"},
+			{"[20~",	"f9"},
+			{"[21~",	"f10"},
+			{"[23~",	"f11"},
+			{"[24~",	"f12"}
+		};
 	};
 
-	bool wait(int timeout=0){
-		if (timeout == 0) return cin.rdbuf()->in_avail() > 0;
+	//* Last entered key
+	string last = "";
+
+	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
+	bool poll(int timeout=0){
+		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		auto timer = 0;
-		while (timeout == -1 || timer * 10 <= timeout) {
+		while (timer * 10 <= timeout) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
 			sleep_ms(10);
-			if (timeout >= 0) ++timer;
+			++timer;
 		}
 		return false;
 	}
 
+	//* Wait until input is available
+	void wait(){
+		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
+	}
+
+	//* Get a key or mouse action from input
 	string get(){
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 && key.size() < 100) key += cin.get();
@@ -89,28 +98,15 @@ class C_Input {
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";
+			last = key;
 		}
 		return key;
 	}
 
-public:
-
-	//* Wait <timeout> ms for input on stdin and return true if available
-	//* -1 for infinite wait
-	bool operator()(int timeout){
-		if (wait(timeout)) {
-			last = get();
-			return !last.empty();
-		} else {
-			last = "";
-			return false;
-		}
+	void clear(){
+		last.clear();
 	}
 
-	//* Return last entered key
-	string operator()(){
-		return last;
-	}
 };
 
 #endif

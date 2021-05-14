@@ -44,30 +44,35 @@ namespace Global {
 
 }
 
-class Processes {
-	uint64_t tstamp;
-	long int clk_tck;
-	map<int, tuple<string, string, string>> cache;
-	map<string, uint> sorts = {
-		{"pid", 0},
-		{"name", 1},
-		{"command", 2},
-		{"threads", 3},
-		{"user", 4},
-		{"memory", 5},
-		{"cpu direct", 6},
-		{"cpu lazy", 7}
-	};
-	map<string, string> uid_user;
-	fs::path passwd_path;
-	fs::file_time_type passwd_time;
-	map<int, uint64_t> cpu_times;
-	map<int, uint64_t> cpu_second;
-	uint counter = 0;
-	long page_size = sysconf(_SC_PAGE_SIZE);
-public:
+namespace Proc {
+	namespace {
+		uint64_t tstamp;
+		long int clk_tck;
+		map<int, tuple<string, string, string>> cache;
+		map<string, string> uid_user;
+		fs::path passwd_path;
+		fs::file_time_type passwd_time;
+		map<int, uint64_t> cpu_times;
+		map<int, uint64_t> cpu_second;
+		uint counter = 0;
+		long page_size = sysconf(_SC_PAGE_SIZE);
+	}
+
 	atomic<bool> stop;
 	atomic<bool> running;
+	vector<string> sort_vector = {
+		"pid",
+		"name",
+		"command",
+		"threads",
+		"user",
+		"memory",
+		"cpu direct",
+		"cpu lazy",
+	};
+	map<string, uint> sort_map;
+
+
 
 	//* Collects process information from /proc and returns a vector of tuples
 	auto collect(string sorting="pid", bool reverse=false, string filter=""){
@@ -81,7 +86,7 @@ public:
 		auto since_last = time_ms() - tstamp;
 		if (since_last < 1) since_last = 1;
 		auto uptime = system_uptime();
-		auto sortint = (sorts.contains(sorting)) ? sorts[sorting] : 5;
+		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<string> pstat;
 
 		//? Return type! Values in tuple: pid, program, command, threads, username, mem KiB, cpu%, cpu cumulative
@@ -121,7 +126,7 @@ public:
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				pid = stoi(pid_str);
 
-				//* Get cpu usage, threads and rss mem from [pid]/stat
+				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
 				if (fs::exists((string)d.path() + "/stat")) {
 					pread.clear(); pstat.clear();
 					ifstream pread((string)d.path() + "/stat");
@@ -140,9 +145,6 @@ public:
 					//? Cache process start time
 					if (!cpu_second.contains(pid)) cpu_second[pid] = stoull(pstat[21]);
 
-					//? Get RSS memory in KiB (will be overriden by /status if available)
-					rss_mem = (stoull(pstat[23]) * page_size) >> 10;
-
 					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
 					cpu = static_cast<double>(100000 * (cpu_t - cpu_times[pid]) / since_last) / clk_tck;
 
@@ -151,23 +153,16 @@ public:
 					cpu_times[pid] = cpu_t;
 				}
 
-				//* Get RSS memory in KiB
-				if (fs::exists((string)d.path() + "/status")) {
-					pread.clear(); status.clear(); tmpstr.clear();
-					ifstream pread((string)d.path() + "/status");
+				//* Get RSS memory in bytes from /proc/[pid]/statm
+				if (fs::exists((string)d.path() + "/statm")) {
+					pread.clear(); tmpstr.clear();
+					ifstream pread((string)d.path() + "/statm");
 					if (pread.good()) {
-						while (getline(pread, status, ':')){
-							if (status == "VmRSS") {
-								pread.ignore();
-								pread >> ws;
-								getline(pread, tmpstr, 'k');
-								tmpstr.pop_back();
-								break;
-							} else pread.ignore(numeric_limits<streamsize>::max(), '\n');
-						}
+						pread.ignore(numeric_limits<streamsize>::max(), ' ');
+						pread >> rss_mem;
+						rss_mem *= page_size;
 					}
 					pread.close();
-					if (!tmpstr.empty()) rss_mem = stoull(tmpstr);
 				}
 
 				//* Cache program name, command and username
@@ -263,12 +258,14 @@ public:
 		return procs;
 	}
 
-	Processes() {
+	void init(){
 		clk_tck = sysconf(_SC_CLK_TCK);
 		tstamp = time_ms();
 		stop.store(false);
 		passwd_path = (fs::exists(fs::path("/etc/passwd"))) ? fs::path("/etc/passwd") : passwd_path;
-		collect();
+		uint i = 0;
+		for (auto& item : sort_vector) sort_map[item] = i++;
+		// collect();
 	}
 };
 

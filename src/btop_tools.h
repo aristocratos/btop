@@ -27,6 +27,7 @@ tab-size = 4
 #include <thread>
 #include <algorithm>
 #include <fstream>
+#include <regex>
 
 #include <unistd.h>
 #include <termios.h>
@@ -42,7 +43,7 @@ using namespace std;
 //* Collection of escape codes for text style and formatting
 namespace Fx {
 	//* Escape sequence start
-	const string e = "\033[";
+	const string e = "\x1b[";
 
 	//* Bold on
 	const string b = e + "1m";
@@ -67,6 +68,17 @@ namespace Fx {
 
 	//* Reset text effects and restore default foregrund and background color < Changed by C_Theme
 	string reset = reset_base;
+
+	//* Regex for matching color, style and curse move escape sequences
+	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
+
+	//* Regex for matching only color and style escape sequences
+	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
+
+	//* Return a string with all colors and text styling removed
+	string uncolor(string& s){
+		return regex_replace(s, color_regex, "");
+	}
 };
 
 //* Collection of escape codes and functions for cursor manipulation
@@ -93,12 +105,121 @@ namespace Mv {
 	const string restore = Fx::e + "u";
 };
 
+//* Collection of escape codes and functions for terminal manipulation
+namespace Term {
+
+	bool initialized = false;
+	bool resized = false;
+	uint width = 0;
+	uint height = 0;
+	string fg, bg;
+
+	namespace {
+		struct termios initial_settings;
+
+		//* Toggle terminal input echo
+		bool echo(bool on=true){
+			struct termios settings;
+			if (tcgetattr(STDIN_FILENO, &settings)) return false;
+			if (on) settings.c_lflag |= ECHO;
+			else settings.c_lflag &= ~(ECHO);
+			return 0 == tcsetattr(STDIN_FILENO, TCSANOW, &settings);
+		}
+
+		//* Refresh variables holding current terminal width and height and return true if resized
+		bool refresh(){
+			struct winsize w;
+			ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+			resized = (width != w.ws_col || height != w.ws_row) ? true : false;
+			width = w.ws_col;
+			height = w.ws_row;
+			return resized;
+		}
+	};
+
+
+	//* Hide terminal cursor
+	const string hide_cursor = Fx::e + "?25l";
+
+	//* Show terminal cursor
+	const string show_cursor = Fx::e + "?25h";
+
+	//* Switch to alternate screen
+	const string alt_screen = Fx::e + "?1049h";
+
+	//* Switch to normal screen
+	const string normal_screen = Fx::e + "?1049l";
+
+	//* Clear screen and set cursor to position 0,0
+	const string clear = Fx::e + "2J" + Fx::e + "0;0f";
+
+	//* Clear from cursor to end of screen
+	const string clear_end = Fx::e + "0J";
+
+	//* Clear from cursor to beginning of screen
+	const string clear_begin = Fx::e + "1J";
+
+	//* Enable reporting of mouse position on click and release
+	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h";
+
+	//* Disable mouse reporting
+	const string mouse_off = Fx::e + "?1002l";
+
+	//* Enable reporting of mouse position at any movement
+	const string mouse_direct_on = Fx::e + "?1003h";
+
+	//* Disable direct mouse reporting
+	const string mouse_direct_off = Fx::e + "?1003l";
+
+	//* Toggle need for return key when reading input
+	bool linebuffered(bool on=true){
+		struct termios settings;
+		if (tcgetattr(STDIN_FILENO, &settings)) return false;
+		if (on) settings.c_lflag |= ICANON;
+		else settings.c_lflag &= ~(ICANON);
+		if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
+		if (on) setlinebuf(stdin);
+		else setbuf(stdin, NULL);
+		return true;
+	}
+
+
+
+	//* Check for a valid tty, save terminal options and set new options
+	bool init(){
+		if (!initialized){
+			initialized = (bool)isatty(STDIN_FILENO);
+			if (initialized) {
+				initialized = (0 == tcgetattr(STDIN_FILENO, &initial_settings));
+				cin.sync_with_stdio(false);
+				cin.tie(NULL);
+				echo(false);
+				linebuffered(false);
+				refresh();
+				resized = false;
+			}
+		}
+		return initialized;
+	}
+
+	//* Restore terminal options
+	void restore(){
+		if (initialized) {
+			echo(true);
+			linebuffered(true);
+			tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
+			initialized = false;
+		}
+	}
+};
+
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
-//* Return number of UTF8 characters in a string
-inline size_t ulen(string s){
+//* Return number of UTF8 characters in a string with option to disregard escape sequences
+inline size_t ulen(string s, bool escape=false){
+	if (escape) s = regex_replace(s, Fx::escape_regex, "");
 	return std::count_if(s.begin(), s.end(),
-		[](char& c) { return (c & 0xC0) != 0x80; } );
+		[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
 }
 
 //* Return current time since epoch in milliseconds
@@ -157,38 +278,40 @@ void sleep_ms(uint ms) {
 }
 
 //* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-string ljustify(string str, size_t x, bool utf=false, bool lim=true){
- 	if (!utf) {
-		if (lim && str.size() > x) str.resize(x);
-		return str + string(max((int)(x - str.size()), 0), ' ');
-	} else {
-		if (lim && ulen(str) > x) {
+string ljustify(string str, size_t x, bool utf=false, bool escape=false, bool lim=true){
+	if (utf || escape) {
+		if (!escape && lim && ulen(str) > x) {
 			auto i = str.size();
 			while (ulen(str) > x) str.resize(--i);
 		}
-		return str + string(max((int)(x - ulen(str)), 0), ' ');
+		return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
+	}
+	else {
+		if (lim && str.size() > x) str.resize(x);
+		return str + string(max((int)(x - str.size()), 0), ' ');
 	}
 }
 
 //* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-string rjustify(string str, size_t x, bool utf=false, bool lim=true){
- 	if (!utf) {
-		if (lim && str.size() > x) str.resize(x);
-		return string(max((int)(x - str.size()), 0), ' ') + str;
-	} else {
-		if (lim && ulen(str) > x) {
+string rjustify(string str, size_t x, bool utf=false, bool escape=false, bool lim=true){
+	if (utf || escape) {
+		if (!escape && lim && ulen(str) > x) {
 			auto i = str.size();
 			while (ulen(str) > x) str.resize(--i);
 		}
-		return string(max((int)(x - ulen(str)), 0), ' ') + str;
+		return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
+	}
+	else {
+		if (lim && str.size() > x) str.resize(x);
+		return string(max((int)(x - str.size()), 0), ' ') + str;
 	}
 }
 
 //* Trim trailing characters if utf8 string length is greatear than <x>
 string uresize(string str, size_t x){
-	auto i = str.size();
-	if (i < 1 || x < 1) return str;
-	while (ulen(str) > x) str.resize(--i);
+	// auto i = str.size();
+	if (str.empty()) return str;
+	while (ulen(str) > x) str.pop_back();
 	return str;
 }
 
@@ -269,104 +392,7 @@ string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool
 
 //? --------------------------------------------------- CLASSES -----------------------------------------------------
 
-//* Collection of escape codes and functions for terminal manipulation
-class C_Term {
-	struct termios initial_settings;
-public:
-	bool initialized = false;
-	bool resized = false;
-	uint width = 0;
-	uint height = 0;
 
-	//* Hide terminal cursor
-	const string hide_cursor = Fx::e + "?25l";
-
-	//* Show terminal cursor
-	const string show_cursor = Fx::e + "?25h";
-
-	//* Switch to alternate screen
-	const string alt_screen = Fx::e + "?1049h";
-
-	//* Switch to normal screen
-	const string normal_screen = Fx::e + "?1049l";
-
-	//* Clear screen and set cursor to position 0,0
-	const string clear = Fx::e + "2J" + Fx::e + "0;0f";
-
-	//* Enable reporting of mouse position on click and release
-	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h";
-
-	//* Disable mouse reporting
-	const string mouse_off = Fx::e + "?1002l";
-
-	//* Enable reporting of mouse position at any movement
-	const string mouse_direct_on = Fx::e + "?1003h";
-
-	//* Disable direct mouse reporting
-	const string mouse_direct_off = Fx::e + "?1003l";
-
-	//* Toggle need for return key when reading input
-	bool linebuffered(bool on=true){
-		struct termios settings;
-		if (tcgetattr(STDIN_FILENO, &settings)) return false;
-		if (on) settings.c_lflag |= ICANON;
-		else settings.c_lflag &= ~(ICANON);
-		if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
-		if (on) setlinebuf(stdin);
-		else setbuf(stdin, NULL);
-		return true;
-	}
-
-	//* Toggle terminal input echo
-	bool echo(bool on=true){
-		struct termios settings;
-		if (tcgetattr(STDIN_FILENO, &settings)) return false;
-		if (on) settings.c_lflag |= ECHO;
-		else settings.c_lflag &= ~(ECHO);
-		return 0 == tcsetattr(STDIN_FILENO, TCSANOW, &settings);
-	}
-
-	//* Refresh variables holding current terminal width and height and return true if resized
-	bool refresh(){
-		struct winsize w;
-		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-		resized = (width != w.ws_col || height != w.ws_row) ? true : false;
-		State::width = width = w.ws_col;
-		State::height = height = w.ws_row;
-		return resized;
-	}
-
-	//* Check for a valid tty, save terminal options and set new options
-	bool init(){
-		if (!initialized){
-			initialized = (bool)isatty(STDIN_FILENO);
-			if (initialized) {
-				initialized = (0 == tcgetattr(STDIN_FILENO, &initial_settings));
-				cin.sync_with_stdio(false);
-				cin.tie(NULL);
-				echo(false);
-				linebuffered(false);
-			}
-		}
-		return initialized;
-	}
-
-	//* Restore terminal options
-	void restore(){
-		if (initialized) {
-			echo(true);
-			linebuffered(true);
-			tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
-			initialized = false;
-		}
-	}
-
-	C_Term() {
-		init();
-		refresh();
-		resized = false;
-	}
-};
 
 //? --------------------------------------------------- STRUCTS -------------------------------------------------------
 

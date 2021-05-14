@@ -66,6 +66,9 @@ namespace Global {
 	};
 
 	const string Version = "0.0.1";
+
+	string banner;
+	uint banner_width;
 }
 
 
@@ -90,46 +93,42 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-class C_Banner {
-	string banner_str;
-
-public:
-	int width = 0;
-
-	C_Banner(){
-		size_t z = 0;
-		string b_color, bg, fg, out, oc, letter;
-		int bg_i;
-		int new_len;
-		for (auto line: Global::Banner_src) {
-			new_len = ulen(line[1]);
-			if (new_len > width) width = new_len;
-			fg = hex_to_color(line[0]);
-			bg_i = 120-z*12;
-			bg = dec_to_color(bg_i, bg_i, bg_i);
-			for (uint i = 0; i < line[1].size(); i += 3) {
-				if (line[1][i] == ' '){
-					letter = ' ';
-					i -= 2;
-				} else{
-					letter = line[1].substr(i, 3);
-				}
-				b_color = (letter == "█") ? fg : bg;
-				if (b_color != oc) out += b_color;
-				out += letter;
-				oc = b_color;
+//* Generate the btop++ banner
+auto create_banner(){
+	struct out_vals {
+		uint w;
+		string s;
+	};
+	size_t z = 0;
+	uint width=0, new_len=0;
+	string b_color, bg, fg, out, oc, letter;
+	bool truecolor = Config::getB("truecolor");
+	int bg_i;
+	for (auto line: Global::Banner_src) {
+		if ((new_len = ulen(line[1])) > width) width = new_len;
+		fg = Theme::hex_to_color(line[0], !truecolor);
+		bg_i = 120-z*12;
+		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
+		for (uint i = 0; i < line[1].size(); i += 3) {
+			if (line[1][i] == ' '){
+				letter = ' ';
+				i -= 2;
+			} else{
+				letter = line[1].substr(i, 3);
 			}
-			z++;
-			if (z < Global::Banner_src.size()) out += Mv::l(new_len) + Mv::d(1);
+			b_color = (letter == "█") ? fg : bg;
+			if (b_color != oc) out += b_color;
+			out += letter;
+			oc = b_color;
 		}
-		banner_str = out + Mv::r(18 - Global::Version.size()) + Fx::i + dec_to_color(0,0,0, State::truecolor, "bg") + dec_to_color(150, 150, 150) + "v" + Global::Version;
+		z++;
+		if (z < Global::Banner_src.size()) out += Mv::l(new_len) + Mv::d(1);
 	}
+	out += Mv::r(18 - Global::Version.size()) + Fx::i + Theme::dec_to_color(0,0,0, !truecolor, "bg") +
+			Theme::dec_to_color(150, 150, 150, !truecolor) + "v" + Global::Version + Fx::reset;
+	return out_vals {width, out};
+}
 
-	//* Returns the pre-generated btop++ banner
-	string operator() (){
-		return banner_str + Fx::reset;
-	}
-};
 
 //* Threading test function
 string my_worker(int x){
@@ -159,41 +158,38 @@ int main(int argc, char **argv){
 	}
 
 	//? Initialize terminal and set options
-	C_Term Term;
-	if (!Term.initialized) {
+	if (!Term::init()) {
 		cout << "ERROR: No tty detected!" << endl;
 		cout << "Sorry, btop++ needs an interactive shell to run." << endl;
 		exit(1);
 	}
 
 	//? Read config file if present
-	C_Config Config;
+	Config::load("____");
 
 	//? Generate the theme
-	C_Theme Theme(Global::Default_theme);
+	Theme::set(Global::Default_theme);
 
 	//? Create the btop++ banner
-	C_Banner Banner;
+	auto [banner_width, banner] = create_banner();
+	Global::banner_width = move(banner_width);
+	Global::banner = move(banner);
 
-	//? Initialize the Input class
-	C_Input Input;
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
-	int debug = 2;
+	int debug = 0;
 	int tests = 0;
 
-	// cout << Theme("main_bg") << Term.clear << flush;
+	// cout << Theme("main_bg") << Term::clear << flush;
 	bool thread_test = false;
 
-	if (debug < 2) cout << Term.alt_screen << Term.clear << Term.hide_cursor << flush;
+	if (debug < 2) cout << Term::alt_screen << Term::hide_cursor << flush;
 
-	cout << Theme("main_fg") << Term.clear << endl;
+	cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
 
-	cout << Mv::r(Term.width / 2 - Banner.width / 2) << Banner() << endl;
-	cout << string(Term.width - 1, '-') << endl;
-
-
+	cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
+	cout << string(Term::width - 1, '-') << endl;
 
 
 	//* Test MENUS
@@ -215,7 +211,7 @@ int main(int argc, char **argv){
 
 	int i = 0;
 	if (tests>0) for(auto& item : Global::Default_theme) {
-		cout << Theme(item.first) << item.first << ":" << Theme("main_fg") << Theme(item.first).erase(0, 2) << Fx::reset << "  ";
+		cout << Theme::c(item.first) << item.first << ":" << Theme::c("main_fg") << Theme::c(item.first).erase(0, 2) << Fx::reset << "  ";
 		if (++i == 4) {
 			i = 0;
 			cout << endl;
@@ -258,11 +254,14 @@ int main(int argc, char **argv){
 
 
 	auto timestamp = time_ms();
-	Processes Proc;
+	Proc::init();
 
 	cout << "Total Processes init: " << time_ms() - timestamp << "ms" << endl;
+	cout << "Press any key to start!" << Mv::l(100) << flush;
 
-	sleep_ms(1000);
+	// sleep_ms(1000);
+	// Input::wait();
+	// Input::clear();
 
 
 	// insert Processes call here
@@ -270,26 +269,63 @@ int main(int argc, char **argv){
 
 	uint lc;
 	string ostring;
-	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term.width - 69) << " Threads: " <<
+	uint64_t tsl, timestamp2;
+	uint timer = 2000;
+	bool filtering = false;
+	vector<string> sorting;
+	bool reversing = false;
+	int sortint = Proc::sort_map["cpu lazy"];
+	string filter;
+	string filter_cur;
+	string key;
+	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term::width - 69) << " Threads: " <<
 			ljustify("User:", 10) << " " << rjustify("MemB", 5) << " " << rjustify("Cpu%", 14) << "\n" << Mv::save << flush;
 
-	while (Input() != "q") {
+	while (key != "q") {
 		timestamp = time_ms();
-		auto plist = Proc.collect("cpu lazy", false);
-		timestamp = time_ms() - timestamp;
+		tsl = timestamp + timer;
+		auto plist = Proc::collect(Proc::sort_vector[sortint], reversing, filter);
+		timestamp2 = time_ms();
+		timestamp = timestamp2 - timestamp;
 		ostring.clear();
 		lc = 0;
+		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
+		cout << Mv::restore << Mv::u(2) << Mv::r(20) << rjustify("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
+				 "Sorting: " + Proc::sort_vector[sortint], Term::width - 22, true, filtering) <<  Mv::restore << flush;
+
 		for (auto& [lpid, lname, lcmd, lthread, luser, lmem, lcpu, lcpu_s] : plist){
 			(void) lcpu_s;
-			ostring += 	rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term.width - 66, true) + " " +
-						rjustify(to_string(lthread), 5) + " " + ljustify(luser, 10) + " " + rjustify(floating_humanizer(lmem, true, 1), 5) + string(11, ' ');
+			ostring += 	rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term::width - 66, true) + " " +
+						rjustify(to_string(lthread), 5) + " " + ljustify(luser, 10) + " " + rjustify(floating_humanizer(lmem, true), 5) + string(11, ' ');
 			ostring += (lcpu > 100) ? rjustify(to_string(lcpu), 3) + " " : rjustify(to_string(lcpu), 4);
 			ostring += "\n";
-			if (lc++ > Term.height - 20) break;
+			if (lc++ > Term::height - 20) break;
 		}
-		cout << Mv::restore << ostring << endl;
-		cout << "Processes call took: " << timestamp << "ms." << endl;
-		Input(2000);
+
+		cout << Mv::restore << ostring << Term::clear_end << endl;
+		cout << "Processes call took: " << timestamp << "ms. Drawing took: " << time_ms() - timestamp2 << "ms." << endl;
+
+		while (time_ms() < tsl) {
+			if (Input::poll(tsl - time_ms())) key = Input::get();
+			else { key.clear() ; continue; }
+			// if (key != "") continue;
+			if (filtering) {
+				if (key == "enter") filtering = false;
+				else if (key == "backspace") {if (!filter.empty()) filter = uresize(filter, ulen(filter) - 1);}
+				else if (key == "space") filter.push_back(' ');
+				else if (ulen(key) == 1 ) filter.append(key);
+				else { key.clear() ; continue; }
+				break;
+			}
+			else if (key == "q") break;
+			else if (key == "left") { if (--sortint < 0) sortint = (int)Proc::sort_vector.size() - 1; }
+			else if (key == "right") { if (++sortint > (int)Proc::sort_vector.size() - 1) sortint = 0; }
+			else if (key == "f") filtering = true;
+			else if (key == "r") reversing = !reversing;
+			else if (key == "delete") filter.clear();
+			else continue;
+			break;
+		}
 	}
 
 	// cout << "Found " << plist.size() << " pids\n" << endl;
@@ -301,15 +337,15 @@ int main(int argc, char **argv){
 
 
 	if (tests>3){
-		auto nbcolor = hex_to_color(Global::Default_theme.at("net_box"));
-		auto nbcolor_rgb = c_to_rgb(nbcolor);
+		auto nbcolor = Theme::hex_to_color(Global::Default_theme.at("net_box"));
+		auto nbcolor_rgb = Theme::rgb(nbcolor);
 		auto nbcolor_man = ssplit(nbcolor, ";");
 		cout << nbcolor << "Some color" << endl;
 		cout << "nbcolor_rgb size=" << nbcolor_rgb.size() << endl;
 		cout << "R:" << nbcolor_rgb.at("r") << " G:" << nbcolor_rgb.at("g") << " B:" << nbcolor_rgb.at("b") << endl;
 		cout << "MANUAL R:" << nbcolor_man.at(2) << " G:" << nbcolor_man.at(3) << " B:" << nbcolor_man.at(4) << endl;
 
-		auto ccc = dec_to_color(100, 255, 100);
+		auto ccc = Theme::dec_to_color(100, 255, 100);
 		cout << "\n" << ccc << "Testing..." << endl;
 	}
 
@@ -357,9 +393,9 @@ int main(int argc, char **argv){
 
 
 
-	if (debug == 0){
-		cout << Theme("main_fg");
-		cout << Mv::to(Term.height - 1, 0) << "Press q to exit! Timeout" << flush;
+	if (debug == 3){
+		cout << Theme::c("main_fg");
+		cout << Mv::to(Term::height - 1, 0) << "Press q to exit! Timeout" << flush;
 		string full, key;
 		int wt = 90;
 		bool qp = false;
@@ -367,13 +403,13 @@ int main(int argc, char **argv){
 			int wtm = wt / 60;
 			int wts = wt - wtm * 60;
 			wt--;
-			cout << Mv::to(Term.height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
+			cout << Mv::to(Term::height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
 			//chr = Key(1000);
-			if (Input(1000)) {
-				key = Input();
-				cout << Mv::to(Term.height - 2, 1) << "Last key: LEN=" << key.size() << " ULEN=" << ulen(key) << " KEY=\"" << key << "\" CODE=" << (int)key.at(0) << "        " << flush;
+			if (Input::poll(1000)) {
+				key = Input::get();
+				cout << Mv::to(Term::height - 2, 1) << "Last key: LEN=" << key.size() << " ULEN=" << ulen(key) << " KEY=\"" << key << "\" CODE=" << (int)key.at(0) << "        " << flush;
 				full += key;
-				cout << Mv::to(Term.height - 5, 1) << full << flush;
+				cout << Mv::to(Term::height - 5, 1) << full << flush;
 				if (key == "q") qp = true;
 				key = "";
 				wt++;
@@ -381,8 +417,8 @@ int main(int argc, char **argv){
 		}
 	}
 
-	if (debug == 1) Input(-1);
-	Term.restore();
-	if (debug < 2) cout << Term.normal_screen << Term.show_cursor << flush;
+	if (debug == 1) Input::wait();
+	Term::restore();
+	if (debug < 2) cout << Term::normal_screen << Term::show_cursor << flush;
 	return 0;
 }
