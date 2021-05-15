@@ -48,7 +48,8 @@ namespace Proc {
 	namespace {
 		uint64_t tstamp;
 		long int clk_tck;
-		map<int, tuple<string, string, string>> cache;
+		struct p_cache { string name, cmd, user; };
+		map<int, p_cache> cache;
 		map<string, string> uid_user;
 		fs::path passwd_path;
 		fs::file_time_type passwd_time;
@@ -56,6 +57,7 @@ namespace Proc {
 		map<int, uint64_t> cpu_second;
 		uint counter = 0;
 		long page_size = sysconf(_SC_PAGE_SIZE);
+
 	}
 
 	atomic<bool> stop;
@@ -72,9 +74,18 @@ namespace Proc {
 	};
 	map<string, uint> sort_map;
 
+	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c
+	struct proc_info {
+		int pid;
+		string name, cmd;
+		size_t threads;
+		string user;
+		uint64_t mem;
+		double cpu_p, cpu_c;
+	};
 
 
-	//* Collects process information from /proc and returns a vector of tuples
+	//* Collects process information from /proc and returns a vector of proc_info structs
 	auto collect(string sorting="pid", bool reverse=false, string filter=""){
 		running.store(true);
 		int pid;
@@ -88,9 +99,7 @@ namespace Proc {
 		auto uptime = system_uptime();
 		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<string> pstat;
-
-		//? Return type! Values in tuple: pid, program, command, threads, username, mem KiB, cpu%, cpu cumulative
-		vector<tuple<int, string, string, size_t, string, uint64_t, double, double>> procs;
+		vector<proc_info> procs;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
@@ -198,37 +207,36 @@ namespace Proc {
 						pread.close();
 						user = (!uid.empty() && uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 					}
-					cache[pid] = make_tuple(name, cmd, user);
+					cache[pid] = p_cache(name, cmd, user);
 				}
 
 				// //* Match filter if applicable
 				if (!filter.empty() &&
 					pid_str.find(filter) == string::npos &&				//? Pid
-					get<0>(cache[pid]).find(filter) == string::npos &&	//? Program
-					get<1>(cache[pid]).find(filter) == string::npos &&	//? Command
-					get<2>(cache[pid]).find(filter) == string::npos 	//? User
+					cache[pid].name.find(filter) == string::npos &&		//? Program
+					cache[pid].cmd.find(filter) == string::npos &&		//? Command
+					cache[pid].user.find(filter) == string::npos 		//? User
 					) continue;
 
 				//* Create tuple
-				procs.push_back(make_tuple(pid, get<0>(cache[pid]), get<1>(cache[pid]), threads, get<2>(cache[pid]), rss_mem, cpu, cpu_s));
+				procs.push_back(proc_info(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s));
 			}
 		}
 
 		// auto st = time_ms();
 
 		//* Sort processes vector
-		ranges::sort(procs, [&sortint, &reverse](	tuple<int, string, string, size_t, string, uint64_t, double, double>& a,
-													tuple<int, string, string, size_t, string, uint64_t, double, double>& b)
+		ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b)
 			{
 				switch (sortint) {
-					case 0: return (reverse) ? get<0>(a) < get<0>(b) : get<0>(a) > get<0>(b);	//? Pid
-					case 1: return (reverse) ? get<1>(a) < get<1>(b) : get<1>(a) > get<1>(b);	//? Program
-					case 2: return (reverse) ? get<2>(a) < get<2>(b) : get<2>(a) > get<2>(b);	//? Command
-					case 3: return (reverse) ? get<3>(a) < get<3>(b) : get<3>(a) > get<3>(b);	//? Threads
-					case 4: return (reverse) ? get<4>(a) < get<4>(b) : get<4>(a) > get<4>(b);	//? User
-					case 5: return (reverse) ? get<5>(a) < get<5>(b) : get<5>(a) > get<5>(b);	//? Memory
-					case 6: return (reverse) ? get<6>(a) < get<6>(b) : get<6>(a) > get<6>(b);	//? Cpu direct
-					case 7: return (reverse) ? get<7>(a) < get<7>(b) : get<7>(a) > get<7>(b);	//? Cpu lazy
+					case 0: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
+					case 1: return (reverse) ? a.name < b.name : a.name > b.name;
+					case 2: return (reverse) ? a.cmd < b.cmd : a.cmd > b.cmd;
+					case 3: return (reverse) ? a.threads < b.threads : a.threads > b.threads;
+					case 4: return (reverse) ? a.user < b.user : a.user > b.user;
+					case 5: return (reverse) ? a.mem < b.mem : a.mem > b.mem;
+					case 6: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
+					case 7: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
 				}
 				return false;
 			}
@@ -238,10 +246,10 @@ namespace Proc {
 		if (sortint == 6 && !reverse) {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
-				if (i <= 5 && get<6>(procs[i]) > max) max = get<6>(procs[i]);
+				if (i <= 5 && procs[i].cpu_p > max) max = procs[i].cpu_p;
 				else if (i == 6) target = (max > 30.0) ? max : 10.0;
-				if (i == offset && get<6>(procs[i]) > 30.0) offset++;
-				else if (get<6>(procs[i]) > target) rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
+				if (i == offset && procs[i].cpu_p > 30.0) offset++;
+				else if (procs[i].cpu_p > target) rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
 			}
 		}
 
