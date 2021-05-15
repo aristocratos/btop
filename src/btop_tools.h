@@ -17,16 +17,13 @@ tab-size = 4
 */
 
 #ifndef _btop_tools_included_
-#define _btop_tools_included_
+#define _btop_tools_included_ 1
 
 #include <string>
 #include <cmath>
 #include <vector>
-#include <map>
+#include <iostream>
 #include <chrono>
-#include <thread>
-#include <algorithm>
-#include <fstream>
 #include <regex>
 
 #include <unistd.h>
@@ -344,14 +341,6 @@ string sec_to_dhms(uint sec){
 	out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
 	out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
 	return out;
-}
-
-double system_uptime(){
-	string upstr;
-	ifstream pread("/proc/uptime");
-	getline(pread, upstr, ' ');
-	pread.close();
-	return stod(upstr);
 }
 
 //* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed

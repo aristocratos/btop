@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_theme_included_
-#define _btop_theme_included_
+#define _btop_theme_included_ 1
 
 #include <string>
 #include <cmath>

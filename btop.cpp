@@ -16,18 +16,12 @@ indent = tab
 tab-size = 4
 */
 
-#include <iostream>
+
 #include <string>
-#include <cmath>
 #include <vector>
-#include <map>
-#include <tuple>
 #include <thread>
 #include <future>
 #include <atomic>
-#include <filesystem>
-
-#include <unistd.h>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
@@ -149,7 +143,7 @@ int main(int argc, char **argv){
 	if (argc > 1) argumentParser(argc, argv);
 
 	//? Init for Linux
-	if (Global::SYSTEM == "linux") {
+	if (Global::System == "linux") {
 		Global::proc_path = (fs::is_directory(fs::path("/proc"))) ? fs::path("/proc") : Global::proc_path;
 		if (Global::proc_path.empty()) {
 			cout << "ERROR: Proc filesystem not detected!" << endl;
@@ -293,11 +287,10 @@ int main(int argc, char **argv){
 		cout << Mv::restore << Mv::u(2) << Mv::r(20) << rjustify("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
 				 "Sorting: " + Proc::sort_vector[sortint], Term::width - 22, true, filtering) <<  Mv::restore << flush;
 
-		for (auto& [lpid, lname, lcmd, lthread, luser, lmem, lcpu, lcpu_s] : plist){
-			(void) lcpu_s;
-			ostring += 	rjustify(to_string(lpid), 8) + " " + ljustify(lname, 16) + " " + ljustify(lcmd, Term::width - 66, true) + " " +
-						rjustify(to_string(lthread), 5) + " " + ljustify(luser, 10) + " " + rjustify(floating_humanizer(lmem, true), 5) + string(11, ' ');
-			ostring += (lcpu > 100) ? rjustify(to_string(lcpu), 3) + " " : rjustify(to_string(lcpu), 4);
+		for (Proc::proc_info& procs : plist){
+			ostring += 	rjustify(to_string(procs.pid), 8) + " " + ljustify(procs.name, 16) + " " + ljustify(procs.cmd, Term::width - 66, true) + " " +
+						rjustify(to_string(procs.threads), 5) + " " + ljustify(procs.user, 10) + " " + rjustify(floating_humanizer(procs.mem, true), 5) + string(11, ' ');
+			ostring += (procs.cpu_p > 100) ? rjustify(to_string(procs.cpu_p), 3) + " " : rjustify(to_string(procs.cpu_p), 4);
 			ostring += "\n";
 			if (lc++ > Term::height - 20) break;
 		}

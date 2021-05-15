@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_input_included_
-#define _btop_input_included_
+#define _btop_input_included_ 1
 
 #include <string>
 #include <map>

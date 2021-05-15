@@ -112,7 +112,7 @@ Look to the creators of the terminal emulator you use to fix these issues if the
 
 None
 
-But will need G++ 10 or Clang 11 if compiling from source.
+But will need G++ 10 if compiling from source.
 
 ## Screenshots
 
@@ -165,7 +165,7 @@ Config files stored in "$HOME/.config/btop" folder
 
 #### btop.cfg: (auto generated if not found)
 
-"/etc/bpytop.conf" will be used as default seed for config file creation if it exists. ("/usr/local/etc/bpytop.conf" on BSD)
+"/etc/btop.conf" will be used as default seed for config file creation if it exists. ("/usr/local/etc/btop.conf" on BSD)
 
 ```bash
 #? Config file for btop v. 0.0.1

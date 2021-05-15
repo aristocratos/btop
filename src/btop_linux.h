@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_linux_included_
-#define _btop_linux_included_
+#define _btop_linux_included_ 1
 
 #include <string>
 #include <vector>
@@ -39,29 +39,42 @@ using namespace std;
 
 namespace Global {
 
-	const string SYSTEM = "linux";
+	const string System = "linux";
 	filesystem::path proc_path;
 
 }
+
+//? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
+
+double system_uptime(){
+	string upstr;
+	ifstream pread("/proc/uptime");
+	getline(pread, upstr, ' ');
+	pread.close();
+	return stod(upstr);
+}
+
+//? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
 namespace Proc {
 	namespace {
 		uint64_t tstamp;
 		long int clk_tck;
-		struct p_cache { string name, cmd, user; };
-		map<int, p_cache> cache;
+		struct p_cache {
+			string name, cmd, user;
+			uint64_t cpu_t = 0, cpu_s = 0;
+		};
+		map<uint, p_cache> cache;
 		map<string, string> uid_user;
 		fs::path passwd_path;
 		fs::file_time_type passwd_time;
-		map<int, uint64_t> cpu_times;
-		map<int, uint64_t> cpu_second;
 		uint counter = 0;
 		long page_size = sysconf(_SC_PAGE_SIZE);
 
 	}
 
-	atomic<bool> stop;
-	atomic<bool> running;
+	atomic<bool> stop (false);
+	atomic<bool> running (false);
 	vector<string> sort_vector = {
 		"pid",
 		"name",
@@ -76,7 +89,7 @@ namespace Proc {
 
 	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c
 	struct proc_info {
-		int pid;
+		uint pid;
 		string name, cmd;
 		size_t threads;
 		string user;
@@ -88,18 +101,20 @@ namespace Proc {
 	//* Collects process information from /proc and returns a vector of proc_info structs
 	auto collect(string sorting="pid", bool reverse=false, string filter=""){
 		running.store(true);
-		int pid;
+		uint pid;
 		uint64_t cpu_t, rss_mem;
 		double cpu, cpu_s;
+		bool new_cache;
 		size_t threads;
 		ifstream pread;
-		string pid_str, name, cmd, attr, user, instr, uid, status, tmpstr, smap;
+		string pid_str, name, cmd, attr, user, instr, uid, status, tmpstr;
 		auto since_last = time_ms() - tstamp;
 		if (since_last < 1) since_last = 1;
 		auto uptime = system_uptime();
 		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<string> pstat;
 		vector<proc_info> procs;
+		vector<uint> c_pids;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
@@ -121,7 +136,7 @@ namespace Proc {
 		}
 
 
-		//* Iterate over all pid directories in /proc and get relevant values
+		//* Iterate over all pids in /proc and get relevant values
 		for (auto& d: fs::directory_iterator(Global::proc_path)){
 			if (stop.load()) {
 				procs.clear();
@@ -132,50 +147,15 @@ namespace Proc {
 			pid_str = fs::path(d.path()).filename();
 			cpu = 0.0;
 			rss_mem = 0;
+			new_cache = false;
 			if (d.is_directory() && isdigit(pid_str[0])) {
-				pid = stoi(pid_str);
-
-				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
-				if (fs::exists((string)d.path() + "/stat")) {
-					pread.clear(); pstat.clear();
-					ifstream pread((string)d.path() + "/stat");
-					if (pread.good()) while (getline(pread, instr, ' ')) pstat.push_back(instr);
-					pread.close();
-
-					if (pstat.size() < 37) continue;
-
-					//? Process number of threads
-					threads = stoul(pstat[19]);
-
-					//? Process utime + stime
-					cpu_t = stoull(pstat[13]) + stoull(pstat[14]);
-					if (!cpu_times.contains(pid)) cpu_times[pid] = cpu_t;
-
-					//? Cache process start time
-					if (!cpu_second.contains(pid)) cpu_second[pid] = stoull(pstat[21]);
-
-					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
-					cpu = static_cast<double>(100000 * (cpu_t - cpu_times[pid]) / since_last) / clk_tck;
-
-					//? Process cumulative cpu usage since process start
-					cpu_s = static_cast<double>((cpu_t / clk_tck) / (uptime - (cpu_second[pid] / clk_tck)));
-					cpu_times[pid] = cpu_t;
-				}
-
-				//* Get RSS memory in bytes from /proc/[pid]/statm
-				if (fs::exists((string)d.path() + "/statm")) {
-					pread.clear(); tmpstr.clear();
-					ifstream pread((string)d.path() + "/statm");
-					if (pread.good()) {
-						pread.ignore(numeric_limits<streamsize>::max(), ' ');
-						pread >> rss_mem;
-						rss_mem *= page_size;
-					}
-					pread.close();
-				}
+				pid = stoul(pid_str);
+				c_pids.push_back(pid);
 
 				//* Cache program name, command and username
 				if (!cache.contains(pid)) {
+					name.clear(); cmd.clear(); user.clear();
+					new_cache = true;
 					if (fs::exists((string)d.path() + "/comm")) {
 						pread.clear(); name.clear();
 						ifstream pread((string)d.path() + "/comm");
@@ -210,6 +190,54 @@ namespace Proc {
 					cache[pid] = p_cache(name, cmd, user);
 				}
 
+				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
+				if (fs::exists((string)d.path() + "/stat")) {
+					pread.clear(); pstat.clear();
+					ifstream pread((string)d.path() + "/stat");
+					if (pread.good()) while (getline(pread, instr, ' ')) pstat.push_back(instr);
+					pread.close();
+
+					if (pstat.size() < 37) continue;
+
+					//? Process number of threads
+					threads = stoul(pstat[19]);
+
+					//? Process utime + stime
+					cpu_t = stoull(pstat[13]) + stoull(pstat[14]);
+
+					//? Cache cpu times and cpu seconds
+					if (new_cache) {
+						cache[pid].cpu_t = cpu_t;
+						cache[pid].cpu_s = stoull(pstat[21]);
+					}
+
+					//? Cache process start time
+					// if (!cpu_second.contains(pid)) cpu_second[pid] = stoull(pstat[21]);
+
+					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
+					cpu = static_cast<double>(100000 * (cpu_t - cache[pid].cpu_t) / since_last) / clk_tck;
+
+					//? Process cumulative cpu usage since process start
+					cpu_s = static_cast<double>((cpu_t / clk_tck) / (uptime - (cache[pid].cpu_s / clk_tck)));
+
+					//? Add latest cpu times to cache
+					cache[pid].cpu_t = cpu_t;
+				}
+
+				//* Get RSS memory in bytes from /proc/[pid]/statm
+				if (fs::exists((string)d.path() + "/statm")) {
+					pread.clear(); tmpstr.clear();
+					ifstream pread((string)d.path() + "/statm");
+					if (pread.good()) {
+						pread.ignore(numeric_limits<streamsize>::max(), ' ');
+						pread >> rss_mem;
+						rss_mem *= page_size;
+					}
+					pread.close();
+				}
+
+
+
 				// //* Match filter if applicable
 				if (!filter.empty() &&
 					pid_str.find(filter) == string::npos &&				//? Pid
@@ -218,7 +246,7 @@ namespace Proc {
 					cache[pid].user.find(filter) == string::npos 		//? User
 					) continue;
 
-				//* Create tuple
+				//* Create proc_info
 				procs.push_back(proc_info(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s));
 			}
 		}
@@ -235,15 +263,15 @@ namespace Proc {
 					case 3: return (reverse) ? a.threads < b.threads : a.threads > b.threads;
 					case 4: return (reverse) ? a.user < b.user : a.user > b.user;
 					case 5: return (reverse) ? a.mem < b.mem : a.mem > b.mem;
-					case 6: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
-					case 7: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
+					case 6: return (reverse) ? a.cpu_p < b.cpu_p : a.cpu_p > b.cpu_p;
+					case 7: return (reverse) ? a.cpu_c < b.cpu_c : a.cpu_c > b.cpu_c;
 				}
 				return false;
 			}
 		);
 
 		//* When using "cpu lazy" sorting push processes with high cpu usage to the front regardless of cumulative usage
-		if (sortint == 6 && !reverse) {
+		if (sortint == 7 && !reverse) {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
 				if (i <= 5 && procs[i].cpu_p > max) max = procs[i].cpu_p;
@@ -254,11 +282,14 @@ namespace Proc {
 		}
 
 		//* Clear all cached values at a regular interval to get rid of dead processes
-		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
+		if (++counter >= 5 || (filter.empty() && cache.size() > procs.size() + 100)) {
+			map<uint, p_cache> r_cache;
 			counter = 0;
-			cache.clear();
-			cpu_times.clear();
-			cpu_second.clear();
+			for (auto& p : c_pids){
+				r_cache[p] = cache[p];
+			}
+			cache = move(r_cache);
+
 		}
 
 		tstamp = time_ms();
@@ -266,14 +297,13 @@ namespace Proc {
 		return procs;
 	}
 
+	//* Initialize needed variables for collect
 	void init(){
 		clk_tck = sysconf(_SC_CLK_TCK);
 		tstamp = time_ms();
-		stop.store(false);
 		passwd_path = (fs::exists(fs::path("/etc/passwd"))) ? fs::path("/etc/passwd") : passwd_path;
 		uint i = 0;
 		for (auto& item : sort_vector) sort_map[item] = i++;
-		// collect();
 	}
 };
 
