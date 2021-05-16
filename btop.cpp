@@ -22,12 +22,14 @@ tab-size = 4
 #include <thread>
 #include <future>
 #include <atomic>
+#include <ranges>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 #include <btop_input.h>
 #include <btop_theme.h>
+#include <btop_draw.h>
 
 #if defined(__linux__)
 	#include <btop_linux.h>
@@ -43,8 +45,8 @@ tab-size = 4
     #endif
 #endif
 
-namespace fs = std::filesystem;
-using namespace std;
+using std::string, std::vector, std::map, std::atomic, std::endl, std::cout, std::views::iota;
+using namespace Tools;
 
 
 //? ------------------------------------------------- GLOBALS ---------------------------------------------------------
@@ -88,7 +90,7 @@ void argumentParser(int argc, char **argv){
 }
 
 //* Generate the btop++ banner
-auto create_banner(){
+auto createBanner(){
 	struct out_vals {
 		uint w;
 		string s;
@@ -137,6 +139,8 @@ string my_worker(int x){
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
 
+	using namespace std;
+
 	//? Init
 
 	cout.setf(std::ios::boolalpha);
@@ -161,11 +165,13 @@ int main(int argc, char **argv){
 	//? Read config file if present
 	Config::load("____");
 
+	auto thts = time_ms();
+
 	//? Generate the theme
 	Theme::set(Global::Default_theme);
 
 	//? Create the btop++ banner
-	auto [banner_width, banner] = create_banner();
+	auto [banner_width, banner] = createBanner();
 	Global::banner_width = move(banner_width);
 	Global::banner = move(banner);
 
@@ -186,31 +192,43 @@ int main(int argc, char **argv){
 	cout << string(Term::width - 1, '-') << endl;
 
 
-	//* Test MENUS
-	// for (auto& outer : Global::Menus){
-	// 	for (auto& inner : outer.second){
-	// 		for (auto& item : inner.second){
-	// 			cout << item << endl;
-	// 		}
-	// 	}
-	// }
+	//* Test boxes
+	if (true){
+		cout << Box::draw(Box::Conf(10, 5, 50, 10, Theme::c("title"), "testing", "testagain", true, 7)) << Mv::d(12) << endl;
+		exit(0);
+	}
 
-
-
-	// cout << Config(Bool, "truecolor") << endl;
-	// cout << Config(Int, "tree_depth") << endl;
-	// cout << Config(String, "color_theme") << endl;
 
 	//* Test theme
 
-	int i = 0;
-	if (tests>0) for(auto& item : Global::Default_theme) {
-		cout << Theme::c(item.first) << item.first << ":" << Theme::c("main_fg") << Theme::c(item.first).erase(0, 2) << Fx::reset << "  ";
-		if (++i == 4) {
-			i = 0;
-			cout << endl;
+	if (false) {
+		cout << "Theme generation took " << time_ms() - thts << "ms" << endl;
+
+		cout << "Colors:" << endl;
+		uint i = 0;
+		for(auto& item : Theme::colors) {
+			cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
+			// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
+			if (++i == 4) {
+				i = 0;
+				cout << endl;
+			}
 		}
 		cout << Fx::reset << endl;
+
+
+		cout << "Gradients:";
+		for (auto& [name, cvec] : Theme::gradients) {
+			cout << endl << rjust(name + ":", 10);
+			for (auto& color : cvec) {
+				cout << color << "■";
+			}
+
+			cout << Fx::reset << endl;
+		}
+
+
+		exit(0);
 	}
 
 
@@ -220,13 +238,13 @@ int main(int argc, char **argv){
 		map<int, future<string>> runners;
 		map<int, string> outputs;
 
-		for (int i = 0; i < 10; i++){
+		for (int i : iota(0, 10)){
 			runners[i] = async(my_worker, i);
 		}
-		i = 0;
+		// uint i = 0;
 		while (outputs.size() < 10){
 
-			for (int i = 0; i < 10; i++){
+			for (int i : iota(0, 10)){
 				if (runners[i].valid() && runners[i].wait_for(chrono::milliseconds(10)) == future_status::ready) {
 					outputs[i] = runners[i].get();
 					cout << "Thread " << i << " : " << outputs[i] << endl;
@@ -272,8 +290,8 @@ int main(int argc, char **argv){
 	string filter;
 	string filter_cur;
 	string key;
-	cout << rjustify("Pid:", 8) << " " << ljustify("Program:", 16) << " " << ljustify("Command:", Term::width - 69) << " Threads: " <<
-			ljustify("User:", 10) << " " << rjustify("MemB", 5) << " " << rjustify("Cpu%", 14) << "\n" << Mv::save << flush;
+	cout << rjust("Pid:", 8) << " " << ljust("Program:", 16) << " " << ljust("Command:", Term::width - 69) << " Threads: " <<
+			ljust("User:", 10) << " " << rjust("MemB", 5) << " " << rjust("Cpu%", 14) << "\n" << Mv::save << flush;
 
 	while (key != "q") {
 		timestamp = time_ms();
@@ -284,13 +302,13 @@ int main(int argc, char **argv){
 		ostring.clear();
 		lc = 0;
 		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
-		cout << Mv::restore << Mv::u(2) << Mv::r(20) << rjustify("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
+		cout << Mv::restore << Mv::u(2) << Mv::r(20) << rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
 				 "Sorting: " + Proc::sort_vector[sortint], Term::width - 22, true, filtering) <<  Mv::restore << flush;
 
 		for (Proc::proc_info& procs : plist){
-			ostring += 	rjustify(to_string(procs.pid), 8) + " " + ljustify(procs.name, 16) + " " + ljustify(procs.cmd, Term::width - 66, true) + " " +
-						rjustify(to_string(procs.threads), 5) + " " + ljustify(procs.user, 10) + " " + rjustify(floating_humanizer(procs.mem, true), 5) + string(11, ' ');
-			ostring += (procs.cpu_p > 100) ? rjustify(to_string(procs.cpu_p), 3) + " " : rjustify(to_string(procs.cpu_p), 4);
+			ostring += 	rjust(to_string(procs.pid), 8) + " " + ljust(procs.name, 16) + " " + ljust(procs.cmd, Term::width - 66, true) + " " +
+						rjust(to_string(procs.threads), 5) + " " + ljust(procs.user, 10) + " " + rjust(floating_humanizer(procs.mem, true), 5) + string(11, ' ');
+			ostring += (procs.cpu_p > 100) ? rjust(to_string(procs.cpu_p), 3) + " " : rjust(to_string(procs.cpu_p), 4);
 			ostring += "\n";
 			if (lc++ > Term::height - 20) break;
 		}
@@ -328,19 +346,6 @@ int main(int argc, char **argv){
 	//cout << pw->pw_name << "/" << gr->gr_name << endl;
 
 
-
-	if (tests>3){
-		auto nbcolor = Theme::hex_to_color(Global::Default_theme.at("net_box"));
-		auto nbcolor_rgb = Theme::rgb(nbcolor);
-		auto nbcolor_man = ssplit(nbcolor, ";");
-		cout << nbcolor << "Some color" << endl;
-		cout << "nbcolor_rgb size=" << nbcolor_rgb.size() << endl;
-		cout << "R:" << nbcolor_rgb.at("r") << " G:" << nbcolor_rgb.at("g") << " B:" << nbcolor_rgb.at("b") << endl;
-		cout << "MANUAL R:" << nbcolor_man.at(2) << " G:" << nbcolor_man.at(3) << " B:" << nbcolor_man.at(4) << endl;
-
-		auto ccc = Theme::dec_to_color(100, 255, 100);
-		cout << "\n" << ccc << "Testing..." << endl;
-	}
 
 
 	if (tests>4){

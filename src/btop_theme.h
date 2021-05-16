@@ -23,12 +23,14 @@ tab-size = 4
 #include <cmath>
 #include <vector>
 #include <map>
+#include <ranges>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using namespace std;
+using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota;
+using namespace Tools;
 
 namespace Theme {
 
@@ -97,7 +99,7 @@ namespace Theme {
 	}
 
 	//* Return a map of "r", "g", "b", 0-255 values for a 24-bit color escape string
-	map<string, int> rgb(string c_string){
+	map<string, int> esc_to_rgb(string c_string){
 		map<string, int> rgb = {{"r", 0}, {"g", 0}, {"b", 0}};
 		if (c_string.size() >= 14){
 			c_string.erase(0, 7);
@@ -111,48 +113,122 @@ namespace Theme {
 		return rgb;
 	}
 
-	namespace {
-		map<string, string> color;
-		map<string, vector<string>> gradient;
 
-		//* Generate the theme
-		map<string,string> generate(map<string, string>& source){
-			map<string, string> out;
+	namespace {
+		map<string, string> colors;
+		map<string, vector<int>> rgbs;
+		map<string, vector<string>> gradients;
+
+		//* Convert hex color to a vector of decimals
+		vector<int> hex_to_dec(string hexa){
+			if (hexa.size() > 1){
+				hexa.erase(0, 1);
+				for (auto& c : hexa) if (!isxdigit(c)) return vector<int>{-1, -1, -1};
+
+				if (hexa.size() == 2){
+					int h_int = stoi(hexa, 0, 16);
+					return vector<int>{h_int, h_int, h_int};
+				}
+				else if (hexa.size() == 6){
+						return vector<int>{
+							stoi(hexa.substr(0, 2), 0, 16),
+							stoi(hexa.substr(2, 2), 0, 16),
+							stoi(hexa.substr(4, 2), 0, 16)
+						};
+				}
+			}
+			return vector<int>{-1 ,-1 ,-1};
+		}
+
+		//* Generate colors and rgb decimal vectors for the theme
+		void generateColors(map<string, string>& source){
 			vector<string> t_rgb;
 			string depth;
-			for (auto& item : Global::Default_theme) {
-				depth = (item.first.ends_with("bg")) ? "bg" : "fg";
-				if (source.contains(item.first)) {
-					if (source.at(item.first)[0] == '#') out[item.first] = hex_to_color(source.at(item.first), !Config::getB("truecolor"), depth);
+			colors.clear(); rgbs.clear();
+			for (auto& [name, color] : Global::Default_theme) {
+				depth = (name.ends_with("bg")) ? "bg" : "fg";
+				if (source.contains(name)) {
+					if (source.at(name)[0] == '#') {
+						colors[name] = hex_to_color(source.at(name), !Config::getB("truecolor"), depth);
+						rgbs[name] = hex_to_dec(source.at(name));
+					}
 					else {
-						t_rgb = ssplit(source.at(item.first), " ");
-						out[item.first] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !Config::getB("truecolor"), depth);
+						t_rgb = ssplit(source.at(name), " ");
+						colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !Config::getB("truecolor"), depth);
+						rgbs[name] = vector<int>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
 					}
 				}
-				else out[item.first] = "";
-				if (out[item.first].empty()) out[item.first] = hex_to_color(item.second, !Config::getB("truecolor"), depth);
+				else colors[name] = "";
+				if (colors[name].empty()) {
+					colors[name] = hex_to_color(color, !Config::getB("truecolor"), depth);
+					rgbs[name] = vector<int>{-1, -1, -1};
+				}
 			}
-			return out;
+		}
+
+		//* Generate color gradients from one, two or three colors, 101 values indexed 0-100
+		void generateGradients(){
+			gradients.clear();
+			vector<string> c_gradient;
+			string wname;
+			vector<vector<int>> rgb_vec;
+			map<int, vector<int>> dec_map;
+			int f, s, r, o;
+			for (auto& [name, s_vector] : rgbs){
+				dec_map.clear(); c_gradient.clear();
+				if (!name.ends_with("_start")) continue;
+				wname = rtrim(name, "_start");
+				rgb_vec = {s_vector, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
+
+				//? Only start iteration if gradient has a _end color value defined
+				if (rgb_vec[2][0] >= 0) {
+
+					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
+					r = (rgb_vec[1][0] >= 0) ? 50 : 100;
+					for (int i : iota(0, 3)){
+						f = 0; s = (r == 50) ? 1 : 2; o = 0;
+						for (int c : iota(0, 101)){
+							dec_map[c].push_back(rgb_vec[f][i] + (c - o) * (rgb_vec[s][i] - rgb_vec[f][i]) / r);
+
+							//? Switch source vectors from _start/_mid to _mid/_end at 50 passes if _mid is defined
+							if (c == r) { ++f; ++s; o = 50;}
+						}
+					}
+				}
+				if (!dec_map.empty()) {
+					for (auto& vec : dec_map) c_gradient.push_back(dec_to_color(vec.second[0], vec.second[1], vec.second[2], !Config::getB("truecolor")));
+				} else {
+					//? If only _start was defined create vector of 101 copies of _start color
+					c_gradient = vector<string>(101, colors[name]);
+				}
+				gradients[wname] = c_gradient;
+			}
 		}
 	}
 
 
 	//* Set current theme using <source> map
 	void set(map<string, string> source){
-		color = generate(source);
-		Term::fg = color.at("main_fg");
-		Term::bg = color.at("main_bg");
+		generateColors(source);
+		generateGradients();
+		Term::fg = colors.at("main_fg");
+		Term::bg = colors.at("main_bg");
 		Fx::reset = Fx::reset_base + Term::fg + Term::bg;
 	}
 
 	//* Return escape code for color <name>
 	auto c(string name){
-		return color.at(name);
+		return colors.at(name);
 	}
 
 	//* Return vector of escape codes for color gradient <name>
 	auto g(string name){
-		return gradient.at(name);
+		return gradients.at(name);
+	}
+
+	//* Return vector of red, green and blue in decimal for color <name>
+	auto dec(string name){
+		return rgbs.at(name);
 	}
 
 };

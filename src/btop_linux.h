@@ -21,7 +21,6 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <tuple>
 #include <map>
 #include <atomic>
 #include <fstream>
@@ -34,13 +33,15 @@ tab-size = 4
 #include <btop_globs.h>
 #include <btop_tools.h>
 
+
+using std::string, std::vector, std::map, std::ifstream, std::atomic, std::numeric_limits, std::streamsize;
 namespace fs = std::filesystem;
-using namespace std;
+using namespace Tools;
 
 namespace Global {
 
 	const string System = "linux";
-	filesystem::path proc_path;
+	fs::path proc_path;
 
 }
 
@@ -254,7 +255,7 @@ namespace Proc {
 		// auto st = time_ms();
 
 		//* Sort processes vector
-		ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b)
+		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b)
 			{
 				switch (sortint) {
 					case 0: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
@@ -281,15 +282,12 @@ namespace Proc {
 			}
 		}
 
-		//* Clear all cached values at a regular interval to get rid of dead processes
-		if (++counter >= 5 || (filter.empty() && cache.size() > procs.size() + 100)) {
+		//* Clear dead processes from cache at a regular interval
+		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
 			map<uint, p_cache> r_cache;
 			counter = 0;
-			for (auto& p : c_pids){
-				r_cache[p] = cache[p];
-			}
+			for (auto& p : c_pids) r_cache[p] = cache[p];
 			cache = move(r_cache);
-
 		}
 
 		tstamp = time_ms();

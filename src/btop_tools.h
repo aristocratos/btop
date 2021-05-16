@@ -25,15 +25,15 @@ tab-size = 4
 #include <iostream>
 #include <chrono>
 #include <regex>
+#include <utility>
 
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
 #include <btop_globs.h>
-#include <btop_config.h>
 
-using namespace std;
+using std::string, std::vector, std::map, std::regex, std::max, std::to_string, std::cin;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -42,23 +42,29 @@ namespace Fx {
 	//* Escape sequence start
 	const string e = "\x1b[";
 
-	//* Bold on
+	//* Bold on/off
 	const string b = e + "1m";
+	const string ub = e + "22m";
 
-	//* Dark on
+	//* Dark on/off
 	const string d = e + "2m";
+	const string ud = e + "22m";
 
-	//* Italic on
+	//* Italic on/off
 	const string i = e + "3m";
+	const string ui = e + "23m";
 
-	//* Underline on
+	//* Underline on/off
 	const string ul = e + "4m";
+	const string uul = e + "24m";
 
-	//* Blink on
+	//* Blink on/off
 	const string bl = e + "5m";
+	const string ubl = e + "25m";
 
-	//* Strike / crossed-out on
+	//* Strike / crossed-out on/off
 	const string s = e + "9m";
+	const string us = e + "29m";
 
 	//* Reset foreground/background color and text effects
 	const string reset_base = e + "0m";
@@ -212,177 +218,202 @@ namespace Term {
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
-//* Return number of UTF8 characters in a string with option to disregard escape sequences
-inline size_t ulen(string s, bool escape=false){
-	if (escape) s = regex_replace(s, Fx::escape_regex, "");
-	return std::count_if(s.begin(), s.end(),
-		[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
-}
+namespace Tools {
 
-//* Return current time since epoch in milliseconds
-uint64_t time_ms(){
-	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
+	//* Return number of UTF8 characters in a string with option to disregard escape sequences
+	inline size_t ulen(string s, bool escape=false){
+		if (escape) s = std::regex_replace(s, Fx::escape_regex, "");
+		return std::count_if(s.begin(), s.end(),
+			[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
+	}
 
-//* Check if a string is a valid bool value
-bool isbool(string str){
-	return (str == "true") || (str == "false") || (str == "True") || (str == "False");
-}
+	//* Return current time since epoch in milliseconds
+	uint64_t time_ms(){
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
 
-//* Check if a string is a valid integer value
-bool isint(string str){
-	return all_of(str.begin(), str.end(), ::isdigit);
-}
+	//* Check if a string is a valid bool value
+	bool isbool(string str){
+		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
+	}
 
-//* Left-trim <t_str> from <str> and return string
-string ltrim(string str, string t_str = " "){
-	while (str.starts_with(t_str)) str.erase(0, t_str.size());
-	return str;
-}
+	//* Check if a string is a valid integer value
+	bool isint(string str){
+		return all_of(str.begin(), str.end(), ::isdigit);
+	}
 
-//* Right-trim <t_str> from <str> and return string
-string rtrim(string str, string t_str = " "){
-	while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
-	return str;
-}
+	//* Left-trim <t_str> from <str> and return string
+	string ltrim(string str, string t_str = " "){
+		while (str.starts_with(t_str)) str.erase(0, t_str.size());
+		return str;
+	}
 
-//* Left-right-trim <t_str> from <str> and return string
-string trim(string str, string t_str = " "){
-	return ltrim(rtrim(str, t_str), t_str);
-}
+	//* Right-trim <t_str> from <str> and return string
+	string rtrim(string str, string t_str = " "){
+		while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
+		return str;
+	}
 
-//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
-vector<string> ssplit(string str, string delim = " ", int times = 0){
-	vector<string> out;
-	if (!str.empty() && !delim.empty()){
-		size_t pos = 0;
-		int x = 0;
-		string tmp;
-		while ((pos = str.find(delim)) != string::npos){
-			tmp = str.substr(0, pos);
-			if (tmp != delim && !tmp.empty()) out.push_back(tmp);
-			str.erase(0, pos + delim.size());
-			if (times > 0 && ++x >= times) break;
+	//* Left-right-trim <t_str> from <str> and return string
+	string trim(string str, string t_str = " "){
+		return ltrim(rtrim(str, t_str), t_str);
+	}
+
+	//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
+	vector<string> ssplit(string str, string delim = " ", int times = 0){
+		vector<string> out;
+		if (!str.empty() && !delim.empty()){
+			size_t pos = 0;
+			int x = 0;
+			string tmp;
+			while ((pos = str.find(delim)) != string::npos){
+				tmp = str.substr(0, pos);
+				if (tmp != delim && !tmp.empty()) out.push_back(tmp);
+				str.erase(0, pos + delim.size());
+				if (times > 0 && ++x >= times) break;
+			}
+		}
+		out.push_back(str);
+		return out;
+	}
+
+	//* Put current thread to sleep for <ms> milliseconds
+	void sleep_ms(uint ms) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+	}
+
+	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
+	string ljust(string str, const size_t x, bool utf=false, bool escape=false, bool lim=true){
+		if (utf || escape) {
+			if (!escape && lim && ulen(str) > x) {
+				auto i = str.size();
+				while (ulen(str) > x) str.resize(--i);
+			}
+			return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
+		}
+		else {
+			if (lim && str.size() > x) str.resize(x);
+			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
-	out.push_back(str);
-	return out;
-}
 
-//* Put current thread to sleep for <ms> milliseconds
-void sleep_ms(uint ms) {
-	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-}
-
-//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-string ljustify(string str, size_t x, bool utf=false, bool escape=false, bool lim=true){
-	if (utf || escape) {
-		if (!escape && lim && ulen(str) > x) {
-			auto i = str.size();
-			while (ulen(str) > x) str.resize(--i);
+	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
+	string rjust(string str, const size_t x, bool utf=false, bool escape=false, bool lim=true){
+		if (utf || escape) {
+			if (!escape && lim && ulen(str) > x) {
+				auto i = str.size();
+				while (ulen(str) > x) str.resize(--i);
+			}
+			return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
 		}
-		return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
-	}
-	else {
-		if (lim && str.size() > x) str.resize(x);
-		return str + string(max((int)(x - str.size()), 0), ' ');
-	}
-}
-
-//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-string rjustify(string str, size_t x, bool utf=false, bool escape=false, bool lim=true){
-	if (utf || escape) {
-		if (!escape && lim && ulen(str) > x) {
-			auto i = str.size();
-			while (ulen(str) > x) str.resize(--i);
+		else {
+			if (lim && str.size() > x) str.resize(x);
+			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
-		return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
 	}
-	else {
-		if (lim && str.size() > x) str.resize(x);
-		return string(max((int)(x - str.size()), 0), ' ') + str;
+
+	//* Trim trailing characters if utf8 string length is greatear than <x>
+	string uresize(string str, const size_t x){
+		if (str.empty()) return str;
+		while (ulen(str) > x) str.pop_back();
+		return str;
 	}
-}
 
-//* Trim trailing characters if utf8 string length is greatear than <x>
-string uresize(string str, size_t x){
-	// auto i = str.size();
-	if (str.empty()) return str;
-	while (ulen(str) > x) str.pop_back();
-	return str;
-}
-
-//* Replace whitespaces " " with escape code for move right
-string trans(string str){
-	size_t pos;
-	string newstr;
-	while ((pos = str.find(' ')) != string::npos){
-		newstr.append(str.substr(0, pos));
-		str.erase(0, pos);
-		pos = 1;
-		while (pos < str.size() && str.at(pos) == ' ') pos++;
-		newstr.append(Mv::r(pos));
-		str.erase(0, pos);
+	//* Replace whitespaces " " with escape code for move right
+	string trans(string str){
+		size_t pos;
+		string newstr;
+		while ((pos = str.find(' ')) != string::npos){
+			newstr.append(str.substr(0, pos));
+			str.erase(0, pos);
+			pos = 1;
+			while (pos < str.size() && str.at(pos) == ' ') pos++;
+			newstr.append(Mv::r(pos));
+			str.erase(0, pos);
+		}
+		return (newstr.empty()) ? str : newstr;
 	}
-	return (newstr.empty()) ? str : newstr;
-}
 
-string sec_to_dhms(uint sec){
-	string out;
-	uint d, h, m;
-	d = sec / (3600 * 24);
-	sec %= 3600 * 24;
-	h = sec / 3600;
-	sec %= 3600;
-	m = sec / 60;
-	sec %= 60;
-	if (d>0) out = to_string(d) + "d ";
-	out += (h<10) ? "0" + to_string(h) + ":" : to_string(h) + ":";
-	out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
-	out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
-	return out;
-}
+	//* Convert seconds to format "Xd HH:MM:SS" and return string
+	string sec_to_dhms(uint sec){
+		string out;
+		uint d, h, m;
+		d = sec / (3600 * 24);
+		sec %= 3600 * 24;
+		h = sec / 3600;
+		sec %= 3600;
+		m = sec / 60;
+		sec %= 60;
+		if (d>0) out = to_string(d) + "d ";
+		out += (h<10) ? "0" + to_string(h) + ":" : to_string(h) + ":";
+		out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
+		out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
+		return out;
+	}
 
-//* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed
-//* bit=True or defaults to bytes
-//* start=int to set 1024 multiplier starting unit
-//* short=True always returns 0 decimals and shortens unit to 1 character
-string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool bit=false, bool per_second=false){
-	string out;
-	uint mult = (bit) ? 8 : 1;
-	auto& units = (bit) ? Global::Units_bit : Global::Units_byte;
+	//* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed
+	//* bit=True or defaults to bytes
+	//* start=int to set 1024 multiplier starting unit
+	//* short=True always returns 0 decimals and shortens unit to 1 character
+	string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool bit=false, bool per_second=false){
+		string out;
+		uint mult = (bit) ? 8 : 1;
+		auto& units = (bit) ? Global::Units_bit : Global::Units_byte;
 
-	value *= 100 * mult;
+		value *= 100 * mult;
 
-	while (value >= 102400){
-		value >>= 10;
-		if (value < 100){
+		while (value >= 102400){
+			value >>= 10;
+			if (value < 100){
+				out = to_string(value);
+				break;
+			}
+			start++;
+		}
+		if (out.empty()) {
 			out = to_string(value);
-			break;
+			if (out.size() == 4 && start > 0) { out.pop_back(); out.insert(2, ".");}
+			else if (out.size() == 3 && start > 0) out.insert(1, ".");
+			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}
-		start++;
-	}
-	if (out.empty()) {
-		out = to_string(value);
-		if (out.size() == 4 && start > 0) { out.pop_back(); out.insert(2, ".");}
-		else if (out.size() == 3 && start > 0) out.insert(1, ".");
-		else if (out.size() >= 2) out.resize(out.size() - 2);
-	}
-	if (shorten){
-			if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
-			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
-			out.push_back(units[start][0]);
-	}
-	else out += " " + units[start];
+		if (shorten){
+				if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
+				if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
+				out.push_back(units[start][0]);
+		}
+		else out += " " + units[start];
 
-	if (per_second) out += (bit) ? "ps" : "/s";
-	return out;
+		if (per_second) out += (bit) ? "ps" : "/s";
+		return out;
+	}
+
+	//* Repeat string <str> <n> number of times
+	string repeat(string str, const size_t n){
+		if (n == 0){
+			str.clear();
+			str.shrink_to_fit();
+			return str;
+		} else if (n == 1 || str.empty()){
+			return str;
+		}
+		const auto period = str.size();
+		if (period == 1){
+			str.append(n - 1, str.front());
+			return str;
+		}
+		str.reserve(period * n);
+		size_t m = 2;
+		for (; m < n; m *= 2) str += str;
+		str.append(str.c_str(), (n - (m / 2)) * period);
+		return str;
+	}
+
+	//* String gets passed to repeat function
+	std::string operator*(string str, size_t n){
+   		return repeat(std::move(str), n);
+	}
+
 }
 
-//? --------------------------------------------------- CLASSES -----------------------------------------------------
-
-
-
-//? --------------------------------------------------- STRUCTS -------------------------------------------------------
 
 #endif
