@@ -189,19 +189,17 @@ int main(int argc, char **argv){
 	cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
 
 	cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
-	cout << string(Term::width - 1, '-') << endl;
-
-
-	//* Test boxes
-	if (true){
-		cout << Box::draw(Box::Conf(10, 5, 50, 10, Theme::c("title"), "testing", "testagain", true, 7)) << Mv::d(12) << endl;
-		exit(0);
+	// cout << string(Term::width - 1, '-') << endl;
+	int ill;
+	for (int i : iota(0, (int)Term::width)){
+		ill = (i <= (int)Term::width / 2) ? i : ill - 1;
+		cout << Theme::g("used")[ill] << "-";
 	}
-
+	cout << Fx::reset << endl;
 
 	//* Test theme
 
-	if (false) {
+	if (true) {
 		cout << "Theme generation took " << time_ms() - thts << "ms" << endl;
 
 		cout << "Colors:" << endl;
@@ -287,11 +285,20 @@ int main(int argc, char **argv){
 	vector<string> sorting;
 	bool reversing = false;
 	int sortint = Proc::sort_map["cpu lazy"];
+	vector<string> greyscale;
 	string filter;
 	string filter_cur;
 	string key;
-	cout << rjust("Pid:", 8) << " " << ljust("Program:", 16) << " " << ljust("Command:", Term::width - 69) << " Threads: " <<
-			ljust("User:", 10) << " " << rjust("MemB", 5) << " " << rjust("Cpu%", 14) << "\n" << Mv::save << flush;
+
+	int xc;
+	for (uint i : iota(0, (int)Term::height - 19)){
+		xc = 230 - i * 150 / (Term::height - 20);
+		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
+	}
+
+	string pbox = Box::draw(Box::Conf(0, 10, Term::width, Term::height - 16, Theme::c("proc_box"), "testbox", "below", true, 7));
+	pbox += rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 69) + " Threads: " +
+			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n";
 
 	while (key != "q") {
 		timestamp = time_ms();
@@ -302,18 +309,18 @@ int main(int argc, char **argv){
 		ostring.clear();
 		lc = 0;
 		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
-		cout << Mv::restore << Mv::u(2) << Mv::r(20) << rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
-				 "Sorting: " + Proc::sort_vector[sortint], Term::width - 22, true, filtering) <<  Mv::restore << flush;
+		ostring = Mv::save + Mv::u(2) + Mv::r(20) + trans(rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
+				 "Sorting: " + string(Proc::sort_vector[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
 
 		for (Proc::proc_info& procs : plist){
-			ostring += 	rjust(to_string(procs.pid), 8) + " " + ljust(procs.name, 16) + " " + ljust(procs.cmd, Term::width - 66, true) + " " +
+			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(procs.pid), 8) + " " + ljust(procs.name, 16) + " " + ljust(procs.cmd, Term::width - 66, true) + " " +
 						rjust(to_string(procs.threads), 5) + " " + ljust(procs.user, 10) + " " + rjust(floating_humanizer(procs.mem, true), 5) + string(11, ' ');
 			ostring += (procs.cpu_p > 100) ? rjust(to_string(procs.cpu_p), 3) + " " : rjust(to_string(procs.cpu_p), 4);
 			ostring += "\n";
-			if (lc++ > Term::height - 20) break;
+			if (lc++ > Term::height - 21) break;
 		}
 
-		cout << Mv::restore << ostring << Term::clear_end << endl;
+		cout << pbox << ostring << Fx::reset << "\n" << endl;
 		cout << "Processes call took: " << timestamp << "ms. Drawing took: " << time_ms() - timestamp2 << "ms." << endl;
 
 		while (time_ms() < tsl) {

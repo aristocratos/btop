@@ -64,17 +64,21 @@ namespace Box {
 
 		//* Draw corners
 		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
-				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
+				Mv::to(c.y, c.x + c.width) + Symbols::right_up +
 				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
-				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
+				Mv::to(c.y + c.height - 1, c.x + c.width) + Symbols::right_down;
 
 		//* Draw titles if defined
 		if (!c.title.empty()){
 			out += Mv::to(c.y, c.x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + c.title +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
+		if (!c.title2.empty()){
+			out += Mv::to(c.y + c.height - 1, c.x + 2) + Symbols::title_left + Theme::c("title") + c.title2 +
+			Fx::ub + lcolor + Symbols::title_right;
+		}
 
-		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
+		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
 	}
 
 }

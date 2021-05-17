@@ -29,7 +29,7 @@ tab-size = 4
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota;
+using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota, std::array;
 using namespace Tools;
 
 namespace Theme {
@@ -116,28 +116,28 @@ namespace Theme {
 
 	namespace {
 		map<string, string> colors;
-		map<string, vector<int>> rgbs;
-		map<string, vector<string>> gradients;
+		map<string, array<int, 3>> rgbs;
+		map<string, array<string, 101>> gradients;
 
-		//* Convert hex color to a vector of decimals
-		vector<int> hex_to_dec(string hexa){
+		//* Convert hex color to a array of decimals
+		array<int, 3> hex_to_dec(string hexa){
 			if (hexa.size() > 1){
 				hexa.erase(0, 1);
-				for (auto& c : hexa) if (!isxdigit(c)) return vector<int>{-1, -1, -1};
+				for (auto& c : hexa) if (!isxdigit(c)) return array<int, 3>{-1, -1, -1};
 
 				if (hexa.size() == 2){
 					int h_int = stoi(hexa, 0, 16);
-					return vector<int>{h_int, h_int, h_int};
+					return array<int, 3>{h_int, h_int, h_int};
 				}
 				else if (hexa.size() == 6){
-						return vector<int>{
+						return array<int, 3>{
 							stoi(hexa.substr(0, 2), 0, 16),
 							stoi(hexa.substr(2, 2), 0, 16),
 							stoi(hexa.substr(4, 2), 0, 16)
 						};
 				}
 			}
-			return vector<int>{-1 ,-1 ,-1};
+			return array<int, 3>{-1 ,-1 ,-1};
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
@@ -155,13 +155,13 @@ namespace Theme {
 					else {
 						t_rgb = ssplit(source.at(name), " ");
 						colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !Config::getB("truecolor"), depth);
-						rgbs[name] = vector<int>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
+						rgbs[name] = array<int, 3>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
 					}
 				}
 				else colors[name] = "";
 				if (colors[name].empty()) {
 					colors[name] = hex_to_color(color, !Config::getB("truecolor"), depth);
-					rgbs[name] = vector<int>{-1, -1, -1};
+					rgbs[name] = array<int, 3>{-1, -1, -1};
 				}
 			}
 		}
@@ -169,37 +169,38 @@ namespace Theme {
 		//* Generate color gradients from one, two or three colors, 101 values indexed 0-100
 		void generateGradients(){
 			gradients.clear();
-			vector<string> c_gradient;
+			array<string, 101> c_gradient;
 			string wname;
-			vector<vector<int>> rgb_vec;
-			map<int, vector<int>> dec_map;
-			int f, s, r, o;
-			for (auto& [name, s_vector] : rgbs){
-				dec_map.clear(); c_gradient.clear();
+			array<array<int, 3>, 3> rgb_arr;
+			array<array<int, 3>, 101> dec_arr;
+			int f, s, r, o, y;
+			for (auto& [name, source_arr] : rgbs){
 				if (!name.ends_with("_start")) continue;
+				dec_arr[0][0] = -1;
 				wname = rtrim(name, "_start");
-				rgb_vec = {s_vector, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
+				rgb_arr = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
 
 				//? Only start iteration if gradient has a _end color value defined
-				if (rgb_vec[2][0] >= 0) {
+				if (rgb_arr[2][0] >= 0) {
 
 					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
-					r = (rgb_vec[1][0] >= 0) ? 50 : 100;
+					r = (rgb_arr[1][0] >= 0) ? 50 : 100;
 					for (int i : iota(0, 3)){
 						f = 0; s = (r == 50) ? 1 : 2; o = 0;
 						for (int c : iota(0, 101)){
-							dec_map[c].push_back(rgb_vec[f][i] + (c - o) * (rgb_vec[s][i] - rgb_vec[f][i]) / r);
+							dec_arr[c][i] = rgb_arr[f][i] + (c - o) * (rgb_arr[s][i] - rgb_arr[f][i]) / r;
 
-							//? Switch source vectors from _start/_mid to _mid/_end at 50 passes if _mid is defined
+							//? Switch source arrays from _start/_mid to _mid/_end at 50 passes if _mid is defined
 							if (c == r) { ++f; ++s; o = 50;}
 						}
 					}
 				}
-				if (!dec_map.empty()) {
-					for (auto& vec : dec_map) c_gradient.push_back(dec_to_color(vec.second[0], vec.second[1], vec.second[2], !Config::getB("truecolor")));
+				y = 0;
+				if (dec_arr[0][0] != -1) {
+					for (auto& vec : dec_arr) c_gradient[y++] = dec_to_color(vec[0], vec[1], vec[2], !Config::getB("truecolor"));
 				} else {
-					//? If only _start was defined create vector of 101 copies of _start color
-					c_gradient = vector<string>(101, colors[name]);
+					//? If only _start was defined fill array with _start color
+					c_gradient.fill(colors[name]);
 				}
 				gradients[wname] = c_gradient;
 			}

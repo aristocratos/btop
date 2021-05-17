@@ -331,7 +331,7 @@ namespace Tools {
 			newstr.append(Mv::r(pos));
 			str.erase(0, pos);
 		}
-		return (newstr.empty()) ? str : newstr;
+		return (newstr.empty()) ? str : newstr + str;
 	}
 
 	//* Convert seconds to format "Xd HH:MM:SS" and return string
