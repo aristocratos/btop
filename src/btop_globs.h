@@ -20,17 +20,18 @@ tab-size = 4
 #define _btop_globs_included_ 1
 
 #include <string>
-#include <map>
 #include <vector>
+#include <array>
 #include <atomic>
+#include <unordered_map>
 
-using std::string, std::vector, std::map, std::atomic;
+using std::string, std::vector, std::unordered_map, std::array, std::atomic;
 
 namespace Global {
 
 	atomic<bool> stop_all(false);
 
-	const map<string, string> Default_theme = {
+	const unordered_map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
 		{ "main_fg", "#cc" },
 		{ "title", "#ee" },
@@ -75,7 +76,7 @@ namespace Global {
 		{ "process_end", "#d45454" }
 	};
 
-	const map<string, map<string, vector<string>>> Menus = {
+	const unordered_map<string, unordered_map<string, vector<string>>> Menus = {
 		{ "options", {
 			{ "normal", {
 				"┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",
@@ -115,8 +116,8 @@ namespace Global {
 	};
 
 	//? Units for floating_humanizer function
-	const vector<string> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
-	const vector<string> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
+	const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+	const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
 
 }
 
@@ -132,7 +133,7 @@ namespace Symbols {
 	const string div_up			= "┬";
 	const string div_down		= "┴";
 
-	const vector<string> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
+	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 }
 
 #endif

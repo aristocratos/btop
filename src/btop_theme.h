@@ -23,13 +23,14 @@ tab-size = 4
 #include <cmath>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <ranges>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota, std::array;
+using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota, std::array, std::unordered_map;
 using namespace Tools;
 
 namespace Theme {
@@ -98,16 +99,16 @@ namespace Theme {
 		else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 	}
 
-	//* Return a map of "r", "g", "b", 0-255 values for a 24-bit color escape string
-	map<string, int> esc_to_rgb(string c_string){
-		map<string, int> rgb = {{"r", 0}, {"g", 0}, {"b", 0}};
+	//* Return an array of red, green and blue, 0-255 values for a 24-bit color escape string
+	auto esc_to_rgb(string c_string){
+		array<int, 3> rgb = {-1, -1, -1};
 		if (c_string.size() >= 14){
 			c_string.erase(0, 7);
 			auto c_split = ssplit(c_string, ";");
 			if (c_split.size() == 3){
-				rgb["r"] = stoi(c_split[0]);
-				rgb["g"] = stoi(c_split[1]);
-				rgb["b"] = stoi(c_split[2].erase(c_split[2].size()));
+				rgb[0] = stoi(c_split[0]);
+				rgb[1] = stoi(c_split[1]);
+				rgb[2] = stoi(c_split[2].erase(c_split[2].size()));
 			}
 		}
 		return rgb;
@@ -115,9 +116,9 @@ namespace Theme {
 
 
 	namespace {
-		map<string, string> colors;
-		map<string, array<int, 3>> rgbs;
-		map<string, array<string, 101>> gradients;
+		unordered_map<string, string> colors;
+		unordered_map<string, array<int, 3>> rgbs;
+		unordered_map<string, array<string, 101>> gradients;
 
 		//* Convert hex color to a array of decimals
 		array<int, 3> hex_to_dec(string hexa){
@@ -141,7 +142,7 @@ namespace Theme {
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
-		void generateColors(map<string, string>& source){
+		void generateColors(unordered_map<string, string>& source){
 			vector<string> t_rgb;
 			string depth;
 			colors.clear(); rgbs.clear();
@@ -209,7 +210,7 @@ namespace Theme {
 
 
 	//* Set current theme using <source> map
-	void set(map<string, string> source){
+	void set(unordered_map<string, string> source){
 		generateColors(source);
 		generateGradients();
 		Term::fg = colors.at("main_fg");
@@ -222,16 +223,16 @@ namespace Theme {
 		return colors.at(name);
 	}
 
-	//* Return vector of escape codes for color gradient <name>
+	//* Return array of escape codes for color gradient <name>
 	auto g(string name){
 		return gradients.at(name);
 	}
 
-	//* Return vector of red, green and blue in decimal for color <name>
+	//* Return array of red, green and blue in decimal for color <name>
 	auto dec(string name){
 		return rgbs.at(name);
 	}
 
-};
+}
 
 #endif

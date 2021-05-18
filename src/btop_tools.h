@@ -33,7 +33,7 @@ tab-size = 4
 
 #include <btop_globs.h>
 
-using std::string, std::vector, std::map, std::regex, std::max, std::to_string, std::cin;
+using std::string, std::vector, std::regex, std::max, std::to_string, std::cin;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -82,7 +82,7 @@ namespace Fx {
 	string uncolor(string& s){
 		return regex_replace(s, color_regex, "");
 	}
-};
+}
 
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
@@ -106,7 +106,7 @@ namespace Mv {
 
 	//* Restore saved cursor postion
 	const string restore = Fx::e + "u";
-};
+}
 
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
@@ -138,7 +138,7 @@ namespace Term {
 			height = w.ws_row;
 			return resized;
 		}
-	};
+	}
 
 
 	//* Hide terminal cursor
@@ -214,7 +214,7 @@ namespace Term {
 			initialized = false;
 		}
 	}
-};
+}
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 

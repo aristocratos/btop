@@ -21,11 +21,11 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include <btop_tools.h>
 
-using std::string, std::vector, std::map;
+using std::string, std::vector, std::unordered_map;
 using namespace Tools;
 
 
@@ -35,7 +35,7 @@ namespace Config {
 
 		bool changed = false;
 
-		map<string, string> strings = {
+		unordered_map<string, string> strings = {
 			{"color_theme", "Default"},
 			{"shown_boxes", "cpu mem net proc"},
 			{"proc_sorting", "cpu lazy"},
@@ -52,7 +52,7 @@ namespace Config {
 			{"net_iface", ""},
 			{"log_level", "WARNING"}
 		};
-		map<string, bool> bools = {
+		unordered_map<string, bool> bools = {
 			{"theme_background", true},
 			{"truecolor", true},
 			{"proc_reversed", false},
@@ -84,12 +84,12 @@ namespace Config {
 			{"show_battery", true},
 			{"show_init", false}
 		};
-		map<string, int> ints = {
+		unordered_map<string, int> ints = {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
 			{"tree_depth", 3}
 		};
-	};
+	}
 
 	//* Return config value <name> as a bool
 	bool& getB(string name){
@@ -128,6 +128,6 @@ namespace Config {
 		(void)source;
 		return true;
 	}
-};
+}
 
 #endif

@@ -20,13 +20,13 @@ tab-size = 4
 #define _btop_input_included_ 1
 
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <iostream>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 
-using std::string, std::map, std::cin;
+using std::string, std::unordered_map, std::cin;
 using namespace Tools;
 
 
@@ -34,7 +34,7 @@ using namespace Tools;
 namespace Input {
 	namespace {
 		//* Map for translating key codes to readable values
-		const map<string, string> Key_escapes = {
+		const unordered_map<string, string> Key_escapes = {
 			{"\033",	"escape"},
 			{"\n",		"enter"},
 			{" ",		"space"},
@@ -69,7 +69,7 @@ namespace Input {
 			{"[23~",	"f11"},
 			{"[24~",	"f12"}
 		};
-	};
+	}
 
 	//* Last entered key
 	string last = "";
@@ -108,6 +108,6 @@ namespace Input {
 		last.clear();
 	}
 
-};
+}
 
 #endif

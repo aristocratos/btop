@@ -21,7 +21,8 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <map>
+#include <array>
+#include <unordered_map>
 #include <atomic>
 #include <fstream>
 #include <filesystem>
@@ -34,7 +35,7 @@ tab-size = 4
 #include <btop_tools.h>
 
 
-using std::string, std::vector, std::map, std::ifstream, std::atomic, std::numeric_limits, std::streamsize;
+using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::unordered_map;
 namespace fs = std::filesystem;
 using namespace Tools;
 
@@ -65,8 +66,8 @@ namespace Proc {
 			string name, cmd, user;
 			uint64_t cpu_t = 0, cpu_s = 0;
 		};
-		map<uint, p_cache> cache;
-		map<string, string> uid_user;
+		unordered_map<uint, p_cache> cache;
+		unordered_map<string, string> uid_user;
 		fs::path passwd_path;
 		fs::file_time_type passwd_time;
 		uint counter = 0;
@@ -76,7 +77,7 @@ namespace Proc {
 
 	atomic<bool> stop (false);
 	atomic<bool> running (false);
-	vector<string> sort_vector = {
+	array<string, 8> sort_array = {
 		"pid",
 		"name",
 		"command",
@@ -86,7 +87,7 @@ namespace Proc {
 		"cpu direct",
 		"cpu lazy",
 	};
-	map<string, uint> sort_map;
+	unordered_map<string, uint> sort_map;
 
 	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c
 	struct proc_info {
@@ -146,8 +147,8 @@ namespace Proc {
 				return procs;
 			}
 			pid_str = fs::path(d.path()).filename();
-			cpu = 0.0;
-			rss_mem = 0;
+			cpu = 0.0; cpu_s = 0.0; cpu_t = 0;
+			rss_mem = 0; threads = 0;
 			new_cache = false;
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				pid = stoul(pid_str);
@@ -284,7 +285,7 @@ namespace Proc {
 
 		//* Clear dead processes from cache at a regular interval
 		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
-			map<uint, p_cache> r_cache;
+			unordered_map<uint, p_cache> r_cache;
 			counter = 0;
 			for (auto& p : c_pids) r_cache[p] = cache[p];
 			cache = move(r_cache);
@@ -301,9 +302,9 @@ namespace Proc {
 		tstamp = time_ms();
 		passwd_path = (fs::exists(fs::path("/etc/passwd"))) ? fs::path("/etc/passwd") : passwd_path;
 		uint i = 0;
-		for (auto& item : sort_vector) sort_map[item] = i++;
+		for (auto& item : sort_array) sort_map[item] = i++;
 	}
-};
+}
 
 
 

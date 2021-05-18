@@ -18,6 +18,7 @@ tab-size = 4
 
 
 #include <string>
+#include <array>
 #include <vector>
 #include <thread>
 #include <future>
@@ -45,14 +46,14 @@ tab-size = 4
     #endif
 #endif
 
-using std::string, std::vector, std::map, std::atomic, std::endl, std::cout, std::views::iota;
+using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota;
 using namespace Tools;
 
 
 //? ------------------------------------------------- GLOBALS ---------------------------------------------------------
 
 namespace Global {
-	const vector<vector<string>> Banner_src = {
+	const vector<array<string, 2>> Banner_src = {
 		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
 		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
 		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
@@ -64,7 +65,7 @@ namespace Global {
 	const string Version = "0.0.1";
 
 	string banner;
-	uint banner_width;
+	const uint banner_width = 49;
 }
 
 
@@ -90,22 +91,16 @@ void argumentParser(int argc, char **argv){
 }
 
 //* Generate the btop++ banner
-auto createBanner(){
-	struct out_vals {
-		uint w;
-		string s;
-	};
+string createBanner(){
 	size_t z = 0;
-	uint width=0, new_len=0;
 	string b_color, bg, fg, out, oc, letter;
 	bool truecolor = Config::getB("truecolor");
 	int bg_i;
 	for (auto line: Global::Banner_src) {
-		if ((new_len = ulen(line[1])) > width) width = new_len;
 		fg = Theme::hex_to_color(line[0], !truecolor);
 		bg_i = 120-z*12;
 		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
-		for (uint i = 0; i < line[1].size(); i += 3) {
+		for (size_t i = 0; i < line[1].size(); i += 3) {
 			if (line[1][i] == ' '){
 				letter = ' ';
 				i -= 2;
@@ -117,12 +112,11 @@ auto createBanner(){
 			out += letter;
 			oc = b_color;
 		}
-		z++;
-		if (z < Global::Banner_src.size()) out += Mv::l(new_len) + Mv::d(1);
+		if (++z < Global::Banner_src.size()) out += Mv::l(ulen(line[1])) + Mv::d(1);
 	}
 	out += Mv::r(18 - Global::Version.size()) + Fx::i + Theme::dec_to_color(0,0,0, !truecolor, "bg") +
-			Theme::dec_to_color(150, 150, 150, !truecolor) + "v" + Global::Version + Fx::reset;
-	return out_vals {width, out};
+			Theme::dec_to_color(150, 150, 150, !truecolor) + "v" + Global::Version + Fx::ui;
+	return out;
 }
 
 
@@ -171,9 +165,7 @@ int main(int argc, char **argv){
 	Theme::set(Global::Default_theme);
 
 	//? Create the btop++ banner
-	auto [banner_width, banner] = createBanner();
-	Global::banner_width = move(banner_width);
-	Global::banner = move(banner);
+	Global::banner = createBanner();
 
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
@@ -190,7 +182,7 @@ int main(int argc, char **argv){
 
 	cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
 	// cout << string(Term::width - 1, '-') << endl;
-	int ill;
+	int ill = 0;
 	for (int i : iota(0, (int)Term::width)){
 		ill = (i <= (int)Term::width / 2) ? i : ill - 1;
 		cout << Theme::g("used")[ill] << "-";
@@ -198,8 +190,7 @@ int main(int argc, char **argv){
 	cout << Fx::reset << endl;
 
 	//* Test theme
-
-	if (true) {
+	if (false) {
 		cout << "Theme generation took " << time_ms() - thts << "ms" << endl;
 
 		cout << "Colors:" << endl;
@@ -282,7 +273,6 @@ int main(int argc, char **argv){
 	uint64_t tsl, timestamp2;
 	uint timer = 2000;
 	bool filtering = false;
-	vector<string> sorting;
 	bool reversing = false;
 	int sortint = Proc::sort_map["cpu lazy"];
 	vector<string> greyscale;
@@ -303,19 +293,19 @@ int main(int argc, char **argv){
 	while (key != "q") {
 		timestamp = time_ms();
 		tsl = timestamp + timer;
-		auto plist = Proc::collect(Proc::sort_vector[sortint], reversing, filter);
+		auto plist = Proc::collect(Proc::sort_array[sortint], reversing, filter);
 		timestamp2 = time_ms();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
 		lc = 0;
 		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
 		ostring = Mv::save + Mv::u(2) + Mv::r(20) + trans(rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
-				 "Sorting: " + string(Proc::sort_vector[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
+				 "Sorting: " + string(Proc::sort_array[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
 
-		for (Proc::proc_info& procs : plist){
-			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(procs.pid), 8) + " " + ljust(procs.name, 16) + " " + ljust(procs.cmd, Term::width - 66, true) + " " +
-						rjust(to_string(procs.threads), 5) + " " + ljust(procs.user, 10) + " " + rjust(floating_humanizer(procs.mem, true), 5) + string(11, ' ');
-			ostring += (procs.cpu_p > 100) ? rjust(to_string(procs.cpu_p), 3) + " " : rjust(to_string(procs.cpu_p), 4);
+		for (auto& p : plist){
+			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " " +
+						rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ');
+			ostring += (p.cpu_p > 100) ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4);
 			ostring += "\n";
 			if (lc++ > Term::height - 21) break;
 		}
@@ -326,18 +316,17 @@ int main(int argc, char **argv){
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();
 			else { key.clear() ; continue; }
-			// if (key != "") continue;
 			if (filtering) {
 				if (key == "enter") filtering = false;
 				else if (key == "backspace") {if (!filter.empty()) filter = uresize(filter, ulen(filter) - 1);}
 				else if (key == "space") filter.push_back(' ');
 				else if (ulen(key) == 1 ) filter.append(key);
-				else { key.clear() ; continue; }
+				else { key.clear(); continue; }
 				break;
 			}
 			else if (key == "q") break;
-			else if (key == "left") { if (--sortint < 0) sortint = (int)Proc::sort_vector.size() - 1; }
-			else if (key == "right") { if (++sortint > (int)Proc::sort_vector.size() - 1) sortint = 0; }
+			else if (key == "left") { if (--sortint < 0) sortint = (int)Proc::sort_array.size() - 1; }
+			else if (key == "right") { if (++sortint > (int)Proc::sort_array.size() - 1) sortint = 0; }
 			else if (key == "f") filtering = true;
 			else if (key == "r") reversing = !reversing;
 			else if (key == "delete") filter.clear();
