@@ -19,10 +19,12 @@ tab-size = 4
 
 #include <string>
 #include <array>
+#include <list>
 #include <vector>
 #include <thread>
 #include <future>
 #include <atomic>
+#include <numeric>
 #include <ranges>
 
 #include <btop_globs.h>
@@ -33,20 +35,27 @@ tab-size = 4
 #include <btop_draw.h>
 
 #if defined(__linux__)
+	#define LINUX 1
 	#include <btop_linux.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
 		// #include <btop_bsd.h>
+		#error BSD support not yet implemented!
 	#endif
 #elif defined(__APPLE__) && defined(__MACH__)
 	#include <TargetConditionals.h>
 	#if TARGET_OS_MAC == 1
+		#define OSX 1
 		// #include <btop_osx.h>
+		#error OSX support not yet implemented!
     #endif
+#else
+	#error Platform not supported or could not determine platform!
 #endif
 
-using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota;
+using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
+using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status;
 using namespace Tools;
 
 
@@ -133,21 +142,21 @@ string my_worker(int x){
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
 
-	using namespace std;
+	// using namespace std;
 
 	//? Init
 
 	cout.setf(std::ios::boolalpha);
 	if (argc > 1) argumentParser(argc, argv);
 
-	//? Init for Linux
-	if (Global::System == "linux") {
+	#if defined(LINUX)
+		//? Linux init
 		Global::proc_path = (fs::is_directory(fs::path("/proc"))) ? fs::path("/proc") : Global::proc_path;
 		if (Global::proc_path.empty()) {
 			cout << "ERROR: Proc filesystem not detected!" << endl;
 			exit(1);
 		}
-	}
+	#endif
 
 	//? Initialize terminal and set options
 	if (!Term::init()) {
@@ -172,19 +181,22 @@ int main(int argc, char **argv){
 
 	int debug = 0;
 	int tests = 0;
+	bool debuginit = false;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	bool thread_test = false;
 
-	if (debug < 2) cout << Term::alt_screen << Term::hide_cursor << flush;
+	if (!debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
 
 	cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
 
 	cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
 	// cout << string(Term::width - 1, '-') << endl;
+	size_t blen = (Term::width > 200) ? 200 : Term::width;
+	if (Term::width > 203) cout << Mv::r(Term::width / 2 - blen / 2) << flush;
 	int ill = 0;
-	for (int i : iota(0, (int)Term::width)){
-		ill = (i <= (int)Term::width / 2) ? i : ill - 1;
+	for (int i : iota(0, (int)blen)){
+		ill = (i <= (int)blen / 2) ? i : ill - 1;
 		cout << Theme::g("used")[ill] << "-";
 	}
 	cout << Fx::reset << endl;
@@ -234,7 +246,7 @@ int main(int argc, char **argv){
 		while (outputs.size() < 10){
 
 			for (int i : iota(0, 10)){
-				if (runners[i].valid() && runners[i].wait_for(chrono::milliseconds(10)) == future_status::ready) {
+				if (runners[i].valid() && runners[i].wait_for(std::chrono::milliseconds(10)) == future_status::ready) {
 					outputs[i] = runners[i].get();
 					cout << "Thread " << i << " : " << outputs[i] << endl;
 				}
@@ -271,7 +283,8 @@ int main(int argc, char **argv){
 	uint lc;
 	string ostring;
 	uint64_t tsl, timestamp2;
-	uint timer = 2000;
+	list<uint64_t> avgtimes;
+	uint timer = 1000;
 	bool filtering = false;
 	bool reversing = false;
 	int sortint = Proc::sort_map["cpu lazy"];
@@ -300,7 +313,7 @@ int main(int argc, char **argv){
 		lc = 0;
 		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
 		ostring = Mv::save + Mv::u(2) + Mv::r(20) + trans(rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
-				 "Sorting: " + string(Proc::sort_array[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
+			"Sorting: " + string(Proc::sort_array[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
 
 		for (auto& p : plist){
 			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " " +
@@ -310,8 +323,11 @@ int main(int argc, char **argv){
 			if (lc++ > Term::height - 21) break;
 		}
 
+		avgtimes.push_front(timestamp);
+		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
-		cout << "Processes call took: " << timestamp << "ms. Drawing took: " << time_ms() - timestamp2 << "ms." << endl;
+		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << timestamp << "ms. Average: " << accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size() <<
+			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms.        " << endl;
 
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();
@@ -413,6 +429,6 @@ int main(int argc, char **argv){
 
 	if (debug == 1) Input::wait();
 	Term::restore();
-	if (debug < 2) cout << Term::normal_screen << Term::show_cursor << flush;
+	if (!debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	return 0;
 }

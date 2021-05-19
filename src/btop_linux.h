@@ -21,12 +21,15 @@ tab-size = 4
 
 #include <string>
 #include <vector>
+#include <deque>
 #include <array>
 #include <unordered_map>
 #include <atomic>
 #include <fstream>
 #include <filesystem>
 #include <ranges>
+#include <list>
+
 
 #include <unistd.h>
 
@@ -35,7 +38,7 @@ tab-size = 4
 #include <btop_tools.h>
 
 
-using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::unordered_map;
+using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::unordered_map, std::deque, std::list;
 namespace fs = std::filesystem;
 using namespace Tools;
 
@@ -61,6 +64,7 @@ double system_uptime(){
 namespace Proc {
 	namespace {
 		uint64_t tstamp;
+		size_t numpids = 500;
 		long int clk_tck;
 		struct p_cache {
 			string name, cmd, user;
@@ -89,7 +93,7 @@ namespace Proc {
 	};
 	unordered_map<string, uint> sort_map;
 
-	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c
+	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, tty, cpu_n, p_nice, ppid
 	struct proc_info {
 		uint pid;
 		string name, cmd;
@@ -97,16 +101,21 @@ namespace Proc {
 		string user;
 		uint64_t mem;
 		double cpu_p, cpu_c;
+		char state;
+		int cpu_n, p_nice;
+		uint ppid;
 	};
 
 
 	//* Collects process information from /proc and returns a vector of proc_info structs
 	auto collect(string sorting="pid", bool reverse=false, string filter=""){
 		running.store(true);
-		uint pid;
+		uint pid, ppid;
 		uint64_t cpu_t, rss_mem;
 		double cpu, cpu_s;
 		bool new_cache;
+		char state;
+		int cpu_n, p_nice;
 		size_t threads;
 		ifstream pread;
 		string pid_str, name, cmd, attr, user, instr, uid, status, tmpstr;
@@ -115,8 +124,13 @@ namespace Proc {
 		auto uptime = system_uptime();
 		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<string> pstat;
+		pstat.reserve(40);
 		vector<proc_info> procs;
+		procs.reserve((numpids + 10));
 		vector<uint> c_pids;
+		c_pids.reserve((numpids + 10));
+		numpids = 0;
+		uint parenthesis = 0;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
@@ -146,9 +160,10 @@ namespace Proc {
 				stop.store(false);
 				return procs;
 			}
+			numpids++;
 			pid_str = fs::path(d.path()).filename();
-			cpu = 0.0; cpu_s = 0.0; cpu_t = 0;
-			rss_mem = 0; threads = 0;
+			cpu = 0.0; cpu_s = 0.0; cpu_t = 0; cpu_n = 0;
+			rss_mem = 0; threads = 0; state = '0'; ppid = 0; p_nice = 0;
 			new_cache = false;
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				pid = stoul(pid_str);
@@ -194,27 +209,47 @@ namespace Proc {
 
 				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
 				if (fs::exists((string)d.path() + "/stat")) {
-					pread.clear(); pstat.clear();
+					pread.clear(); instr.clear(); pstat.clear(); pstat.reserve(40); pstat.resize(3, "");
 					ifstream pread((string)d.path() + "/stat");
-					if (pread.good()) while (getline(pread, instr, ' ')) pstat.push_back(instr);
+					if (pread.good()) {
+						parenthesis = 1;
+						pread.ignore(numeric_limits<streamsize>::max(), '(');
+						while (parenthesis > 0 && !pread.eof()) {
+							instr = pread.get();
+							if (instr == "(") ++parenthesis;
+							else if (instr == ")") --parenthesis;
+						}
+						pread.ignore(1);
+						while (getline(pread, instr, ' ') && pstat.size() < 40) pstat.push_back(instr);
+					}
 					pread.close();
 
-					if (pstat.size() < 37) continue;
+					if (pstat.size() < 22) continue;
+
+					//? Process state
+					state = pstat[3][0];
+
+					//? Process parent pid
+					ppid = stoul(pstat[4]);
+
+					//? Process nice value
+					p_nice = stoi(pstat[19]);
 
 					//? Process number of threads
-					threads = stoul(pstat[19]);
+					threads = stoul(pstat[20]);
 
 					//? Process utime + stime
-					cpu_t = stoull(pstat[13]) + stoull(pstat[14]);
+					cpu_t = stoull(pstat[14]) + stoull(pstat[15]);
 
 					//? Cache cpu times and cpu seconds
 					if (new_cache) {
 						cache[pid].cpu_t = cpu_t;
-						cache[pid].cpu_s = stoull(pstat[21]);
+						cache[pid].cpu_s = stoull(pstat[22]);
 					}
 
-					//? Cache process start time
-					// if (!cpu_second.contains(pid)) cpu_second[pid] = stoull(pstat[21]);
+					//? CPU number last executed on
+					if (pstat.size() > 39) cpu_n = stoi(pstat[39]);
+
 
 					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
 					cpu = static_cast<double>(100000 * (cpu_t - cache[pid].cpu_t) / since_last) / clk_tck;
@@ -228,7 +263,7 @@ namespace Proc {
 
 				//* Get RSS memory in bytes from /proc/[pid]/statm
 				if (fs::exists((string)d.path() + "/statm")) {
-					pread.clear(); tmpstr.clear();
+					pread.clear();
 					ifstream pread((string)d.path() + "/statm");
 					if (pread.good()) {
 						pread.ignore(numeric_limits<streamsize>::max(), ' ');
@@ -238,22 +273,19 @@ namespace Proc {
 					pread.close();
 				}
 
-
-
-				// //* Match filter if applicable
+				//* Match filter if defined
 				if (!filter.empty() &&
-					pid_str.find(filter) == string::npos &&				//? Pid
-					cache[pid].name.find(filter) == string::npos &&		//? Program
-					cache[pid].cmd.find(filter) == string::npos &&		//? Command
-					cache[pid].user.find(filter) == string::npos 		//? User
+					pid_str.find(filter) == string::npos &&
+					cache[pid].name.find(filter) == string::npos &&
+					cache[pid].cmd.find(filter) == string::npos &&
+					cache[pid].user.find(filter) == string::npos
 					) continue;
 
 				//* Create proc_info
-				procs.push_back(proc_info(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s));
+				procs.push_back(proc_info(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s, state, cpu_n, p_nice, ppid));
 			}
 		}
 
-		// auto st = time_ms();
 
 		//* Sort processes vector
 		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b)
