@@ -210,12 +210,13 @@ namespace Proc {
 				if (fs::exists((string)d.path() + "/stat")) {
 					pread.clear(); instr.clear(); pstat.clear();
 					ifstream pread((string)d.path() + "/stat");
-					if (pread.good() && getline(pread, instr)) {	
-						pstat = ssplit(instr.substr(instr.rfind(')') + 1), " ", 38);	
+					if (pread.good() && getline(pread, instr)) {
+						//? Skip pid and comm field and find comm fields closing ')' from right to avoid names with whitespace or parenthesis
+						pstat = ssplit(instr.substr(instr.rfind(')') + 1), " ", 37, true);	
 					}
 					pread.close();
 
-					if (pstat.size() < 22) continue;
+					if (pstat.size() < 20) continue;
 
 					//? Process state
 					state = pstat[0][0];
@@ -239,7 +240,7 @@ namespace Proc {
 					}
 
 					//? CPU number last executed on
-					if (pstat.size() > 39) cpu_n = stoi(pstat[36]);
+					if (pstat.size() > 36) cpu_n = stoi(pstat[36]);
 
 
 					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
@@ -248,7 +249,7 @@ namespace Proc {
 					//? Process cumulative cpu usage since process start
 					cpu_s = static_cast<double>((cpu_t / clk_tck) / (uptime - (cache[pid].cpu_s / clk_tck)));
 
-					//? Add latest cpu times to cache
+					//? Update cache with latest cpu times
 					cache[pid].cpu_t = cpu_t;
 				}
 
