@@ -260,7 +260,7 @@ namespace Tools {
 	}
 
 	//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
-	vector<string> ssplit(string str, string delim = " ", int times = 0){
+	vector<string> ssplit(string str, string delim = " ", int times = 0, bool ignore_remainder=false){
 		vector<string> out;
 		if (times > 0) out.reserve(times);
 		if (!str.empty() && !delim.empty()){
@@ -274,7 +274,7 @@ namespace Tools {
 				if (times > 0 && ++x >= times) break;
 			}
 		}
-		out.push_back(str);
+		if (!ignore_remainder) out.push_back(str);
 		return out;
 	}
 
