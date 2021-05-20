@@ -130,7 +130,6 @@ namespace Proc {
 		vector<uint> c_pids;
 		c_pids.reserve((numpids + 10));
 		numpids = 0;
-		uint parenthesis = 0;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
@@ -209,46 +208,38 @@ namespace Proc {
 
 				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
 				if (fs::exists((string)d.path() + "/stat")) {
-					pread.clear(); instr.clear(); pstat.clear(); pstat.reserve(40); pstat.resize(3, "");
+					pread.clear(); instr.clear(); pstat.clear();
 					ifstream pread((string)d.path() + "/stat");
-					if (pread.good()) {
-						parenthesis = 1;
-						pread.ignore(numeric_limits<streamsize>::max(), '(');
-						while (parenthesis > 0 && !pread.eof()) {
-							instr = pread.get();
-							if (instr == "(") ++parenthesis;
-							else if (instr == ")") --parenthesis;
-						}
-						pread.ignore(1);
-						while (getline(pread, instr, ' ') && pstat.size() < 40) pstat.push_back(instr);
+					if (pread.good() && getline(pread, instr)) {	
+						pstat = ssplit(instr.substr(instr.rfind(')') + 1), " ", 38);	
 					}
 					pread.close();
 
 					if (pstat.size() < 22) continue;
 
 					//? Process state
-					state = pstat[3][0];
+					state = pstat[0][0];
 
 					//? Process parent pid
-					ppid = stoul(pstat[4]);
+					ppid = stoul(pstat[1]);
 
 					//? Process nice value
-					p_nice = stoi(pstat[19]);
+					p_nice = stoi(pstat[16]);
 
 					//? Process number of threads
-					threads = stoul(pstat[20]);
+					threads = stoul(pstat[17]);
 
 					//? Process utime + stime
-					cpu_t = stoull(pstat[14]) + stoull(pstat[15]);
+					cpu_t = stoull(pstat[11]) + stoull(pstat[12]);
 
 					//? Cache cpu times and cpu seconds
 					if (new_cache) {
 						cache[pid].cpu_t = cpu_t;
-						cache[pid].cpu_s = stoull(pstat[22]);
+						cache[pid].cpu_s = stoull(pstat[19]);
 					}
 
 					//? CPU number last executed on
-					if (pstat.size() > 39) cpu_n = stoi(pstat[39]);
+					if (pstat.size() > 39) cpu_n = stoi(pstat[36]);
 
 
 					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion

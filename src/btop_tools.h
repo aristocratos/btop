@@ -262,6 +262,7 @@ namespace Tools {
 	//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
 	vector<string> ssplit(string str, string delim = " ", int times = 0){
 		vector<string> out;
+		if (times > 0) out.reserve(times);
 		if (!str.empty() && !delim.empty()){
 			size_t pos = 0;
 			int x = 0;
