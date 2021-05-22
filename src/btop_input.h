@@ -23,12 +23,16 @@ tab-size = 4
 #include <unordered_map>
 #include <iostream>
 
-#include <btop_globs.h>
 #include <btop_tools.h>
 
 using std::string, std::unordered_map, std::cin;
 using namespace Tools;
 
+/* The input functions relies on the following std::cin options being set:
+	cin.sync_with_stdio(false);
+	cin.tie(NULL);
+	These will automatically be set when running Term::init() from btop_tools.h
+*/
 
 //* Functions and variables for handling keyboard and mouse input
 namespace Input {

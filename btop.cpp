@@ -26,6 +26,8 @@ tab-size = 4
 #include <atomic>
 #include <numeric>
 #include <ranges>
+#include <filesystem>
+#include <unistd.h>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
@@ -56,6 +58,7 @@ tab-size = 4
 
 using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
 using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status;
+namespace fs = std::filesystem;
 using namespace Tools;
 
 
@@ -151,9 +154,9 @@ int main(int argc, char **argv){
 
 	#if defined(LINUX)
 		//? Linux init
-		Global::proc_path = (fs::is_directory(fs::path("/proc"))) ? fs::path("/proc") : Global::proc_path;
+		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? fs::path("/proc") : Global::proc_path;
 		if (Global::proc_path.empty()) {
-			cout << "ERROR: Proc filesystem not detected!" << endl;
+			cout << "ERROR: Proc filesystem not found/readable!" << endl;
 			exit(1);
 		}
 	#endif
@@ -161,7 +164,7 @@ int main(int argc, char **argv){
 	//? Initialize terminal and set options
 	if (!Term::init()) {
 		cout << "ERROR: No tty detected!" << endl;
-		cout << "Sorry, btop++ needs an interactive shell to run." << endl;
+		cout << "btop++ needs an interactive shell to run." << endl;
 		exit(1);
 	}
 
@@ -171,7 +174,7 @@ int main(int argc, char **argv){
 	auto thts = time_ms();
 
 	//? Generate the theme
-	Theme::set(Global::Default_theme);
+	Theme::set(Theme::Default_theme);
 
 	//? Create the btop++ banner
 	Global::banner = createBanner();
@@ -233,7 +236,6 @@ int main(int argc, char **argv){
 	}
 
 
-
 	if (thread_test){
 
 		map<int, future<string>> runners;
@@ -263,26 +265,17 @@ int main(int argc, char **argv){
 
 
 
-//------>>>>>>
+//*------>>>>>> Proc testing
 
 
 	auto timestamp = time_ms();
 	Proc::init();
 
-	cout << "Total Processes init: " << time_ms() - timestamp << "ms" << endl;
-	cout << "Press any key to start!" << Mv::l(100) << flush;
-
-	// sleep_ms(1000);
-	// Input::wait();
-	// Input::clear();
-
-
-	// insert Processes call here
 
 
 	uint lc;
 	string ostring;
-	uint64_t tsl, timestamp2;
+	uint64_t tsl, timestamp2, rcount = 0;
 	list<uint64_t> avgtimes;
 	uint timer = 1000;
 	bool filtering = false;
@@ -326,8 +319,8 @@ int main(int argc, char **argv){
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
-		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << timestamp << "ms. Average: " << accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size() <<
-			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms.        " << endl;
+		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 4) << "ms. Average: " << rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 3) <<
+			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms. Number of processes: " << Proc::numpids << ". Run count: " << ++rcount << "    " << endl;
 
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();
@@ -353,7 +346,7 @@ int main(int argc, char **argv){
 
 	// cout << "Found " << plist.size() << " pids\n" << endl;
 
-//-----<<<<<
+//*-----<<<<<
 
 	//cout << pw->pw_name << "/" << gr->gr_name << endl;
 

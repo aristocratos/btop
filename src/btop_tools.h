@@ -37,6 +37,21 @@ using std::string, std::vector, std::regex, std::max, std::to_string, std::cin;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
+namespace Symbols {
+	const string h_line			= "─";
+	const string v_line			= "│";
+	const string left_up		= "┌";
+	const string right_up		= "┐";
+	const string left_down		= "└";
+	const string right_down		= "┘";
+	const string title_left		= "┤";
+	const string title_right	= "├";
+	const string div_up			= "┬";
+	const string div_down		= "┴";
+
+	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
+}
+
 //* Collection of escape codes for text style and formatting
 namespace Fx {
 	//* Escape sequence start
@@ -228,34 +243,34 @@ namespace Tools {
 	}
 
 	//* Return current time since epoch in milliseconds
-	uint64_t time_ms(){
+	inline uint64_t time_ms(){
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	//* Check if a string is a valid bool value
-	bool isbool(string str){
+	inline bool isbool(string& str){
 		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
 	}
 
 	//* Check if a string is a valid integer value
-	bool isint(string str){
+	inline bool isint(string& str){
 		return all_of(str.begin(), str.end(), ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return string
-	string ltrim(string str, string t_str = " "){
+	inline string ltrim(string str, string t_str = " "){
 		while (str.starts_with(t_str)) str.erase(0, t_str.size());
 		return str;
 	}
 
 	//* Right-trim <t_str> from <str> and return string
-	string rtrim(string str, string t_str = " "){
+	inline string rtrim(string str, string t_str = " "){
 		while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
 		return str;
 	}
 
 	//* Left-right-trim <t_str> from <str> and return string
-	string trim(string str, string t_str = " "){
+	inline string trim(string str, string t_str = " "){
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
@@ -352,6 +367,10 @@ namespace Tools {
 		return out;
 	}
 
+	//? Units for floating_humanizer function
+	const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+	const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
+
 	//* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
@@ -359,7 +378,7 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool bit=false, bool per_second=false){
 		string out;
 		uint mult = (bit) ? 8 : 1;
-		auto& units = (bit) ? Global::Units_bit : Global::Units_byte;
+		auto& units = (bit) ? Units_bit : Units_byte;
 
 		value *= 100 * mult;
 
