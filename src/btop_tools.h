@@ -24,6 +24,9 @@ tab-size = 4
 #include <vector>
 #include <iostream>
 #include <chrono>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
 #include <regex>
 #include <utility>
 
@@ -361,9 +364,9 @@ namespace Tools {
 		m = sec / 60;
 		sec %= 60;
 		if (d>0) out = to_string(d) + "d ";
-		out += (h<10) ? "0" + to_string(h) + ":" : to_string(h) + ":";
-		out += (m<10) ? "0" + to_string(m) + ":" : to_string(m) + ":";
-		out += (sec<10) ? "0" + to_string(sec) : to_string(sec);
+		out += ((h<10) ? "0" : "") + to_string(h) + ":";
+		out += ((m<10) ? "0" : "") + to_string(m) + ":";
+		out += ((sec<10) ? "0" : "") + to_string(sec);
 		return out;
 	}
 
@@ -433,6 +436,20 @@ namespace Tools {
    		return repeat(std::move(str), n);
 	}
 
+	//* Return current time in <strf> format
+	std::string strf_time(std::string strf){
+		auto now = std::chrono::system_clock::now();
+		auto in_time_t = std::chrono::system_clock::to_time_t(now);
+		std::tm bt {};
+		std::stringstream ss;
+		ss << std::put_time(localtime_r(&in_time_t, &bt), strf.c_str());
+		return ss.str();
+	}
+
+}
+
+namespace Logger {
+	string cur_date = Tools::strf_time("%Y-%m-%d");
 }
 
 

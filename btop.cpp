@@ -78,6 +78,12 @@ namespace Global {
 
 	string banner;
 	const uint banner_width = 49;
+
+	fs::path conf_dir;
+	fs::path conf_file;
+	fs::path logfile;
+	fs::path theme_folder;
+	fs::path user_theme_folder;
 }
 
 
@@ -145,21 +151,49 @@ string my_worker(int x){
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv){
 
-	// using namespace std;
-
 	//? Init
 
 	cout.setf(std::ios::boolalpha);
 	if (argc > 1) argumentParser(argc, argv);
 
+	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
+		cout << "WARNING: No UTF-8 locale was detected! Symbols might not look as intended." << endl;
+	}
+
 	#if defined(LINUX)
 		//? Linux init
-		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? fs::path("/proc") : Global::proc_path;
+		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (Global::proc_path.empty()) {
-			cout << "ERROR: Proc filesystem not found/readable!" << endl;
+			cout << "ERROR: Proc filesystem not found or no permission to read from it!" << endl;
 			exit(1);
 		}
 	#endif
+
+	//? Setup paths for config, log and themes
+	for (auto env : {"XDG_CONFIG_HOME", "HOME"}) {
+		if (getenv(env) != NULL && access(getenv(env), W_OK) != -1) {
+			Global::conf_dir = fs::path(getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
+			break;
+		}
+	}
+	if (!Global::conf_dir.empty()) {
+		if (!fs::is_directory(Global::conf_dir) && !fs::create_directories(Global::conf_dir)) {
+			cout << "WARNING: Could not create or access btop config directory. Logging and config saving disabled." << endl;
+		}
+		else {
+			Global::conf_file = Global::conf_dir / "btop.conf";
+			Global::logfile = Global::conf_dir / "btop.log";
+			Global::user_theme_folder = Global::conf_dir / "themes";
+			if (!fs::exists(Global::user_theme_folder) && !fs::create_directory(Global::user_theme_folder)) Global::user_theme_folder.clear();
+		}
+	}
+	for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
+		if (access(theme_path, R_OK) != -1) {
+			Global::theme_folder = theme_path;
+			break;
+		}
+	}
+
 
 	//? Initialize terminal and set options
 	if (!Term::init()) {
@@ -320,7 +354,7 @@ int main(int argc, char **argv){
 		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
 		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 4) << "ms. Average: " << rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 3) <<
-			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms. Number of processes: " << Proc::numpids << ". Run count: " << ++rcount << "    " << endl;
+			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms. Number of processes: " << Proc::numpids << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << endl;
 
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();

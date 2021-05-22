@@ -73,8 +73,8 @@ namespace Proc {
 		fs::path passwd_path;
 		fs::file_time_type passwd_time;
 		uint counter = 0;
-		auto page_size = sysconf(_SC_PAGE_SIZE);
-		auto clk_tck = sysconf(_SC_CLK_TCK);
+		long page_size;
+		long clk_tck;
 
 	}
 
@@ -93,7 +93,7 @@ namespace Proc {
 	};
 	unordered_map<string, uint> sort_map;
 
-	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, tty, cpu_n, p_nice, ppid
+	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, cpu_n, p_nice, ppid
 	struct proc_info {
 		uint pid;
 		string name, cmd;
@@ -125,8 +125,6 @@ namespace Proc {
 		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<proc_info> procs;
 		procs.reserve((numpids + 10));
-		vector<uint> c_pids;
-		c_pids.reserve((numpids + 10));
 		numpids = 0;
 
 		//* Update uid_user map if /etc/passwd changed since last run
@@ -164,7 +162,6 @@ namespace Proc {
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				numpids++;
 				pid = stoul(pid_str);
-				c_pids.push_back(pid);
 
 				//* Cache program name, command and username
 				if (!cache.contains(pid)) {
@@ -215,14 +212,14 @@ namespace Proc {
 						continue;
 				}
 
-				//* Get cpu usage, cpu cumulative and threads from /proc/[pid]/stat
+				//* Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (pread.good()) {
 					instr.clear(); s_pos = 0; c_pos = 0; s_count = 0;
 					getline(pread, instr);
 					pread.close();
 
-					//? Skip pid and comm field and find comm fields closing ')' to avoid names with whitespace or parenthesis
+					//? Skip pid and comm field and find comm fields closing ')'
 					s_pos = instr.find_last_of(')') + 2;
 
 					do {
@@ -329,8 +326,11 @@ namespace Proc {
 		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
 			unordered_map<uint, p_cache> r_cache;
 			counter = 0;
-			for (auto& p : c_pids) r_cache[p] = cache[p];
-			cache = move(r_cache);
+			if (filter.empty()) {
+				for (auto& p : procs) r_cache[p.pid] = cache[p.pid];
+				cache = move(r_cache);
+			}
+			else cache.clear();
 		}
 
 		tstamp = time_ms();
@@ -341,7 +341,14 @@ namespace Proc {
 	//* Initialize needed variables for collect
 	void init(){
 		tstamp = time_ms();
-		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
+		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path; //! add logger error
+
+		page_size = sysconf(_SC_PAGE_SIZE); //! add logger error
+		if (page_size <= 0) page_size = 4096;
+
+		clk_tck = sysconf(_SC_CLK_TCK); //! add logger error
+		if (clk_tck <= 0) clk_tck = 100;
+
 		uint i = 0;
 		for (auto& item : sort_array) sort_map[item] = i++;
 	}
