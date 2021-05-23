@@ -295,8 +295,7 @@ namespace Proc {
 
 
 		//* Sort processes vector
-		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b)
-			{
+		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b) {
 				switch (sortint) {
 					case 0: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
 					case 1: return (reverse) ? a.name < b.name : a.name > b.name;
@@ -341,13 +340,21 @@ namespace Proc {
 	//* Initialize needed variables for collect
 	void init(){
 		tstamp = time_ms();
-		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path; //! add logger error
+		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
+		if (passwd_path.empty()) Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
 
-		page_size = sysconf(_SC_PAGE_SIZE); //! add logger error
-		if (page_size <= 0) page_size = 4096;
+		page_size = sysconf(_SC_PAGE_SIZE);
+		if (page_size <= 0) {
+			page_size = 4096;
+			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+		}
 
-		clk_tck = sysconf(_SC_CLK_TCK); //! add logger error
-		if (clk_tck <= 0) clk_tck = 100;
+
+		clk_tck = sysconf(_SC_CLK_TCK);
+		if (clk_tck <= 0) {
+			clk_tck = 100;
+			Logger::warning("Could not get system clocks per second. Defaulting to 100, processes cpu usage might be incorrect.");
+		}
 
 		uint i = 0;
 		for (auto& item : sort_array) sort_map[item] = i++;

@@ -23,12 +23,15 @@ tab-size = 4
 #include <cmath>
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <ctime>
 #include <sstream>
 #include <iomanip>
 #include <regex>
 #include <utility>
+#include <atomic>
+#include <filesystem>
 
 #include <unistd.h>
 #include <termios.h>
@@ -36,7 +39,8 @@ tab-size = 4
 
 #include <btop_globs.h>
 
-using std::string, std::vector, std::regex, std::max, std::to_string, std::cin;
+using std::string, std::vector, std::regex, std::max, std::to_string, std::cin, std::atomic;
+namespace fs = std::filesystem;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -449,7 +453,53 @@ namespace Tools {
 }
 
 namespace Logger {
-	string cur_date = Tools::strf_time("%Y-%m-%d");
+	namespace {
+		std::atomic<bool> busy (false);
+		fs::path logfile;
+		uint loglevel = 2;
+		bool first = true;
+		string tdf = "%Y/%m/%d (%T) | ";
+		unordered_map<uint, string> log_levels = {
+			{ 0, "DISABLED" },
+			{ 1, "ERROR" },
+			{ 2, "WARNING" },
+			{ 3, "INFO" },
+			{ 4, "DEBUG" }
+		};
+	}
+
+	void log_write(uint level, string& msg){
+		if (logfile.empty() || loglevel < level) return;
+		while (busy.load()) Tools::sleep_ms(1);
+		busy.store(true);
+		if (fs::exists(logfile) && fs::file_size(logfile) > 1024 << 10) {
+			auto old_log = logfile;
+			old_log += ".1";
+			if (fs::exists(old_log)) fs::remove(old_log);
+			fs::rename(logfile, old_log);
+		}
+		std::ofstream lwrite(logfile, std::ios::app);
+		if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "----> btop++ v." << Global::Version << "\n";}
+		lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
+		lwrite.close();
+		busy.store(false);
+	}
+
+	void error(string msg){
+		log_write(1, msg);
+	}
+
+	void warning(string msg){
+		log_write(2, msg);
+	}
+
+	void info(string msg){
+		log_write(3, msg);
+	}
+
+	void debug(string msg){
+		log_write(4, msg);
+	}
 }
 
 

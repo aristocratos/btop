@@ -29,6 +29,19 @@ tab-size = 4
 #include <filesystem>
 #include <unistd.h>
 
+namespace Global {
+	const std::vector<std::array<std::string, 2>> Banner_src = {
+		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
+		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
+		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
+		{"#9A1919", "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
+		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
+		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
+	};
+
+	const std::string Version = "0.0.10";
+}
+
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
@@ -53,7 +66,7 @@ tab-size = 4
 		#error OSX support not yet implemented!
     #endif
 #else
-	#error Platform not supported or could not determine platform!
+	#error Platform not supported!
 #endif
 
 using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
@@ -62,32 +75,16 @@ namespace fs = std::filesystem;
 using namespace Tools;
 
 
-//? ------------------------------------------------- GLOBALS ---------------------------------------------------------
-
 namespace Global {
-	const vector<array<string, 2>> Banner_src = {
-		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
-		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
-		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
-		{"#9A1919", "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
-		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
-		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
-	};
-
-	const string Version = "0.0.1";
-
 	string banner;
 	const uint banner_width = 49;
 
 	fs::path conf_dir;
 	fs::path conf_file;
-	fs::path logfile;
 	fs::path theme_folder;
 	fs::path user_theme_folder;
 }
 
-
-//? --------------------------------------- FUNCTIONS, STRUCTS & CLASSES ----------------------------------------------
 
 //* A simple argument parser
 void argumentParser(int argc, char **argv){
@@ -156,10 +153,6 @@ int main(int argc, char **argv){
 	cout.setf(std::ios::boolalpha);
 	if (argc > 1) argumentParser(argc, argv);
 
-	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
-		cout << "WARNING: No UTF-8 locale was detected! Symbols might not look as intended." << endl;
-	}
-
 	#if defined(LINUX)
 		//? Linux init
 		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
@@ -182,7 +175,7 @@ int main(int argc, char **argv){
 		}
 		else {
 			Global::conf_file = Global::conf_dir / "btop.conf";
-			Global::logfile = Global::conf_dir / "btop.log";
+			Logger::logfile = Global::conf_dir / "btop.log";
 			Global::user_theme_folder = Global::conf_dir / "themes";
 			if (!fs::exists(Global::user_theme_folder) && !fs::create_directory(Global::user_theme_folder)) Global::user_theme_folder.clear();
 		}
@@ -194,10 +187,19 @@ int main(int argc, char **argv){
 		}
 	}
 
+	string err_msg;
+
+	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
+		err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.";
+		Logger::warning(err_msg);
+		cout << "WARNING: " << err_msg << endl;
+	}
 
 	//? Initialize terminal and set options
 	if (!Term::init()) {
-		cout << "ERROR: No tty detected!" << endl;
+		err_msg = "No tty detected!";
+		Logger::error(err_msg + " Quitting.");
+		cout << "ERROR: " << err_msg << endl;
 		cout << "btop++ needs an interactive shell to run." << endl;
 		exit(1);
 	}
@@ -216,9 +218,11 @@ int main(int argc, char **argv){
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
-	int debug = 0;
+	int debug = 1;
 	int tests = 0;
 	bool debuginit = false;
+
+	if (debug > 0) { Logger::loglevel = 4; Logger::debug("Running in debug mode!");}
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	bool thread_test = false;
@@ -296,7 +300,6 @@ int main(int argc, char **argv){
 
 
 	cout << "Up for " << sec_to_dhms(round(system_uptime())) << endl;
-
 
 
 //*------>>>>>> Proc testing
@@ -454,7 +457,6 @@ int main(int argc, char **argv){
 		}
 	}
 
-	if (debug == 1) Input::wait();
 	Term::restore();
 	if (!debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	return 0;
