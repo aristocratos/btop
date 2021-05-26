@@ -31,9 +31,9 @@ tab-size = 4
 
 using std::string, std::vector, std::map, std::round, std::views::iota;
 
-namespace Box {
+namespace Draw {
 
-	struct Conf {
+	struct BoxConf {
 		uint x=0, y=0;
 		uint width=0, height=0;
 		string line_color = "", title = "", title2 = "";
@@ -41,8 +41,7 @@ namespace Box {
 		uint num=0;
 	};
 
-
-	string draw(Conf c){
+	string createBox(BoxConf c){
 		string out;
 		string lcolor = (c.line_color.empty()) ? Theme::c("div_line") : c.line_color;
 		string numbering = (c.num == 0) ? "" : Theme::c("hi_fg") + Symbols::superscript[c.num];
@@ -80,11 +79,23 @@ namespace Box {
 		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
 	}
 
+	class Meter {
+		string out, color_gradient, color_inactive;
+
+
+	};
+
+}
+
+namespace Box {
+
+
+
 }
 
 namespace Proc {
 
-	// Box::Conf box;
+	// Draw::BoxConf box;
 
 }
 

@@ -329,7 +329,7 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	string pbox = Box::draw(Box::Conf(0, 10, Term::width, Term::height - 16, Theme::c("proc_box"), "testbox", "below", true, 7));
+	string pbox = Draw::createBox({.x = 0, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .num = 7});
 	pbox += rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 69) + " Threads: " +
 			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n";
 
@@ -356,8 +356,10 @@ int main(int argc, char **argv){
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
-		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 4) << "ms. Average: " << rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 3) <<
-			 "ms of " << avgtimes.size() << " samples. Drawing took: " << time_ms() - timestamp2 << "ms. Number of processes: " << Proc::numpids << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << endl;
+		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 4) << "ms. Average: " <<
+			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 3) << "ms of " << avgtimes.size() <<
+			" samples. Drawing took: " << time_ms() - timestamp2 << "ms.\nNumber of processes: " << Proc::numpids << ". Run count: " <<
+			++rcount << ". Time: " << strf_time("%X   ") << endl;
 
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();

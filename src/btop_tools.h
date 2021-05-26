@@ -470,8 +470,7 @@ namespace Logger {
 
 	void log_write(uint level, string& msg){
 		if (logfile.empty() || loglevel < level) return;
-		while (busy.load()) Tools::sleep_ms(1);
-		busy.store(true);
+		busy.wait(true); busy.store(true);
 		if (fs::exists(logfile) && fs::file_size(logfile) > 1024 << 10) {
 			auto old_log = logfile;
 			old_log += ".1";
@@ -479,7 +478,7 @@ namespace Logger {
 			fs::rename(logfile, old_log);
 		}
 		std::ofstream lwrite(logfile, std::ios::app);
-		if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "----> btop++ v." << Global::Version << "\n";}
+		if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
 		lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
 		lwrite.close();
 		busy.store(false);

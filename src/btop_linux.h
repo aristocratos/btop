@@ -23,9 +23,13 @@ tab-size = 4
 #include <vector>
 #include <deque>
 #include <array>
+#include <map>
 #include <unordered_map>
 #include <atomic>
+#include <future>
+#include <thread>
 #include <fstream>
+#include <streambuf>
 #include <filesystem>
 #include <ranges>
 #include <list>
@@ -37,7 +41,7 @@ tab-size = 4
 #include <btop_tools.h>
 
 
-using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::unordered_map, std::deque, std::list;
+using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::map, std::unordered_map, std::deque, std::list;
 using std::cout, std::flush, std::endl;
 namespace fs = std::filesystem;
 using namespace Tools;
@@ -200,7 +204,7 @@ namespace Proc {
 						user = (!uid.empty() && uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 					}
 					else continue;
-					cache[pid] = p_cache(name, cmd, user);
+					cache[pid] = {name, cmd, user};
 				}
 
 				//* Match filter if defined
@@ -221,6 +225,7 @@ namespace Proc {
 
 					//? Skip pid and comm field and find comm fields closing ')'
 					s_pos = instr.find_last_of(')') + 2;
+					if (s_pos == string::npos) continue;
 
 					do {
 						c_pos = instr.find(' ', s_pos);
@@ -266,7 +271,7 @@ namespace Proc {
 						s_pos = c_pos + 1;
 					} while (s_count++ < 36);
 
-					if (s_count < 20) continue;
+					if (s_count < 19) continue;
 
 					//? Process cpu usage since last update, 100'000 because (100 percent * 1000 milliseconds) for correct conversion
 					cpu = static_cast<double>(100000 * (cpu_t - cache[pid].cpu_t) / since_last) / clk_tck;
@@ -289,7 +294,7 @@ namespace Proc {
 				}
 
 				//* Create proc_info
-				procs.push_back(proc_info(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s, state, cpu_n, p_nice, ppid));
+				procs.push_back({pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s, state, cpu_n, p_nice, ppid});
 			}
 		}
 
@@ -331,7 +336,6 @@ namespace Proc {
 			}
 			else cache.clear();
 		}
-
 		tstamp = time_ms();
 		running.store(false);
 		return procs;

@@ -1,12 +1,14 @@
 PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/btop/doc
-CXX = g++
-override CXXFLAGS += -std=c++20 -O3 -pthread -Wall -Wextra -pedantic
+CPP = g++
+CPPFLAGS = -std=c++20 -pthread
+OPTFLAG = -O3
+INFOFLAGS += -Wall -Wextra -Wno-stringop-overread -pedantic
 INCLUDES = -I./src
 
 btop: btop.cpp
 	@mkdir -p bin
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -o bin/btop btop.cpp
+	$(CPP) $(CPPFLAGS) $(INCLUDES) $(OPTFLAG) $(INFOFLAGS) -o bin/btop btop.cpp
 
 install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
