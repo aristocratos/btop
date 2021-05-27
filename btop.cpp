@@ -238,7 +238,7 @@ int main(int argc, char **argv){
 	int ill = 0;
 	for (int i : iota(0, (int)blen)){
 		ill = (i <= (int)blen / 2) ? i : ill - 1;
-		cout << Theme::g("used")[ill] << "-";
+		cout << Theme::g("used")[ill] << Symbols::h_line;
 	}
 	cout << Fx::reset << endl;
 
@@ -270,6 +270,18 @@ int main(int argc, char **argv){
 		}
 
 
+		exit(0);
+	}
+
+
+	if (true) {
+		Draw::Meter kmeter;
+		kmeter(Term::width - 2, "cpu", false);
+		cout << kmeter(25) << endl;
+		cout << kmeter(0) << endl;
+		cout << kmeter(50) << endl;
+		cout << kmeter(100) << endl;
+		cout << kmeter(50) << endl;
 		exit(0);
 	}
 
@@ -329,15 +341,15 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	string pbox = Draw::createBox({.x = 0, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .num = 7});
+	string pbox = Draw::createBox({.x = 0, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
 	pbox += rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 69) + " Threads: " +
 			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n";
 
 	while (key != "q") {
-		timestamp = time_ms();
-		tsl = timestamp + timer;
+		timestamp = time_micros();
+		tsl = time_ms() + timer;
 		auto plist = Proc::collect(Proc::sort_array[sortint], reversing, filter);
-		timestamp2 = time_ms();
+		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
 		lc = 0;
@@ -353,12 +365,16 @@ int main(int argc, char **argv){
 			if (lc++ > Term::height - 21) break;
 		}
 
+		while (lc++ < Term::height - 19) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
+
+
+
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
-		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 4) << "ms. Average: " <<
-			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 3) << "ms of " << avgtimes.size() <<
-			" samples. Drawing took: " << time_ms() - timestamp2 << "ms.\nNumber of processes: " << Proc::numpids << ". Run count: " <<
+		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
+			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
+			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Run count: " <<
 			++rcount << ". Time: " << strf_time("%X   ") << endl;
 
 		while (time_ms() < tsl) {

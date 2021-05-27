@@ -4,7 +4,7 @@ CPP = g++
 CPPFLAGS = -std=c++20 -pthread
 OPTFLAG = -O3
 INFOFLAGS += -Wall -Wextra -Wno-stringop-overread -pedantic
-INCLUDES = -I./src
+INCLUDES = -I./src -I./include
 
 btop: btop.cpp
 	@mkdir -p bin

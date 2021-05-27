@@ -56,6 +56,8 @@ namespace Symbols {
 	const string div_up			= "┬";
 	const string div_down		= "┴";
 
+	const string meter = "■";
+
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 }
 
@@ -252,6 +254,11 @@ namespace Tools {
 	//* Return current time since epoch in milliseconds
 	inline uint64_t time_ms(){
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
+
+	//* Return current time since epoch in milliseconds
+	inline uint64_t time_micros(){
+		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	//* Check if a string is a valid bool value

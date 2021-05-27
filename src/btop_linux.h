@@ -23,8 +23,6 @@ tab-size = 4
 #include <vector>
 #include <deque>
 #include <array>
-#include <map>
-#include <unordered_map>
 #include <atomic>
 #include <future>
 #include <thread>
@@ -39,9 +37,10 @@ tab-size = 4
 #include <btop_config.h>
 #include <btop_globs.h>
 #include <btop_tools.h>
+#include <robin_hood.h>
 
 
-using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::map, std::unordered_map, std::deque, std::list;
+using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, robin_hood::unordered_flat_map;
 using std::cout, std::flush, std::endl;
 namespace fs = std::filesystem;
 using namespace Tools;
@@ -72,8 +71,8 @@ namespace Proc {
 			string name, cmd, user;
 			uint64_t cpu_t = 0, cpu_s = 0;
 		};
-		unordered_map<uint, p_cache> cache;
-		unordered_map<string, string> uid_user;
+		unordered_flat_map<uint, p_cache> cache;
+		unordered_flat_map<string, string> uid_user;
 		fs::path passwd_path;
 		fs::file_time_type passwd_time;
 		uint counter = 0;
@@ -95,7 +94,7 @@ namespace Proc {
 		"cpu direct",
 		"cpu lazy",
 	};
-	unordered_map<string, uint> sort_map;
+	unordered_flat_map<string, uint> sort_map;
 
 	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, cpu_n, p_nice, ppid
 	struct proc_info {
@@ -138,13 +137,12 @@ namespace Proc {
 			uid_user.clear();
 			pread.open(passwd_path);
 			if (pread.good()) {
-				while (true){
+				while (!pread.eof()){
 					getline(pread, r_user, ':');
 					pread.ignore(SSmax, ':');
 					getline(pread, r_uid, ':');
 					uid_user[r_uid] = r_user;
 					pread.ignore(SSmax, '\n');
-					if (pread.eof()) break;
 				}
 			}
 			pread.close();
@@ -180,7 +178,6 @@ namespace Proc {
 
 					pread.open(d.path() / "cmdline");
 					if (pread.good()) {
-						tmpstr.clear();
 						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + " ";
 						pread.close();
 						if (!cmd.empty()) cmd.pop_back();
@@ -189,7 +186,7 @@ namespace Proc {
 
 					pread.open(d.path() / "status");
 					if (pread.good()) {
-						status.clear(); uid.clear();
+						uid.clear();
 						while (!pread.eof()){
 							getline(pread, status, ':');
 							if (status == "Uid") {
@@ -208,10 +205,11 @@ namespace Proc {
 				}
 
 				//* Match filter if defined
-				if (!filter.empty() && pid_str.find(filter) == string::npos &&
-					cache[pid].name.find(filter) == string::npos &&
-					cache[pid].cmd.find(filter) == string::npos &&
-					cache[pid].user.find(filter) == string::npos) {
+				if (!filter.empty()
+					&& pid_str.find(filter) == string::npos
+					&& cache[pid].name.find(filter) == string::npos
+					&& cache[pid].cmd.find(filter) == string::npos
+					&& cache[pid].user.find(filter) == string::npos) {
 						if (new_cache) cache.erase(pid);
 						continue;
 				}
@@ -219,9 +217,9 @@ namespace Proc {
 				//* Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (pread.good()) {
-					instr.clear(); s_pos = 0; c_pos = 0; s_count = 0;
 					getline(pread, instr);
 					pread.close();
+					s_pos = 0; c_pos = 0; s_count = 0;
 
 					//? Skip pid and comm field and find comm fields closing ')'
 					s_pos = instr.find_last_of(')') + 2;
@@ -289,12 +287,12 @@ namespace Proc {
 				if (pread.good()) {
 					pread.ignore(SSmax, ' ');
 					pread >> rss_mem;
-					rss_mem *= page_size;
 					pread.close();
+					rss_mem *= page_size;
 				}
 
 				//* Create proc_info
-				procs.push_back({pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s, state, cpu_n, p_nice, ppid});
+				procs.emplace_back(pid, cache[pid].name, cache[pid].cmd, threads, cache[pid].user, rss_mem, cpu, cpu_s, state, cpu_n, p_nice, ppid);
 			}
 		}
 
@@ -302,14 +300,14 @@ namespace Proc {
 		//* Sort processes vector
 		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b) {
 				switch (sortint) {
-					case 0: return (reverse) ? a.pid < b.pid : a.pid > b.pid;
-					case 1: return (reverse) ? a.name < b.name : a.name > b.name;
-					case 2: return (reverse) ? a.cmd < b.cmd : a.cmd > b.cmd;
-					case 3: return (reverse) ? a.threads < b.threads : a.threads > b.threads;
-					case 4: return (reverse) ? a.user < b.user : a.user > b.user;
-					case 5: return (reverse) ? a.mem < b.mem : a.mem > b.mem;
-					case 6: return (reverse) ? a.cpu_p < b.cpu_p : a.cpu_p > b.cpu_p;
-					case 7: return (reverse) ? a.cpu_c < b.cpu_c : a.cpu_c > b.cpu_c;
+					case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
+					case 1: return (reverse) ? a.name < b.name 			: a.name > b.name;
+					case 2: return (reverse) ? a.cmd < b.cmd 			: a.cmd > b.cmd;
+					case 3: return (reverse) ? a.threads < b.threads 	: a.threads > b.threads;
+					case 4: return (reverse) ? a.user < b.user 			: a.user > b.user;
+					case 5: return (reverse) ? a.mem < b.mem 			: a.mem > b.mem;
+					case 6: return (reverse) ? a.cpu_p < b.cpu_p 		: a.cpu_p > b.cpu_p;
+					case 7: return (reverse) ? a.cpu_c < b.cpu_c 		: a.cpu_c > b.cpu_c;
 				}
 				return false;
 			}
@@ -328,11 +326,12 @@ namespace Proc {
 
 		//* Clear dead processes from cache at a regular interval
 		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
-			unordered_map<uint, p_cache> r_cache;
+			unordered_flat_map<uint, p_cache> r_cache;
+			r_cache.reserve(procs.size());
 			counter = 0;
 			if (filter.empty()) {
 				for (auto& p : procs) r_cache[p.pid] = cache[p.pid];
-				cache = move(r_cache);
+				cache.swap(r_cache);
 			}
 			else cache.clear();
 		}

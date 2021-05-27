@@ -192,7 +192,7 @@ namespace Theme {
 			string depth;
 			colors.clear(); rgbs.clear();
 			for (auto& [name, color] : Default_theme) {
-				depth = (name.ends_with("bg")) ? "bg" : "fg";
+				depth = (name.ends_with("bg") && name != "meter_bg") ? "bg" : "fg";
 				if (source.contains(name)) {
 					if (source.at(name)[0] == '#') {
 						colors[name] = hex_to_color(source.at(name), !Config::getB("truecolor"), depth);

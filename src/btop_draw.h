@@ -22,6 +22,8 @@ tab-size = 4
 #include <vector>
 #include <map>
 #include <ranges>
+#include <algorithm>
+#include <cmath>
 
 #include <btop_config.h>
 #include <btop_tools.h>
@@ -29,7 +31,7 @@ tab-size = 4
 #ifndef _btop_draw_included_
 #define _btop_draw_included_ 1
 
-using std::string, std::vector, std::map, std::round, std::views::iota;
+using std::string, std::vector, std::map, std::round, std::views::iota, std::string_literals::operator""s;
 
 namespace Draw {
 
@@ -80,8 +82,42 @@ namespace Draw {
 	}
 
 	class Meter {
-		string out, color_gradient, color_inactive;
+		string out, color_gradient;
+		int width = 10;
+		bool invert = false;
+		vector<string> cache;
+	public:
+		void operator()(int width, string color_gradient, bool invert = false) {
+			if (width < 0) width = 1;
+			this->width = width;
+			this->color_gradient = color_gradient;
+			this->invert = invert;
+			cache.clear();
+			cache.insert(cache.begin(), 101, "");
+		}
 
+		string operator()(int value) {
+			if (value > 100) value = 100;
+			else if (value < 0) value = 0;
+			if (!cache.at(value).empty()) return out = cache.at(value);
+			out.clear();
+			int y;
+			for (int i : iota(1, width + 1)) {
+				y = round((double)i * 100.0 / width);
+				if (value >= y)
+					out += Theme::g(color_gradient)[invert ? 100 - y : y] + Symbols::meter;
+				else {
+					out += Theme::c("meter_bg") + Symbols::meter * (width + 1 - i);
+					break;
+				}
+			}
+			out += Fx::reset;
+			return cache.at(value) = out;
+		}
+
+		string operator()() {
+			return out;
+		}
 
 	};
 
