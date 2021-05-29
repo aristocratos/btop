@@ -31,16 +31,17 @@ tab-size = 4
 #include <filesystem>
 #include <ranges>
 #include <list>
+#include <robin_hood.h>
 
 #include <unistd.h>
 
 #include <btop_config.h>
 #include <btop_globs.h>
 #include <btop_tools.h>
-#include <robin_hood.h>
 
 
-using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, robin_hood::unordered_flat_map;
+
+using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize;
 using std::cout, std::flush, std::endl;
 namespace fs = std::filesystem;
 using namespace Tools;

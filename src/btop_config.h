@@ -21,11 +21,13 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <robin_hood.h>
+#include <filesystem>
 
 #include <btop_tools.h>
 
-using std::string, std::vector, std::unordered_map;
+using std::string, std::vector, robin_hood::unordered_flat_map;
+namespace fs = std::filesystem;
 using namespace Tools;
 
 
@@ -33,9 +35,12 @@ using namespace Tools;
 namespace Config {
 	namespace {
 
+		fs::path conf_dir;
+		fs::path conf_file;
+
 		bool changed = false;
 
-		unordered_map<string, string> strings = {
+		unordered_flat_map<string, string> strings = {
 			{"color_theme", "Default"},
 			{"shown_boxes", "cpu mem net proc"},
 			{"proc_sorting", "cpu lazy"},
@@ -52,7 +57,7 @@ namespace Config {
 			{"net_iface", ""},
 			{"log_level", "WARNING"}
 		};
-		unordered_map<string, bool> bools = {
+		unordered_flat_map<string, bool> bools = {
 			{"theme_background", true},
 			{"truecolor", true},
 			{"proc_reversed", false},
@@ -84,7 +89,7 @@ namespace Config {
 			{"show_battery", true},
 			{"show_init", false}
 		};
-		unordered_map<string, int> ints = {
+		unordered_flat_map<string, int> ints = {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
 			{"tree_depth", 3}

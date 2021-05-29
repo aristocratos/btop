@@ -28,6 +28,7 @@ tab-size = 4
 #include <ranges>
 #include <filesystem>
 #include <unistd.h>
+#include <robin_hood.h>
 
 namespace Global {
 	const std::vector<std::array<std::string, 2>> Banner_src = {
@@ -69,7 +70,7 @@ namespace Global {
 	#error Platform not supported!
 #endif
 
-using std::string, std::vector, std::array, std::map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
+using std::string, std::vector, std::array, robin_hood::unordered_flat_map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
 using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status;
 namespace fs = std::filesystem;
 using namespace Tools;
@@ -79,10 +80,14 @@ namespace Global {
 	string banner;
 	const uint banner_width = 49;
 
-	fs::path conf_dir;
-	fs::path conf_file;
-	fs::path theme_folder;
-	fs::path user_theme_folder;
+	fs::path self_path;
+
+	bool debuginit = false;
+	bool debug = false;
+
+	uint64_t start_time;
+
+	bool quitting = false;
 }
 
 
@@ -94,10 +99,13 @@ void argumentParser(int argc, char **argv){
 		if (argument == "-v" || argument == "--version") {
 			cout << "btop version: " << Global::Version << endl;
 			exit(0);
-		} else if (argument == "-h" || argument == "--help") {
+		}
+		else if (argument == "-h" || argument == "--help") {
 			cout << "help here" << endl;
 			exit(0);
-		} else {
+		}
+		else if (argument == "--debug") Global::debug = true;
+		else {
 			cout << " Unknown argument: " << argument << "\n" <<
 			" Use -h or --help for help." <<  endl;
 			exit(1);
@@ -134,6 +142,18 @@ string createBanner(){
 	return out;
 }
 
+void clean_quit(int signal){
+	if (Global::quitting) return;
+	if (Term::initialized) {
+		Term::restore();
+		if (!Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
+	}
+	if (Global::debug) Logger::debug("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
+	Global::quitting = true;
+	if (signal != -1) exit(signal);
+}
+
+void _exit_handler() { clean_quit(-1); }
 
 //* Threading test function
 string my_worker(int x){
@@ -150,62 +170,83 @@ int main(int argc, char **argv){
 
 	//? Init
 
+	Global::start_time = time_s();
+
 	cout.setf(std::ios::boolalpha);
 	if (argc > 1) argumentParser(argc, argv);
 
+	std::atexit(_exit_handler);
+
 	#if defined(LINUX)
-		//? Linux init
+		//? Linux paths init
 		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (Global::proc_path.empty()) {
 			cout << "ERROR: Proc filesystem not found or no permission to read from it!" << endl;
 			exit(1);
+		}
+		{
+			std::error_code ec;
+			Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
 		}
 	#endif
 
 	//? Setup paths for config, log and themes
 	for (auto env : {"XDG_CONFIG_HOME", "HOME"}) {
 		if (getenv(env) != NULL && access(getenv(env), W_OK) != -1) {
-			Global::conf_dir = fs::path(getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
+			Config::conf_dir = fs::path(getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
 			break;
 		}
 	}
-	if (!Global::conf_dir.empty()) {
-		if (!fs::is_directory(Global::conf_dir) && !fs::create_directories(Global::conf_dir)) {
+	if (!Config::conf_dir.empty()) {
+		std::error_code ec;
+		if (!fs::is_directory(Config::conf_dir) && !fs::create_directories(Config::conf_dir, ec)) {
 			cout << "WARNING: Could not create or access btop config directory. Logging and config saving disabled." << endl;
+			cout << "Make sure your $HOME environment variable is correctly set to fix this." << endl;
 		}
 		else {
-			Global::conf_file = Global::conf_dir / "btop.conf";
-			Logger::logfile = Global::conf_dir / "btop.log";
-			Global::user_theme_folder = Global::conf_dir / "themes";
-			if (!fs::exists(Global::user_theme_folder) && !fs::create_directory(Global::user_theme_folder)) Global::user_theme_folder.clear();
+			std::error_code ec;
+			Config::conf_file = Config::conf_dir / "btop.conf";
+			Logger::logfile = Config::conf_dir / "btop.log";
+			Theme::user_theme_dir = Config::conf_dir / "themes";
+			if (!fs::exists(Theme::user_theme_dir) && !fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
 		}
 	}
-	for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
-		if (access(theme_path, R_OK) != -1) {
-			Global::theme_folder = theme_path;
-			break;
+	if (!Global::self_path.empty()) {
+			std::error_code ec;
+			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
+			if (ec || access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
+		}
+
+	if (Theme::theme_dir.empty()) {
+		for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
+			if (fs::exists(fs::path(theme_path)) && access(theme_path, R_OK) != -1) {
+				Theme::theme_dir = fs::path(theme_path);
+				break;
+			}
 		}
 	}
 
-	string err_msg;
+	Global::debug = true;
+	if (Global::debug) { Logger::loglevel = 4; Logger::debug("Starting in debug mode");}
 
 	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
-		err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.";
+		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.";
 		Logger::warning(err_msg);
 		cout << "WARNING: " << err_msg << endl;
 	}
 
 	//? Initialize terminal and set options
 	if (!Term::init()) {
-		err_msg = "No tty detected!";
+		string err_msg = "No tty detected!";
 		Logger::error(err_msg + " Quitting.");
 		cout << "ERROR: " << err_msg << endl;
 		cout << "btop++ needs an interactive shell to run." << endl;
-		exit(1);
+		clean_quit(1);
 	}
 
 	//? Read config file if present
 	Config::load("____");
+	Config::setB("truecolor", false);
 
 	auto thts = time_ms();
 
@@ -218,16 +259,13 @@ int main(int argc, char **argv){
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
-	int debug = 1;
-	int tests = 0;
-	bool debuginit = false;
 
-	if (debug > 0) { Logger::loglevel = 4; Logger::debug("Running in debug mode!");}
+	Global::debuginit = false;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	bool thread_test = false;
 
-	if (!debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
+	if (!Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
 
 	cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
 
@@ -273,8 +311,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-
-	if (true) {
+	if (false) {
 		Draw::Meter kmeter;
 		kmeter(Term::width - 2, "cpu", false);
 		cout << kmeter(25) << endl;
@@ -285,11 +322,25 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
+	if (false) {
+		cout << fs::absolute(fs::current_path() / "..") << endl;
+		cout << Global::self_path << endl;
+		cout << Theme::theme_dir << endl;
+		cout << Config::conf_dir << endl;
+		exit(0);
+	}
+
+	if (false) {
+		string a = "⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿";
+		cout << a << endl;
+		exit(0);
+	}
+
 
 	if (thread_test){
 
-		map<int, future<string>> runners;
-		map<int, string> outputs;
+		unordered_flat_map<int, future<string>> runners;
+		unordered_flat_map<int, string> outputs;
 
 		for (int i : iota(0, 10)){
 			runners[i] = async(my_worker, i);
@@ -325,7 +376,7 @@ int main(int argc, char **argv){
 	uint lc;
 	string ostring;
 	uint64_t tsl, timestamp2, rcount = 0;
-	list<uint64_t> avgtimes;
+	list<uint64_t> avgtimes = {0};
 	uint timer = 1000;
 	bool filtering = false;
 	bool reversing = false;
@@ -369,8 +420,8 @@ int main(int argc, char **argv){
 
 
 
-		avgtimes.push_front(timestamp);
-		if (avgtimes.size() > 100) avgtimes.pop_back();
+		if (rcount > 0) avgtimes.push_front(timestamp);
+		if (avgtimes.size() > 10) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
 		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
@@ -403,79 +454,5 @@ int main(int argc, char **argv){
 
 //*-----<<<<<
 
-	//cout << pw->pw_name << "/" << gr->gr_name << endl;
-
-
-
-
-	if (tests>4){
-		string trim_test1 = "-*vad ";
-		string trim_test2 = " vad*-";
-		string trim_test3 = trim_test1 + trim_test2;
-
-		cout << "\"" << ltrim(trim_test1, "-*") << "\" \"" << rtrim(trim_test2, "*-") << "\" \"" << trim(trim_test3, "-") << "\"" << endl;
-
-
-		string testie = "Does this work as intended?    Or?";
-		auto t_vec = ssplit(testie);
-		for(auto& tp : t_vec){
-			cout << "\"" << tp << "\" " << flush;
-		}
-	}
-
-
-	//if (tests>5){
-
-	//}
-
-	// map<string, string> dict = {
-	// 	{"Korv", "14"},
-	// 	{"Vad", "13"}
-	// };
-
-	// cout << dict["Korv"] << ", " << dict["Vad"] << endl;
-
-	// vector<map<string, int>> test = {
-	// 	{{"first", 1}, {"second", 2}},
-	// 	{{"first", 11}, {"second", 22}}
-	// };
-
-	//cout << test[0]["first"] << " " << test[1]["second"] << endl;
-
-	// for (auto& m : test) {
-	// 	cout << endl;
-	// 	for (auto& item : m) {
-	// 		cout << item.first << " " << item.second << endl;
-	// 	}
-	// }
-
-
-
-	if (debug == 3){
-		cout << Theme::c("main_fg");
-		cout << Mv::to(Term::height - 1, 0) << "Press q to exit! Timeout" << flush;
-		string full, key;
-		int wt = 90;
-		bool qp = false;
-		while (!qp && wt >= 0){
-			int wtm = wt / 60;
-			int wts = wt - wtm * 60;
-			wt--;
-			cout << Mv::to(Term::height - 1, 26) << "(" << wtm << ":" << wts << ")    " << flush;
-			//chr = Key(1000);
-			if (Input::poll(1000)) {
-				key = Input::get();
-				cout << Mv::to(Term::height - 2, 1) << "Last key: LEN=" << key.size() << " ULEN=" << ulen(key) << " KEY=\"" << key << "\" CODE=" << (int)key.at(0) << "        " << flush;
-				full += key;
-				cout << Mv::to(Term::height - 5, 1) << full << flush;
-				if (key == "q") qp = true;
-				key = "";
-				wt++;
-			}
-		}
-	}
-
-	Term::restore();
-	if (!debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	return 0;
 }

@@ -22,20 +22,24 @@ tab-size = 4
 #include <string>
 #include <cmath>
 #include <vector>
-#include <map>
 #include <unordered_map>
+#include <robin_hood.h>
 #include <ranges>
+#include <algorithm>
 
 #include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using std::string, std::round, std::vector, std::map, std::stoi, std::views::iota, std::array, std::unordered_map;
+using std::string, std::round, std::vector, robin_hood::unordered_flat_map, std::stoi, std::views::iota, std::array, std::clamp, std::max, std::min;
 using namespace Tools;
 
 namespace Theme {
 
-	const unordered_map<string, string> Default_theme = {
+	fs::path theme_dir;
+	fs::path user_theme_dir;
+
+	const unordered_flat_map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
 		{ "main_fg", "#cc" },
 		{ "title", "#ee" },
@@ -83,10 +87,10 @@ namespace Theme {
 	namespace {
 		//* Convert 24-bit colors to 256 colors using 6x6x6 color cube
 		int truecolor_to_256(uint r, uint g, uint b){
-			if (r / 11 == g / 11 && g / 11 == b / 11) {
-				return 232 + r / 11;
+			if (round((double)r / 11) == round((double)g / 11) && round((double)g / 11) == round((double)b / 11)) {
+				return 232 + round((double)r / 11);
 			} else {
-				return round((float)(r / 51)) * 36 + round((float)(g / 51)) * 6 + round((float)(b / 51)) + 16;
+				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
 			}
 		}
 	}
@@ -98,7 +102,10 @@ namespace Theme {
 	string hex_to_color(string hexa, bool t_to_256=false, string depth="fg"){
 		if (hexa.size() > 1){
 			hexa.erase(0, 1);
-			for (auto& c : hexa) if (!isxdigit(c)) return "";
+			for (auto& c : hexa) if (!isxdigit(c)) {
+				Logger::error("Invalid hex value: " + hexa);
+				return "";
+			}
 			depth = (depth == "fg") ? "38" : "48";
 			string pre = Fx::e + depth + ";";
 			pre += (t_to_256) ? "5;" : "2;";
@@ -125,7 +132,9 @@ namespace Theme {
 						to_string(stoi(hexa.substr(4, 2), 0, 16)) + "m";
 				}
 			}
+			else Logger::error("Invalid size of hex value: " + hexa);
 		}
+		else Logger::error("Hex value missing." + hexa);
 		return "";
 	}
 
@@ -137,9 +146,9 @@ namespace Theme {
 		depth = (depth == "fg") ? "38" : "48";
 		string pre = Fx::e + depth + ";";
 		pre += (t_to_256) ? "5;" : "2;";
-		r = (r > 255) ? 255 : r;
-		g = (g > 255) ? 255 : g;
-		b = (b > 255) ? 255 : b;
+		r = min(r, 255u);
+		g = min(g, 255u);
+		b = min(b, 255u);
 		if (t_to_256) return pre + to_string(truecolor_to_256(r, g, b)) + "m";
 		else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 	}
@@ -161,9 +170,9 @@ namespace Theme {
 
 
 	namespace {
-		unordered_map<string, string> colors;
-		unordered_map<string, array<int, 3>> rgbs;
-		unordered_map<string, array<string, 101>> gradients;
+		unordered_flat_map<string, string> colors;
+		unordered_flat_map<string, array<int, 3>> rgbs;
+		unordered_flat_map<string, array<string, 101>> gradients;
 
 		//* Convert hex color to a array of decimals
 		array<int, 3> hex_to_dec(string hexa){
@@ -187,40 +196,46 @@ namespace Theme {
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
-		void generateColors(unordered_map<string, string>& source){
+		void generateColors(unordered_flat_map<string, string>& source){
 			vector<string> t_rgb;
 			string depth;
+			bool t_to_256 = !Config::getB("truecolor");
 			colors.clear(); rgbs.clear();
 			for (auto& [name, color] : Default_theme) {
 				depth = (name.ends_with("bg") && name != "meter_bg") ? "bg" : "fg";
 				if (source.contains(name)) {
 					if (source.at(name)[0] == '#') {
-						colors[name] = hex_to_color(source.at(name), !Config::getB("truecolor"), depth);
+						colors[name] = hex_to_color(source.at(name), t_to_256, depth);
 						rgbs[name] = hex_to_dec(source.at(name));
 					}
 					else {
 						t_rgb = ssplit(source.at(name), " ");
-						colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), !Config::getB("truecolor"), depth);
-						rgbs[name] = array<int, 3>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
+						if (t_rgb.size() != 3)
+							Logger::error("Invalid RGB decimal value: \"" + source.at(name) + "\"");
+						else {
+							colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), t_to_256, depth);
+							rgbs[name] = array<int, 3>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
+						}
 					}
 				}
-				else colors[name] = "";
 				if (colors[name].empty()) {
-					colors[name] = hex_to_color(color, !Config::getB("truecolor"), depth);
+					Logger::info("Missing color value for \"" + name + "\". Using value from default.");
+					colors[name] = hex_to_color(color, t_to_256, depth);
 					rgbs[name] = array<int, 3>{-1, -1, -1};
 				}
 			}
 		}
 
-		//* Generate color gradients from one, two or three colors, 101 values indexed 0-100
+		//* Generate color gradients from two or three colors, 101 values indexed 0-100
 		void generateGradients(){
 			gradients.clear();
 			array<string, 101> c_gradient;
 			string wname;
+			bool t_to_256 = !Config::getB("truecolor");
 			array<array<int, 3>, 3> rgb_arr;
 			array<array<int, 3>, 101> dec_arr;
-			int f, s, r, o, y;
-			for (auto& [name, source_arr] : rgbs){
+			int arr1, arr2, rng, offset, y;
+			for (auto& [name, source_arr] : rgbs) {
 				if (!name.ends_with("_start")) continue;
 				dec_arr[0][0] = -1;
 				wname = rtrim(name, "_start");
@@ -230,21 +245,22 @@ namespace Theme {
 				if (rgb_arr[2][0] >= 0) {
 
 					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
-					r = (rgb_arr[1][0] >= 0) ? 50 : 100;
-					for (int i : iota(0, 3)){
-						f = 0; s = (r == 50) ? 1 : 2; o = 0;
-						for (int c : iota(0, 101)){
-							dec_arr[c][i] = rgb_arr[f][i] + (c - o) * (rgb_arr[s][i] - rgb_arr[f][i]) / r;
+					rng = (rgb_arr[1][0] >= 0) ? 50 : 100;
+					for (int rgb : iota(0, 3)){
+						arr1 = 0; arr2 = (rng == 50) ? 1 : 2; offset = 0;
+						for (int i : iota(0, 101)) {
+							dec_arr[i][rgb] = rgb_arr[arr1][rgb] + (i - offset) * (rgb_arr[arr2][rgb] - rgb_arr[arr1][rgb]) / rng;
 
 							//? Switch source arrays from _start/_mid to _mid/_end at 50 passes if _mid is defined
-							if (c == r) { ++f; ++s; o = 50;}
+							if (i == rng) { ++arr1; ++arr2; offset = 50;}
 						}
 					}
 				}
 				y = 0;
 				if (dec_arr[0][0] != -1) {
-					for (auto& vec : dec_arr) c_gradient[y++] = dec_to_color(vec[0], vec[1], vec[2], !Config::getB("truecolor"));
-				} else {
+					for (auto& arr : dec_arr) c_gradient[y++] = dec_to_color(arr[0], arr[1], arr[2], t_to_256);
+				}
+				else {
 					//? If only _start was defined fill array with _start color
 					c_gradient.fill(colors[name]);
 				}
@@ -255,7 +271,7 @@ namespace Theme {
 
 
 	//* Set current theme using <source> map
-	void set(unordered_map<string, string> source){
+	void set(unordered_flat_map<string, string> source){
 		generateColors(source);
 		generateGradients();
 		Term::fg = colors.at("main_fg");
@@ -264,17 +280,17 @@ namespace Theme {
 	}
 
 	//* Return escape code for color <name>
-	auto c(string name){
+	auto& c(string name){
 		return colors.at(name);
 	}
 
 	//* Return array of escape codes for color gradient <name>
-	auto g(string name){
+	auto& g(string name){
 		return gradients.at(name);
 	}
 
 	//* Return array of red, green and blue in decimal for color <name>
-	auto dec(string name){
+	auto& dec(string name){
 		return rgbs.at(name);
 	}
 

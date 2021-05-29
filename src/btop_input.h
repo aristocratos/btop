@@ -20,12 +20,12 @@ tab-size = 4
 #define _btop_input_included_ 1
 
 #include <string>
-#include <unordered_map>
+#include <robin_hood.h>
 #include <iostream>
 
 #include <btop_tools.h>
 
-using std::string, std::unordered_map, std::cin;
+using std::string, robin_hood::unordered_flat_map, std::cin;
 using namespace Tools;
 
 /* The input functions relies on the following std::cin options being set:
@@ -38,7 +38,7 @@ using namespace Tools;
 namespace Input {
 	namespace {
 		//* Map for translating key codes to readable values
-		const unordered_map<string, string> Key_escapes = {
+		const unordered_flat_map<string, string> Key_escapes = {
 			{"\033",	"escape"},
 			{"\n",		"enter"},
 			{" ",		"space"},

@@ -23,9 +23,9 @@ tab-size = 4
 #include <vector>
 #include <array>
 #include <atomic>
-#include <unordered_map>
+#include <robin_hood.h>
 
-using std::string, std::vector, std::unordered_map, std::array, std::atomic;
+using std::string, std::vector, std::unordered_map, std::array, std::atomic, robin_hood::unordered_flat_map;
 
 namespace Global {
 
@@ -33,7 +33,7 @@ namespace Global {
 
 
 
-	const unordered_map<string, unordered_map<string, vector<string>>> Menus = {
+	const unordered_flat_map<string, unordered_map<string, vector<string>>> Menus = {
 		{ "options", {
 			{ "normal", {
 				"┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",

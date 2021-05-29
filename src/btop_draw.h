@@ -20,7 +20,7 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <map>
+#include <robin_hood.h>
 #include <ranges>
 #include <algorithm>
 #include <cmath>
@@ -31,7 +31,42 @@ tab-size = 4
 #ifndef _btop_draw_included_
 #define _btop_draw_included_ 1
 
-using std::string, std::vector, std::map, std::round, std::views::iota, std::string_literals::operator""s;
+using std::string, std::vector, robin_hood::unordered_flat_map, std::round, std::views::iota, std::string_literals::operator""s, std::clamp;
+
+namespace Symbols {
+	const string h_line			= "─";
+	const string v_line			= "│";
+	const string left_up		= "┌";
+	const string right_up		= "┐";
+	const string left_down		= "└";
+	const string right_down		= "┘";
+	const string title_left		= "┤";
+	const string title_right	= "├";
+	const string div_up			= "┬";
+	const string div_down		= "┴";
+
+	const string meter = "■";
+
+	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
+
+	const unordered_flat_map<bool, string> graph_00 = { {true, Mv::r(1)}, {false, " "} };
+
+	unordered_flat_map<float, string> graph_up = {
+		{0.0, " "}, {0.1, "⢀"}, {0.2, "⢠"}, {0.3, "⢰"}, {0.4, "⢸"},
+		{1.0, "⡀"}, {1.1, "⣀"}, {1.2, "⣠"}, {1.3, "⣰"}, {1.4, "⣸"},
+		{2.0, "⡄"}, {2.1, "⣄"}, {2.2, "⣤"}, {2.3, "⣴"}, {2.4, "⣼"},
+		{3.0, "⡆"}, {3.1, "⣆"}, {3.2, "⣦"}, {3.3, "⣶"}, {3.4, "⣾"},
+		{4.0, "⡇"}, {4.1, "⣇"}, {4.2, "⣧"}, {4.3, "⣷"}, {4.4, "⣿"}
+	};
+
+	unordered_flat_map<float, string> graph_down = {
+		{0.0, " "}, {0.1, "⠈"}, {0.2, "⠘"}, {0.3, "⠸"}, {0.4, "⢸"},
+		{1.0, "⠁"}, {1.1, "⠉"}, {1.2, "⠙"}, {1.3, "⠹"}, {1.4, "⢹"},
+		{2.0, "⠃"}, {2.1, "⠋"}, {2.2, "⠛"}, {2.3, "⠻"}, {2.4, "⢻"},
+		{3.0, "⠇"}, {3.1, "⠏"}, {3.2, "⠟"}, {3.3, "⠿"}, {3.4, "⢿"},
+		{4.0, "⡇"}, {4.1, "⡏"}, {4.2, "⡟"}, {4.3, "⡿"}, {4.4, "⣿"}
+	};
+}
 
 namespace Draw {
 
@@ -43,6 +78,7 @@ namespace Draw {
 		uint num=0;
 	};
 
+	//* Create a box using values from a BoxConf struct and return as a string
 	string createBox(BoxConf c){
 		string out;
 		string lcolor = (c.line_color.empty()) ? Theme::c("div_line") : c.line_color;
@@ -81,24 +117,27 @@ namespace Draw {
 		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
 	}
 
+	//* Class holding a percentage meter
 	class Meter {
 		string out, color_gradient;
 		int width = 10;
 		bool invert = false;
 		vector<string> cache;
 	public:
+		//* Set meter options
 		void operator()(int width, string color_gradient, bool invert = false) {
-			if (width < 0) width = 1;
 			this->width = width;
 			this->color_gradient = color_gradient;
 			this->invert = invert;
+			out.clear();
 			cache.clear();
 			cache.insert(cache.begin(), 101, "");
 		}
 
+		//* Return a string representation of the meter with given value
 		string operator()(int value) {
-			if (value > 100) value = 100;
-			else if (value < 0) value = 0;
+			if (width < 1) return out;
+			value = clamp(value, 0, 100);
 			if (!cache.at(value).empty()) return out = cache.at(value);
 			out.clear();
 			int y;

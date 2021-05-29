@@ -32,6 +32,7 @@ tab-size = 4
 #include <utility>
 #include <atomic>
 #include <filesystem>
+#include <robin_hood.h>
 
 #include <unistd.h>
 #include <termios.h>
@@ -39,27 +40,10 @@ tab-size = 4
 
 #include <btop_globs.h>
 
-using std::string, std::vector, std::regex, std::max, std::to_string, std::cin, std::atomic;
+using std::string, std::vector, std::regex, std::max, std::to_string, std::cin, std::atomic, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
-
-namespace Symbols {
-	const string h_line			= "─";
-	const string v_line			= "│";
-	const string left_up		= "┌";
-	const string right_up		= "┐";
-	const string left_down		= "└";
-	const string right_down		= "┘";
-	const string title_left		= "┤";
-	const string title_right	= "├";
-	const string div_up			= "┬";
-	const string div_down		= "┴";
-
-	const string meter = "■";
-
-	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
-}
 
 //* Collection of escape codes for text style and formatting
 namespace Fx {
@@ -249,6 +233,11 @@ namespace Tools {
 		if (escape) s = std::regex_replace(s, Fx::escape_regex, "");
 		return std::count_if(s.begin(), s.end(),
 			[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
+	}
+
+	//* Return current time since epoch in seconds
+	inline uint64_t time_s(){
+		return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	//* Return current time since epoch in milliseconds
@@ -459,6 +448,7 @@ namespace Tools {
 
 }
 
+//* Simple logging implementation
 namespace Logger {
 	namespace {
 		std::atomic<bool> busy (false);
@@ -466,7 +456,7 @@ namespace Logger {
 		uint loglevel = 2;
 		bool first = true;
 		string tdf = "%Y/%m/%d (%T) | ";
-		unordered_map<uint, string> log_levels = {
+		unordered_flat_map<uint, string> log_levels = {
 			{ 0, "DISABLED" },
 			{ 1, "ERROR" },
 			{ 2, "WARNING" },
