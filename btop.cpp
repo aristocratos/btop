@@ -246,7 +246,7 @@ int main(int argc, char **argv){
 
 	//? Read config file if present
 	Config::load("____");
-	Config::setB("truecolor", false);
+	// Config::setB("truecolor", false);
 
 	auto thts = time_ms();
 
@@ -260,7 +260,7 @@ int main(int argc, char **argv){
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 
-	Global::debuginit = false;
+	Global::debuginit = true;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	bool thread_test = false;
@@ -334,6 +334,45 @@ int main(int argc, char **argv){
 		string a = "⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿";
 		cout << a << endl;
 		exit(0);
+	}
+
+	if (true) {
+
+		vector<long long> mydata;
+		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
+		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
+		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
+		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
+
+		Draw::Graph kgraph {};
+
+		auto kts = time_micros();
+		kgraph(Term::width, Term::height - 10, "cpu", mydata);
+
+
+		cout << Mv::save << kgraph() << "\n\nInit took " << time_micros() - kts << " μs.       ";
+
+		// int x = 0;
+		// long long y = 0;
+		// bool flip = false;
+		list<uint64_t> ktavg;
+		while (!Input::poll()) {
+			mydata.back() = std::rand() % 101;
+			// mydata.back() = y;
+			kts = time_micros();
+			cout << Mv::restore << kgraph(mydata) << endl;
+			ktavg.push_front(time_micros() - kts);
+			if (ktavg.size() > 100) ktavg.pop_back();
+			cout << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
+			// if (flip) y--;
+			// else y++;
+			// if (y == 100 || y == 0) flip = !flip;
+			sleep_ms(50);
+		}
+		Input::get();
+
+		exit(0);
+
 	}
 
 

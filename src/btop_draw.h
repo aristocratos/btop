@@ -20,6 +20,7 @@ tab-size = 4
 
 #include <string>
 #include <vector>
+#include <array>
 #include <robin_hood.h>
 #include <ranges>
 #include <algorithm>
@@ -31,7 +32,8 @@ tab-size = 4
 #ifndef _btop_draw_included_
 #define _btop_draw_included_ 1
 
-using std::string, std::vector, robin_hood::unordered_flat_map, std::round, std::views::iota, std::string_literals::operator""s, std::clamp;
+using std::string, std::vector, robin_hood::unordered_flat_map, std::round, std::views::iota,
+	std::string_literals::operator""s, std::clamp, std::array, std::floor;
 
 namespace Symbols {
 	const string h_line			= "─";
@@ -49,9 +51,7 @@ namespace Symbols {
 
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 
-	const unordered_flat_map<bool, string> graph_00 = { {true, Mv::r(1)}, {false, " "} };
-
-	unordered_flat_map<float, string> graph_up = {
+	const unordered_flat_map<float, string> graph_up = {
 		{0.0, " "}, {0.1, "⢀"}, {0.2, "⢠"}, {0.3, "⢰"}, {0.4, "⢸"},
 		{1.0, "⡀"}, {1.1, "⣀"}, {1.2, "⣠"}, {1.3, "⣰"}, {1.4, "⣸"},
 		{2.0, "⡄"}, {2.1, "⣄"}, {2.2, "⣤"}, {2.3, "⣴"}, {2.4, "⣼"},
@@ -59,8 +59,24 @@ namespace Symbols {
 		{4.0, "⡇"}, {4.1, "⣇"}, {4.2, "⣧"}, {4.3, "⣷"}, {4.4, "⣿"}
 	};
 
-	unordered_flat_map<float, string> graph_down = {
+	const unordered_flat_map<float, string> graph_down = {
 		{0.0, " "}, {0.1, "⠈"}, {0.2, "⠘"}, {0.3, "⠸"}, {0.4, "⢸"},
+		{1.0, "⠁"}, {1.1, "⠉"}, {1.2, "⠙"}, {1.3, "⠹"}, {1.4, "⢹"},
+		{2.0, "⠃"}, {2.1, "⠋"}, {2.2, "⠛"}, {2.3, "⠻"}, {2.4, "⢻"},
+		{3.0, "⠇"}, {3.1, "⠏"}, {3.2, "⠟"}, {3.3, "⠿"}, {3.4, "⢿"},
+		{4.0, "⡇"}, {4.1, "⡏"}, {4.2, "⡟"}, {4.3, "⡿"}, {4.4, "⣿"}
+	};
+
+	const unordered_flat_map<float, string> graph_up_small = {
+		{0.0, Mv::r(1)}, {0.1, "⢀"}, {0.2, "⢠"}, {0.3, "⢰"}, {0.4, "⢸"},
+		{1.0, "⡀"}, {1.1, "⣀"}, {1.2, "⣠"}, {1.3, "⣰"}, {1.4, "⣸"},
+		{2.0, "⡄"}, {2.1, "⣄"}, {2.2, "⣤"}, {2.3, "⣴"}, {2.4, "⣼"},
+		{3.0, "⡆"}, {3.1, "⣆"}, {3.2, "⣦"}, {3.3, "⣶"}, {3.4, "⣾"},
+		{4.0, "⡇"}, {4.1, "⣇"}, {4.2, "⣧"}, {4.3, "⣷"}, {4.4, "⣿"}
+	};
+
+	const unordered_flat_map<float, string> graph_down_small = {
+		{0.0, Mv::r(1)}, {0.1, "⠈"}, {0.2, "⠘"}, {0.3, "⠸"}, {0.4, "⢸"},
 		{1.0, "⠁"}, {1.1, "⠉"}, {1.2, "⠙"}, {1.3, "⠹"}, {1.4, "⢹"},
 		{2.0, "⠃"}, {2.1, "⠋"}, {2.2, "⠛"}, {2.3, "⠻"}, {2.4, "⢻"},
 		{3.0, "⠇"}, {3.1, "⠏"}, {3.2, "⠟"}, {3.3, "⠿"}, {3.4, "⢿"},
@@ -120,7 +136,7 @@ namespace Draw {
 	//* Class holding a percentage meter
 	class Meter {
 		string out, color_gradient;
-		int width = 10;
+		int width = 0;
 		bool invert = false;
 		vector<string> cache;
 	public:
@@ -158,6 +174,103 @@ namespace Draw {
 			return out;
 		}
 
+	};
+
+	//* Class holding a graph
+	class Graph {
+		string out, color_gradient;
+		int width = 0, height = 0, lowest = 0;
+		long long last = 0, max_value = 0, offset = 0;
+		bool current = true, no_zero = false, invert = false, data_same = true;
+		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
+		unordered_flat_map<float, string> graph_symbol;
+
+		void _create(vector<long long>& data, int data_offset = 0) {
+			bool mult = (data.size() - data_offset > 1);
+			unordered_flat_map<string, long long> shifter;
+			unordered_flat_map<string, int> result;
+			long long data_value = 0;
+			for (int horizon : iota(0, height)){
+				long long cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
+				long long cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+				for (int i = data_offset; i < (int)data.size(); i++) {
+					if (mult) current = !current;
+					if (mult && i == data_offset) last = 0;
+					data_value = data[i];
+					if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
+					shifter = { {"left", last}, {"right", data_value} };
+					for (auto [side, value] : shifter) {
+						if (value >= cur_high)
+							result[side] = 4;
+						else if (value <= cur_low)
+							result[side] = 0;
+						else {
+							if (height == 1) result[side] = round((float)value * 4 / 100 + 0.3);
+							else result[side] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + 0.1);
+						}
+						if (no_zero && horizon == height - 1 && result[side] == 0) result[side] = 1;
+					}
+					if (mult) last = data_value;
+					graphs[current][horizon] += graph_symbol[(float)result["left"] + (float)result["right"] / 10];
+				}
+			}
+			last = data_value;
+			if (height == 1)
+				out = (last < 5 ? Theme::c("inactive_fg") : Theme::g(color_gradient)[last]) + graphs[current][0];
+			else {
+				out.clear();
+				for (int i : iota(0, height)) {
+					if (i > 0) out += Mv::d(1) + Mv::l(width);
+					out += (invert) ? Theme::g(color_gradient)[i * 100 / (height - 1)] : Theme::g(color_gradient)[100 - (i * 100 / (height - 1))];
+					out += graphs[current][i];
+				}
+			}
+			out += Fx::reset;
+		}
+
+	public:
+		//* Set graph options and initialize with data
+		void operator()(int width, int height, string color_gradient, vector<long long> data, bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0, bool data_same = true) {
+			graphs[true].clear(); graphs[false].clear();
+			this->width = width; this->height = height;
+			this->invert = invert; this->offset = offset;
+			this->no_zero = no_zero; this->max_value = max_value;
+			this->color_gradient = color_gradient;
+			this->data_same = data_same;
+			if (height == 1) graph_symbol = (invert) ? Symbols::graph_down_small : Symbols::graph_up_small;
+			else graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
+			if (no_zero) lowest = 1;
+			int value_width = ceil((float)data.size() / 2);
+			int data_offset = 0;
+			if (value_width > width) data_offset = data.size() - width * 2;
+			current = ((data.size() - data_offset) % 2 == 0);
+
+			for (int i : iota(0, height)) {
+				(void) i;
+				graphs[true].push_back((value_width < width) ? graph_symbol[0.0] * (width - value_width) : "");
+				graphs[false].push_back((value_width < width) ? graph_symbol[0.0] * (width - value_width) : "");
+			}
+			if (data.size() == 0) return;
+			this->_create(data, data_offset);
+		}
+
+		//* Add <num> number of values from back of <data> and return string representation of graph
+		string operator()(vector<long long>& data, int num = 1) {
+			if (data_same || data.size() == 0) {data_same = false; return out;}
+			current = !current;
+			for (int i : iota(0, height)) {
+				if (graphs[current][i].starts_with(graph_symbol[0.0])) graphs[current][i].erase(0, graph_symbol[0.0].size());
+				else graphs[current][i].erase(0, 3);
+			}
+			this->_create(data, (int)data.size() - num);
+			return out;
+		}
+
+		//* Return string representation of graph
+		string operator()() {
+			data_same = false;
+			return out;
+		}
 	};
 
 }

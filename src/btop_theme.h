@@ -31,7 +31,7 @@ tab-size = 4
 #include <btop_tools.h>
 #include <btop_config.h>
 
-using std::string, std::round, std::vector, robin_hood::unordered_flat_map, std::stoi, std::views::iota, std::array, std::clamp, std::max, std::min;
+using std::string, std::round, std::vector, robin_hood::unordered_flat_map, std::stoi, std::views::iota, std::array, std::clamp, std::max, std::min, std::ceil;
 using namespace Tools;
 
 namespace Theme {
