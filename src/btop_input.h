@@ -90,11 +90,6 @@ namespace Input {
 		return false;
 	}
 
-	//* Wait until input is available
-	void wait(){
-		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
-	}
-
 	//* Get a key or mouse action from input
 	string get(){
 		string key;
@@ -106,6 +101,12 @@ namespace Input {
 			last = key;
 		}
 		return key;
+	}
+
+	//* Wait until input is available
+	void wait(bool clear=false){
+		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
+		if (clear) get();
 	}
 
 	void clear(){

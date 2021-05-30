@@ -185,18 +185,24 @@ namespace Draw {
 		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
 		unordered_flat_map<float, string> graph_symbol;
 
-		void _create(vector<long long>& data, int data_offset = 0) {
+		//* Create two representations of the graph to switch between to represent two values for each braille character
+		void _create(vector<long long>& data, int data_offset) {
 			bool mult = (data.size() - data_offset > 1);
+			if (mult && (data.size() - data_offset) % 2 != 0) data_offset--;
 			unordered_flat_map<string, long long> shifter;
 			unordered_flat_map<string, int> result;
 			long long data_value = 0;
+			if (mult && data_offset > 0) {
+				last = data[data_offset - 1];
+				if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
+			}
 			for (int horizon : iota(0, height)){
 				long long cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
 				long long cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
 				for (int i = data_offset; i < (int)data.size(); i++) {
 					if (mult) current = !current;
-					if (mult && i == data_offset) last = 0;
-					data_value = data[i];
+					if (i == -1) { data_value = 0; last = 0; }
+					else data_value = data[i];
 					if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
 					shifter = { {"left", last}, {"right", data_value} };
 					for (auto [side, value] : shifter) {
@@ -208,21 +214,21 @@ namespace Draw {
 							if (height == 1) result[side] = round((float)value * 4 / 100 + 0.3);
 							else result[side] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + 0.1);
 						}
-						if (no_zero && horizon == height - 1 && result[side] == 0) result[side] = 1;
+						if (no_zero && horizon == height - 1 && i != -1 && result[side] == 0) result[side] = 1;
 					}
-					if (mult) last = data_value;
+					if (mult && i > data_offset) last = data_value;
 					graphs[current][horizon] += graph_symbol[(float)result["left"] + (float)result["right"] / 10];
 				}
 			}
 			last = data_value;
 			if (height == 1)
-				out = (last < 5 ? Theme::c("inactive_fg") : Theme::g(color_gradient)[last]) + graphs[current][0];
+				out = (last < 1 ? Theme::c("inactive_fg") : Theme::g(color_gradient)[last]) + graphs[current][0];
 			else {
 				out.clear();
 				for (int i : iota(0, height)) {
 					if (i > 0) out += Mv::d(1) + Mv::l(width);
 					out += (invert) ? Theme::g(color_gradient)[i * 100 / (height - 1)] : Theme::g(color_gradient)[100 - (i * 100 / (height - 1))];
-					out += graphs[current][i];
+					out += (invert) ? graphs[current][ (height - 1) - i] : graphs[current][i];
 				}
 			}
 			out += Fx::reset;
@@ -240,11 +246,12 @@ namespace Draw {
 			if (height == 1) graph_symbol = (invert) ? Symbols::graph_down_small : Symbols::graph_up_small;
 			else graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
 			if (no_zero) lowest = 1;
+			current = true;
 			int value_width = ceil((float)data.size() / 2);
 			int data_offset = 0;
 			if (value_width > width) data_offset = data.size() - width * 2;
-			current = ((data.size() - data_offset) % 2 == 0);
 
+			//? Populate the two switching graph vectors and fill empty space if width > data size
 			for (int i : iota(0, height)) {
 				(void) i;
 				graphs[true].push_back((value_width < width) ? graph_symbol[0.0] * (width - value_width) : "");
@@ -256,11 +263,16 @@ namespace Draw {
 
 		//* Add <num> number of values from back of <data> and return string representation of graph
 		string operator()(vector<long long>& data, int num = 1) {
-			if (data_same || data.size() == 0) {data_same = false; return out;}
+			if (data_same) {data_same = false; return out;}
 			current = !current;
+
+			//? Make room for new character(s) on graph
 			for (int i : iota(0, height)) {
-				if (graphs[current][i].starts_with(graph_symbol[0.0])) graphs[current][i].erase(0, graph_symbol[0.0].size());
-				else graphs[current][i].erase(0, 3);
+				int y = 0;
+				while (y++ < num) {
+					if (graphs[current][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
+					else graphs[current][i].erase(0, 3);
+				}
 			}
 			this->_create(data, (int)data.size() - num);
 			return out;
