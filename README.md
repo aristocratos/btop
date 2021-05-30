@@ -28,7 +28,7 @@
 ### Under development
 ##### 5 May 2021
 
-This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will likely have to be written from scratch without any external libraries.
+This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will have to be written from scratch without any external libraries.
 And will need some help in the form of code contributions to get complete support for BSD and OSX.
 
 If you got suggestions of C++ libraries that are multi-platform and are as extensive as [psutil](https://github.com/giampaolo/psutil) are for python, feel free to open up a new thread in Discussions, it could help speed up the development a lot.
@@ -67,8 +67,8 @@ Btop++ uses the same theme files as bpytop and bashtop (some color values missin
 
 See [themes](https://github.com/aristocratos/btop/tree/master/themes) folder for available themes.
 
-The `make install` command places the default themes in `/usr/local/share/btop/themes`.
-User created themes should be placed in `$HOME/.config/btop/themes`.
+The `make install` command places the default themes in `[/usr/local]/share/btop/themes`.
+User created themes should be placed in `$XDG_CONFIG_HOME/btop/themes` or `$HOME/.config/btop/themes`.
 
 Let me know if you want to contribute with new themes.
 
@@ -112,7 +112,7 @@ Look to the creators of the terminal emulator you use to fix these issues if the
 
 None
 
-But will need G++ 10 if compiling from source.
+But will need G++ 11 if compiling from source.
 
 ## Screenshots
 
@@ -131,6 +131,8 @@ Options menu.
 ## Installation
 
 #### Manual compilation and installation
+
+Requires GCC/G++ 11!
 
 >Clone and compile
 
@@ -152,20 +154,18 @@ sudo make install
 sudo make uninstall
 ```
 
->to clear any compiled files
+>to remove any compiled files
 
 ```bash
-make distclean
+make clean
 ```
 
 ## Configurability
 
 All options changeable from within UI.
-Config files stored in "$HOME/.config/btop" folder
+Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
 
 #### btop.cfg: (auto generated if not found)
-
-"/etc/btop.conf" will be used as default seed for config file creation if it exists. ("/usr/local/etc/btop.conf" on BSD)
 
 ```bash
 #? Config file for btop v. 0.0.1
