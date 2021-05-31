@@ -21,6 +21,7 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <array>
+#include <map>
 #include <robin_hood.h>
 #include <ranges>
 #include <algorithm>
@@ -186,11 +187,11 @@ namespace Draw {
 		unordered_flat_map<float, string> graph_symbol;
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
-		void _create(vector<long long>& data, int data_offset) {
-			bool mult = (data.size() - data_offset > 1);
+		void _create(const vector<long long>& data, int data_offset) {
+			const bool mult = (data.size() - data_offset > 1);
 			if (mult && (data.size() - data_offset) % 2 != 0) data_offset--;
-			unordered_flat_map<string, long long> shifter;
-			unordered_flat_map<string, int> result;
+			vector<int> result;
+			const float mod = (height == 1) ? 0.3 : 0.1;
 			long long data_value = 0;
 			if (mult && data_offset > 0) {
 				last = data[data_offset - 1];
@@ -204,20 +205,19 @@ namespace Draw {
 					if (i == -1) { data_value = 0; last = 0; }
 					else data_value = data[i];
 					if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
-					shifter = { {"left", last}, {"right", data_value} };
-					for (auto [side, value] : shifter) {
+					result.clear();
+					for (auto value : {last, data_value}) {
 						if (value >= cur_high)
-							result[side] = 4;
-						else if (value <= cur_low)
-							result[side] = 0;
+							result.push_back(4);
+						else if (value < cur_low)
+							result.push_back(0);
 						else {
-							if (height == 1) result[side] = round((float)value * 4 / 100 + 0.3);
-							else result[side] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + 0.1);
+							result.push_back(round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod));
+							if (no_zero && horizon == height - 1 && i != -1 && result.back() == 0) result.back() = 1;
 						}
-						if (no_zero && horizon == height - 1 && i != -1 && result[side] == 0) result[side] = 1;
 					}
 					if (mult && i > data_offset) last = data_value;
-					graphs[current][horizon] += graph_symbol[(float)result["left"] + (float)result["right"] / 10];
+					graphs[current][horizon] += graph_symbol[(float)result.at(0) + (float)result.at(1) / 10];
 				}
 			}
 			last = data_value;
@@ -236,7 +236,7 @@ namespace Draw {
 
 	public:
 		//* Set graph options and initialize with data
-		void operator()(int width, int height, string color_gradient, vector<long long> data, bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0, bool data_same = true) {
+		void operator()(int width, int height, string color_gradient, const vector<long long>& data, bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0, bool data_same = true) {
 			graphs[true].clear(); graphs[false].clear();
 			this->width = width; this->height = height;
 			this->invert = invert; this->offset = offset;
@@ -262,7 +262,7 @@ namespace Draw {
 		}
 
 		//* Add <num> number of values from back of <data> and return string representation of graph
-		string operator()(vector<long long>& data, int num = 1) {
+		string operator()(const vector<long long>& data, const int num = 1) {
 			if (data_same) {data_same = false; return out;}
 			current = !current;
 

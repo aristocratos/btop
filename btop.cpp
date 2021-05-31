@@ -39,6 +39,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
+	const uint banner_width = 49;
 
 	const std::string Version = "0.0.10";
 }
@@ -78,7 +79,6 @@ using namespace Tools;
 
 namespace Global {
 	string banner;
-	const uint banner_width = 49;
 
 	fs::path self_path;
 
@@ -341,48 +341,55 @@ int main(int argc, char **argv){
 		vector<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
-		mydata.push_back(0);
-		mydata.push_back(0);
-		mydata.push_back(100);
+		// mydata.push_back(0);
+		// mydata.push_back(0);
+		// mydata.push_back(100);
 
 
 		// for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		// for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 
 		Draw::Graph kgraph {};
+		Draw::Meter kmeter {};
 		Draw::Graph kgraph2 {};
 		Draw::Graph kgraph3 {};
 
 		auto kts = time_micros();
 		kgraph(Term::width, 10, "process", mydata, false, false);
+		kmeter(Term::width, "process");
+		// cout << Mv::save << kgraph(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
+
+		// exit(0);
 		kgraph2(Term::width, 10, "process", mydata, true, false);
 		kgraph3(Term::width, 1, "process", mydata, false, false);
 		// cout << kgraph() << endl;
 		// cout << kgraph2() << endl;
 		// exit(0);
 
-		cout << Mv::save << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << kgraph3(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
+		// cout << Mv::save << kgraph(mydata) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
+		cout << Mv::save << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// sleep_ms(1000);
 		// mydata.push_back(50);
 		// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// exit(0);
 
-		// int x = 0;
-		// long long y = 0;
-		// bool flip = false;
+		// int x = 0q;
+		long long y = 0;
+		bool flip = false;
 		list<uint64_t> ktavg;
 		while (true) {
-			mydata.back() = std::rand() % 101;
-			// mydata.back() = y;
+			// mydata.back() = std::rand() % 101;
+			mydata.back() = y;
 			kts = time_micros();
 			// cout << Mv::restore << " "s * Term::width << "\n" << " "s * Term::width << endl;
-			cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << endl;
+			// cout << Mv::restore << kgraph(mydata) << "\n" << kmeter(mydata.back()) << endl;
+			cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << endl;
 			ktavg.push_front(time_micros() - kts);
 			if (ktavg.size() > 100) ktavg.pop_back();
 			cout << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
-			// if (flip) y--;
-			// else y++;
-			// if (y == 100 || y == 0) flip = !flip;
+			if (flip) y--;
+			else y++;
+			if (y == 100 || y == 0) flip = !flip;
 			if (Input::poll()) {
 				if (Input::get() == "space") Input::wait(true);
 				else break;
