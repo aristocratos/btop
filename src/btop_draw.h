@@ -52,36 +52,20 @@ namespace Symbols {
 
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 
-	const unordered_flat_map<float, string> graph_up = {
-		{0.0, " "}, {0.1, "⢀"}, {0.2, "⢠"}, {0.3, "⢰"}, {0.4, "⢸"},
-		{1.0, "⡀"}, {1.1, "⣀"}, {1.2, "⣠"}, {1.3, "⣰"}, {1.4, "⣸"},
-		{2.0, "⡄"}, {2.1, "⣄"}, {2.2, "⣤"}, {2.3, "⣴"}, {2.4, "⣼"},
-		{3.0, "⡆"}, {3.1, "⣆"}, {3.2, "⣦"}, {3.3, "⣶"}, {3.4, "⣾"},
-		{4.0, "⡇"}, {4.1, "⣇"}, {4.2, "⣧"}, {4.3, "⣷"}, {4.4, "⣿"}
+	const vector<string> graph_up = {
+		" ", "⢀", "⢠", "⢰", "⢸",
+		"⡀", "⣀", "⣠", "⣰", "⣸",
+		"⡄", "⣄", "⣤", "⣴", "⣼",
+		"⡆", "⣆", "⣦", "⣶", "⣾",
+		"⡇", "⣇", "⣧", "⣷", "⣿"
 	};
 
-	const unordered_flat_map<float, string> graph_down = {
-		{0.0, " "}, {0.1, "⠈"}, {0.2, "⠘"}, {0.3, "⠸"}, {0.4, "⢸"},
-		{1.0, "⠁"}, {1.1, "⠉"}, {1.2, "⠙"}, {1.3, "⠹"}, {1.4, "⢹"},
-		{2.0, "⠃"}, {2.1, "⠋"}, {2.2, "⠛"}, {2.3, "⠻"}, {2.4, "⢻"},
-		{3.0, "⠇"}, {3.1, "⠏"}, {3.2, "⠟"}, {3.3, "⠿"}, {3.4, "⢿"},
-		{4.0, "⡇"}, {4.1, "⡏"}, {4.2, "⡟"}, {4.3, "⡿"}, {4.4, "⣿"}
-	};
-
-	const unordered_flat_map<float, string> graph_up_small = {
-		{0.0, Mv::r(1)}, {0.1, "⢀"}, {0.2, "⢠"}, {0.3, "⢰"}, {0.4, "⢸"},
-		{1.0, "⡀"}, {1.1, "⣀"}, {1.2, "⣠"}, {1.3, "⣰"}, {1.4, "⣸"},
-		{2.0, "⡄"}, {2.1, "⣄"}, {2.2, "⣤"}, {2.3, "⣴"}, {2.4, "⣼"},
-		{3.0, "⡆"}, {3.1, "⣆"}, {3.2, "⣦"}, {3.3, "⣶"}, {3.4, "⣾"},
-		{4.0, "⡇"}, {4.1, "⣇"}, {4.2, "⣧"}, {4.3, "⣷"}, {4.4, "⣿"}
-	};
-
-	const unordered_flat_map<float, string> graph_down_small = {
-		{0.0, Mv::r(1)}, {0.1, "⠈"}, {0.2, "⠘"}, {0.3, "⠸"}, {0.4, "⢸"},
-		{1.0, "⠁"}, {1.1, "⠉"}, {1.2, "⠙"}, {1.3, "⠹"}, {1.4, "⢹"},
-		{2.0, "⠃"}, {2.1, "⠋"}, {2.2, "⠛"}, {2.3, "⠻"}, {2.4, "⢻"},
-		{3.0, "⠇"}, {3.1, "⠏"}, {3.2, "⠟"}, {3.3, "⠿"}, {3.4, "⢿"},
-		{4.0, "⡇"}, {4.1, "⡏"}, {4.2, "⡟"}, {4.3, "⡿"}, {4.4, "⣿"}
+	const vector<string> graph_down = {
+		" ", "⠈", "⠘", "⠸", "⢸",
+		"⠁", "⠉", "⠙", "⠹", "⢹",
+		"⠃", "⠋", "⠛", "⠻", "⢻",
+		"⠇", "⠏", "⠟", "⠿", "⢿",
+		"⡇", "⡏", "⡟", "⡿", "⣿"
 	};
 }
 
@@ -182,43 +166,50 @@ namespace Draw {
 		string out, color_gradient;
 		int width = 0, height = 0, lowest = 0;
 		long long last = 0, max_value = 0, offset = 0;
-		bool current = true, no_zero = false, invert = false, data_same = true;
+		bool current = true, no_zero = false, invert = false;
 		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
-		unordered_flat_map<float, string> graph_symbol;
+		vector<string> graph_symbol;
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
 		void _create(const vector<long long>& data, int data_offset) {
 			const bool mult = (data.size() - data_offset > 1);
 			if (mult && (data.size() - data_offset) % 2 != 0) data_offset--;
-			vector<int> result;
+			array<int, 2> result;
 			const float mod = (height == 1) ? 0.3 : 0.1;
 			long long data_value = 0;
 			if (mult && data_offset > 0) {
 				last = data[data_offset - 1];
 				if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
 			}
-			for (int horizon : iota(0, height)){
-				long long cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
-				long long cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
-				for (int i = data_offset; i < (int)data.size(); i++) {
-					if (mult) current = !current;
-					if (i == -1) { data_value = 0; last = 0; }
-					else data_value = data[i];
-					if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
-					result.clear();
+
+			//? Horizontal iteration over values in <data>
+			for (int i = data_offset; i < (int)data.size(); i++) {
+				if (i == -1) { data_value = 0; last = 0; }
+				else data_value = data[i];
+				if (mult) current = !current;
+				if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
+				//? Vertical iteration over height of graph
+				for (int horizon : iota(0, height)){
+					int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
+					int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+					//? Calculate previous + current value to fit two values in 1 braille character
+					int ai = 0;
 					for (auto value : {last, data_value}) {
 						if (value >= cur_high)
-							result.push_back(4);
+							result[ai] = 4;
 						else if (value < cur_low)
-							result.push_back(0);
+							result[ai] = 0;
 						else {
-							result.push_back(round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod));
-							if (no_zero && horizon == height - 1 && i != -1 && result.back() == 0) result.back() = 1;
+							result[ai] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
+							if (no_zero && horizon == height - 1 && i != -1 && result[ai] == 0) result[ai] = 1;
 						}
+						ai++;
 					}
-					if (mult && i > data_offset) last = data_value;
-					graphs[current][horizon] += graph_symbol[(float)result.at(0) + (float)result.at(1) / 10];
+					//? Generate braille symbol from 5x5 2D vector
+					graphs[current][horizon] += (height == 1 && result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[result[0] * 5 + result[1]];
 				}
+				if (mult && i > data_offset) last = data_value;
+
 			}
 			last = data_value;
 			if (height == 1)
@@ -236,17 +227,16 @@ namespace Draw {
 
 	public:
 		//* Set graph options and initialize with data
-		void operator()(int width, int height, string color_gradient, const vector<long long>& data, bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0, bool data_same = true) {
+		void operator()(int width, int height, string color_gradient, const vector<long long>& data, bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0) {
 			graphs[true].clear(); graphs[false].clear();
 			this->width = width; this->height = height;
 			this->invert = invert; this->offset = offset;
 			this->no_zero = no_zero; this->max_value = max_value;
 			this->color_gradient = color_gradient;
-			this->data_same = data_same;
-			if (height == 1) graph_symbol = (invert) ? Symbols::graph_down_small : Symbols::graph_up_small;
-			else graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
+			// if (height == 1) graph_symbol = (invert) ? Symbols::graph_down_small : Symbols::graph_up_small;
+			graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
 			if (no_zero) lowest = 1;
-			current = true;
+			// current = true;
 			int value_width = ceil((float)data.size() / 2);
 			int data_offset = 0;
 			if (value_width > width) data_offset = data.size() - width * 2;
@@ -261,26 +251,22 @@ namespace Draw {
 			this->_create(data, data_offset);
 		}
 
-		//* Add <num> number of values from back of <data> and return string representation of graph
-		string operator()(const vector<long long>& data, const int num = 1) {
-			if (data_same) {data_same = false; return out;}
+		//* Add last value from back of <data> and return string representation of graph
+		string operator()(const vector<long long>& data, bool data_same = false) {
+			if (data_same) return out;
 			current = !current;
 
-			//? Make room for new character(s) on graph
+			//? Make room for new characters on graph
 			for (int i : iota(0, height)) {
-				int y = 0;
-				while (y++ < num) {
-					if (graphs[current][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
-					else graphs[current][i].erase(0, 3);
-				}
+				if (graphs[current][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
+				else graphs[current][i].erase(0, 3);
 			}
-			this->_create(data, (int)data.size() - num);
+			this->_create(data, (int)data.size() - 1);
 			return out;
 		}
 
 		//* Return string representation of graph
 		string operator()() {
-			data_same = false;
 			return out;
 		}
 	};

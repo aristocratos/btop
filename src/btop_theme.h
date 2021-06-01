@@ -192,7 +192,7 @@ namespace Theme {
 						};
 				}
 			}
-			return array<int, 3>{-1 ,-1 ,-1};
+			return {-1 ,-1 ,-1};
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
@@ -234,7 +234,6 @@ namespace Theme {
 			bool t_to_256 = !Config::getB("truecolor");
 			array<array<int, 3>, 3> rgb_arr;
 			array<array<int, 3>, 101> dec_arr;
-			int arr1, arr2, rng, offset, y;
 			for (auto& [name, source_arr] : rgbs) {
 				if (!name.ends_with("_start")) continue;
 				dec_arr[0][0] = -1;
@@ -245,9 +244,10 @@ namespace Theme {
 				if (rgb_arr[2][0] >= 0) {
 
 					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
-					rng = (rgb_arr[1][0] >= 0) ? 50 : 100;
+					int rng = (rgb_arr[1][0] >= 0) ? 50 : 100;
 					for (int rgb : iota(0, 3)){
-						arr1 = 0; arr2 = (rng == 50) ? 1 : 2; offset = 0;
+						int arr1 = 0, offset = 0;
+						int arr2 = (rng == 50) ? 1 : 2; 
 						for (int i : iota(0, 101)) {
 							dec_arr[i][rgb] = rgb_arr[arr1][rgb] + (i - offset) * (rgb_arr[arr2][rgb] - rgb_arr[arr1][rgb]) / rng;
 
@@ -256,8 +256,8 @@ namespace Theme {
 						}
 					}
 				}
-				y = 0;
 				if (dec_arr[0][0] != -1) {
+					int y = 0;
 					for (auto& arr : dec_arr) c_gradient[y++] = dec_to_color(arr[0], arr[1], arr[2], t_to_256);
 				}
 				else {

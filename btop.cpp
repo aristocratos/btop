@@ -245,7 +245,7 @@ int main(int argc, char **argv){
 	}
 
 	//? Read config file if present
-	Config::load("____");
+	Config::load();
 	// Config::setB("truecolor", false);
 
 	auto thts = time_ms();
@@ -343,7 +343,7 @@ int main(int argc, char **argv){
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 		// mydata.push_back(0);
 		// mydata.push_back(0);
-		// mydata.push_back(100);
+		// mydata.push_back(50);
 
 
 		// for (long long i = 0; i <= 100; i++) mydata.push_back(i);
@@ -367,7 +367,7 @@ int main(int argc, char **argv){
 		// exit(0);
 
 		// cout << Mv::save << kgraph(mydata) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
-		cout << Mv::save << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
+		cout << Mv::save << kgraph(mydata, true) << "\n" << kgraph2(mydata, true) << "\n" << kgraph3(mydata, true) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// sleep_ms(1000);
 		// mydata.push_back(50);
 		// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;

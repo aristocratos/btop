@@ -129,9 +129,8 @@ namespace Config {
 		changed = true;
 	}
 
-	bool load(string source){
-		(void)source;
-		return true;
+	void load(){
+		if (conf_file.empty()) return;
 	}
 }
 
