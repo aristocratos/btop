@@ -27,7 +27,6 @@ tab-size = 4
 #include <ranges>
 #include <algorithm>
 
-#include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 

@@ -38,9 +38,7 @@ tab-size = 4
 #include <termios.h>
 #include <sys/ioctl.h>
 
-#include <btop_globs.h>
-
-using std::string, std::vector, std::regex, std::max, std::to_string, std::cin, std::atomic, robin_hood::unordered_flat_map;
+using std::string, std::vector, std::array, std::regex, std::max, std::to_string, std::cin, std::atomic, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -95,19 +93,19 @@ namespace Fx {
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-	inline string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
+	const string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
 
 	//* Move cursor right <x> columns
-	inline string r(int x){ return Fx::e + to_string(x) + "C";}
+	const string r(int x){ return Fx::e + to_string(x) + "C";}
 
 	//* Move cursor left <x> columns
-	inline string l(int x){ return Fx::e + to_string(x) + "D";}
+	const string l(int x){ return Fx::e + to_string(x) + "D";}
 
 	//* Move cursor up x lines
-	inline string u(int x){ return Fx::e + to_string(x) + "A";}
+	const string u(int x){ return Fx::e + to_string(x) + "A";}
 
 	//* Move cursor down x lines
-	inline string d(int x) { return Fx::e + to_string(x) + "B";}
+	const string d(int x) { return Fx::e + to_string(x) + "B";}
 
 	//* Save cursor position
 	const string save = Fx::e + "s";
@@ -229,51 +227,51 @@ namespace Term {
 namespace Tools {
 
 	//* Return number of UTF8 characters in a string with option to disregard escape sequences
-	inline size_t ulen(string s, bool escape=false){
+	size_t ulen(string s, bool escape=false){
 		if (escape) s = std::regex_replace(s, Fx::escape_regex, "");
 		return std::count_if(s.begin(), s.end(),
 			[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
 	}
 
 	//* Return current time since epoch in seconds
-	inline uint64_t time_s(){
+	uint64_t time_s(){
 		return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	//* Return current time since epoch in milliseconds
-	inline uint64_t time_ms(){
+	uint64_t time_ms(){
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
-	//* Return current time since epoch in milliseconds
-	inline uint64_t time_micros(){
+	//* Return current time since epoch in microseconds
+	uint64_t time_micros(){
 		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	//* Check if a string is a valid bool value
-	inline bool isbool(string& str){
+	bool isbool(string& str){
 		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
 	}
 
 	//* Check if a string is a valid integer value
-	inline bool isint(string& str){
+	bool isint(string& str){
 		return all_of(str.begin(), str.end(), ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return string
-	inline string ltrim(string str, string t_str = " "){
+	string ltrim(string str, string t_str = " "){
 		while (str.starts_with(t_str)) str.erase(0, t_str.size());
 		return str;
 	}
 
 	//* Right-trim <t_str> from <str> and return string
-	inline string rtrim(string str, string t_str = " "){
+	string rtrim(string str, string t_str = " "){
 		while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
 		return str;
 	}
 
 	//* Left-right-trim <t_str> from <str> and return string
-	inline string trim(string str, string t_str = " "){
+	string trim(string str, string t_str = " "){
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
@@ -452,8 +450,6 @@ namespace Tools {
 namespace Logger {
 	namespace {
 		std::atomic<bool> busy (false);
-		fs::path logfile;
-		uint loglevel = 2;
 		bool first = true;
 		string tdf = "%Y/%m/%d (%T) | ";
 		unordered_flat_map<uint, string> log_levels = {
@@ -465,19 +461,25 @@ namespace Logger {
 		};
 	}
 
+	fs::path logfile;
+	uint loglevel = 2;
+
 	void log_write(uint level, string& msg){
-		if (logfile.empty() || loglevel < level) return;
+		if (loglevel < level || logfile.empty()) return;
 		busy.wait(true); busy.store(true);
-		if (fs::exists(logfile) && fs::file_size(logfile) > 1024 << 10) {
+		std::error_code ec;
+		if (fs::file_size(logfile, ec) > 1024 << 10) {
 			auto old_log = logfile;
 			old_log += ".1";
-			if (fs::exists(old_log)) fs::remove(old_log);
-			fs::rename(logfile, old_log);
+			if (fs::exists(old_log)) fs::remove(old_log, ec);
+			fs::rename(logfile, old_log, ec);
 		}
-		std::ofstream lwrite(logfile, std::ios::app);
-		if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
-		lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
-		lwrite.close();
+		if (!ec) {
+			std::ofstream lwrite(logfile, std::ios::app);
+			if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
+			lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
+			lwrite.close();
+		}
 		busy.store(false);
 	}
 

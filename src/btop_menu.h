@@ -16,8 +16,8 @@ indent = tab
 tab-size = 4
 */
 
-#ifndef _btop_globs_included_
-#define _btop_globs_included_ 1
+#ifndef _btop_menu_included_
+#define _btop_menu_included_ 1
 
 #include <string>
 #include <vector>
@@ -27,11 +27,9 @@ tab-size = 4
 
 using std::string, std::vector, std::unordered_map, std::array, std::atomic, robin_hood::unordered_flat_map;
 
-namespace Global {
+namespace Menu {
 
-	atomic<bool> stop_all(false);
-
-
+	atomic<bool> active(false);
 
 	const unordered_flat_map<string, unordered_map<string, vector<string>>> Menus = {
 		{ "options", {

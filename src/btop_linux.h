@@ -36,7 +36,6 @@ tab-size = 4
 #include <unistd.h>
 
 #include <btop_config.h>
-#include <btop_globs.h>
 #include <btop_tools.h>
 
 

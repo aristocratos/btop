@@ -39,17 +39,15 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const uint banner_width = 49;
-
-	const std::string Version = "0.0.10";
+	const std::string Version = "0.0.20";
 }
 
-#include <btop_globs.h>
 #include <btop_tools.h>
 #include <btop_config.h>
 #include <btop_input.h>
 #include <btop_theme.h>
 #include <btop_draw.h>
+#include <btop_menu.h>
 
 #if defined(__linux__)
 	#define LINUX 1
@@ -79,6 +77,7 @@ using namespace Tools;
 
 namespace Global {
 	string banner;
+	size_t banner_width = 0;
 
 	fs::path self_path;
 
@@ -113,35 +112,6 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-//* Generate the btop++ banner
-string createBanner(){
-	size_t z = 0;
-	string b_color, bg, fg, out, oc, letter;
-	bool truecolor = Config::getB("truecolor");
-	int bg_i;
-	for (auto line: Global::Banner_src) {
-		fg = Theme::hex_to_color(line[0], !truecolor);
-		bg_i = 120-z*12;
-		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
-		for (size_t i = 0; i < line[1].size(); i += 3) {
-			if (line[1][i] == ' '){
-				letter = ' ';
-				i -= 2;
-			} else{
-				letter = line[1].substr(i, 3);
-			}
-			b_color = (letter == "█") ? fg : bg;
-			if (b_color != oc) out += b_color;
-			out += letter;
-			oc = b_color;
-		}
-		if (++z < Global::Banner_src.size()) out += Mv::l(ulen(line[1])) + Mv::d(1);
-	}
-	out += Mv::r(18 - Global::Version.size()) + Fx::i + Theme::dec_to_color(0,0,0, !truecolor, "bg") +
-			Theme::dec_to_color(150, 150, 150, !truecolor) + "v" + Global::Version + Fx::ui;
-	return out;
-}
-
 void clean_quit(int signal){
 	if (Global::quitting) return;
 	if (Term::initialized) {
@@ -155,14 +125,45 @@ void clean_quit(int signal){
 
 void _exit_handler() { clean_quit(-1); }
 
-//* Threading test function
-string my_worker(int x){
-	for (int i = 0; i < 100 + (x * 100); i++){
-		sleep_ms(10);
-		if (Global::stop_all.load()) return "Thread stopped! x=" + to_string(x);
+//? Generate the btop++ banner
+void banner_gen() {
+	size_t z = 0, w = 0;
+	string b_color, bg, fg, oc, letter;
+	bool truecolor = Config::getB("truecolor");
+	int bg_i;
+	Global::banner.clear();
+	Global::banner_width = 0;
+	for (auto line: Global::Banner_src) {
+		if ( (w = ulen(line[1])) > Global::banner_width) Global::banner_width = w;
+		fg = Theme::hex_to_color(line[0], !truecolor);
+		bg_i = 120-z*12;
+		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
+		for (size_t i = 0; i < line[1].size(); i += 3) {
+			if (line[1][i] == ' '){
+				letter = ' ';
+				i -= 2;
+			} else{
+				letter = line[1].substr(i, 3);
+			}
+			b_color = (letter == "█") ? fg : bg;
+			if (b_color != oc) Global::banner += b_color;
+			Global::banner += letter;
+			oc = b_color;
+		}
+		if (++z < Global::Banner_src.size()) Global::banner += Mv::l(ulen(line[1])) + Mv::d(1);
 	}
-	return "Thread done! x=" + to_string(x);
+	Global::banner += Mv::r(18 - Global::Version.size()) + Fx::i + Theme::dec_to_color(0,0,0, !truecolor, "bg") +
+			Theme::dec_to_color(150, 150, 150, !truecolor) + "v" + Global::Version + Fx::ui;
 }
+
+//* Threading test function
+// string my_worker(int x){
+// 	for (int i = 0; i < 100 + (x * 100); i++){
+// 		sleep_ms(10);
+// 		if (Global::stop_all.load()) return "Thread stopped! x=" + to_string(x);
+// 	}
+// 	return "Thread done! x=" + to_string(x);
+// }
 
 
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
@@ -254,7 +255,7 @@ int main(int argc, char **argv){
 	Theme::set(Theme::Default_theme);
 
 	//? Create the btop++ banner
-	Global::banner = createBanner();
+	banner_gen();
 
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
@@ -263,7 +264,7 @@ int main(int argc, char **argv){
 	Global::debuginit = true;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
-	bool thread_test = false;
+	// bool thread_test = false;
 
 	if (!Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
 
@@ -343,53 +344,53 @@ int main(int argc, char **argv){
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 		// mydata.push_back(0);
 		// mydata.push_back(0);
-		// mydata.push_back(50);
+		mydata.push_back(50);
 
 
 		// for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		// for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 
 		Draw::Graph kgraph {};
-		Draw::Meter kmeter {};
-		Draw::Graph kgraph2 {};
-		Draw::Graph kgraph3 {};
+		cout << Draw::createBox({.x = 5, .y = 10, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "graph", .fill = false, .num = 7}) << Mv::save << flush;
+		// Draw::Meter kmeter {};
+		// Draw::Graph kgraph2 {};
+		// Draw::Graph kgraph3 {};
 
 		auto kts = time_micros();
-		kgraph(Term::width, 10, "process", mydata, false, false);
-		kmeter(Term::width, "process");
+		kgraph(Term::width - 12, 10, "cpu", mydata, false, false);
+		// kmeter(Term::width - 12, "process");
 		// cout << Mv::save << kgraph(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 
 		// exit(0);
-		kgraph2(Term::width, 10, "process", mydata, true, false);
-		kgraph3(Term::width, 1, "process", mydata, false, false);
+		// kgraph2(Term::width, 10, "process", mydata, true, false);
+		// kgraph3(Term::width, 1, "process", mydata, false, false);
 		// cout << kgraph() << endl;
 		// cout << kgraph2() << endl;
 		// exit(0);
 
-		// cout << Mv::save << kgraph(mydata) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
-		cout << Mv::save << kgraph(mydata, true) << "\n" << kgraph2(mydata, true) << "\n" << kgraph3(mydata, true) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
+		cout << Mv::restore << kgraph(mydata, true) << "\n\n" << Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
+		// cout << Mv::save << kgraph(mydata, true) << "\n" << kgraph2(mydata, true) << "\n" << kgraph3(mydata, true) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// sleep_ms(1000);
 		// mydata.push_back(50);
 		// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// exit(0);
 
-		// int x = 0q;
-		long long y = 0;
-		bool flip = false;
+		// long long y = 0;
+		// bool flip = false;
 		list<uint64_t> ktavg;
 		while (true) {
-			// mydata.back() = std::rand() % 101;
-			mydata.back() = y;
+			mydata.back() = std::rand() % 101;
+			// mydata.back() = y;
 			kts = time_micros();
 			// cout << Mv::restore << " "s * Term::width << "\n" << " "s * Term::width << endl;
-			// cout << Mv::restore << kgraph(mydata) << "\n" << kmeter(mydata.back()) << endl;
-			cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << endl;
+			cout << Mv::restore << kgraph(mydata) << endl;
+			// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << endl;
 			ktavg.push_front(time_micros() - kts);
 			if (ktavg.size() > 100) ktavg.pop_back();
-			cout << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
-			if (flip) y--;
-			else y++;
-			if (y == 100 || y == 0) flip = !flip;
+			cout << Mv::d(1) << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
+			// if (flip) y--;
+			// else y++;
+			// if (y == 100 || y == 0) flip = !flip;
 			if (Input::poll()) {
 				if (Input::get() == "space") Input::wait(true);
 				else break;
@@ -403,28 +404,28 @@ int main(int argc, char **argv){
 	}
 
 
-	if (thread_test){
+	// if (thread_test){
 
-		unordered_flat_map<int, future<string>> runners;
-		unordered_flat_map<int, string> outputs;
+	// 	unordered_flat_map<int, future<string>> runners;
+	// 	unordered_flat_map<int, string> outputs;
 
-		for (int i : iota(0, 10)){
-			runners[i] = async(my_worker, i);
-		}
-		// uint i = 0;
-		while (outputs.size() < 10){
+	// 	for (int i : iota(0, 10)){
+	// 		runners[i] = async(my_worker, i);
+	// 	}
+	// 	// uint i = 0;
+	// 	while (outputs.size() < 10){
 
-			for (int i : iota(0, 10)){
-				if (runners[i].valid() && runners[i].wait_for(std::chrono::milliseconds(10)) == future_status::ready) {
-					outputs[i] = runners[i].get();
-					cout << "Thread " << i << " : " << outputs[i] << endl;
-				}
-			}
+	// 		for (int i : iota(0, 10)){
+	// 			if (runners[i].valid() && runners[i].wait_for(std::chrono::milliseconds(10)) == future_status::ready) {
+	// 				outputs[i] = runners[i].get();
+	// 				cout << "Thread " << i << " : " << outputs[i] << endl;
+	// 			}
+	// 		}
 
-			// if (++i >= 10) i = 0;
-			if (outputs.size() >= 8) Global::stop_all.store(true);
-		}
-	}
+	// 		// if (++i >= 10) i = 0;
+	// 		if (outputs.size() >= 8) Global::stop_all.store(true);
+	// 	}
+	// }
 
 
 

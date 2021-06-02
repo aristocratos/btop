@@ -71,6 +71,8 @@ namespace Symbols {
 
 namespace Draw {
 
+	using namespace Tools;
+
 	struct BoxConf {
 		uint x=0, y=0;
 		uint width=0, height=0;
@@ -101,9 +103,9 @@ namespace Draw {
 
 		//* Draw corners
 		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
-				Mv::to(c.y, c.x + c.width) + Symbols::right_up +
+				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
 				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
-				Mv::to(c.y + c.height - 1, c.x + c.width) + Symbols::right_down;
+				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
 
 		//* Draw titles if defined
 		if (!c.title.empty()){
@@ -115,12 +117,12 @@ namespace Draw {
 			Fx::ub + lcolor + Symbols::title_right;
 		}
 
-		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
+		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
 	}
 
 	//* Class holding a percentage meter
 	class Meter {
-		string out, color_gradient;
+		string color_gradient;
 		int width = 0;
 		bool invert = false;
 		vector<string> cache;
@@ -130,20 +132,18 @@ namespace Draw {
 			this->width = width;
 			this->color_gradient = color_gradient;
 			this->invert = invert;
-			out.clear();
 			cache.clear();
 			cache.insert(cache.begin(), 101, "");
 		}
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value) {
-			if (width < 1) return out;
+			if (width < 1) return "";
 			value = clamp(value, 0, 100);
-			if (!cache.at(value).empty()) return out = cache.at(value);
-			out.clear();
-			int y;
+			if (!cache.at(value).empty()) return cache.at(value);
+			string& out = cache.at(value);
 			for (int i : iota(1, width + 1)) {
-				y = round((double)i * 100.0 / width);
+				int y = round((double)i * 100.0 / width);
 				if (value >= y)
 					out += Theme::g(color_gradient)[invert ? 100 - y : y] + Symbols::meter;
 				else {
@@ -152,28 +152,25 @@ namespace Draw {
 				}
 			}
 			out += Fx::reset;
-			return cache.at(value) = out;
-		}
-
-		string operator()() {
 			return out;
 		}
+
 
 	};
 
 	//* Class holding a graph
 	class Graph {
 		string out, color_gradient;
-		int width = 0, height = 0, lowest = 0;
+		int width = 0, height = 0;
 		long long last = 0, max_value = 0, offset = 0;
 		bool current = true, no_zero = false, invert = false;
 		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
-		vector<string> graph_symbol;
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
 		void _create(const vector<long long>& data, int data_offset) {
 			const bool mult = (data.size() - data_offset > 1);
 			if (mult && (data.size() - data_offset) % 2 != 0) data_offset--;
+			auto& graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
 			array<int, 2> result;
 			const float mod = (height == 1) ? 0.3 : 0.1;
 			long long data_value = 0;
@@ -183,10 +180,10 @@ namespace Draw {
 			}
 
 			//? Horizontal iteration over values in <data>
-			for (int i = data_offset; i < (int)data.size(); i++) {
+			for (int i : iota(data_offset, (int)data.size())) {
+				current = !current;
 				if (i == -1) { data_value = 0; last = 0; }
 				else data_value = data[i];
-				if (mult) current = !current;
 				if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
 				//? Vertical iteration over height of graph
 				for (int horizon : iota(0, height)){
@@ -197,7 +194,7 @@ namespace Draw {
 					for (auto value : {last, data_value}) {
 						if (value >= cur_high)
 							result[ai] = 4;
-						else if (value < cur_low)
+						else if (value <= cur_low)
 							result[ai] = 0;
 						else {
 							result[ai] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
@@ -233,40 +230,34 @@ namespace Draw {
 			this->invert = invert; this->offset = offset;
 			this->no_zero = no_zero; this->max_value = max_value;
 			this->color_gradient = color_gradient;
-			// if (height == 1) graph_symbol = (invert) ? Symbols::graph_down_small : Symbols::graph_up_small;
-			graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
-			if (no_zero) lowest = 1;
-			// current = true;
 			int value_width = ceil((float)data.size() / 2);
 			int data_offset = 0;
 			if (value_width > width) data_offset = data.size() - width * 2;
 
-			//? Populate the two switching graph vectors and fill empty space if width > data size
-			for (int i : iota(0, height)) {
-				(void) i;
-				graphs[true].push_back((value_width < width) ? graph_symbol[0.0] * (width - value_width) : "");
-				graphs[false].push_back((value_width < width) ? graph_symbol[0.0] * (width - value_width) : "");
+			//? Populate the two switching graph vectors and fill empty space if data size < width
+			auto& graph_symbol = (invert) ? Symbols::graph_down : Symbols::graph_up;
+			for (int i : iota(0, height * 2)) {
+				graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : graph_symbol[0]) * (width - value_width) : "");
 			}
 			if (data.size() == 0) return;
 			this->_create(data, data_offset);
 		}
 
 		//* Add last value from back of <data> and return string representation of graph
-		string operator()(const vector<long long>& data, bool data_same = false) {
+		string& operator()(const vector<long long>& data, bool data_same = false) {
 			if (data_same) return out;
-			current = !current;
 
 			//? Make room for new characters on graph
 			for (int i : iota(0, height)) {
-				if (graphs[current][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
-				else graphs[current][i].erase(0, 3);
+				if (graphs[(!current)][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
+				else graphs[(!current)][i].erase(0, 3);
 			}
 			this->_create(data, (int)data.size() - 1);
 			return out;
 		}
 
 		//* Return string representation of graph
-		string operator()() {
+		string& operator()() {
 			return out;
 		}
 	};
