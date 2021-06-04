@@ -91,21 +91,21 @@ namespace Draw {
 
 		//* Draw horizontal lines
 		for (uint hpos : {c.y, c.y + c.height - 1}){
-			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width - 1);
+			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width);
 		}
 
 		//* Draw vertical lines and fill if enabled
 		for (uint hpos : iota(c.y + 1, c.y + c.height - 1)){
 			out += Mv::to(hpos, c.x) + Symbols::v_line +
-				((c.fill) ? string(c.width - 2, ' ') : Mv::r(c.width - 2)) +
+				((c.fill) ? string(c.width - 1, ' ') : Mv::r(c.width - 1)) +
 				Symbols::v_line;
 		}
 
 		//* Draw corners
 		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
-				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
+				Mv::to(c.y, c.x + c.width) + Symbols::right_up +
 				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
-				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
+				Mv::to(c.y + c.height - 1, c.x + c.width) + Symbols::right_down;
 
 		//* Draw titles if defined
 		if (!c.title.empty()){
@@ -117,7 +117,7 @@ namespace Draw {
 			Fx::ub + lcolor + Symbols::title_right;
 		}
 
-		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
+		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
 	}
 
 	//* Class holding a percentage meter
@@ -203,7 +203,7 @@ namespace Draw {
 						ai++;
 					}
 					//? Generate braille symbol from 5x5 2D vector
-					graphs[current][horizon] += (height == 1 && result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[result[0] * 5 + result[1]];
+					graphs[current][horizon] += (height == 1 && result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
 				}
 				if (mult && i > data_offset) last = data_value;
 

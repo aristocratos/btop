@@ -112,20 +112,26 @@ namespace Config {
 	}
 
 	//* Set config value <name> to bool <value>
-	void setB(string name, bool value){
+	void set(string name, bool value){
 		bools.at(name) = value;
 		changed = true;
 	}
 
 	//* Set config value <name> to int <value>
-	void setI(string name, int value){
+	void set(string name, int value){
 		ints.at(name) = value;
 		changed = true;
 	}
 
 	//* Set config value <name> to string <value>
-	void setS(string name, string value){
+	void set(string name, string value){
 		strings.at(name) = value;
+		changed = true;
+	}
+
+	//* Flip config bool value
+	void flip(string name){
+		bools.at(name) = !bools.at(name);
 		changed = true;
 	}
 

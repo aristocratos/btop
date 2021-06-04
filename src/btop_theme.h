@@ -85,7 +85,7 @@ namespace Theme {
 
 	namespace {
 		//* Convert 24-bit colors to 256 colors using 6x6x6 color cube
-		int truecolor_to_256(uint r, uint g, uint b){
+		int truecolor_to_256(int r, int g, int b){
 			if (round((double)r / 11) == round((double)g / 11) && round((double)g / 11) == round((double)b / 11)) {
 				return 232 + round((double)r / 11);
 			} else {
@@ -105,12 +105,10 @@ namespace Theme {
 				Logger::error("Invalid hex value: " + hexa);
 				return "";
 			}
-			depth = (depth == "fg") ? "38" : "48";
-			string pre = Fx::e + depth + ";";
-			pre += (t_to_256) ? "5;" : "2;";
+			string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 
 			if (hexa.size() == 2){
-				uint h_int = stoi(hexa, 0, 16);
+				int h_int = stoi(hexa, 0, 16);
 				if (t_to_256){
 					return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 				} else {
@@ -133,7 +131,7 @@ namespace Theme {
 			}
 			else Logger::error("Invalid size of hex value: " + hexa);
 		}
-		else Logger::error("Hex value missing." + hexa);
+		else Logger::error("Hex value missing: " + hexa);
 		return "";
 	}
 
@@ -141,13 +139,11 @@ namespace Theme {
 	//* Args	r: [0-255], g: [0-255], b: [0-255]
 	//*			t_to_256: [true|false] convert 24bit value to 256 color value
 	//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-	string dec_to_color(uint r, uint g, uint b, bool t_to_256=false, string depth="fg"){
-		depth = (depth == "fg") ? "38" : "48";
-		string pre = Fx::e + depth + ";";
-		pre += (t_to_256) ? "5;" : "2;";
-		r = min(r, 255u);
-		g = min(g, 255u);
-		b = min(b, 255u);
+	string dec_to_color(int r, int g, int b, bool t_to_256=false, string depth="fg"){
+		string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+		r = std::clamp(r, 0, 255);
+		g = std::clamp(g, 0, 255);
+		b = std::clamp(b, 0, 255);
 		if (t_to_256) return pre + to_string(truecolor_to_256(r, g, b)) + "m";
 		else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 	}
@@ -229,15 +225,13 @@ namespace Theme {
 		void generateGradients(){
 			gradients.clear();
 			array<string, 101> c_gradient;
-			string wname;
 			bool t_to_256 = !Config::getB("truecolor");
-			array<array<int, 3>, 3> rgb_arr;
-			array<array<int, 3>, 101> dec_arr;
 			for (auto& [name, source_arr] : rgbs) {
 				if (!name.ends_with("_start")) continue;
+				array<array<int, 3>, 101> dec_arr;
 				dec_arr[0][0] = -1;
-				wname = rtrim(name, "_start");
-				rgb_arr = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
+				string wname = rtrim(name, "_start");
+				array<array<int, 3>, 3> rgb_arr = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
 
 				//? Only start iteration if gradient has a _end color value defined
 				if (rgb_arr[2][0] >= 0) {

@@ -40,6 +40,7 @@ namespace Global {
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
 	const std::string Version = "0.0.20";
+	int coreCount;
 }
 
 #include <btop_tools.h>
@@ -127,14 +128,14 @@ void _exit_handler() { clean_quit(-1); }
 
 //? Generate the btop++ banner
 void banner_gen() {
-	size_t z = 0, w = 0;
+	size_t z = 0;
 	string b_color, bg, fg, oc, letter;
 	bool truecolor = Config::getB("truecolor");
 	int bg_i;
 	Global::banner.clear();
 	Global::banner_width = 0;
 	for (auto line: Global::Banner_src) {
-		if ( (w = ulen(line[1])) > Global::banner_width) Global::banner_width = w;
+		if (auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
 		fg = Theme::hex_to_color(line[0], !truecolor);
 		bg_i = 120-z*12;
 		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
@@ -179,12 +180,8 @@ int main(int argc, char **argv){
 	std::atexit(_exit_handler);
 
 	#if defined(LINUX)
-		//? Linux paths init
-		Global::proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
-		if (Global::proc_path.empty()) {
-			cout << "ERROR: Proc filesystem not found or no permission to read from it!" << endl;
-			exit(1);
-		}
+		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		if (Global::coreCount < 1) Global::coreCount = 1;
 		{
 			std::error_code ec;
 			Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
@@ -199,21 +196,18 @@ int main(int argc, char **argv){
 		}
 	}
 	if (!Config::conf_dir.empty()) {
-		std::error_code ec;
-		if (!fs::is_directory(Config::conf_dir) && !fs::create_directories(Config::conf_dir, ec)) {
+		if (std::error_code ec; !fs::is_directory(Config::conf_dir) && !fs::create_directories(Config::conf_dir, ec)) {
 			cout << "WARNING: Could not create or access btop config directory. Logging and config saving disabled." << endl;
 			cout << "Make sure your $HOME environment variable is correctly set to fix this." << endl;
 		}
 		else {
-			std::error_code ec;
 			Config::conf_file = Config::conf_dir / "btop.conf";
 			Logger::logfile = Config::conf_dir / "btop.log";
 			Theme::user_theme_dir = Config::conf_dir / "themes";
 			if (!fs::exists(Theme::user_theme_dir) && !fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
 		}
 	}
-	if (!Global::self_path.empty()) {
-			std::error_code ec;
+	if (std::error_code ec; !Global::self_path.empty()) {
 			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
 			if (ec || access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
 		}
@@ -245,6 +239,11 @@ int main(int argc, char **argv){
 		clean_quit(1);
 	}
 
+	#if defined(LINUX)
+		//? Linux init
+		Proc::init();
+	#endif
+
 	//? Read config file if present
 	Config::load();
 	// Config::setB("truecolor", false);
@@ -261,7 +260,7 @@ int main(int argc, char **argv){
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 
-	Global::debuginit = true;
+	Global::debuginit = false;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	// bool thread_test = false;
@@ -436,7 +435,6 @@ int main(int argc, char **argv){
 
 
 	auto timestamp = time_ms();
-	Proc::init();
 
 
 
@@ -444,7 +442,7 @@ int main(int argc, char **argv){
 	string ostring;
 	uint64_t tsl, timestamp2, rcount = 0;
 	list<uint64_t> avgtimes = {0};
-	uint timer = 1000;
+	uint timer = 2000;
 	bool filtering = false;
 	bool reversing = false;
 	int sortint = Proc::sort_map["cpu lazy"];
@@ -461,25 +459,28 @@ int main(int argc, char **argv){
 
 	string pbox = Draw::createBox({.x = 0, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
 	pbox += rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 69) + " Threads: " +
-			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n";
+			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Mv::save;
 
 	while (key != "q") {
 		timestamp = time_micros();
 		tsl = time_ms() + timer;
-		auto plist = Proc::collect(Proc::sort_array[sortint], reversing, filter);
+		auto plist = Proc::collect(Proc::sort_array[sortint], reversing, filter, Config::getB("proc_per_core"));
 		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
 		lc = 0;
-		filter_cur = (filtering) ? Fx::bl + "█" + Fx::reset : "";
-		ostring = Mv::save + Mv::u(2) + Mv::r(20) + trans(rjust("Filter: " + filter + filter_cur + string(Term::width / 3, ' ') +
-			"Sorting: " + string(Proc::sort_array[sortint]), Term::width - 25, true, filtering)) + Mv::restore;
+
+		ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
+			+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : "")) + Mv::l(Term::width)
+			+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
+				+ string(Proc::sort_array[sortint]), Term::width - 3))
+			+ Mv::restore;
 
 		for (auto& p : plist){
-			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " " +
-						rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ');
-			ostring += (p.cpu_p > 100) ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4);
-			ostring += "\n";
+			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
+						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+						+ (p.cpu_p < 10 || p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
+						+ "\n";
 			if (lc++ > Term::height - 21) break;
 		}
 
@@ -511,6 +512,7 @@ int main(int argc, char **argv){
 			else if (key == "right") { if (++sortint > (int)Proc::sort_array.size() - 1) sortint = 0; }
 			else if (key == "f") filtering = true;
 			else if (key == "r") reversing = !reversing;
+			else if (key == "c") Config::flip("proc_per_core");
 			else if (key == "delete") filter.clear();
 			else continue;
 			break;

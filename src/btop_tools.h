@@ -93,19 +93,19 @@ namespace Fx {
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-	const string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
+	string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
 
 	//* Move cursor right <x> columns
-	const string r(int x){ return Fx::e + to_string(x) + "C";}
+	string r(int x){ return Fx::e + to_string(x) + "C";}
 
 	//* Move cursor left <x> columns
-	const string l(int x){ return Fx::e + to_string(x) + "D";}
+	string l(int x){ return Fx::e + to_string(x) + "D";}
 
 	//* Move cursor up x lines
-	const string u(int x){ return Fx::e + to_string(x) + "A";}
+	string u(int x){ return Fx::e + to_string(x) + "A";}
 
 	//* Move cursor down x lines
-	const string d(int x) { return Fx::e + to_string(x) + "B";}
+	string d(int x) { return Fx::e + to_string(x) + "B";}
 
 	//* Save cursor position
 	const string save = Fx::e + "s";
@@ -135,17 +135,18 @@ namespace Term {
 			return 0 == tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 		}
 
-		//* Refresh variables holding current terminal width and height and return true if resized
-		bool refresh(){
-			struct winsize w;
-			ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-			resized = (width != w.ws_col || height != w.ws_row) ? true : false;
-			width = w.ws_col;
-			height = w.ws_row;
-			return resized;
+		//* Toggle need for return key when reading input
+		bool linebuffered(bool on=true){
+			struct termios settings;
+			if (tcgetattr(STDIN_FILENO, &settings)) return false;
+			if (on) settings.c_lflag |= ICANON;
+			else settings.c_lflag &= ~(ICANON);
+			if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
+			if (on) setlinebuf(stdin);
+			else setbuf(stdin, NULL);
+			return true;
 		}
 	}
-
 
 	//* Hide terminal cursor
 	const string hide_cursor = Fx::e + "?25l";
@@ -180,19 +181,17 @@ namespace Term {
 	//* Disable direct mouse reporting
 	const string mouse_direct_off = Fx::e + "?1003l";
 
-	//* Toggle need for return key when reading input
-	bool linebuffered(bool on=true){
-		struct termios settings;
-		if (tcgetattr(STDIN_FILENO, &settings)) return false;
-		if (on) settings.c_lflag |= ICANON;
-		else settings.c_lflag &= ~(ICANON);
-		if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
-		if (on) setlinebuf(stdin);
-		else setbuf(stdin, NULL);
-		return true;
+	//* Refresh variables holding current terminal width and height and return true if resized
+	bool refresh(){
+		struct winsize w;
+		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+		if (width != w.ws_col || height != w.ws_row) {
+			width = w.ws_col;
+			height = w.ws_row;
+			resized = true;
+		}
+		return resized;
 	}
-
-
 
 	//* Check for a valid tty, save terminal options and set new options
 	bool init(){
@@ -408,34 +407,16 @@ namespace Tools {
 		return out;
 	}
 
-	//* Repeat string <str> <n> number of times
-	string repeat(string str, const size_t n){
-		if (n == 0){
-			str.clear();
-			str.shrink_to_fit();
-			return str;
-		} else if (n == 1 || str.empty()){
-			return str;
-		}
-		const auto period = str.size();
-		if (period == 1){
-			str.append(n - 1, str.front());
-			return str;
-		}
-		str.reserve(period * n);
-		size_t m = 2;
-		for (; m < n; m *= 2) str += str;
-		str.append(str.c_str(), (n - (m / 2)) * period);
-		return str;
-	}
-
-	//* String gets passed to repeat function
+	//* Add std::string operator "*" : Repeat string <str> <n> number of times
 	std::string operator*(string str, size_t n){
-   		return repeat(std::move(str), n);
+		string out;
+		out.reserve(str.size() * n);
+		while (n-- > 0) out += str;
+		return out;
 	}
 
 	//* Return current time in <strf> format
-	std::string strf_time(std::string strf){
+	string strf_time(string strf){
 		auto now = std::chrono::system_clock::now();
 		auto in_time_t = std::chrono::system_clock::to_time_t(now);
 		std::tm bt {};
@@ -468,11 +449,11 @@ namespace Logger {
 		if (loglevel < level || logfile.empty()) return;
 		busy.wait(true); busy.store(true);
 		std::error_code ec;
-		if (fs::file_size(logfile, ec) > 1024 << 10) {
+		if (fs::file_size(logfile, ec) > 1024 << 10 && !ec) {
 			auto old_log = logfile;
 			old_log += ".1";
 			if (fs::exists(old_log)) fs::remove(old_log, ec);
-			fs::rename(logfile, old_log, ec);
+			if (!ec) fs::rename(logfile, old_log, ec);
 		}
 		if (!ec) {
 			std::ofstream lwrite(logfile, std::ios::app);
@@ -480,6 +461,7 @@ namespace Logger {
 			lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
 			lwrite.close();
 		}
+		else logfile.clear();
 		busy.store(false);
 	}
 

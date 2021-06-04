@@ -81,10 +81,10 @@ namespace Input {
 	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
 	bool poll(int timeout=0){
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
-		int timer = 0;
-		while (timer++ * 10 <= timeout) {
+		while (timeout > 0) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
-			sleep_ms( (timer * 10 <= timeout) ? 10 : timeout % 10);
+			sleep_ms(timeout < 10 ? timeout : 10);
+			timeout -= 10;
 		}
 		return false;
 	}
