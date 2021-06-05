@@ -179,6 +179,7 @@ int main(int argc, char **argv){
 
 	std::atexit(_exit_handler);
 
+	//? Linux init
 	#if defined(LINUX)
 		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (Global::coreCount < 1) Global::coreCount = 1;
@@ -225,17 +226,17 @@ int main(int argc, char **argv){
 	if (Global::debug) { Logger::loglevel = 4; Logger::debug("Starting in debug mode");}
 
 	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
-		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.";
+		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.\n"s
+			+ "Make sure your $LANG evironment variable is set and with a UTF-8 locale."s;
 		Logger::warning(err_msg);
 		cout << "WARNING: " << err_msg << endl;
 	}
 
 	//? Initialize terminal and set options
 	if (!Term::init()) {
-		string err_msg = "No tty detected!";
-		Logger::error(err_msg + " Quitting.");
+		string err_msg = "No tty detected!\nbtop++ needs an interactive shell to run.";
+		Logger::error(err_msg);
 		cout << "ERROR: " << err_msg << endl;
-		cout << "btop++ needs an interactive shell to run." << endl;
 		clean_quit(1);
 	}
 
@@ -246,7 +247,7 @@ int main(int argc, char **argv){
 
 	//? Read config file if present
 	Config::load();
-	// Config::setB("truecolor", false);
+	// Config::set("truecolor", false);
 
 	auto thts = time_ms();
 
@@ -311,6 +312,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
+
 	if (false) {
 		Draw::Meter kmeter;
 		kmeter(Term::width - 2, "cpu", false);
@@ -336,7 +338,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-	if (true) {
+	if (false) {
 
 		vector<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);

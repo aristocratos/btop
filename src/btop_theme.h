@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_theme_included_
-#define _btop_theme_included_ 1
+#define _btop_theme_included_
 
 #include <string>
 #include <cmath>
@@ -240,7 +240,7 @@ namespace Theme {
 					int rng = (rgb_arr[1][0] >= 0) ? 50 : 100;
 					for (int rgb : iota(0, 3)){
 						int arr1 = 0, offset = 0;
-						int arr2 = (rng == 50) ? 1 : 2; 
+						int arr2 = (rng == 50) ? 1 : 2;
 						for (int i : iota(0, 101)) {
 							dec_arr[i][rgb] = rgb_arr[arr1][rgb] + (i - offset) * (rgb_arr[arr2][rgb] - rgb_arr[arr1][rgb]) / rng;
 

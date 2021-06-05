@@ -31,7 +31,7 @@ tab-size = 4
 #include <btop_tools.h>
 
 #ifndef _btop_draw_included_
-#define _btop_draw_included_ 1
+#define _btop_draw_included_
 
 using std::string, std::vector, robin_hood::unordered_flat_map, std::round, std::views::iota,
 	std::string_literals::operator""s, std::clamp, std::array, std::floor;

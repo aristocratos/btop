@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_config_included_
-#define _btop_config_included_ 1
+#define _btop_config_included_
 
 #include <string>
 #include <vector>
@@ -38,6 +38,8 @@ namespace Config {
 		fs::path conf_dir;
 		fs::path conf_file;
 
+		atomic<bool> locked (false);
+		atomic<bool> writelock (false);
 		bool changed = false;
 
 		unordered_flat_map<string, string> strings = {
@@ -57,6 +59,8 @@ namespace Config {
 			{"net_iface", ""},
 			{"log_level", "WARNING"}
 		};
+		unordered_flat_map<string, string> stringsTmp;
+
 		unordered_flat_map<string, bool> bools = {
 			{"theme_background", true},
 			{"truecolor", true},
@@ -89,11 +93,20 @@ namespace Config {
 			{"show_battery", true},
 			{"show_init", false}
 		};
+		unordered_flat_map<string, bool> boolsTmp;
+
 		unordered_flat_map<string, int> ints = {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
 			{"tree_depth", 3}
 		};
+		unordered_flat_map<string, int> intsTmp;
+
+		bool _locked(){
+			atomic_wait(writelock);
+			if (!changed) changed = true;
+			return locked.load();
+		}
 	}
 
 	//* Return config value <name> as a bool
@@ -113,26 +126,59 @@ namespace Config {
 
 	//* Set config value <name> to bool <value>
 	void set(string name, bool value){
-		bools.at(name) = value;
-		changed = true;
+		if (_locked()) boolsTmp[name] = value;
+		else bools.at(name) = value;
 	}
 
 	//* Set config value <name> to int <value>
 	void set(string name, int value){
+		if (_locked()) intsTmp[name] = value;
 		ints.at(name) = value;
-		changed = true;
 	}
 
 	//* Set config value <name> to string <value>
 	void set(string name, string value){
-		strings.at(name) = value;
-		changed = true;
+		if (_locked()) stringsTmp[name] = value;
+		else strings.at(name) = value;
 	}
 
-	//* Flip config bool value
+	//* Flip config bool <name>
 	void flip(string name){
-		bools.at(name) = !bools.at(name);
-		changed = true;
+		if (_locked()) {
+			if (boolsTmp.contains(name)) boolsTmp.at(name) = !boolsTmp.at(name);
+			else boolsTmp[name] = !bools.at(name);
+		}
+		else bools.at(name) = !bools.at(name);
+	}
+
+	//* Wait if locked then lock config and cache changes until unlock
+	void lock(){
+		atomic_wait_set(locked, true);
+	}
+
+	//* Unlock config and write any cached values to config
+	void unlock(){
+		atomic_wait_set(writelock, true);
+		if (stringsTmp.size() > 0) {
+			for (auto& item : stringsTmp){
+				strings.at(item.first) = item.second;
+			}
+			stringsTmp.clear(); stringsTmp.compact();
+		}
+		if (intsTmp.size() > 0) {
+			for (auto& item : intsTmp){
+				ints.at(item.first) = item.second;
+			}
+			intsTmp.clear(); intsTmp.compact();
+		}
+		if (boolsTmp.size() > 0) {
+			for (auto& item : boolsTmp){
+				bools.at(item.first) = item.second;
+			}
+			boolsTmp.clear(); boolsTmp.compact();
+		}
+		writelock.store(false);
+		locked.store(false);
 	}
 
 	void load(){

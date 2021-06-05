@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_linux_included_
-#define _btop_linux_included_ 1
+#define _btop_linux_included_
 
 #include <string>
 #include <vector>

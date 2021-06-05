@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #ifndef _btop_tools_included_
-#define _btop_tools_included_ 1
+#define _btop_tools_included_
 
 #include <string>
 #include <cmath>
@@ -226,10 +226,25 @@ namespace Term {
 namespace Tools {
 
 	//* Return number of UTF8 characters in a string with option to disregard escape sequences
-	size_t ulen(string s, bool escape=false){
-		if (escape) s = std::regex_replace(s, Fx::escape_regex, "");
-		return std::count_if(s.begin(), s.end(),
+	size_t ulen(string str, bool escape=false){
+		if (escape) str = std::regex_replace(str, Fx::escape_regex, "");
+		return std::count_if(str.begin(), str.end(),
 			[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
+	}
+
+	//* Resize a string consisting of UTF8 characters (only reduces size)
+	string uresize(string str, const size_t len){
+		if (str.size() < 1) return str;
+		if (len < 1) return "";
+		for (size_t x = 0, i = 0; i < str.size(); i++) {
+			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
+			if (x == len) {
+				str.resize(i + 1);
+				str.shrink_to_fit();
+				break;
+			}
+		}
+		return str;
 	}
 
 	//* Return current time since epoch in seconds
@@ -301,10 +316,7 @@ namespace Tools {
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string ljust(string str, const size_t x, bool utf=false, bool escape=false, bool lim=true){
 		if (utf || escape) {
-			if (!escape && lim && ulen(str) > x) {
-				auto i = str.size();
-				while (ulen(str) > x) str.resize(--i);
-			}
+			if (!escape && lim && ulen(str) > x) str = uresize(str, x);
 			return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
 		}
 		else {
@@ -316,23 +328,13 @@ namespace Tools {
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string rjust(string str, const size_t x, bool utf=false, bool escape=false, bool lim=true){
 		if (utf || escape) {
-			if (!escape && lim && ulen(str) > x) {
-				auto i = str.size();
-				while (ulen(str) > x) str.resize(--i);
-			}
+			if (!escape && lim && ulen(str) > x) str = uresize(str, x);
 			return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
 		}
 		else {
 			if (lim && str.size() > x) str.resize(x);
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
-	}
-
-	//* Trim trailing characters if utf8 string length is greatear than <x>
-	string uresize(string str, const size_t x){
-		if (str.empty()) return str;
-		while (ulen(str) > x) str.pop_back();
-		return str;
 	}
 
 	//* Replace whitespaces " " with escape code for move right
@@ -425,10 +427,30 @@ namespace Tools {
 		return ss.str();
 	}
 
+
+	#if __GNUC__ > 10
+		//* Redirects to atomic wait
+		void atomic_wait(atomic<bool>& atom, bool val=true){
+			atom.wait(val);
+		}
+	#else
+		//* Crude implementation of atomic wait for GCC < 11
+		void atomic_wait(atomic<bool>& atom, bool val=true){
+			while (atom.load() == val) sleep_ms(1);
+		}
+	#endif
+
+	//* Waits for <atom> to not be <val> and then sets it to <val> again
+	void atomic_wait_set(atomic<bool>& atom, bool val){
+		atomic_wait(atom, val);
+		atom.store(val);
+	}
+
 }
 
 //* Simple logging implementation
 namespace Logger {
+	using namespace Tools;
 	namespace {
 		std::atomic<bool> busy (false);
 		bool first = true;
@@ -447,7 +469,7 @@ namespace Logger {
 
 	void log_write(uint level, string& msg){
 		if (loglevel < level || logfile.empty()) return;
-		busy.wait(true); busy.store(true);
+		atomic_wait_set(busy, true);
 		std::error_code ec;
 		if (fs::file_size(logfile, ec) > 1024 << 10 && !ec) {
 			auto old_log = logfile;
@@ -457,8 +479,8 @@ namespace Logger {
 		}
 		if (!ec) {
 			std::ofstream lwrite(logfile, std::ios::app);
-			if (first) { first = false; lwrite << "\n" << Tools::strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
-			lwrite << Tools::strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
+			if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
+			lwrite << strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
 			lwrite.close();
 		}
 		else logfile.clear();

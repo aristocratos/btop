@@ -112,7 +112,9 @@ Look to the creators of the terminal emulator you use to fix these issues if the
 
 None
 
-But will need G++ 11 if compiling from source.
+### Compiling from source
+
+Needs at least G++ 10, preferably 11 (or higher) to make use of some C++20 functionality.
 
 ## Screenshots
 
@@ -132,7 +134,7 @@ Options menu.
 
 #### Manual compilation and installation
 
-Requires GCC/G++ 11!
+Requires GCC/G++ 10 or higher!
 
 >Clone and compile
 
