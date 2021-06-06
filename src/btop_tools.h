@@ -238,8 +238,8 @@ namespace Tools {
 		if (len < 1) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
 			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
-			if (x == len) {
-				str.resize(i + 1);
+			if (x == len + 1) {
+				str.resize(i);
 				str.shrink_to_fit();
 				break;
 			}
