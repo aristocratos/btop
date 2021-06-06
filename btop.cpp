@@ -333,12 +333,6 @@ int main(int argc, char **argv){
 	}
 
 	if (false) {
-		string a = "⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿⣿ ⣿\n⣿⣿⣿";
-		cout << a << endl;
-		exit(0);
-	}
-
-	if (false) {
 
 		vector<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);

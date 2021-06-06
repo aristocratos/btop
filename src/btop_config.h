@@ -126,19 +126,19 @@ namespace Config {
 
 	//* Set config value <name> to bool <value>
 	void set(string name, bool value){
-		if (_locked()) boolsTmp[name] = value;
+		if (_locked()) boolsTmp.insert_or_assign(name, value);
 		else bools.at(name) = value;
 	}
 
 	//* Set config value <name> to int <value>
 	void set(string name, int value){
-		if (_locked()) intsTmp[name] = value;
+		if (_locked()) intsTmp.insert_or_assign(name, value);
 		ints.at(name) = value;
 	}
 
 	//* Set config value <name> to string <value>
 	void set(string name, string value){
-		if (_locked()) stringsTmp[name] = value;
+		if (_locked()) stringsTmp.insert_or_assign(name, value);
 		else strings.at(name) = value;
 	}
 
@@ -146,36 +146,36 @@ namespace Config {
 	void flip(string name){
 		if (_locked()) {
 			if (boolsTmp.contains(name)) boolsTmp.at(name) = !boolsTmp.at(name);
-			else boolsTmp[name] = !bools.at(name);
+			else boolsTmp.insert_or_assign(name, (!bools.at(name)));
 		}
 		else bools.at(name) = !bools.at(name);
 	}
 
 	//* Wait if locked then lock config and cache changes until unlock
 	void lock(){
-		atomic_wait_set(locked, true);
+		atomic_wait_set(locked);
 	}
 
 	//* Unlock config and write any cached values to config
 	void unlock(){
-		atomic_wait_set(writelock, true);
+		atomic_wait_set(writelock);
 		if (stringsTmp.size() > 0) {
 			for (auto& item : stringsTmp){
 				strings.at(item.first) = item.second;
 			}
-			stringsTmp.clear(); stringsTmp.compact();
+			stringsTmp.clear();
 		}
 		if (intsTmp.size() > 0) {
 			for (auto& item : intsTmp){
 				ints.at(item.first) = item.second;
 			}
-			intsTmp.clear(); intsTmp.compact();
+			intsTmp.clear();
 		}
 		if (boolsTmp.size() > 0) {
 			for (auto& item : boolsTmp){
 				bools.at(item.first) = item.second;
 			}
-			boolsTmp.clear(); boolsTmp.compact();
+			boolsTmp.clear();
 		}
 		writelock.store(false);
 		locked.store(false);

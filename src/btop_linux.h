@@ -60,7 +60,6 @@ namespace Tools {
 
 namespace Proc {
 	namespace {
-		uint64_t tstamp;
 		struct p_cache {
 			string name, cmd, user;
 			uint64_t cpu_t = 0, cpu_s = 0;
@@ -79,7 +78,8 @@ namespace Proc {
 	uint64_t old_cputimes = 0;
 	size_t numpids = 500;
 	atomic<bool> stop (false);
-	atomic<bool> running (false);
+	atomic<bool> collecting (false);
+	atomic<bool> drawing (false);
 	array<string, 8> sort_array = {
 		"pid",
 		"name",
@@ -90,7 +90,7 @@ namespace Proc {
 		"cpu direct",
 		"cpu lazy",
 	};
-	unordered_flat_map<string, uint> sort_map;
+	unordered_flat_map<string, int> sort_map;
 
 	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, cpu_n, p_nice, ppid
 	struct proc_info {
@@ -105,16 +105,17 @@ namespace Proc {
 		uint ppid = 0;
 	};
 
+	vector<proc_info> current_procs;
 
-	//* Collects process information from /proc and returns a vector of proc_info structs
-	auto collect(string sorting="pid", bool reverse=false, string filter="", bool per_core=true){
-		running.store(true);
+
+	//* Collects process information from /proc, saves to and returns reference to Proc::current_procs;
+	auto& collect(string sorting="pid", bool reverse=false, string filter="", bool per_core=true){
+		atomic_wait_set(collecting);
 		ifstream pread;
 		auto uptime = system_uptime();
-		auto sortint = (sort_map.contains(sorting)) ? sort_map[sorting] : 7;
 		vector<proc_info> procs;
 		procs.reserve((numpids + 10));
-		numpids = 0;
+		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
 
 		//* Update uid_user map if /etc/passwd changed since last run
@@ -143,22 +144,21 @@ namespace Proc {
 			for (uint64_t times; pread >> times; cputimes += times);
 			pread.close();
 		}
-		else return procs;
+		else return current_procs;
 
 		//* Iterate over all pids in /proc
 		for (auto& d: fs::directory_iterator(proc_path)){
 			if (pread.is_open()) pread.close();
 			if (stop.load()) {
-				procs.clear();
-				running.store(false);
+				collecting.store(false);
 				stop.store(false);
-				return procs;
+				return current_procs;
 			}
 
 			string pid_str = d.path().filename();
 			bool new_cache = false;
 			if (d.is_directory() && isdigit(pid_str[0])) {
-				numpids++;
+				npids++;
 				proc_info new_proc (stoul(pid_str));
 
 				//* Cache program name, command and username
@@ -298,7 +298,7 @@ namespace Proc {
 
 
 		//* Sort processes vector
-		std::ranges::sort(procs, [&sortint, &reverse](proc_info& a, proc_info& b) {
+		std::ranges::sort(procs, [sortint = sort_map.at(sorting), &reverse](proc_info& a, proc_info& b) {
 				switch (sortint) {
 					case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
 					case 1: return (reverse) ? a.name < b.name 			: a.name > b.name;
@@ -314,7 +314,7 @@ namespace Proc {
 		);
 
 		//* When using "cpu lazy" sorting push processes with high cpu usage to the front regardless of cumulative usage
-		if (sortint == 7 && !reverse) {
+		if (sort_map.at(sorting) == 7 && !reverse) {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
 				if (i <= 5 && procs[i].cpu_p > max) max = procs[i].cpu_p;
@@ -325,11 +325,10 @@ namespace Proc {
 		}
 
 		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 10000 || (filter.empty() && cache.size() > procs.size() + 100)) {
+		if (++counter >= 10000 || ((int)cache.size() > npids + 100)) {
 			unordered_flat_map<uint, p_cache> r_cache;
 			r_cache.reserve(procs.size());
 			counter = 0;
-			Logger::debug("Cleared proc cache");
 			if (filter.empty()) {
 				for (auto& p : procs) r_cache[p.pid] = cache[p.pid];
 				cache.swap(r_cache);
@@ -337,15 +336,15 @@ namespace Proc {
 			else cache.clear();
 		}
 		old_cputimes = cputimes;
-		tstamp = time_ms();
-		running.store(false);
-		return procs;
+		atomic_wait(drawing);
+		current_procs.swap(procs);
+		numpids = npids;
+		collecting.store(false);
+		return current_procs;
 	}
 
 	//* Initialize needed variables for collect
 	void init(){
-		tstamp = time_ms();
-
 		proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (proc_path.empty()) {
 			string errmsg = "Proc filesystem not found or no permission to read from it!";

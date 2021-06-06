@@ -441,7 +441,7 @@ namespace Tools {
 	#endif
 
 	//* Waits for <atom> to not be <val> and then sets it to <val> again
-	void atomic_wait_set(atomic<bool>& atom, bool val){
+	void atomic_wait_set(atomic<bool>& atom, bool val=true){
 		atomic_wait(atom, val);
 		atom.store(val);
 	}
