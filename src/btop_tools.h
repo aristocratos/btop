@@ -267,8 +267,8 @@ namespace Tools {
 		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
 	}
 
-	//* Check if a string is a valid integer value
-	bool isint(string& str){
+	//* Check if a string is a valid positive integer value
+	bool isuint(string& str){
 		return all_of(str.begin(), str.end(), ::isdigit);
 	}
 
@@ -428,13 +428,13 @@ namespace Tools {
 	}
 
 
-	#if __GNUC__ > 10
+	#if (__GNUC__ > 10)
 		//* Redirects to atomic wait
 		void atomic_wait(atomic<bool>& atom, bool val=true){
 			atom.wait(val);
 		}
 	#else
-		//* Crude implementation of atomic wait for GCC < 11
+		//* Crude implementation of atomic wait for GCC 10
 		void atomic_wait(atomic<bool>& atom, bool val=true){
 			while (atom.load() == val) sleep_ms(1);
 		}

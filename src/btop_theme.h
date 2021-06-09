@@ -257,7 +257,7 @@ namespace Theme {
 					//? If only _start was defined fill array with _start color
 					c_gradient.fill(colors[name]);
 				}
-				gradients[wname] = c_gradient;
+				gradients[wname].swap(c_gradient);
 			}
 		}
 	}

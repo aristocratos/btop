@@ -21,6 +21,7 @@ tab-size = 4
 #include <array>
 #include <list>
 #include <vector>
+#include <csignal>
 #include <thread>
 #include <future>
 #include <atomic>
@@ -51,7 +52,7 @@ namespace Global {
 #include <btop_menu.h>
 
 #if defined(__linux__)
-	#define LINUX 1
+	#define LINUX
 	#include <btop_linux.h>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
@@ -62,7 +63,7 @@ namespace Global {
 #elif defined(__APPLE__) && defined(__MACH__)
 	#include <TargetConditionals.h>
 	#if TARGET_OS_MAC == 1
-		#define OSX 1
+		#define OSX
 		// #include <btop_osx.h>
 		#error OSX support not yet implemented!
     #endif
@@ -113,7 +114,7 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-void clean_quit(int signal){
+void clean_quit(int sig){
 	if (Global::quitting) return;
 	if (Term::initialized) {
 		Term::restore();
@@ -121,10 +122,38 @@ void clean_quit(int signal){
 	}
 	if (Global::debug) Logger::debug("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 	Global::quitting = true;
-	if (signal != -1) exit(signal);
+	Config::write();
+	if (sig != -1) exit(sig);
+}
+
+void sleep_now(){
+	if (Term::initialized) {
+		Term::restore();
+		if (!Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
+	}
+	std::raise(SIGSTOP);
+}
+
+void resume_now(){
+	Term::init();
+	if (!Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
 }
 
 void _exit_handler() { clean_quit(-1); }
+
+void _signal_handler(int sig) {
+	switch (sig) {
+		case SIGINT:
+			clean_quit(0);
+			break;
+		case SIGTSTP:
+			sleep_now();
+			break;
+		case SIGCONT:
+			resume_now();
+			break;
+	}
+}
 
 //? Generate the btop++ banner
 void banner_gen() {
@@ -178,11 +207,16 @@ int main(int argc, char **argv){
 	if (argc > 1) argumentParser(argc, argv);
 
 	std::atexit(_exit_handler);
+	std::at_quick_exit(_exit_handler);
+	std::signal(SIGINT, _signal_handler);
+	std::signal(SIGTSTP, _signal_handler);
+	std::signal(SIGCONT, _signal_handler);
 
 	//? Linux init
 	#if defined(LINUX)
 		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (Global::coreCount < 1) Global::coreCount = 1;
+
 		{
 			std::error_code ec;
 			Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
@@ -261,7 +295,7 @@ int main(int argc, char **argv){
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 
-	Global::debuginit = false;
+	Global::debuginit = true;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	// bool thread_test = false;
@@ -453,8 +487,8 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	string pbox = Draw::createBox({.x = 0, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
-	pbox += rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 69) + " Threads: " +
+	string pbox = Draw::createBox({.x = 1, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
+	pbox += Mv::r(1) + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
 			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Mv::save;
 
 	while (key != "q") {

@@ -40,7 +40,7 @@ namespace Config {
 
 		atomic<bool> locked (false);
 		atomic<bool> writelock (false);
-		bool changed = false;
+		unordered_flat_map<string, bool> changed;
 
 		unordered_flat_map<string, string> strings = {
 			{"color_theme", "Default"},
@@ -104,23 +104,22 @@ namespace Config {
 
 		bool _locked(){
 			atomic_wait(writelock);
-			if (!changed) changed = true;
 			return locked.load();
 		}
 	}
 
-	//* Return config value <name> as a bool
-	bool& getB(string name){
+	//* Return bool config value <name>
+	const bool& getB(string name){
 		return bools.at(name);
 	}
 
-	//* Return config value <name> as a int
-	int& getI(string name){
+	//* Return integer config value <name>
+	const int& getI(string name){
 		return ints.at(name);
 	}
 
-	//* Return config value <name> as a string
-	string& getS(string name){
+	//* Return string config value <name>
+	const string& getS(string name){
 		return strings.at(name);
 	}
 
@@ -128,18 +127,21 @@ namespace Config {
 	void set(string name, bool value){
 		if (_locked()) boolsTmp.insert_or_assign(name, value);
 		else bools.at(name) = value;
+		changed.insert_or_assign(name, true);
 	}
 
 	//* Set config value <name> to int <value>
 	void set(string name, int value){
 		if (_locked()) intsTmp.insert_or_assign(name, value);
 		ints.at(name) = value;
+		changed.insert_or_assign(name, true);
 	}
 
 	//* Set config value <name> to string <value>
 	void set(string name, string value){
 		if (_locked()) stringsTmp.insert_or_assign(name, value);
 		else strings.at(name) = value;
+		changed.insert_or_assign(name, true);
 	}
 
 	//* Flip config bool <name>
@@ -149,6 +151,7 @@ namespace Config {
 			else boolsTmp.insert_or_assign(name, (!bools.at(name)));
 		}
 		else bools.at(name) = !bools.at(name);
+		changed.insert_or_assign(name, true);
 	}
 
 	//* Wait if locked then lock config and cache changes until unlock
@@ -183,6 +186,19 @@ namespace Config {
 
 	void load(){
 		if (conf_file.empty()) return;
+	}
+
+	void write(){
+		if (conf_file.empty() || changed.empty()) return;
+
+		if (Logger::loglevel > 3) {
+			string items;
+			for (auto item : Config::changed) {
+				items += item.first + ", ";
+			}
+			items.pop_back(); items.pop_back();
+			Logger::debug("Writing out new config values for: " + items);
+		}
 	}
 }
 

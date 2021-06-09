@@ -91,21 +91,21 @@ namespace Draw {
 
 		//* Draw horizontal lines
 		for (uint hpos : {c.y, c.y + c.height - 1}){
-			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width);
+			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width - 1);
 		}
 
 		//* Draw vertical lines and fill if enabled
 		for (uint hpos : iota(c.y + 1, c.y + c.height - 1)){
 			out += Mv::to(hpos, c.x) + Symbols::v_line +
-				((c.fill) ? string(c.width - 1, ' ') : Mv::r(c.width - 1)) +
+				((c.fill) ? string(c.width - 2, ' ') : Mv::r(c.width - 2)) +
 				Symbols::v_line;
 		}
 
 		//* Draw corners
 		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
-				Mv::to(c.y, c.x + c.width) + Symbols::right_up +
+				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
 				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
-				Mv::to(c.y + c.height - 1, c.x + c.width) + Symbols::right_down;
+				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
 
 		//* Draw titles if defined
 		if (!c.title.empty()){
@@ -117,7 +117,7 @@ namespace Draw {
 			Fx::ub + lcolor + Symbols::title_right;
 		}
 
-		return out + Fx::reset + Mv::to(c.y + 1, c.x + 2);
+		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
 	}
 
 	//* Class holding a percentage meter

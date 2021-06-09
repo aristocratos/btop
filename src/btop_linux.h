@@ -155,8 +155,8 @@ namespace Proc {
 				return current_procs;
 			}
 
-			string pid_str = d.path().filename();
 			bool new_cache = false;
+			string pid_str = d.path().filename();
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				npids++;
 				proc_info new_proc (stoul(pid_str));
@@ -314,7 +314,7 @@ namespace Proc {
 		);
 
 		//* When using "cpu lazy" sorting push processes with high cpu usage to the front regardless of cumulative usage
-		if (sort_map.at(sorting) == 7 && !reverse) {
+		if (sorting == "cpu lazy" && !reverse) {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
 				if (i <= 5 && procs[i].cpu_p > max) max = procs[i].cpu_p;
