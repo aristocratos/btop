@@ -260,8 +260,8 @@ int main(int argc, char **argv){
 	if (Global::debug) { Logger::loglevel = 4; Logger::debug("Starting in debug mode");}
 
 	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
-		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.\n"s
-			+ "Make sure your $LANG evironment variable is set and with a UTF-8 locale."s;
+		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.\n"
+						 "Make sure your $LANG evironment variable is set and with a UTF-8 locale.";
 		Logger::warning(err_msg);
 		cout << "WARNING: " << err_msg << endl;
 	}
