@@ -193,14 +193,13 @@ namespace Draw {
 					int ai = 0;
 					for (auto value : {last, data_value}) {
 						if (value >= cur_high)
-							result[ai] = 4;
+							result[ai++] = 4;
 						else if (value <= cur_low)
-							result[ai] = 0;
+							result[ai++] = 0;
 						else {
-							result[ai] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
+							result[ai++] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
 							if (no_zero && horizon == height - 1 && i != -1 && result[ai] == 0) result[ai] = 1;
 						}
-						ai++;
 					}
 					//? Generate braille symbol from 5x5 2D vector
 					graphs[current][horizon] += (height == 1 && result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
@@ -228,8 +227,10 @@ namespace Draw {
 			graphs[true].clear(); graphs[false].clear();
 			this->width = width; this->height = height;
 			this->invert = invert; this->offset = offset;
-			this->no_zero = no_zero; this->max_value = max_value;
+			this->no_zero = no_zero;
 			this->color_gradient = color_gradient;
+			if (max_value == 0 && offset > 0) max_value = 100;
+			this->max_value = max_value;
 			int value_width = ceil((float)data.size() / 2);
 			int data_offset = 0;
 			if (value_width > width) data_offset = data.size() - width * 2;
@@ -265,6 +266,7 @@ namespace Draw {
 }
 
 namespace Box {
+
 
 
 

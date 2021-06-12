@@ -41,7 +41,7 @@ namespace Config {
 
 		atomic<bool> locked (false);
 		atomic<bool> writelock (false);
-		bool changed;
+		bool write_new;
 
 		vector<array<string, 2>> descriptions = {
 			{"color_theme", "#* Color theme, looks for a .theme file in \"/usr/[local/]share/bpytop/themes\" and \"~/.config/bpytop/themes\", \"Default\" for builtin default theme.\n"
@@ -160,7 +160,7 @@ namespace Config {
 
 		bool _locked(){
 			atomic_wait(writelock);
-			if (!changed) changed = true;
+			if (!write_new) write_new = true;
 			return locked.load();
 		}
 	}
@@ -238,14 +238,71 @@ namespace Config {
 	}
 
 	//* Load the config file from disk
-	void load(){
-		if (conf_file.empty()) return;
-		else if (!fs::exists(conf_file)) { changed = true; return; }
+	void load(fs::path conf_file, vector<string>& load_errors){
+		if (conf_file.empty())
+			return;
+		else if (!fs::exists(conf_file)) {
+			write_new = true;
+			return;
+		}
+		std::ifstream cread(conf_file);
+		if (cread.good()) {
+			unordered_flat_map<string, int> valid_names;
+			for (auto &n : descriptions)
+				valid_names[n[0]] = 0;
+			string v_string;
+			getline(cread, v_string, '\n');
+			if (!v_string.ends_with(Global::Version))
+				write_new = true;
+			while (!cread.eof()) {
+				cread >> std::ws;
+				if (cread.peek() == '#') {
+					cread.ignore(SSmax, '\n');
+					continue;
+				}
+				string name, value;
+				getline(cread, name, '=');
+				if (!valid_names.contains(name)) {
+					cread.ignore(SSmax, '\n');
+					continue;
+				}
+
+				if (bools.contains(name)) {
+					cread >> value;
+					if (!isbool(value))
+						load_errors.push_back("Got an invalid bool value for config name: " + name);
+					else
+						bools.at(name) = stobool(value);
+				}
+				else if (ints.contains(name)) {
+					cread >> value;
+					if (!isint(value))
+						load_errors.push_back("Got an invalid integer value for config name: " + name);
+					else
+						ints.at(name) = stoi(value);
+				}
+				else if (strings.contains(name)) {
+					cread >> std::ws;
+					if (cread.peek() == '"') {
+						cread.ignore(1);
+						getline(cread, value, '"');
+					}
+					else cread >> value;
+
+					if (name == "log_level" && !v_contains(Logger::log_levels, value)) load_errors.push_back("Invalid log_level: " + value);
+					else strings.at(name) = value;
+				}
+
+				cread.ignore(SSmax, '\n');
+			}
+			cread.close();
+			if (!load_errors.empty()) write_new = true;
+		}
 	}
 
 	//* Write the config file to disk
 	void write(){
-		if (conf_file.empty() || !changed) return;
+		if (conf_file.empty() || !write_new) return;
 		Logger::debug("Writing new config file");
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {

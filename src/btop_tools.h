@@ -38,7 +38,7 @@ tab-size = 4
 #include <termios.h>
 #include <sys/ioctl.h>
 
-using std::string, std::vector, std::array, std::regex, std::max, std::to_string, std::cin, std::atomic, robin_hood::unordered_flat_map;
+using std::string, std::string_view, std::vector, std::array, std::regex, std::max, std::to_string, std::cin, std::atomic, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -225,8 +225,10 @@ namespace Term {
 
 namespace Tools {
 
+	const auto SSmax = std::numeric_limits<std::streamsize>::max();
+
 	//* Return number of UTF8 characters in a string with option to disregard escape sequences
-	size_t ulen(string str, bool escape=false){
+	size_t ulen(string str, const bool escape=false){
 		if (escape) str = std::regex_replace(str, Fx::escape_regex, "");
 		return std::count_if(str.begin(), str.end(),
 			[](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
@@ -245,6 +247,18 @@ namespace Tools {
 			}
 		}
 		return str;
+	}
+
+	//* Check if vector <vec> contains value <find_val>
+	template <typename T>
+	bool v_contains(vector<T>& vec, T find_val) {
+		return std::ranges::find(vec, find_val) != vec.end();
+	}
+
+	//* Return index of <find_val> from vector <vec>, returns size of <vec> if <find_val> is not present
+	template <typename T>
+	size_t v_index(vector<T>& vec, T find_val) {
+		return std::ranges::distance(vec.begin(), std::ranges::find(vec, find_val));
 	}
 
 	//* Return current time since epoch in seconds
@@ -267,49 +281,57 @@ namespace Tools {
 		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
 	}
 
-	//* Check if a string is a valid positive integer value
-	bool isuint(string& str){
-		return all_of(str.begin(), str.end(), ::isdigit);
+	//* Convert string to bool, returning any value not equal to "true" or "True" as false
+	bool stobool(string& str){
+		return (str == "true" || str == "True") ? true : false;
 	}
 
-	//* Left-trim <t_str> from <str> and return string
-	string ltrim(string str, string t_str = " "){
-		while (str.starts_with(t_str)) str.erase(0, t_str.size());
-		return str;
+	//* Check if a string is a valid integer value
+	bool isint(string& str){
+		if (str.empty()) return false;
+		size_t offset = (str[0] == '-' ? 1 : 0);
+		return all_of(str.begin() + offset, str.end(), ::isdigit);
 	}
 
-	//* Right-trim <t_str> from <str> and return string
-	string rtrim(string str, string t_str = " "){
-		while (str.ends_with(t_str)) str.resize(str.size() - t_str.size());
-		return str;
+	//* Left-trim <t_str> from <str> and return new string
+	string ltrim(const string& str, const string t_str = " "){
+		string_view str_v = str;
+		while (str_v.starts_with(t_str)) str_v.remove_prefix(t_str.size());
+		return (string)str_v;
 	}
 
-	//* Left-right-trim <t_str> from <str> and return string
-	string trim(string str, string t_str = " "){
+	//* Right-trim <t_str> from <str> and return new string
+	string rtrim(const string& str, const string t_str = " "){
+		string_view str_v = str;
+		while (str_v.ends_with(t_str)) str_v.remove_suffix(t_str.size());
+		return (string)str_v;
+	}
+
+	//* Left-right-trim <t_str> from <str> and return new string
+	string trim(const string& str, const string t_str = " "){
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
 	//* Split <string> at <delim> <time> number of times (0 for unlimited) and return vector
-	vector<string> ssplit(string str, string delim = " ", int times = 0, bool ignore_remainder=false){
+	vector<string> ssplit(const string& str, const string delim = " ", const int times = 0, const bool ignore_remainder=false){
 		vector<string> out;
+		string_view str_v = str;
 		if (times > 0) out.reserve(times);
-		if (!str.empty() && !delim.empty()){
+		if (!str_v.empty() && !delim.empty()){
 			size_t pos = 0;
 			int x = 0;
-			string tmp;
-			while ((pos = str.find(delim)) != string::npos){
-				tmp = str.substr(0, pos);
-				if (tmp != delim && !tmp.empty()) out.push_back(tmp);
-				str.erase(0, pos + delim.size());
+			while ((pos = str_v.find(delim)) != string::npos){
+				if (str_v.substr(0, pos) != delim) out.emplace_back(str_v.substr(0, pos));
+				str_v.remove_prefix(pos + delim.size());
 				if (times > 0 && ++x >= times) break;
 			}
 		}
-		if (!ignore_remainder) out.push_back(str);
+		if (!ignore_remainder) out.emplace_back(str_v);
 		return out;
 	}
 
 	//* Put current thread to sleep for <ms> milliseconds
-	void sleep_ms(uint ms) {
+	void sleep_ms(const uint& ms) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 	}
 
@@ -455,12 +477,12 @@ namespace Logger {
 		std::atomic<bool> busy (false);
 		bool first = true;
 		string tdf = "%Y/%m/%d (%T) | ";
-		unordered_flat_map<uint, string> log_levels = {
-			{ 0, "DISABLED" },
-			{ 1, "ERROR" },
-			{ 2, "WARNING" },
-			{ 3, "INFO" },
-			{ 4, "DEBUG" }
+		vector<string> log_levels = {
+			"DISABLED",
+			"ERROR",
+			"WARNING",
+			"INFO",
+			"DEBUG"
 		};
 	}
 
@@ -480,7 +502,7 @@ namespace Logger {
 		if (!ec) {
 			std::ofstream lwrite(logfile, std::ios::app);
 			if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
-			lwrite << strf_time(tdf) << log_levels[level] << ": " << msg << "\n";
+			lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
 			lwrite.close();
 		}
 		else logfile.clear();

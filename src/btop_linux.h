@@ -44,7 +44,6 @@ using std::string, std::vector, std::array, std::ifstream, std::atomic, std::num
 using std::cout, std::flush, std::endl;
 namespace fs = std::filesystem;
 using namespace Tools;
-const auto SSmax = std::numeric_limits<streamsize>::max();
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
@@ -63,6 +62,9 @@ namespace Proc {
 		struct p_cache {
 			string name, cmd, user;
 			uint64_t cpu_t = 0, cpu_s = 0;
+			string prefix = "";
+			size_t depth = 0;
+			bool collapsed = false;
 		};
 		unordered_flat_map<uint, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
@@ -92,7 +94,7 @@ namespace Proc {
 	};
 	unordered_flat_map<string, int> sort_map;
 
-	//* proc_info: pid, name, cmd, threads, user, mem, cpu_p, cpu_c, state, cpu_n, p_nice, ppid
+	//* Container for process information
 	struct proc_info {
 		uint pid;
 		string name = "", cmd = "";
@@ -102,21 +104,25 @@ namespace Proc {
 		double cpu_p = 0.0, cpu_c = 0.0;
 		char state = '0';
 		int cpu_n = 0, p_nice = 0;
-		uint ppid = 0;
+		int ppid = -1;
+		string prefix = "";
 	};
 
 	vector<proc_info> current_procs;
 
 
-	//* Collects process information from /proc, saves to and returns reference to Proc::current_procs;
-	auto& collect(string sorting="pid", bool reverse=false, string filter="", bool per_core=true){
+	//* Collects and sorts process information from /proc, saves to and returns reference to Proc::current_procs;
+	auto& collect(string sorting="pid", bool reverse=false, string filter="", bool per_core=true, bool tree=false){
 		atomic_wait_set(collecting);
 		ifstream pread;
 		auto uptime = system_uptime();
 		vector<proc_info> procs;
+		vector<uint> pid_list;
 		procs.reserve((numpids + 10));
+		pid_list.reserve(numpids + 10);
 		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
+		(void)tree;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
@@ -160,6 +166,7 @@ namespace Proc {
 			if (d.is_directory() && isdigit(pid_str[0])) {
 				npids++;
 				proc_info new_proc (stoul(pid_str));
+				pid_list.push_back(new_proc.pid);
 
 				//* Cache program name, command and username
 				if (!cache.contains(new_proc.pid)) {
@@ -238,7 +245,7 @@ namespace Proc {
 								break;
 							}
 							case 1: { //? Process parent pid
-								new_proc.ppid = stoul(instr.substr(s_pos, c_pos - s_pos));
+								new_proc.ppid = stoi(instr.substr(s_pos, c_pos - s_pos));
 								break;
 							}
 							case 11: { //? Process utime
@@ -297,7 +304,7 @@ namespace Proc {
 		}
 
 
-		//* Sort processes vector
+		//* Sort processes
 		std::ranges::sort(procs, [sortint = sort_map.at(sorting), &reverse](proc_info& a, proc_info& b) {
 				switch (sortint) {
 					case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
@@ -326,14 +333,13 @@ namespace Proc {
 
 		//* Clear dead processes from cache at a regular interval
 		if (++counter >= 10000 || ((int)cache.size() > npids + 100)) {
-			unordered_flat_map<uint, p_cache> r_cache;
-			r_cache.reserve(procs.size());
 			counter = 0;
-			if (filter.empty()) {
-				for (auto& p : procs) r_cache[p.pid] = cache[p.pid];
-				cache.swap(r_cache);
+			unordered_flat_map<uint, p_cache> r_cache;
+			r_cache.reserve(pid_list.size());
+			for (auto& p : pid_list) {
+				if (cache.contains(p)) r_cache[p] = cache.at(p);
 			}
-			else cache.clear();
+			cache.swap(r_cache);
 		}
 		old_cputimes = cputimes;
 		atomic_wait(drawing);

@@ -256,8 +256,19 @@ int main(int argc, char **argv){
 		}
 	}
 
-	Global::debug = true;
-	if (Global::debug) { Logger::loglevel = 4; Logger::debug("Starting in debug mode");}
+	//? Read config file if present
+	{	vector<string> load_errors;
+		Config::load(Config::conf_file, load_errors);
+
+		if (Global::debug) Logger::loglevel = 4;
+		else Logger::loglevel = v_index(Logger::log_levels, Config::getS("log_level"));
+
+		if (Logger::loglevel == 4) Logger::debug("Starting with logger set to debug.");
+
+		if (!load_errors.empty()) {
+			for (auto& err_str : load_errors) Logger::error(err_str);
+		}
+	}
 
 	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
 		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.\n"
@@ -279,8 +290,7 @@ int main(int argc, char **argv){
 		Proc::init();
 	#endif
 
-	//? Read config file if present
-	Config::load();
+
 	// Config::set("truecolor", false);
 
 	auto thts = time_ms();
@@ -430,6 +440,23 @@ int main(int argc, char **argv){
 
 		exit(0);
 
+	}
+
+
+	if (false) {
+		cout << Config::getS("log_level") << endl;
+
+		vector<string> vv = {"hej", "vad", "du"};
+		vector<int> vy;
+
+		cout << v_contains(vv, "vad"s) << endl;
+		cout << v_index(vv, "hej"s) << endl;
+		cout << v_index(vv, "du"s) << endl;
+		cout << v_index(vv, "kodkod"s) << endl;
+		cout << v_index(vy, 4) << endl;
+
+
+		exit(0);
 	}
 
 

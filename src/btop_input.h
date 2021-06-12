@@ -90,10 +90,10 @@ namespace Input {
 	}
 
 	//* Get a key or mouse action from input
-	string get(){
+	string get(bool clear = false){
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 && key.size() < 100) key += cin.get();
-		if (!key.empty()){
+		if (!clear && !key.empty()){
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";
@@ -105,9 +105,10 @@ namespace Input {
 	//* Wait until input is available
 	void wait(bool clear=false){
 		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
-		if (clear) get();
+		if (clear) get(clear);
 	}
 
+	//* Clears last entered key
 	void clear(){
 		last.clear();
 	}
