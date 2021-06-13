@@ -41,7 +41,7 @@ tab-size = 4
 
 
 using std::string, std::vector, std::array, std::ifstream, std::atomic, std::numeric_limits, std::streamsize;
-using std::cout, std::flush, std::endl;
+using std::cout, std::flush, std::endl, std::string_literals::operator""s;
 namespace fs = std::filesystem;
 using namespace Tools;
 
@@ -64,7 +64,7 @@ namespace Proc {
 			uint64_t cpu_t = 0, cpu_s = 0;
 			string prefix = "";
 			size_t depth = 0;
-			bool collapsed = false;
+			int collapsed = -1;
 		};
 		unordered_flat_map<uint, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
@@ -82,7 +82,7 @@ namespace Proc {
 	atomic<bool> stop (false);
 	atomic<bool> collecting (false);
 	atomic<bool> drawing (false);
-	array<string, 8> sort_array = {
+	vector<string> sort_vector = {
 		"pid",
 		"name",
 		"command",
@@ -92,7 +92,6 @@ namespace Proc {
 		"cpu direct",
 		"cpu lazy",
 	};
-	unordered_flat_map<string, int> sort_map;
 
 	//* Container for process information
 	struct proc_info {
@@ -108,12 +107,49 @@ namespace Proc {
 		string prefix = "";
 	};
 
+	//* Generate process tree list
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth=0, bool collapsed=false){
+		auto cur_pos = out_procs.size();
+		if (!collapsed)
+			out_procs.push_back(cur_proc);
+		int children = 0;
+		for (auto& p : in_procs) {
+			if (p.ppid == (int)cur_proc.pid) {
+				children++;
+				if (collapsed) {
+					out_procs.back().cpu_p += p.cpu_p;
+					out_procs.back().mem += p.mem;
+					out_procs.back().threads += p.threads;
+					_tree_gen(p, in_procs, out_procs, cur_depth + 1, collapsed);
+				}
+				else _tree_gen(p, in_procs, out_procs, cur_depth + 1, (cache.at(cur_proc.pid).collapsed == 1));
+			}
+		}
+		if (collapsed) return;
+
+		if (out_procs.size() > cur_pos + 1 && !out_procs.back().prefix.ends_with("] ")) {
+			std::string_view n_prefix = out_procs.back().prefix;
+			n_prefix.remove_suffix(8);
+			out_procs.back().prefix = (string)n_prefix + " └─ ";
+		}
+
+		string prefix = " ├─ ";
+		if (children > 0) prefix = (cache.at(cur_proc.pid).collapsed == 1) ? "[+] " : "[-] ";
+
+		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + prefix;
+	}
+
 	vector<proc_info> current_procs;
 
 
 	//* Collects and sorts process information from /proc, saves to and returns reference to Proc::current_procs;
-	auto& collect(string sorting="pid", bool reverse=false, string filter="", bool per_core=true, bool tree=false){
+	auto& collect(){
 		atomic_wait_set(collecting);
+		auto& sorting = Config::getS("proc_sorting");
+		auto& reverse = Config::getB("proc_reversed");
+		auto& filter = Config::getS("proc_filter");
+		auto& per_core = Config::getB("proc_per_core");
+		auto& tree = Config::getB("proc_tree");
 		ifstream pread;
 		auto uptime = system_uptime();
 		vector<proc_info> procs;
@@ -305,20 +341,19 @@ namespace Proc {
 
 
 		//* Sort processes
-		std::ranges::sort(procs, [sortint = sort_map.at(sorting), &reverse](proc_info& a, proc_info& b) {
-				switch (sortint) {
-					case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
-					case 1: return (reverse) ? a.name < b.name 			: a.name > b.name;
-					case 2: return (reverse) ? a.cmd < b.cmd 			: a.cmd > b.cmd;
-					case 3: return (reverse) ? a.threads < b.threads 	: a.threads > b.threads;
-					case 4: return (reverse) ? a.user < b.user 			: a.user > b.user;
-					case 5: return (reverse) ? a.mem < b.mem 			: a.mem > b.mem;
-					case 6: return (reverse) ? a.cpu_p < b.cpu_p 		: a.cpu_p > b.cpu_p;
-					case 7: return (reverse) ? a.cpu_c < b.cpu_c 		: a.cpu_c > b.cpu_c;
-				}
-				return false;
+		std::ranges::sort(procs, [sortint = v_index(sort_vector, sorting), &reverse](proc_info& a, proc_info& b) {
+			switch (sortint) {
+				case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
+				case 1: return (reverse) ? a.name < b.name 			: a.name > b.name;
+				case 2: return (reverse) ? a.cmd < b.cmd 			: a.cmd > b.cmd;
+				case 3: return (reverse) ? a.threads < b.threads 	: a.threads > b.threads;
+				case 4: return (reverse) ? a.user < b.user 			: a.user > b.user;
+				case 5: return (reverse) ? a.mem < b.mem 			: a.mem > b.mem;
+				case 6: return (reverse) ? a.cpu_p < b.cpu_p 		: a.cpu_p > b.cpu_p;
+				case 7: return (reverse) ? a.cpu_c < b.cpu_c 		: a.cpu_c > b.cpu_c;
 			}
-		);
+			return false;
+		});
 
 		//* When using "cpu lazy" sorting push processes with high cpu usage to the front regardless of cumulative usage
 		if (sorting == "cpu lazy" && !reverse) {
@@ -330,6 +365,17 @@ namespace Proc {
 				else if (procs[i].cpu_p > target) rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
 			}
 		}
+
+		//* Generate tree view if enabled
+		if (tree) {
+			auto min_ppid = std::ranges::min(procs, [](proc_info& a, proc_info& b) { return a.ppid < b.ppid; }).ppid;
+			vector<proc_info> tree_procs;
+			for (auto& p : procs) {
+				if (p.ppid == min_ppid) _tree_gen(p, procs, tree_procs);
+			}
+			procs.swap(tree_procs);
+		}
+
 
 		//* Clear dead processes from cache at a regular interval
 		if (++counter >= 10000 || ((int)cache.size() > npids + 100)) {
@@ -373,9 +419,6 @@ namespace Proc {
 			clk_tck = 100;
 			Logger::warning("Could not get system clocks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
-
-		uint i = 0;
-		for (auto& item : sort_array) sort_map[item] = i++;
 	}
 }
 

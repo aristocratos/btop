@@ -120,9 +120,9 @@ void clean_quit(int sig){
 		Term::restore();
 		if (!Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	}
-	if (Global::debug) Logger::debug("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 	Global::quitting = true;
 	Config::write();
+	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 	if (sig != -1) exit(sig);
 }
 
@@ -256,18 +256,16 @@ int main(int argc, char **argv){
 		}
 	}
 
-	//? Read config file if present
+	//? Config init
 	{	vector<string> load_errors;
 		Config::load(Config::conf_file, load_errors);
 
 		if (Global::debug) Logger::loglevel = 4;
 		else Logger::loglevel = v_index(Logger::log_levels, Config::getS("log_level"));
 
-		if (Logger::loglevel == 4) Logger::debug("Starting with logger set to debug.");
+		Logger::info("Log level set to " + Config::getS("log_level") + ".");
 
-		if (!load_errors.empty()) {
-			for (auto& err_str : load_errors) Logger::error(err_str);
-		}
+		for (auto& err_str : load_errors) Logger::warning(err_str);
 	}
 
 	if (!string(getenv("LANG")).ends_with("UTF-8") && !string(getenv("LANG")).ends_with("utf-8")) {
@@ -501,8 +499,6 @@ int main(int argc, char **argv){
 	list<uint64_t> avgtimes = {0};
 	uint timer = 2000;
 	bool filtering = false;
-	bool reversing = false;
-	int sortint = Proc::sort_map["cpu lazy"];
 	vector<string> greyscale;
 	string filter;
 	string filter_cur;
@@ -515,13 +511,13 @@ int main(int argc, char **argv){
 	}
 
 	string pbox = Draw::createBox({.x = 1, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
-	pbox += Mv::r(1) + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
-			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Mv::save;
+	pbox += Mv::r(1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
+			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Fx::reset + Mv::save;
 
 	while (key != "q") {
 		timestamp = time_micros();
 		tsl = time_ms() + timer;
-		auto plist = Proc::collect(Proc::sort_array[sortint], reversing, filter, Config::getB("proc_per_core"));
+		auto plist = Proc::collect();
 		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
@@ -530,14 +526,27 @@ int main(int argc, char **argv){
 		ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
 			+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : "")) + Mv::l(Term::width)
 			+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-				+ string(Proc::sort_array[sortint]), Term::width - 3))
+				+ string(Config::getS("proc_sorting")), Term::width - 3))
 			+ Mv::restore;
 
 		for (auto& p : plist){
-			ostring += 	Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
+			if (!Config::getB("proc_tree")) {
+				ostring += Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
 						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
 						+ (p.cpu_p < 10 || p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
 						+ "\n";
+			}
+			else {
+				string cmd_cond;
+				if (!p.cmd.empty()) {
+					cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
+					cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
+				}
+				ostring += Mv::r(1) + greyscale[lc] + ljust(p.prefix + to_string(p.pid) + " " + p.name + " " + (!cmd_cond.empty() && cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
+						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+						+ (p.cpu_p < 10 || p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
+						+ "\n";
+			}
 			if (lc++ > Term::height - 21) break;
 		}
 
@@ -562,15 +571,25 @@ int main(int argc, char **argv){
 				else if (key == "space") filter.push_back(' ');
 				else if (ulen(key) == 1 ) filter.append(key);
 				else { key.clear(); continue; }
+				if (filter != Config::getS("proc_filter")) Config::set("proc_filter", filter);
 				break;
 			}
 			else if (key == "q") break;
-			else if (key == "left") { if (--sortint < 0) sortint = (int)Proc::sort_array.size() - 1; }
-			else if (key == "right") { if (++sortint > (int)Proc::sort_array.size() - 1) sortint = 0; }
+			else if (key == "left") {
+				int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
+				if (--cur_i < 0) cur_i = Proc::sort_vector.size() - 1;
+				Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+			}
+			else if (key == "right") {
+				int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
+				if (++cur_i > (int)Proc::sort_vector.size() - 1) cur_i = 0;
+				Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+			}
 			else if (key == "f") filtering = true;
-			else if (key == "r") reversing = !reversing;
+			else if (key == "t") Config::flip("proc_tree");
+			else if (key == "r") Config::flip("proc_reversed");
 			else if (key == "c") Config::flip("proc_per_core");
-			else if (key == "delete") filter.clear();
+			else if (key == "delete") { filter.clear(); Config::set("proc_filter", filter); }
 			else continue;
 			break;
 		}

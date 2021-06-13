@@ -56,7 +56,6 @@ namespace Config {
 								"#* \"cpu lazy\" updates top process over time, \"cpu responsive\" updates top process directly."},
 			{"proc_reversed", "#* Reverse sorting order, True or False."},
 			{"proc_tree", "#* Show processes as a tree."},
-			{"tree_depth", "#* Which depth the tree view should auto collapse processes at."},
 			{"proc_colors", "#* Use the cpu graph colors in the process list."},
 			{"proc_gradient", "#* Use a darkening gradient in the process list."},
 			{"proc_per_core", "#* If process cpu usage should be of the core it's running on or usage of the total available cpu power."},
@@ -115,7 +114,8 @@ namespace Config {
 			{"net_download", "10M"},
 			{"net_upload", "10M"},
 			{"net_iface", ""},
-			{"log_level", "WARNING"}
+			{"log_level", "WARNING"},
+			{"proc_filter", ""}
 		};
 		unordered_flat_map<string, string> stringsTmp;
 
@@ -154,7 +154,6 @@ namespace Config {
 		unordered_flat_map<string, int> ints = {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
-			{"tree_depth", 3}
 		};
 		unordered_flat_map<string, int> intsTmp;
 
@@ -215,26 +214,24 @@ namespace Config {
 	//* Unlock config and write any cached values to config
 	void unlock(){
 		atomic_wait_set(writelock);
-		if (stringsTmp.size() > 0) {
-			for (auto& item : stringsTmp){
-				strings.at(item.first) = item.second;
-			}
-			stringsTmp.clear();
+
+		for (auto& item : stringsTmp){
+			strings.at(item.first) = item.second;
 		}
-		if (intsTmp.size() > 0) {
-			for (auto& item : intsTmp){
-				ints.at(item.first) = item.second;
-			}
-			intsTmp.clear();
+		stringsTmp.clear();
+
+		for (auto& item : intsTmp){
+			ints.at(item.first) = item.second;
 		}
-		if (boolsTmp.size() > 0) {
-			for (auto& item : boolsTmp){
-				bools.at(item.first) = item.second;
-			}
-			boolsTmp.clear();
+		intsTmp.clear();
+
+		for (auto& item : boolsTmp){
+			bools.at(item.first) = item.second;
 		}
-		writelock = false;
+		boolsTmp.clear();
+
 		locked = false;
+		writelock = false;
 	}
 
 	//* Load the config file from disk
@@ -247,9 +244,9 @@ namespace Config {
 		}
 		std::ifstream cread(conf_file);
 		if (cread.good()) {
-			unordered_flat_map<string, int> valid_names;
+			vector<string> valid_names;
 			for (auto &n : descriptions)
-				valid_names[n[0]] = 0;
+				valid_names.push_back(n[0]);
 			string v_string;
 			getline(cread, v_string, '\n');
 			if (!v_string.ends_with(Global::Version))
@@ -262,7 +259,7 @@ namespace Config {
 				}
 				string name, value;
 				getline(cread, name, '=');
-				if (!valid_names.contains(name)) {
+				if (!v_contains(valid_names, name)) {
 					cread.ignore(SSmax, '\n');
 					continue;
 				}
