@@ -323,26 +323,23 @@ namespace Proc {
 					new_proc.mem *= page_size;
 				}
 
-				//* Create proc_info
+				//* Push process to vector
 				procs.push_back(new_proc);
 			}
 		}
 
-
 		//* Sort processes
-		rng::sort(procs, [sortint = v_index(sort_vector, sorting), &reverse](proc_info& a, proc_info& b) {
-			switch (sortint) {
-				case 0: return (reverse) ? a.pid < b.pid 			: a.pid > b.pid;
-				case 1: return (reverse) ? a.name < b.name 			: a.name > b.name;
-				case 2: return (reverse) ? a.cmd < b.cmd 			: a.cmd > b.cmd;
-				case 3: return (reverse) ? a.threads < b.threads 	: a.threads > b.threads;
-				case 4: return (reverse) ? a.user < b.user 			: a.user > b.user;
-				case 5: return (reverse) ? a.mem < b.mem 			: a.mem > b.mem;
-				case 6: return (reverse) ? a.cpu_p < b.cpu_p 		: a.cpu_p > b.cpu_p;
-				case 7: return (reverse) ? a.cpu_c < b.cpu_c 		: a.cpu_c > b.cpu_c;
-			}
-			return false;
-		});
+		auto cmp = [&reverse](auto &a, auto &b) { return (reverse ? a < b : a > b); };
+		switch (v_index(sort_vector, sorting)) {
+				case 0: { rng::sort(procs, cmp, &proc_info::pid); break; }
+				case 1: { rng::sort(procs, cmp, &proc_info::name); break; }
+				case 2: { rng::sort(procs, cmp, &proc_info::cmd); break; }
+				case 3: { rng::sort(procs, cmp, &proc_info::threads); break; }
+				case 4: { rng::sort(procs, cmp, &proc_info::user); break; }
+				case 5: { rng::sort(procs, cmp, &proc_info::mem); break; }
+				case 6: { rng::sort(procs, cmp, &proc_info::cpu_p); break; }
+				case 7: { rng::sort(procs, cmp, &proc_info::cpu_c); break; }
+		}
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
 		if (sorting == "cpu lazy" && !tree && !reverse) {
