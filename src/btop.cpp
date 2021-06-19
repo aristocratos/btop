@@ -30,19 +30,7 @@ tab-size = 4
 #include <filesystem>
 #include <unistd.h>
 #include <robin_hood.h>
-
-namespace Global {
-	const std::vector<std::array<std::string, 2>> Banner_src = {
-		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
-		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
-		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
-		{"#9A1919", "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
-		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
-		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
-	};
-	const std::string Version = "0.0.20";
-	int coreCount;
-}
+#include <cmath>
 
 #include <btop_tools.h>
 #include <btop_config.h>
@@ -71,9 +59,23 @@ namespace Global {
 	#error Platform not supported!
 #endif
 
+namespace Global {
+	const std::vector<std::array<std::string, 2>> Banner_src = {
+		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
+		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
+		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
+		{"#9A1919", "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
+		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
+		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
+	};
+	std::string Version = "0.0.21";
+	int coreCount;
+}
+
 using std::string, std::vector, std::array, robin_hood::unordered_flat_map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
-using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status;
+using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status, std::to_string, std::round;
 namespace fs = std::filesystem;
+namespace rng = std::ranges;
 using namespace Tools;
 
 
@@ -89,6 +91,8 @@ namespace Global {
 	uint64_t start_time;
 
 	bool quitting = false;
+
+	bool arg_tty = false;
 }
 
 
@@ -102,10 +106,26 @@ void argumentParser(int argc, char **argv){
 			exit(0);
 		}
 		else if (argument == "-h" || argument == "--help") {
-			cout << "help here" << endl;
+			cout 	<< "usage: btop [-h] [-v] [-/+t] [--debug]\n\n"
+					<< "optional arguments:\n"
+					<< "  -h, --help			show this help message and exit\n"
+					<< "  -v, --version			show version info and exit\n"
+					<< "  -t, --tty_on			force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
+					<< "  +t, --tty_off			force (OFF) tty mode\n"
+					<< "  --debug			start with loglevel set to DEBUG, overriding value set in config\n"
+					<< endl;
 			exit(0);
 		}
-		else if (argument == "--debug") Global::debug = true;
+		else if (argument == "--debug")
+			Global::debug = true;
+		else if (argument == "-t" || argument == "--tty_on") {
+			Config::set("tty_mode", true);
+			Global::arg_tty = true;
+		}
+		else if (argument == "+t" || argument == "--tty_off") {
+			Config::set("tty_mode", false);
+			Global::arg_tty = true;
+		}
 		else {
 			cout << " Unknown argument: " << argument << "\n" <<
 			" Use -h or --help for help." <<  endl;
@@ -163,18 +183,21 @@ void banner_gen() {
 	int bg_i;
 	Global::banner.clear();
 	Global::banner_width = 0;
+	auto tty_mode = (Config::getB("tty_mode"));
 	for (auto line: Global::Banner_src) {
 		if (auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
 		fg = Theme::hex_to_color(line[0], !truecolor);
 		bg_i = 120-z*12;
 		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
 		for (size_t i = 0; i < line[1].size(); i += 3) {
-			if (line[1][i] == ' '){
+			if (line[1][i] == ' ') {
 				letter = ' ';
 				i -= 2;
-			} else{
-				letter = line[1].substr(i, 3);
 			}
+			else
+				letter = line[1].substr(i, 3);
+
+			if (tty_mode && letter != "█" && letter != " ") letter = "░";
 			b_color = (letter == "█") ? fg : bg;
 			if (b_color != oc) Global::banner += b_color;
 			Global::banner += letter;
@@ -260,10 +283,10 @@ int main(int argc, char **argv){
 	{	vector<string> load_errors;
 		Config::load(Config::conf_file, load_errors);
 
-		if (Global::debug) Logger::loglevel = 4;
-		else Logger::loglevel = v_index(Logger::log_levels, Config::getS("log_level"));
+		if (Global::debug) Logger::set("DEBUG");
+		else Logger::set(Config::getS("log_level"));
 
-		Logger::info("Log level set to " + Config::getS("log_level") + ".");
+		Logger::debug("Logger set to DEBUG");
 
 		for (auto& err_str : load_errors) Logger::warning(err_str);
 	}
@@ -282,6 +305,17 @@ int main(int argc, char **argv){
 		cout << "ERROR: " << err_msg << endl;
 		clean_quit(1);
 	}
+
+	Logger::debug("Running on " + Term::current_tty);
+	if (!Global::arg_tty && Config::getB("force_tty")) {
+		Config::set("tty_mode", true);
+		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
+	}
+	else if (!Global::arg_tty && Term::current_tty.starts_with("/dev/tty")) {
+		Config::set("tty_mode", true);
+		Logger::info("Real tty detected, setting 16 color mode and using tty friendly graph symbols");
+	}
+
 
 	#if defined(LINUX)
 		//? Linux init
@@ -329,7 +363,7 @@ int main(int argc, char **argv){
 
 		cout << "Colors:" << endl;
 		uint i = 0;
-		for(auto& item : Theme::colors) {
+		for(auto& item : Theme::test_colors()) {
 			cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
 			// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
 			if (++i == 4) {
@@ -341,7 +375,7 @@ int main(int argc, char **argv){
 
 
 		cout << "Gradients:";
-		for (auto& [name, cvec] : Theme::gradients) {
+		for (auto& [name, cvec] : Theme::test_gradients()) {
 			cout << endl << rjust(name + ":", 10);
 			for (auto& color : cvec) {
 				cout << color << "■";
@@ -388,13 +422,21 @@ int main(int argc, char **argv){
 		// for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 
 		Draw::Graph kgraph {};
-		cout << Draw::createBox({.x = 5, .y = 10, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "graph", .fill = false, .num = 7}) << Mv::save << flush;
+		Draw::Graph kgraph2 {};
+		Draw::Graph kgraph3 {};
+
+		cout << Draw::createBox({.x = 5, .y = 10, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "braille", .fill = false, .num = 1}) << Mv::save;
+		cout << Draw::createBox({.x = 5, .y = 23, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "block", .fill = false, .num = 2});
+		cout << Draw::createBox({.x = 5, .y = 36, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "tty", .fill = false, .num = 3}) << flush;
 		// Draw::Meter kmeter {};
 		// Draw::Graph kgraph2 {};
 		// Draw::Graph kgraph3 {};
 
 		auto kts = time_micros();
-		kgraph(Term::width - 12, 10, "cpu", mydata, false, false);
+		kgraph(Term::width - 12, 10, "cpu", mydata, "braille", false, false);
+		kgraph2(Term::width - 12, 10, "cpu", mydata, "block", false, false);
+		kgraph3(Term::width - 12, 10, "cpu", mydata, "tty", false, false);
+
 		// kmeter(Term::width - 12, "process");
 		// cout << Mv::save << kgraph(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 
@@ -405,7 +447,10 @@ int main(int argc, char **argv){
 		// cout << kgraph2() << endl;
 		// exit(0);
 
-		cout << Mv::restore << kgraph(mydata, true) << "\n\n" << Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
+		cout 	<< Mv::restore << kgraph(mydata, true)
+				<< Mv::restore << Mv::d(13) << kgraph2(mydata, true)
+				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << endl
+				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
 		// cout << Mv::save << kgraph(mydata, true) << "\n" << kgraph2(mydata, true) << "\n" << kgraph3(mydata, true) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
 		// sleep_ms(1000);
 		// mydata.push_back(50);
@@ -420,7 +465,10 @@ int main(int argc, char **argv){
 			// mydata.back() = y;
 			kts = time_micros();
 			// cout << Mv::restore << " "s * Term::width << "\n" << " "s * Term::width << endl;
-			cout << Mv::restore << kgraph(mydata) << endl;
+			cout 	<< Mv::restore << kgraph(mydata)
+					<< Mv::restore << Mv::d(13) << kgraph2(mydata)
+					<< Mv::restore << Mv::d(26) << kgraph3(mydata)
+					<< endl;
 			// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << endl;
 			ktavg.push_front(time_micros() - kts);
 			if (ktavg.size() > 100) ktavg.pop_back();

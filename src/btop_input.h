@@ -16,8 +16,7 @@ indent = tab
 tab-size = 4
 */
 
-#ifndef _btop_input_included_
-#define _btop_input_included_
+#pragma once
 
 #include <string>
 #include <robin_hood.h>
@@ -31,7 +30,7 @@ using namespace Tools;
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
 	cin.tie(NULL);
-	These will automatically be set when running Term::init() from btop_tools.h
+	These will automatically be set when running Term::init() from btop_tools.cpp
 */
 
 //* Functions and variables for handling keyboard and mouse input
@@ -114,5 +113,3 @@ namespace Input {
 	}
 
 }
-
-#endif

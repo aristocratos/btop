@@ -16,8 +16,7 @@ indent = tab
 tab-size = 4
 */
 
-#ifndef _btop_menu_included_
-#define _btop_menu_included_ 1
+#pragma once
 
 #include <string>
 #include <vector>
@@ -73,7 +72,3 @@ namespace Menu {
 
 
 }
-
-
-
-#endif
