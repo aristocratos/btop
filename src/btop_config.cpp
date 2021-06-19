@@ -23,6 +23,7 @@ tab-size = 4
 #include <fstream>
 
 #include <btop_config.hpp>
+#include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
 using robin_hood::unordered_flat_map, std::map, std::array, std::atomic;

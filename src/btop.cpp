@@ -33,6 +33,7 @@ tab-size = 4
 #include <cmath>
 #include <iostream>
 
+#include <btop_shared.hpp>
 #include <btop_tools.hpp>
 #include <btop_config.hpp>
 #include <btop_input.hpp>
@@ -42,18 +43,15 @@ tab-size = 4
 
 #if defined(__linux__)
 	#define LINUX
-	#include <btop_linux.hpp>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
-		// #include <btop_bsd.h>
 		#error BSD support not yet implemented!
 	#endif
 #elif defined(__APPLE__) && defined(__MACH__)
 	#include <TargetConditionals.h>
 	#if TARGET_OS_MAC == 1
 		#define OSX
-		// #include <btop_osx.h>
 		#error OSX support not yet implemented!
     #endif
 #else

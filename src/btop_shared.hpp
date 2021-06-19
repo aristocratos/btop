@@ -20,25 +20,26 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <atomic>
 #include <filesystem>
+#include <atomic>
 
-using std::string, std::vector, std::atomic;
+using std::string, std::vector;
 
 namespace Global {
+	extern string Version;
 	extern int coreCount;
 }
 
 namespace Tools {
+	//* Platform specific function for system_uptime
 	double system_uptime();
 }
 
 namespace Proc {
-
 	extern std::filesystem::path proc_path;
 	extern size_t numpids;
-	extern atomic<bool> stop;
-	extern atomic<bool> collecting;
+	extern std::atomic<bool> stop;
+	extern std::atomic<bool> collecting;
 	extern vector<string> sort_vector;
 
 	//* Container for process information

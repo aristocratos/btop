@@ -31,6 +31,7 @@ tab-size = 4
 #include <termios.h>
 #include <sys/ioctl.h>
 
+#include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
 using 	std::string_view, std::array, std::regex, std::max, std::to_string, std::cin,

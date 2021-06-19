@@ -32,7 +32,7 @@ tab-size = 4
 
 #include <unistd.h>
 
-#include <btop_linux.hpp>
+#include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 

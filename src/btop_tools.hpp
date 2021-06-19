@@ -31,10 +31,6 @@ using std::string, std::vector;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
-namespace Global {
-	extern string Version;
-}
-
 //* Collection of escape codes for text style and formatting
 namespace Fx {
 	extern const string e;		//* Escape sequence start
