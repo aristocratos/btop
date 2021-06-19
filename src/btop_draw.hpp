@@ -22,9 +22,6 @@ tab-size = 4
 #include <vector>
 #include <robin_hood.h>
 
-#include <btop_config.h>
-#include <btop_tools.h>
-
 using std::string, std::vector, robin_hood::unordered_flat_map;
 
 namespace Symbols {

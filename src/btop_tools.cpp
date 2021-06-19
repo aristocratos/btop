@@ -31,7 +31,7 @@ tab-size = 4
 #include <termios.h>
 #include <sys/ioctl.h>
 
-#include <btop_tools.h>
+#include <btop_tools.hpp>
 
 using 	std::string_view, std::array, std::regex, std::max, std::to_string, std::cin,
 		std::atomic, robin_hood::unordered_flat_map;
@@ -278,11 +278,10 @@ namespace Tools {
 		newstr.reserve(str.size());
 		while ((pos = oldstr.find(' ')) != string::npos){
 			newstr.append(oldstr.substr(0, pos));
-			oldstr.remove_prefix(pos+1);
-			pos = 1;
-			while (pos < oldstr.size() && oldstr.at(pos) == ' ') pos++;
-			newstr.append(Mv::r(pos));
-			oldstr.remove_suffix(pos-1);
+			size_t x = 0;
+			while (pos + x < oldstr.size() && oldstr.at(pos + x) == ' ') x++;
+			newstr.append(Mv::r(x));
+			oldstr.remove_prefix(pos + x);
 		}
 		return (newstr.empty()) ? str : newstr + (string)oldstr;
 	}

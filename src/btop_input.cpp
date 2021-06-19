@@ -16,13 +16,12 @@ indent = tab
 tab-size = 4
 */
 
-#pragma once
-
 #include <string>
 #include <robin_hood.h>
 #include <iostream>
 
-#include <btop_tools.h>
+#include <btop_input.hpp>
+#include <btop_tools.hpp>
 
 using std::string, robin_hood::unordered_flat_map, std::cin;
 using namespace Tools;
@@ -78,7 +77,7 @@ namespace Input {
 	string last = "";
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
-	bool poll(int timeout=0){
+	bool poll(int timeout){
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
@@ -89,7 +88,7 @@ namespace Input {
 	}
 
 	//* Get a key or mouse action from input
-	string get(bool clear = false){
+	string get(bool clear){
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 && key.size() < 100) key += cin.get();
 		if (!clear && !key.empty()){
@@ -102,7 +101,7 @@ namespace Input {
 	}
 
 	//* Wait until input is available
-	void wait(bool clear=false){
+	void wait(bool clear){
 		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
 		if (clear) get(clear);
 	}

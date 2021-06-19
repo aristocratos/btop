@@ -32,9 +32,9 @@ tab-size = 4
 
 #include <unistd.h>
 
-#include <btop_linux.h>
-#include <btop_config.h>
-#include <btop_tools.h>
+#include <btop_linux.hpp>
+#include <btop_config.hpp>
+#include <btop_tools.hpp>
 
 
 
@@ -98,7 +98,7 @@ namespace Proc {
 			out_procs.push_back(cur_proc);
 		int children = 0;
 		for (auto& p : in_procs) {
-			if (p.ppid == (int)cur_proc.pid) {
+			if (p.ppid == cur_proc.pid) {
 				children++;
 				if (collapsed) {
 					out_procs.back().cpu_p += p.cpu_p;
@@ -254,46 +254,52 @@ namespace Proc {
 					s_pos = instr.find_last_of(')') + 2;
 					if (s_pos == string::npos) continue;
 
-					do {
-						c_pos = instr.find(' ', s_pos);
-						if (c_pos == string::npos) break;
+					try {
+						do {
+							c_pos = instr.find(' ', s_pos);
+							if (c_pos == string::npos) break;
 
-						switch (s_count) {
-							case 0: { //? Process state
-								new_proc.state = instr[s_pos];
-								break;
+							switch (s_count) {
+								case 0: { //? Process state
+									new_proc.state = instr[s_pos];
+									break;
+								}
+								case 1: { //? Process parent pid
+									new_proc.ppid = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 11: { //? Process utime
+									cpu_t = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 12: { //? Process stime
+									cpu_t += stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 16: { //? Process nice value
+									new_proc.p_nice = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 17: { //? Process number of threads
+									new_proc.threads = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 19: { //? Cache cpu seconds
+									if (new_cache) cache[new_proc.pid].cpu_s = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
+								case 36: { //? CPU number last executed on
+									new_proc.cpu_n = stoull(instr.substr(s_pos, c_pos - s_pos));
+									break;
+								}
 							}
-							case 1: { //? Process parent pid
-								new_proc.ppid = stoi(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 11: { //? Process utime
-								cpu_t = stoull(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 12: { //? Process stime
-								cpu_t += stoull(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 16: { //? Process nice value
-								new_proc.p_nice = stoi(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 17: { //? Process number of threads
-								new_proc.threads = stoul(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 19: { //? Cache cpu seconds
-								if (new_cache) cache[new_proc.pid].cpu_s = stoull(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-							case 36: { //? CPU number last executed on
-								new_proc.cpu_n = stoi(instr.substr(s_pos, c_pos - s_pos));
-								break;
-							}
-						}
-						s_pos = c_pos + 1;
-					} while (s_count++ < 36);
+
+							s_pos = c_pos + 1;
+						} while (s_count++ < 36);
+					}
+					catch (std::out_of_range&) {
+						continue;
+					}
 
 					if (s_count < 19) continue;
 

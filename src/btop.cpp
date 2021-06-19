@@ -31,17 +31,18 @@ tab-size = 4
 #include <unistd.h>
 #include <robin_hood.h>
 #include <cmath>
+#include <iostream>
 
-#include <btop_tools.h>
-#include <btop_config.h>
-#include <btop_input.h>
-#include <btop_theme.h>
-#include <btop_draw.h>
-#include <btop_menu.h>
+#include <btop_tools.hpp>
+#include <btop_config.hpp>
+#include <btop_input.hpp>
+#include <btop_theme.hpp>
+#include <btop_draw.hpp>
+#include <btop_menu.hpp>
 
 #if defined(__linux__)
 	#define LINUX
-	#include <btop_linux.h>
+	#include <btop_linux.hpp>
 #elif defined(__unix__) || !defined(__APPLE__) && defined(__MACH__)
 	#include <sys/param.h>
 	#if defined(BSD)
@@ -572,9 +573,9 @@ int main(int argc, char **argv){
 		lc = 0;
 
 		ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
-			+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : "")) + Mv::l(Term::width)
+			+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
 			+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-				+ string(Config::getS("proc_sorting")), Term::width - 3))
+				+ string(Config::getS("proc_sorting")), Term::width - 23 - ulen(filter)))
 			+ Mv::restore;
 
 		for (auto& p : plist){

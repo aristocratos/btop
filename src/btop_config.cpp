@@ -22,8 +22,8 @@ tab-size = 4
 #include <atomic>
 #include <fstream>
 
-#include <btop_config.h>
-#include <btop_tools.h>
+#include <btop_config.hpp>
+#include <btop_tools.hpp>
 
 using robin_hood::unordered_flat_map, std::map, std::array, std::atomic;
 namespace fs = std::filesystem;

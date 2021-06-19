@@ -43,15 +43,14 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		uint pid;
+		uint64_t pid;
 		string name = "", cmd = "";
 		size_t threads = 0;
 		string user = "";
 		uint64_t mem = 0;
 		double cpu_p = 0.0, cpu_c = 0.0;
 		char state = '0';
-		int cpu_n = 0, p_nice = 0;
-		int ppid = -1;
+		uint64_t cpu_n = 0, p_nice = 0, ppid = 0;
 		string prefix = "";
 	};
 

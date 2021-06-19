@@ -22,10 +22,10 @@ tab-size = 4
 #include <algorithm>
 #include <cmath>
 
-#include <btop_draw.h>
-#include <btop_config.h>
-#include <btop_theme.h>
-#include <btop_tools.h>
+#include <btop_draw.hpp>
+#include <btop_config.hpp>
+#include <btop_theme.hpp>
+#include <btop_tools.hpp>
 
 using 	robin_hood::unordered_flat_map, std::round, std::views::iota,
 		std::string_literals::operator""s, std::clamp, std::array, std::floor;
