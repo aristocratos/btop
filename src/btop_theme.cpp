@@ -37,6 +37,7 @@ namespace Theme {
 
 	fs::path theme_dir;
 	fs::path user_theme_dir;
+	vector<string> themes;
 
 	const unordered_flat_map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
@@ -81,6 +82,51 @@ namespace Theme {
 		{ "process_start", "#80d0a3" },
 		{ "process_mid", "#dcd179" },
 		{ "process_end", "#d45454" }
+	};
+
+	const unordered_flat_map<string, string> TTY_theme = {
+		{ "main_bg", "\x1b[40m" },
+		{ "main_fg", "\x1b[37m" },
+		{ "title", "\x1b[97m" },
+		{ "hi_fg", "\x1b[31m" },
+		{ "selected_bg", "\x1b[41m" },
+		{ "selected_fg", "\x1b[97m" },
+		{ "inactive_fg", "\x1b[90m" },
+		{ "graph_text", "\x1b[37m" },
+		{ "meter_bg", "\x1b[90m" },
+		{ "proc_misc", "\x1b[92m" },
+		{ "cpu_box", "\x1b[32m" },
+		{ "mem_box", "\x1b[33m" },
+		{ "net_box", "\x1b[35m" },
+		{ "proc_box", "\x1b[31m" },
+		{ "div_line", "\x1b[90m" },
+		{ "temp_start", "\x1b[94m" },
+		{ "temp_mid", "\x1b[96m" },
+		{ "temp_end", "\x1b[95m" },
+		{ "cpu_start", "\x1b[92m" },
+		{ "cpu_mid", "\x1b[93m" },
+		{ "cpu_end", "\x1b[91m" },
+		{ "free_start", "\x1b[32m" },
+		{ "free_mid", "" },
+		{ "free_end", "\x1b[92m" },
+		{ "cached_start", "\x1b[36m" },
+		{ "cached_mid", "" },
+		{ "cached_end", "\x1b[96m" },
+		{ "available_start", "\x1b[33m" },
+		{ "available_mid", "" },
+		{ "available_end", "\x1b[93m" },
+		{ "used_start", "\x1b[31m" },
+		{ "used_mid", "" },
+		{ "used_end", "\x1b[91m" },
+		{ "download_start", "\x1b[34m" },
+		{ "download_mid", "" },
+		{ "download_end", "\x1b[94m" },
+		{ "upload_start", "\x1b[35m" },
+		{ "upload_mid", "" },
+		{ "upload_end", "\x1b[95m" },
+		{ "process_start", "\x1b[32m" },
+		{ "process_mid", "\x1b[33m" },
+		{ "process_end", "\x1b[31m" }
 	};
 
 	namespace {
@@ -182,7 +228,7 @@ namespace Theme {
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
-		void generateColors(unordered_flat_map<string, string>& source){
+		void generateColors(unordered_flat_map<string, string> source){
 			vector<string> t_rgb;
 			string depth;
 			bool t_to_256 = !Config::getB("truecolor");
@@ -251,13 +297,55 @@ namespace Theme {
 				gradients[wname].swap(c_gradient);
 			}
 		}
+
+		void generateTTYColors(){
+
+			rgbs.clear();
+			colors = TTY_theme;
+
+			gradients.clear();
+
+			for (auto& c : colors) {
+				if (!c.first.ends_with("_start")) continue;
+				string base_name = rtrim(c.first, "_start");
+				string section = "_start";
+				int split = colors.at(base_name + "_mid").empty() ? 50 : 33;
+				for (int i : iota(0, 101)) {
+					gradients[base_name][i] = colors.at(base_name + section);
+					if (i == split) {
+						if (split == 50 || split == 66)
+							section = "_end";
+						else {
+							section = "_mid";
+							split *= 2;
+						}
+					}
+				}
+
+			}
+
+		}
+
+		auto loadFile(string filename){
+			unordered_flat_map<string, string> out;
+
+			return out;
+		}
+	}
+
+	void updateThemes(){
+
 	}
 
 
 	//* Set current theme using <source> map
-	void set(unordered_flat_map<string, string> source){
-		generateColors(source);
-		generateGradients();
+	void set(string theme){
+		if (theme == "TTY" || Config::getB("tty_mode"))
+			generateTTYColors();
+		else {
+			generateColors((theme == "Default" ? Default_theme : loadFile(theme)));
+			generateGradients();
+		}
 		Term::fg = colors.at("main_fg");
 		Term::bg = colors.at("main_bg");
 		Fx::reset = Fx::reset_base + Term::fg + Term::bg;

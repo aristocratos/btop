@@ -26,8 +26,9 @@ tab-size = 4
 using std::string, std::vector;
 
 namespace Global {
-	extern string Version;
+	extern const string Version;
 	extern int coreCount;
+	extern string banner;
 }
 
 namespace Tools {

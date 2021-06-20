@@ -92,35 +92,29 @@ namespace Proc {
 	};
 
 	//* Generate process tree list
-	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth=0, bool collapsed=false){
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, bool collapsed, string& prefix){
 		auto cur_pos = out_procs.size();
 		if (!collapsed)
 			out_procs.push_back(cur_proc);
+
 		int children = 0;
-		for (auto& p : in_procs) {
-			if (p.ppid == cur_proc.pid) {
-				children++;
-				if (collapsed) {
-					out_procs.back().cpu_p += p.cpu_p;
-					out_procs.back().mem += p.mem;
-					out_procs.back().threads += p.threads;
-					_tree_gen(p, in_procs, out_procs, cur_depth + 1, collapsed);
-				}
-				else _tree_gen(p, in_procs, out_procs, cur_depth + 1, cache.at(cur_proc.pid).collapsed);
+		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
+			children++;
+			if (collapsed) {
+				out_procs.back().cpu_p += p.cpu_p;
+				out_procs.back().mem += p.mem;
+				out_procs.back().threads += p.threads;
 			}
+			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), prefix);
 		}
 		if (collapsed) return;
 
 		if (out_procs.size() > cur_pos + 1 && !out_procs.back().prefix.ends_with("] ")) {
-			std::string_view n_prefix = out_procs.back().prefix;
-			n_prefix.remove_suffix(8);
-			out_procs.back().prefix = (string)n_prefix + " └─ ";
+			out_procs.back().prefix.resize(out_procs.back().prefix.size() - 8);
+			out_procs.back().prefix += " └─ ";
 		}
 
-		string prefix = " ├─ ";
-		if (children > 0) prefix = (cache.at(cur_proc.pid).collapsed) ? "[+] " : "[-] ";
-
-		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + prefix;
+		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : prefix);
 	}
 
 	vector<proc_info> current_procs;
@@ -323,13 +317,13 @@ namespace Proc {
 					new_proc.mem *= page_size;
 				}
 
-				//* Push process to vector
+				//? Push process to vector
 				procs.push_back(new_proc);
 			}
 		}
 
 		//* Sort processes
-		auto cmp = [&reverse](auto &a, auto &b) { return (reverse ? a < b : a > b); };
+		auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
 		switch (v_index(sort_vector, sorting)) {
 				case 0: { rng::sort(procs, cmp, &proc_info::pid); break; }
 				case 1: { rng::sort(procs, cmp, &proc_info::name); break; }
@@ -359,9 +353,13 @@ namespace Proc {
 		//* Generate tree view if enabled
 		if (tree) {
 			vector<proc_info> tree_procs;
-			auto min_pid = rng::min(procs, rng::less{}, &proc_info::ppid).ppid;
-			for (auto& p : procs) {
-				if (p.ppid == min_pid) _tree_gen(p, procs, tree_procs);
+
+			//? Stable sort to retain selected sorting among processes with the same parent
+			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);
+
+			string prefix = " ├─ ";
+			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, prefix);
 			}
 			procs.swap(tree_procs);
 		}
@@ -372,11 +370,10 @@ namespace Proc {
 			counter = 0;
 			unordered_flat_map<uint, p_cache> r_cache;
 			r_cache.reserve(pid_list.size());
-			for (auto& p : pid_list) {
-				if (cache.contains(p)) r_cache[p] = cache.at(p);
-			}
+			rng::for_each(pid_list, [&r_cache](const auto &p){ if (cache.contains(p)) r_cache[p] = cache.at(p); });
 			cache.swap(r_cache);
 		}
+
 		old_cputimes = cputimes;
 		current_procs.swap(procs);
 		numpids = npids;

@@ -45,6 +45,7 @@ namespace Draw {
 		string line_color = "", title = "", title2 = "";
 		bool fill = true;
 		uint num=0;
+		uint w_percent=0, h_percent=0;
 	};
 
 	//* Create a box using values from a BoxConf struct and return as a string

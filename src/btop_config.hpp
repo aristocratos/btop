@@ -30,27 +30,27 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern vector<string> valid_graph_symbols;
+	extern const vector<string> valid_graph_symbols;
 
-	//* Return bool config value <name>
+	//* Return bool for config key <name>
 	const bool& getB(string name);
 
-	//* Return integer config value <name>
+	//* Return integer for config key <name>
 	const int& getI(string name);
 
-	//* Return string config value <name>
+	//* Return string for config key <name>
 	const string& getS(string name);
 
-	//* Set config value <name> to bool <value>
+	//* Set config key <name> to bool <value>
 	void set(string name, bool value);
 
-	//* Set config value <name> to int <value>
+	//* Set config key <name> to int <value>
 	void set(string name, int value);
 
-	//* Set config value <name> to string <value>
+	//* Set config key <name> to string <value>
 	void set(string name, string value);
 
-	//* Flip config bool <name>
+	//* Flip config key bool <name>
 	void flip(string name);
 
 	//* Wait if locked then lock config and cache changes until unlock

@@ -67,7 +67,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	std::string Version = "0.0.21";
+	const std::string Version = "0.0.21";
 	int coreCount;
 }
 
@@ -178,7 +178,7 @@ void _signal_handler(int sig) {
 void banner_gen() {
 	size_t z = 0;
 	string b_color, bg, fg, oc, letter;
-	bool truecolor = Config::getB("truecolor");
+	auto& truecolor = Config::getB("truecolor");
 	int bg_i;
 	Global::banner.clear();
 	Global::banner_width = 0;
@@ -186,7 +186,7 @@ void banner_gen() {
 	for (auto line: Global::Banner_src) {
 		if (auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
 		fg = Theme::hex_to_color(line[0], !truecolor);
-		bg_i = 120-z*12;
+		bg_i = 120 - z * 12;
 		bg = Theme::dec_to_color(bg_i, bg_i, bg_i, !truecolor);
 		for (size_t i = 0; i < line[1].size(); i += 3) {
 			if (line[1][i] == ' ') {
@@ -238,7 +238,6 @@ int main(int argc, char **argv){
 	#if defined(LINUX)
 		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (Global::coreCount < 1) Global::coreCount = 1;
-
 		{
 			std::error_code ec;
 			Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
@@ -327,7 +326,7 @@ int main(int argc, char **argv){
 	auto thts = time_ms();
 
 	//? Generate the theme
-	Theme::set(Theme::Default_theme);
+	Theme::set("Default");
 
 	//? Create the btop++ banner
 	banner_gen();
@@ -407,7 +406,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-	if (false) {
+	if (true) {
 
 		vector<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
@@ -589,7 +588,7 @@ int main(int argc, char **argv){
 					cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
 					cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
 				}
-				ostring += Mv::r(1) + greyscale[lc] + ljust(p.prefix + to_string(p.pid) + " " + p.name + " " + (!cmd_cond.empty() && cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
+				ostring += Mv::r(1) + (Config::getB("tty_mode") ? " " : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " " + (!cmd_cond.empty() && cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
 						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
 						+ (p.cpu_p < 10 || p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
 						+ "\n";

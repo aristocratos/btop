@@ -28,7 +28,7 @@ namespace Theme {
 	extern std::filesystem::path theme_dir;
 	extern std::filesystem::path user_theme_dir;
 
-	extern const robin_hood::unordered_flat_map<string, string> Default_theme;
+	extern vector<string> themes;
 
 	//* Generate escape sequence for 24-bit or 256 color and return as a string
 	//* Args	hexa: ["#000000"-"#ffffff"] for color, ["#00"-"#ff"] for greyscale
@@ -45,8 +45,11 @@ namespace Theme {
 	//* Return an array of red, green and blue, 0-255 values for a 24-bit color escape string
 	std::array<int, 3> esc_to_rgb(string c_string);
 
+	//* Update list of available themes
+	void updateThemes();
+
 	//* Set current theme using <source> map
-	void set(robin_hood::unordered_flat_map<string, string> source);
+	void set(string theme);
 
 	//* Return escape code for color <name>
 	const string& c(string name);

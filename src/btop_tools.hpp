@@ -151,7 +151,7 @@ namespace Tools {
 
 	//* Check if vector <vec> contains value <find_val>
 	template <typename T>
-	bool v_contains(vector<T>& vec, T find_val) {
+	bool v_contains(const vector<T>& vec, const T find_val) {
 		return std::ranges::find(vec, find_val) != vec.end();
 	}
 
