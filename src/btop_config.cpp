@@ -211,6 +211,7 @@ namespace Config {
 			{"show_battery", true},
 			{"tty_mode", false},
 			{"force_tty", false},
+			{"lowcolor", false},
 		};
 		unordered_flat_map<string, bool> boolsTmp;
 
@@ -222,7 +223,7 @@ namespace Config {
 
 		bool _locked(const string& name){
 			atomic_wait(writelock);
-			if (!write_new && rng::find_if(descriptions, [&name](const auto& a){ return a.at(0) == name; }) != descriptions.end())
+			if (not write_new and rng::find_if(descriptions, [&name](const auto& a){ return a.at(0) == name; }) != descriptions.end())
 				write_new = true;
 			return locked.load();
 		}
@@ -262,10 +263,10 @@ namespace Config {
 
 	void flip(string name){
 		if (_locked(name)) {
-			if (boolsTmp.contains(name)) boolsTmp.at(name) = !boolsTmp.at(name);
-			else boolsTmp.insert_or_assign(name, (!bools.at(name)));
+			if (boolsTmp.contains(name)) boolsTmp.at(name) = not boolsTmp.at(name);
+			else boolsTmp.insert_or_assign(name, (not bools.at(name)));
 		}
-		else bools.at(name) = !bools.at(name);
+		else bools.at(name) = not bools.at(name);
 	}
 
 	void lock(){
@@ -297,7 +298,7 @@ namespace Config {
 	void load(fs::path conf_file, vector<string>& load_errors){
 		if (conf_file.empty())
 			return;
-		else if (!fs::exists(conf_file)) {
+		else if (not fs::exists(conf_file)) {
 			write_new = true;
 			return;
 		}
@@ -308,9 +309,9 @@ namespace Config {
 				valid_names.push_back(n[0]);
 			string v_string;
 			getline(cread, v_string, '\n');
-			if (!v_string.ends_with(Global::Version))
+			if (not v_string.ends_with(Global::Version))
 				write_new = true;
-			while (!cread.eof()) {
+			while (not cread.eof()) {
 				cread >> std::ws;
 				if (cread.peek() == '#') {
 					cread.ignore(SSmax, '\n');
@@ -318,21 +319,21 @@ namespace Config {
 				}
 				string name, value;
 				getline(cread, name, '=');
-				if (!v_contains(valid_names, name)) {
+				if (not v_contains(valid_names, name)) {
 					cread.ignore(SSmax, '\n');
 					continue;
 				}
 
 				if (bools.contains(name)) {
 					cread >> value;
-					if (!isbool(value))
+					if (not isbool(value))
 						load_errors.push_back("Got an invalid bool value for config name: " + name);
 					else
 						bools.at(name) = stobool(value);
 				}
 				else if (ints.contains(name)) {
 					cread >> value;
-					if (!isint(value))
+					if (not isint(value))
 						load_errors.push_back("Got an invalid integer value for config name: " + name);
 					else
 						ints.at(name) = stoi(value);
@@ -345,9 +346,9 @@ namespace Config {
 					}
 					else cread >> value;
 
-					if (name == "log_level" && !v_contains(Logger::log_levels, value))
+					if (name == "log_level" and not v_contains(Logger::log_levels, value))
 						load_errors.push_back("Invalid log_level: " + value);
-					else if (name == "graph_symbol" && !v_contains(valid_graph_symbols, value))
+					else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
 						load_errors.push_back("Invalid graph symbol identifier: " + value);
 					else
 						strings.at(name) = value;
@@ -356,12 +357,12 @@ namespace Config {
 				cread.ignore(SSmax, '\n');
 			}
 			cread.close();
-			if (!load_errors.empty()) write_new = true;
+			if (not load_errors.empty()) write_new = true;
 		}
 	}
 
 	void write(){
-		if (conf_file.empty() || !write_new) return;
+		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {

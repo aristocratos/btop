@@ -85,7 +85,7 @@ namespace Theme {
 	};
 
 	const unordered_flat_map<string, string> TTY_theme = {
-		{ "main_bg", "\x1b[40m" },
+		{ "main_bg", "\x1b[0;40m" },
 		{ "main_fg", "\x1b[37m" },
 		{ "title", "\x1b[97m" },
 		{ "hi_fg", "\x1b[31m" },
@@ -132,7 +132,7 @@ namespace Theme {
 	namespace {
 		//* Convert 24-bit colors to 256 colors using 6x6x6 color cube
 		int truecolor_to_256(int r, int g, int b){
-			if (round((double)r / 11) == round((double)g / 11) && round((double)g / 11) == round((double)b / 11)) {
+			if (round((double)r / 11) == round((double)g / 11) and round((double)g / 11) == round((double)b / 11)) {
 				return 232 + round((double)r / 11);
 			} else {
 				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
@@ -143,7 +143,7 @@ namespace Theme {
 	string hex_to_color(string hexa, bool t_to_256, string depth){
 		if (hexa.size() > 1){
 			hexa.erase(0, 1);
-			for (auto& c : hexa) if (!isxdigit(c)) {
+			for (auto& c : hexa) if (not isxdigit(c)) {
 				Logger::error("Invalid hex value: " + hexa);
 				return "";
 			}
@@ -210,7 +210,7 @@ namespace Theme {
 		array<int, 3> hex_to_dec(string hexa){
 			if (hexa.size() > 1){
 				hexa.erase(0, 1);
-				for (auto& c : hexa) if (!isxdigit(c)) return array<int, 3>{-1, -1, -1};
+				for (auto& c : hexa) if (not isxdigit(c)) return array<int, 3>{-1, -1, -1};
 
 				if (hexa.size() == 2){
 					int h_int = stoi(hexa, 0, 16);
@@ -231,10 +231,10 @@ namespace Theme {
 		void generateColors(unordered_flat_map<string, string> source){
 			vector<string> t_rgb;
 			string depth;
-			bool t_to_256 = !Config::getB("truecolor");
+			bool t_to_256 = Config::getB("lowcolor");
 			colors.clear(); rgbs.clear();
 			for (auto& [name, color] : Default_theme) {
-				depth = (name.ends_with("bg") && name != "meter_bg") ? "bg" : "fg";
+				depth = (name.ends_with("bg") and name != "meter_bg") ? "bg" : "fg";
 				if (source.contains(name)) {
 					if (source.at(name)[0] == '#') {
 						colors[name] = hex_to_color(source.at(name), t_to_256, depth);
@@ -262,9 +262,9 @@ namespace Theme {
 		void generateGradients(){
 			gradients.clear();
 			array<string, 101> c_gradient;
-			bool t_to_256 = !Config::getB("truecolor");
+			bool t_to_256 = Config::getB("lowcolor");
 			for (auto& [name, source_arr] : rgbs) {
-				if (!name.ends_with("_start")) continue;
+				if (not name.ends_with("_start")) continue;
 				array<array<int, 3>, 101> dec_arr;
 				dec_arr[0][0] = -1;
 				string wname = rtrim(name, "_start");
@@ -298,32 +298,25 @@ namespace Theme {
 			}
 		}
 
+		//* Set colors and generate gradients for the TTY theme
 		void generateTTYColors(){
-
 			rgbs.clear();
 			colors = TTY_theme;
-
 			gradients.clear();
 
 			for (auto& c : colors) {
-				if (!c.first.ends_with("_start")) continue;
+				if (not c.first.ends_with("_start")) continue;
 				string base_name = rtrim(c.first, "_start");
 				string section = "_start";
 				int split = colors.at(base_name + "_mid").empty() ? 50 : 33;
 				for (int i : iota(0, 101)) {
 					gradients[base_name][i] = colors.at(base_name + section);
 					if (i == split) {
-						if (split == 50 || split == 66)
-							section = "_end";
-						else {
-							section = "_mid";
-							split *= 2;
-						}
+						section = (split == 33) ? "_mid" : "_end";
+						split *= 2;
 					}
 				}
-
 			}
-
 		}
 
 		auto loadFile(string filename){
@@ -334,13 +327,16 @@ namespace Theme {
 	}
 
 	void updateThemes(){
+		themes.clear();
+		themes.push_back("Default");
+		themes.push_back("TTY");
 
 	}
 
 
 	//* Set current theme using <source> map
 	void set(string theme){
-		if (theme == "TTY" || Config::getB("tty_mode"))
+		if (theme == "TTY" or Config::getB("tty_mode"))
 			generateTTYColors();
 		else {
 			generateColors((theme == "Default" ? Default_theme : loadFile(theme)));

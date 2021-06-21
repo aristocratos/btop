@@ -90,8 +90,8 @@ namespace Input {
 	//* Get a key or mouse action from input
 	string get(bool clear){
 		string key;
-		while (cin.rdbuf()->in_avail() > 0 && key.size() < 100) key += cin.get();
-		if (!clear && !key.empty()){
+		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
+		if (not clear and not key.empty()){
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";

@@ -94,7 +94,7 @@ namespace Proc {
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, bool collapsed, string& prefix){
 		auto cur_pos = out_procs.size();
-		if (!collapsed)
+		if (not collapsed)
 			out_procs.push_back(cur_proc);
 
 		int children = 0;
@@ -109,7 +109,7 @@ namespace Proc {
 		}
 		if (collapsed) return;
 
-		if (out_procs.size() > cur_pos + 1 && !out_procs.back().prefix.ends_with("] ")) {
+		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] ")) {
 			out_procs.back().prefix.resize(out_procs.back().prefix.size() - 8);
 			out_procs.back().prefix += " └─ ";
 		}
@@ -138,13 +138,13 @@ namespace Proc {
 		(void)tree;
 
 		//* Update uid_user map if /etc/passwd changed since last run
-		if (!passwd_path.empty() && fs::last_write_time(passwd_path) != passwd_time) {
+		if (not passwd_path.empty() and fs::last_write_time(passwd_path) != passwd_time) {
 			string r_uid, r_user;
 			passwd_time = fs::last_write_time(passwd_path);
 			uid_user.clear();
 			pread.open(passwd_path);
 			if (pread.good()) {
-				while (!pread.eof()){
+				while (not pread.eof()){
 					getline(pread, r_user, ':');
 					pread.ignore(SSmax, ':');
 					getline(pread, r_uid, ':');
@@ -176,13 +176,13 @@ namespace Proc {
 
 			bool new_cache = false;
 			string pid_str = d.path().filename();
-			if (d.is_directory() && isdigit(pid_str[0])) {
+			if (d.is_directory() and isdigit(pid_str[0])) {
 				npids++;
 				proc_info new_proc (stoul(pid_str));
 				pid_list.push_back(new_proc.pid);
 
 				//* Cache program name, command and username
-				if (!cache.contains(new_proc.pid)) {
+				if (not cache.contains(new_proc.pid)) {
 					string name, cmd, user;
 					new_cache = true;
 					pread.open(d.path() / "comm");
@@ -197,14 +197,14 @@ namespace Proc {
 						string tmpstr = "";
 						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + " ";
 						pread.close();
-						if (!cmd.empty()) cmd.pop_back();
+						if (not cmd.empty()) cmd.pop_back();
 					}
 					else continue;
 
 					pread.open(d.path() / "status");
 					if (pread.good()) {
 						string uid;
-						while (!pread.eof()){
+						while (not pread.eof()){
 							string line;
 							getline(pread, line, ':');
 							if (line == "Uid") {
@@ -216,18 +216,18 @@ namespace Proc {
 							}
 						}
 						pread.close();
-						user = (!uid.empty() && uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+						user = (not uid.empty() and uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 					}
 					else continue;
 					cache[new_proc.pid] = {name, cmd, user};
 				}
 
 				//* Match filter if defined
-				if (!filter.empty()
-					&& pid_str.find(filter) == string::npos
-					&& cache[new_proc.pid].name.find(filter) == string::npos
-					&& cache[new_proc.pid].cmd.find(filter) == string::npos
-					&& cache[new_proc.pid].user.find(filter) == string::npos) {
+				if (not filter.empty()
+					and pid_str.find(filter) == string::npos
+					and cache[new_proc.pid].name.find(filter) == string::npos
+					and cache[new_proc.pid].cmd.find(filter) == string::npos
+					and cache[new_proc.pid].user.find(filter) == string::npos) {
 						if (new_cache) cache.erase(new_proc.pid);
 						continue;
 				}
@@ -336,14 +336,14 @@ namespace Proc {
 		}
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
-		if (sorting == "cpu lazy" && !tree && !reverse) {
+		if (sorting == "cpu lazy" and not tree and not reverse) {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
-				if (i <= 5 && procs[i].cpu_p > max)
+				if (i <= 5 and procs[i].cpu_p > max)
 					max = procs[i].cpu_p;
 				else if (i == 6)
 					target = (max > 30.0) ? max : 10.0;
-				if (i == offset && procs[i].cpu_p > 30.0)
+				if (i == offset and procs[i].cpu_p > 30.0)
 					offset++;
 				else if
 					(procs[i].cpu_p > target) rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
@@ -366,7 +366,7 @@ namespace Proc {
 
 
 		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 10000 || ((int)cache.size() > npids + 100)) {
+		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
 			counter = 0;
 			unordered_flat_map<uint, p_cache> r_cache;
 			r_cache.reserve(pid_list.size());
@@ -383,7 +383,7 @@ namespace Proc {
 
 	//* Initialize needed variables for collect
 	void init(){
-		proc_path = (fs::is_directory(fs::path("/proc")) && access("/proc", R_OK) != -1) ? "/proc" : "";
+		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (proc_path.empty()) {
 			string errmsg = "Proc filesystem not found or no permission to read from it!";
 			Logger::error(errmsg);

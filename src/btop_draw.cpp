@@ -27,8 +27,7 @@ tab-size = 4
 #include <btop_theme.hpp>
 #include <btop_tools.hpp>
 
-using 	robin_hood::unordered_flat_map, std::round, std::views::iota,
-		std::string_literals::operator""s, std::clamp, std::array, std::floor;
+using std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor;
 
 namespace rng = std::ranges;
 
@@ -103,7 +102,7 @@ namespace Draw {
 	string createBox(BoxConf c){
 		string out;
 		string lcolor = (c.line_color.empty()) ? Theme::c("div_line") : c.line_color;
-		string numbering = (c.num == 0) ? "" : Theme::c("hi_fg") + Symbols::superscript[c.num];
+		string numbering = (c.num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(c.num) : Symbols::superscript[c.num]);
 
 		out = Fx::reset + lcolor;
 
@@ -126,11 +125,11 @@ namespace Draw {
 				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
 
 		//* Draw titles if defined
-		if (!c.title.empty()){
+		if (not c.title.empty()){
 			out += Mv::to(c.y, c.x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + c.title +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
-		if (!c.title2.empty()){
+		if (not c.title2.empty()){
 			out += Mv::to(c.y + c.height - 1, c.x + 2) + Symbols::title_left + Theme::c("title") + c.title2 +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
@@ -150,7 +149,7 @@ namespace Draw {
 	string Meter::operator()(int value) {
 		if (width < 1) return "";
 		value = clamp(value, 0, 100);
-		if (!cache.at(value).empty()) return cache.at(value);
+		if (not cache.at(value).empty()) return cache.at(value);
 		string& out = cache.at(value);
 		for (int i : iota(1, width + 1)) {
 			int y = round((double)i * 100.0 / width);
@@ -167,20 +166,20 @@ namespace Draw {
 
 	void Graph::_create(const vector<long long>& data, int data_offset) {
 		const bool mult = (data.size() - data_offset > 1);
-		if (mult && (data.size() - data_offset) % 2 != 0) data_offset--;
+		if (mult and (data.size() - data_offset) % 2 != 0) data_offset--;
 		auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
 		array<int, 2> result;
 		const float mod = (height == 1) ? 0.3 : 0.1;
 		long long data_value = 0;
-		if (mult && data_offset > 0) {
+		if (mult and data_offset > 0) {
 			last = data[data_offset - 1];
 			if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
 		}
 
 		//? Horizontal iteration over values in <data>
 		for (int i : iota(data_offset, (int)data.size())) {
-			if (tty_mode && mult && i % 2 != 0) continue;
-			else if (!tty_mode) current = !current;
+			if (tty_mode and mult and i % 2 != 0) continue;
+			else if (not tty_mode) current = not current;
 			if (i == -1) { data_value = 0; last = 0; }
 			else data_value = data[i];
 			if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
@@ -197,13 +196,13 @@ namespace Draw {
 						result[ai++] = 0;
 					else {
 						result[ai++] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
-						if (no_zero && horizon == height - 1 && i != -1 && result[ai] == 0) result[ai] = 1;
+						if (no_zero and horizon == height - 1 and i != -1 and result[ai] == 0) result[ai] = 1;
 					}
 				}
 				//? Generate braille symbol from 5x5 2D vector
-				graphs[current][horizon] += (height == 1 && result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
+				graphs[current][horizon] += (height == 1 and result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
 			}
-			if (mult && i > data_offset) last = data_value;
+			if (mult and i > data_offset) last = data_value;
 
 		}
 		last = data_value;
@@ -227,13 +226,13 @@ namespace Draw {
 		this->invert = invert; this->offset = offset;
 		this->no_zero = no_zero;
 		this->color_gradient = color_gradient;
-		if (Config::getB("tty_mode") || symbol == "tty") {
+		if (Config::getB("tty_mode") or symbol == "tty") {
 			tty_mode = true;
 			this->symbol = "tty";
 		}
-		else if (symbol != "default" && v_contains(Config::valid_graph_symbols, symbol)) this->symbol = symbol;
+		else if (symbol != "default") this->symbol = symbol;
 		else this->symbol = Config::getS("graph_symbol");
-		if (max_value == 0 && offset > 0) max_value = 100;
+		if (max_value == 0 and offset > 0) max_value = 100;
 		this->max_value = max_value;
 		int value_width = ceil((float)data.size() / 2);
 		int data_offset = 0;
@@ -252,7 +251,7 @@ namespace Draw {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
-		bool select_graph = (tty_mode ? current : !current);
+		bool select_graph = (tty_mode ? current : not current);
 		for (int i : iota(0, height)) {
 			if (graphs[select_graph][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
 			else graphs[select_graph][i].erase(0, 3);

@@ -78,10 +78,10 @@ namespace Draw {
 
 	public:
 		//* Set graph options and initialize with data
-		void operator()(int width, int height, string color_gradient, const vector<long long>& data, string symbol = "default", bool invert = false, bool no_zero = false, long long max_value = 0, long long offset = 0);
+		void operator()(int width, int height, string color_gradient, const vector<long long>& data, string symbol="default", bool invert=false, bool no_zero=false, long long max_value=0, long long offset=0);
 
 		//* Add last value from back of <data> and return string representation of graph
-		string& operator()(const vector<long long>& data, bool data_same = false);
+		string& operator()(const vector<long long>& data, bool data_same=false);
 
 		//* Return string representation of graph
 		string& operator()();

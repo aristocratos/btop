@@ -63,7 +63,7 @@ namespace Fx {
 
 	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
-	string uncolor(string& s){
+	string uncolor(const string& s){
 		return regex_replace(s, color_regex, "");
 	}
 }
@@ -129,7 +129,7 @@ namespace Term {
 	bool refresh(){
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-		if (width != w.ws_col || height != w.ws_row) {
+		if (width != w.ws_col or height != w.ws_row) {
 			width = w.ws_col;
 			height = w.ws_row;
 			resized = true;
@@ -138,7 +138,7 @@ namespace Term {
 	}
 
 	bool init(){
-		if (!initialized){
+		if (not initialized){
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
@@ -206,11 +206,11 @@ namespace Tools {
 	}
 
 	bool isbool(string& str){
-		return (str == "true") || (str == "false") || (str == "True") || (str == "False");
+		return (str == "true") or (str == "false") or (str == "True") or (str == "False");
 	}
 
 	bool stobool(string& str){
-		return (str == "true" || str == "True");
+		return (str == "true" or str == "True");
 	}
 
 	bool isint(string& str){
@@ -241,7 +241,7 @@ namespace Tools {
 									| rng::views::transform([](auto &&rng) {
 										return string_view(&*rng.begin(), rng::distance(rng));
 		})) {
-			if (!s.empty()) out.emplace_back(s);
+			if (not s.empty()) out.emplace_back(s);
 		}
 		return out;
 	}
@@ -251,23 +251,23 @@ namespace Tools {
 	}
 
 	string ljust(string str, const size_t x, bool utf, bool escape, bool lim){
-		if (utf || escape) {
-			if (!escape && lim && ulen(str) > x) str = uresize(str, x);
+		if (utf or escape) {
+			if (not escape and lim and ulen(str) > x) str = uresize(str, x);
 			return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
 		}
 		else {
-			if (lim && str.size() > x) str.resize(x);
+			if (lim and str.size() > x) str.resize(x);
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
 	string rjust(string str, const size_t x, bool utf, bool escape, bool lim){
-		if (utf || escape) {
-			if (!escape && lim && ulen(str) > x) str = uresize(str, x);
+		if (utf or escape) {
+			if (not escape and lim and ulen(str) > x) str = uresize(str, x);
 			return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
 		}
 		else {
-			if (lim && str.size() > x) str.resize(x);
+			if (lim and str.size() > x) str.resize(x);
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
 	}
@@ -280,7 +280,7 @@ namespace Tools {
 		while ((pos = oldstr.find(' ')) != string::npos){
 			newstr.append(oldstr.substr(0, pos));
 			size_t x = 0;
-			while (pos + x < oldstr.size() && oldstr.at(pos + x) == ' ') x++;
+			while (pos + x < oldstr.size() and oldstr.at(pos + x) == ' ') x++;
 			newstr.append(Mv::r(x));
 			oldstr.remove_prefix(pos + x);
 		}
@@ -320,8 +320,8 @@ namespace Tools {
 		}
 		if (out.empty()) {
 			out = to_string(value);
-			if (out.size() == 4 && start > 0) { out.pop_back(); out.insert(2, ".");}
-			else if (out.size() == 3 && start > 0) out.insert(1, ".");
+			if (out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
+			else if (out.size() == 3 and start > 0) out.insert(1, ".");
 			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}
 		if (shorten){
@@ -395,16 +395,16 @@ namespace Logger {
 	}
 
 	void log_write(uint level, string& msg){
-		if (loglevel < level || logfile.empty()) return;
+		if (loglevel < level or logfile.empty()) return;
 		atomic_wait_set(busy, true);
 		std::error_code ec;
-		if (fs::exists(logfile) && fs::file_size(logfile, ec) > 1024 << 10 && !ec) {
+		if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 			auto old_log = logfile;
 			old_log += ".1";
 			if (fs::exists(old_log)) fs::remove(old_log, ec);
-			if (!ec) fs::rename(logfile, old_log, ec);
+			if (not ec) fs::rename(logfile, old_log, ec);
 		}
-		if (!ec) {
+		if (not ec) {
 			std::ofstream lwrite(logfile, std::ios::app);
 			if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
 			lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";

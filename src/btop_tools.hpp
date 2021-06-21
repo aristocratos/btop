@@ -60,7 +60,7 @@ namespace Fx {
 	extern const std::regex color_regex;
 
 	//* Return a string with all colors and text styling removed
-	string uncolor(string& s);
+	string uncolor(const string& s);
 }
 
 //* Collection of escape codes and functions for cursor manipulation
