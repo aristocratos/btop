@@ -168,12 +168,6 @@ namespace Term {
 
 namespace Tools {
 
-	namespace {
-		//? Units for floating_humanizer function
-		const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
-		const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
-	}
-
 	size_t ulen(string str, const bool escape){
 		if (escape) str = std::regex_replace(str, Fx::escape_regex, "");
 		return rng::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
@@ -191,6 +185,18 @@ namespace Tools {
 			}
 		}
 		return str;
+	}
+
+	string str_to_upper(const string& str){
+		string out = str;
+		rng::for_each(out, [](auto& c){ c = ::toupper(c); } );
+		return out;
+	}
+
+	string str_to_lower(const string& str){
+		string out = str;
+		rng::for_each(out, [](char& c){ c = ::tolower(c); } );
+		return out;
 	}
 
 	uint64_t time_s(){
@@ -306,6 +312,8 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten, uint start, bool bit, bool per_second){
 		string out;
 		uint mult = (bit) ? 8 : 1;
+		static const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+		static const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
 		auto& units = (bit) ? Units_bit : Units_byte;
 
 		value *= 100 * mult;
@@ -338,7 +346,7 @@ namespace Tools {
 	std::string operator*(string str, size_t n){
 		string out;
 		out.reserve(str.size() * n);
-		while (n-- > 0) out += str;
+		while (n-- > 0) out.append(str);
 		return out;
 	}
 
@@ -360,13 +368,13 @@ namespace Tools {
 	#else
 		//* Crude implementation of atomic wait for GCC 10
 		void atomic_wait(atomic<bool>& atom, bool val){
-			while (atom.load() == val) sleep_ms(1);
+			while (atom == val) std::this_thread::sleep_for(std::chrono::microseconds(1));
 		}
 	#endif
 
 	void atomic_wait_set(atomic<bool>& atom, bool val){
 		atomic_wait(atom, val);
-		atom.store(val);
+		atom = val;
 	}
 
 }
@@ -411,7 +419,7 @@ namespace Logger {
 			lwrite.close();
 		}
 		else logfile.clear();
-		busy.store(false);
+		busy = false;
 	}
 
 	void error(string msg){

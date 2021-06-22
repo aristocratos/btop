@@ -400,6 +400,13 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
+	if (false) {
+		string first = "Test number 1 OF 45, or?";
+		cout << str_to_lower(first) << endl;
+		cout << str_to_upper(first) << endl;
+		exit(0);
+	}
+
 
 	if (false) {
 		Draw::Meter kmeter;
@@ -420,7 +427,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-	if (true) {
+	if (false) {
 
 		vector<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);

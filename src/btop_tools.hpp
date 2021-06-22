@@ -149,6 +149,12 @@ namespace Tools {
 	//* Resize a string consisting of UTF8 characters (only reduces size)
 	string uresize(string str, const size_t len);
 
+	//* Return <str> with only uppercase characters
+	string str_to_upper(const string& str);
+
+	//* Return <str> with only lowercase characters
+	string str_to_lower(const string& str);
+
 	//* Check if vector <vec> contains value <find_val>
 	template <typename T>
 	bool v_contains(const vector<T>& vec, const T find_val) {
@@ -223,7 +229,7 @@ namespace Tools {
 
 	//* Waits for <atom> to not be <val> and then sets it to <val> again
 	void atomic_wait_set(std::atomic<bool>& atom, bool val=true);
-
+	
 }
 
 //* Simple logging implementation

@@ -168,9 +168,9 @@ namespace Proc {
 		//* Iterate over all pids in /proc
 		for (auto& d: fs::directory_iterator(proc_path)){
 			if (pread.is_open()) pread.close();
-			if (stop.load()) {
-				collecting.store(false);
-				stop.store(false);
+			if (stop) {
+				collecting = false;
+				stop = false;
 				return current_procs;
 			}
 
@@ -377,7 +377,7 @@ namespace Proc {
 		old_cputimes = cputimes;
 		current_procs.swap(procs);
 		numpids = npids;
-		collecting.store(false);
+		collecting = false;
 		return current_procs;
 	}
 
