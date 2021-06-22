@@ -216,7 +216,7 @@ namespace Proc {
 							}
 						}
 						pread.close();
-						user = (not uid.empty() and uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+						user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 					}
 					else continue;
 					cache[new_proc.pid] = {name, cmd, user};
@@ -241,14 +241,14 @@ namespace Proc {
 					string instr;
 					getline(pread, instr);
 					pread.close();
-					size_t s_pos = 0, c_pos = 0, s_count = 0;
+					size_t c_pos = 0, s_count = 0;
 					uint64_t cpu_t = 0;
 
-					//? Skip pid and comm field and find comm fields closing ')'
-					s_pos = instr.find_last_of(')') + 2;
-					if (s_pos == string::npos) continue;
-
 					try {
+						//? Skip pid and comm field and find comm fields closing ')'
+						size_t s_pos = pid_str.size() + cache.at(new_proc.pid).name.size() + 4;
+						if (instr.at(s_pos - 2) != ')')
+							s_pos = instr.find_last_of(')') + 2;
 						do {
 							c_pos = instr.find(' ', s_pos);
 							if (c_pos == string::npos) break;
@@ -291,7 +291,7 @@ namespace Proc {
 							s_pos = c_pos + 1;
 						} while (s_count++ < 36);
 					}
-					catch (std::out_of_range&) {
+					catch (...) {
 						continue;
 					}
 

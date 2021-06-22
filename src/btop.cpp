@@ -622,11 +622,11 @@ int main(int argc, char **argv){
 
 
 		if (rcount > 0) avgtimes.push_front(timestamp);
-		if (avgtimes.size() > 10) avgtimes.pop_back();
+		if (avgtimes.size() > 100) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
 		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
-			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Run count: " <<
+			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " <<
 			++rcount << ". Time: " << strf_time("%X   ") << endl;
 
 		while (time_ms() < tsl) {
