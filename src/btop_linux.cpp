@@ -56,6 +56,41 @@ namespace Tools {
 	}
 }
 
+namespace Shared {
+
+	fs::path proc_path;
+	fs::path passwd_path;
+	fs::file_time_type passwd_time;
+	long page_size;
+	long clk_tck;
+
+	void init(){
+		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
+		if (proc_path.empty()) {
+			string errmsg = "Proc filesystem not found or no permission to read from it!";
+			Logger::error(errmsg);
+			std::cout << "ERROR: " << errmsg << std::endl;
+			exit(1);
+		}
+
+		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
+		if (passwd_path.empty()) Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
+
+		page_size = sysconf(_SC_PAGE_SIZE);
+		if (page_size <= 0) {
+			page_size = 4096;
+			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+		}
+
+		clk_tck = sysconf(_SC_CLK_TCK);
+		if (clk_tck <= 0) {
+			clk_tck = 100;
+			Logger::warning("Could not get system clocks per second. Defaulting to 100, processes cpu usage might be incorrect.");
+		}
+	}
+
+}
+
 namespace Proc {
 	namespace {
 		struct p_cache {
@@ -67,15 +102,9 @@ namespace Proc {
 		};
 		unordered_flat_map<uint, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
-		fs::path passwd_path;
-		fs::file_time_type passwd_time;
+
 		uint counter = 0;
-		long page_size;
-		long clk_tck;
-
 	}
-
-	fs::path proc_path;
 	uint64_t old_cputimes = 0;
 	size_t numpids = 500;
 	atomic<bool> stop (false);
@@ -92,7 +121,7 @@ namespace Proc {
 	};
 
 	//* Generate process tree list
-	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, bool collapsed, string& prefix){
+	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, const int cur_depth, const bool collapsed, const string& prefix){
 		auto cur_pos = out_procs.size();
 		if (not collapsed)
 			out_procs.push_back(cur_proc);
@@ -128,6 +157,8 @@ namespace Proc {
 		auto& per_core = Config::getB("proc_per_core");
 		auto& tree = Config::getB("proc_tree");
 		ifstream pread;
+		string long_string;
+		string short_str;
 		auto uptime = system_uptime();
 		vector<proc_info> procs;
 		vector<uint> pid_list;
@@ -138,11 +169,11 @@ namespace Proc {
 		(void)tree;
 
 		//* Update uid_user map if /etc/passwd changed since last run
-		if (not passwd_path.empty() and fs::last_write_time(passwd_path) != passwd_time) {
+		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
 			string r_uid, r_user;
-			passwd_time = fs::last_write_time(passwd_path);
+			Shared::passwd_time = fs::last_write_time(Shared::passwd_path);
 			uid_user.clear();
-			pread.open(passwd_path);
+			pread.open(Shared::passwd_path);
 			if (pread.good()) {
 				while (not pread.eof()){
 					getline(pread, r_user, ':');
@@ -157,7 +188,7 @@ namespace Proc {
 
 		//* Get cpu total times from /proc/stat
 		uint64_t cputimes = 0;
-		pread.open(proc_path / "stat");
+		pread.open(Shared::proc_path / "stat");
 		if (pread.good()) {
 			pread.ignore(SSmax, ' ');
 			for (uint64_t times; pread >> times; cputimes += times);
@@ -166,7 +197,7 @@ namespace Proc {
 		else return current_procs;
 
 		//* Iterate over all pids in /proc
-		for (auto& d: fs::directory_iterator(proc_path)){
+		for (auto& d: fs::directory_iterator(Shared::proc_path)){
 			if (pread.is_open()) pread.close();
 			if (stop) {
 				collecting = false;
@@ -195,7 +226,7 @@ namespace Proc {
 					pread.open(d.path() / "cmdline");
 					if (pread.good()) {
 						string tmpstr = "";
-						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + " ";
+						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + ' ';
 						pread.close();
 						if (not cmd.empty()) cmd.pop_back();
 					}
@@ -238,58 +269,57 @@ namespace Proc {
 				//* Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (pread.good()) {
-					string instr;
-					getline(pread, instr);
+					getline(pread, long_string);
 					pread.close();
-					size_t c_pos = 0, s_count = 0;
+					size_t s_count = 0, c_pos = 0;
 					uint64_t cpu_t = 0;
 
 					try {
 						//? Skip pid and comm field and find comm fields closing ')'
 						size_t s_pos = pid_str.size() + cache.at(new_proc.pid).name.size() + 4;
-						if (instr.at(s_pos - 2) != ')')
-							s_pos = instr.find_last_of(')') + 2;
-						do {
-							c_pos = instr.find(' ', s_pos);
+						if (long_string.at(s_pos - 2) != ')')
+							s_pos = long_string.find_last_of(')') + 2;
+						while (s_count++ <= 37) {
+							c_pos = long_string.find(' ', s_pos);
 							if (c_pos == string::npos) break;
 
 							switch (s_count) {
-								case 0: { //? Process state
-									new_proc.state = instr[s_pos];
+								case 1: { //? Process state
+									new_proc.state = long_string[s_pos];
 									break;
 								}
-								case 1: { //? Process parent pid
-									new_proc.ppid = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 2: { //? Process parent pid
+									new_proc.ppid = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 11: { //? Process utime
-									cpu_t = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 12: { //? Process utime
+									cpu_t = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 12: { //? Process stime
-									cpu_t += stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 13: { //? Process stime
+									cpu_t += stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 16: { //? Process nice value
-									new_proc.p_nice = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 17: { //? Process nice value
+									new_proc.p_nice = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 17: { //? Process number of threads
-									new_proc.threads = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 18: { //? Process number of threads
+									new_proc.threads = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 19: { //? Cache cpu seconds
-									if (new_cache) cache[new_proc.pid].cpu_s = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 20: { //? Cache cpu seconds
+									if (new_cache) cache[new_proc.pid].cpu_s = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
-								case 36: { //? CPU number last executed on
-									new_proc.cpu_n = stoull(instr.substr(s_pos, c_pos - s_pos));
+								case 37: { //? CPU number last executed on
+									new_proc.cpu_n = stoull(long_string.substr(s_pos, c_pos - s_pos));
 									break;
 								}
 							}
 
 							s_pos = c_pos + 1;
-						} while (s_count++ < 36);
+						}
 					}
 					catch (...) {
 						continue;
@@ -301,7 +331,7 @@ namespace Proc {
 					new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = ((double)cpu_t / clk_tck) / (uptime - (cache[new_proc.pid].cpu_s / clk_tck));
+					new_proc.cpu_c = ((double)cpu_t / Shared::clk_tck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clk_tck));
 
 					//? Update cache with latest cpu times
 					cache[new_proc.pid].cpu_t = cpu_t;
@@ -312,9 +342,9 @@ namespace Proc {
 				pread.open(d.path() / "statm");
 				if (pread.good()) {
 					pread.ignore(SSmax, ' ');
-					pread >> new_proc.mem;
+					getline(pread, short_str, ' ');
 					pread.close();
-					new_proc.mem *= page_size;
+					new_proc.mem = stoull(short_str) * Shared::page_size;
 				}
 
 				//? Push process to vector
@@ -345,8 +375,8 @@ namespace Proc {
 					target = (max > 30.0) ? max : 10.0;
 				if (i == offset and procs[i].cpu_p > 30.0)
 					offset++;
-				else if
-					(procs[i].cpu_p > target) rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
+				else if (procs[i].cpu_p > target)
+					rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
 			}
 		}
 
@@ -379,32 +409,6 @@ namespace Proc {
 		numpids = npids;
 		collecting = false;
 		return current_procs;
-	}
-
-	//* Initialize needed variables for collect
-	void init(){
-		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
-		if (proc_path.empty()) {
-			string errmsg = "Proc filesystem not found or no permission to read from it!";
-			Logger::error(errmsg);
-			std::cout << "ERROR: " << errmsg << std::endl;
-			exit(1);
-		}
-
-		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
-		if (passwd_path.empty()) Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
-
-		page_size = sysconf(_SC_PAGE_SIZE);
-		if (page_size <= 0) {
-			page_size = 4096;
-			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
-		}
-
-		clk_tck = sysconf(_SC_CLK_TCK);
-		if (clk_tck <= 0) {
-			clk_tck = 100;
-			Logger::warning("Could not get system clocks per second. Defaulting to 100, processes cpu usage might be incorrect.");
-		}
 	}
 }
 

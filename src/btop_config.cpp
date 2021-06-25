@@ -39,15 +39,14 @@ namespace Config {
 		bool write_new;
 
 		vector<array<string, 2>> descriptions = {
-			{"color_theme", 		"#* Color theme, looks for a .theme file in \"/usr/[local/]share/bpytop/themes\" and \"~/.config/bpytop/themes\", \"Default\" for builtin default theme.\n"
-									"#* Prefix name by a plus sign (+) for a theme located in user themes folder, i.e. color_theme=\"+monokai\"." },
+			{"color_theme", 		"#* Full path to a bashtop/bpytop/btop++ formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes."},
 
 			{"theme_background", 	"#* If the theme set background should be shown, set to False if you want terminal background transparency."},
 
 			{"truecolor", 			"#* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false."},
 
 			{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
-									"#* Will force 16-color mode, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
+									"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
 			{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
 									"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"

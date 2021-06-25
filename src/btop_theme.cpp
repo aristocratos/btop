@@ -22,6 +22,7 @@ tab-size = 4
 #include <unordered_map>
 #include <ranges>
 #include <algorithm>
+#include <fstream>
 
 #include <btop_tools.hpp>
 #include <btop_config.hpp>
@@ -186,21 +187,6 @@ namespace Theme {
 		else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
 	}
 
-	array<int, 3> esc_to_rgb(string c_string){
-		array<int, 3> rgb = {-1, -1, -1};
-		if (c_string.size() >= 14){
-			c_string.erase(0, 7);
-			auto c_split = ssplit(c_string, ';');
-			if (c_split.size() == 3){
-				rgb[0] = stoi(c_split[0]);
-				rgb[1] = stoi(c_split[1]);
-				rgb[2] = stoi(c_split[2].erase(c_split[2].size()));
-			}
-		}
-		return rgb;
-	}
-
-
 	namespace {
 		unordered_flat_map<string, string> colors;
 		unordered_flat_map<string, array<int, 3>> rgbs;
@@ -234,24 +220,40 @@ namespace Theme {
 			bool t_to_256 = Config::getB("lowcolor");
 			colors.clear(); rgbs.clear();
 			for (auto& [name, color] : Default_theme) {
+				if (name == "main_bg" and not Config::getB("theme_background")) {
+						colors[name] = "\x1b[49m";
+						rgbs[name] = {-1, -1, -1};
+						continue;
+				}
 				depth = (name.ends_with("bg") and name != "meter_bg") ? "bg" : "fg";
 				if (source.contains(name)) {
-					if (source.at(name)[0] == '#') {
+					if (name == "main_bg" and source.at(name).empty()) {
+						colors[name] = "\x1b[49m";
+						rgbs[name] = {-1, -1, -1};
+						continue;
+					}
+					else if (source.at(name).empty() and (name.ends_with("_mid") or name.ends_with("_end"))) {
+						colors[name] = "";
+						rgbs[name] = {-1, -1, -1};
+						continue;
+					}
+					else if (source.at(name).starts_with('#')) {
 						colors[name] = hex_to_color(source.at(name), t_to_256, depth);
 						rgbs[name] = hex_to_dec(source.at(name));
 					}
-					else {
+					else if (not source.at(name).empty()) {
 						t_rgb = ssplit(source.at(name));
 						if (t_rgb.size() != 3)
 							Logger::error("Invalid RGB decimal value: \"" + source.at(name) + "\"");
 						else {
 							colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), t_to_256, depth);
 							rgbs[name] = array<int, 3>{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
+
 						}
 					}
 				}
 				if (colors[name].empty()) {
-					Logger::info("Missing color value for \"" + name + "\". Using value from default.");
+					Logger::debug("Missing color value for \"" + name + "\". Using value from default.");
 					colors[name] = hex_to_color(color, t_to_256, depth);
 					rgbs[name] = array<int, 3>{-1, -1, -1};
 				}
@@ -268,21 +270,21 @@ namespace Theme {
 				array<array<int, 3>, 101> dec_arr;
 				dec_arr[0][0] = -1;
 				string wname = rtrim(name, "_start");
-				array<array<int, 3>, 3> rgb_arr = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
+				array<array<int, 3>, 3> rgb_array = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
 
 				//? Only start iteration if gradient has a _end color value defined
-				if (rgb_arr[2][0] >= 0) {
+				if (rgb_array[2][0] >= 0) {
 
 					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
-					int rng = (rgb_arr[1][0] >= 0) ? 50 : 100;
+					int cur_range = (rgb_array[1][0] >= 0) ? 50 : 100;
 					for (int rgb : iota(0, 3)){
-						int arr1 = 0, offset = 0;
-						int arr2 = (rng == 50) ? 1 : 2;
+						int start = 0, offset = 0;
+						int end = (cur_range == 50) ? 1 : 2;
 						for (int i : iota(0, 101)) {
-							dec_arr[i][rgb] = rgb_arr[arr1][rgb] + (i - offset) * (rgb_arr[arr2][rgb] - rgb_arr[arr1][rgb]) / rng;
+							dec_arr[i][rgb] = rgb_array[start][rgb] + (i - offset) * (rgb_array[end][rgb] - rgb_array[start][rgb]) / cur_range;
 
 							//? Switch source arrays from _start/_mid to _mid/_end at 50 passes if _mid is defined
-							if (i == rng) { ++arr1; ++arr2; offset = 50;}
+							if (i == cur_range) { ++start; ++end; offset = 50;}
 						}
 					}
 				}
@@ -301,8 +303,8 @@ namespace Theme {
 		//* Set colors and generate gradients for the TTY theme
 		void generateTTYColors(){
 			rgbs.clear();
-			colors = TTY_theme;
 			gradients.clear();
+			colors = TTY_theme;
 
 			for (auto& c : colors) {
 				if (not c.first.ends_with("_start")) continue;
@@ -319,10 +321,39 @@ namespace Theme {
 			}
 		}
 
+		//* Load a .theme file from disk
 		auto loadFile(string filename){
-			unordered_flat_map<string, string> out;
+			unordered_flat_map<string, string> theme_out;
+			fs::path filepath = filename;
+			if (not fs::exists(filepath))
+				return Default_theme;
 
-			return out;
+			std::ifstream themefile(filepath);
+			if (themefile.good()) {
+				Logger::debug("Loading theme file: " + filename);
+				while (not themefile.bad()) {
+					themefile.ignore(SSmax, '[');
+					if (themefile.eof()) break;
+					string name, value;
+					getline(themefile, name, ']');
+					if (not Default_theme.contains(name)) {
+						continue;
+					}
+					themefile.ignore(SSmax, '=');
+					themefile >> std::ws;
+					if (themefile.eof()) break;
+					if (themefile.peek() == '"') {
+						themefile.ignore(1);
+						getline(themefile, value, '"');
+					}
+					else getline(themefile, value, '\n');
+
+					theme_out[name] = value;
+				}
+				themefile.close();
+				return theme_out;
+			}
+			return Default_theme;
 		}
 	}
 
@@ -331,11 +362,18 @@ namespace Theme {
 		themes.push_back("Default");
 		themes.push_back("TTY");
 
+		for (const auto& path : { theme_dir, user_theme_dir } ) {
+			for (auto& file : fs::directory_iterator(path)){
+				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1) {
+					themes.push_back(file.path().c_str());
+				}
+			}
+		}
+
 	}
 
-
-	//* Set current theme using <source> map
-	void set(string theme){
+	void setTheme(){
+		string theme = Config::getS("color_theme");
 		if (theme == "TTY" or Config::getB("tty_mode"))
 			generateTTYColors();
 		else {
@@ -362,10 +400,10 @@ namespace Theme {
 		return rgbs.at(name);
 	}
 
-	robin_hood::unordered_flat_map<string, string>& test_colors(){
+	unordered_flat_map<string, string>& test_colors(){
 		return colors;
 	}
-	robin_hood::unordered_flat_map<string, std::array<string, 101>>& test_gradients(){
+	unordered_flat_map<string, std::array<string, 101>>& test_gradients(){
 		return gradients;
 	}
 

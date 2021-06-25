@@ -36,10 +36,10 @@ namespace Input {
 	bool poll(int timeout=0);
 
 	//* Get a key or mouse action from input
-	std::string get(bool clear = false);
+	std::string get();
 
-	//* Wait until input is available
-	void wait(bool clear=false);
+	//* Wait until input is available and return key
+	std::string wait();
 
 	//* Clears last entered key
 	void clear();

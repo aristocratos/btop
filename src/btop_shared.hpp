@@ -36,8 +36,12 @@ namespace Tools {
 	double system_uptime();
 }
 
+namespace Shared {
+	//* Initialize platform specific needed variables and check for errors
+	void init();
+}
+
 namespace Proc {
-	extern std::filesystem::path proc_path;
 	extern size_t numpids;
 	extern std::atomic<bool> stop;
 	extern std::atomic<bool> collecting;
@@ -58,9 +62,6 @@ namespace Proc {
 
 	extern vector<proc_info> current_procs;
 
-	//* Collects and sorts process information from /proc, saves to and returns reference to Proc::current_procs;
+	//* Collects and sorts process information from /proc, saves and returns reference to Proc::current_procs;
 	vector<proc_info>& collect();
-
-	//* Initialize needed variables for collect
-	void init();
 }

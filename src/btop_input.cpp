@@ -73,10 +73,8 @@ namespace Input {
 		};
 	}
 
-	//* Last entered key
 	string last = "";
 
-	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
 	bool poll(int timeout){
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
@@ -87,11 +85,10 @@ namespace Input {
 		return false;
 	}
 
-	//* Get a key or mouse action from input
-	string get(bool clear){
+	string get(){
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (not clear and not key.empty()){
+		if (not key.empty()){
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";
@@ -100,10 +97,9 @@ namespace Input {
 		return key;
 	}
 
-	//* Wait until input is available
-	void wait(bool clear){
+	string wait(){
 		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
-		if (clear) get(clear);
+		return get();
 	}
 
 	//* Clears last entered key

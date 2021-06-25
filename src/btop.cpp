@@ -67,7 +67,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const std::string Version = "0.0.21";
+	const std::string Version = "0.0.30";
 	int coreCount;
 }
 
@@ -329,18 +329,19 @@ int main(int argc, char **argv){
 	}
 
 
-	#if defined(LINUX)
-		//? Linux init
-		Proc::init();
-	#endif
+
+	//? Platform init and error check
+	Shared::init();
+
 
 
 	// Config::set("truecolor", false);
 
-	auto thts = time_ms();
+	auto thts = time_micros();
 
-	//? Generate the theme
-	Theme::set("Default");
+	//? Update theme list and generate the theme
+	Theme::updateThemes();
+	Theme::setTheme();
 
 	//? Create the btop++ banner
 	banner_gen();
@@ -371,29 +372,64 @@ int main(int argc, char **argv){
 
 	//* Test theme
 	if (false) {
-		cout << "Theme generation took " << time_ms() - thts << "ms" << endl;
 
-		cout << "Colors:" << endl;
-		uint i = 0;
-		for(auto& item : Theme::test_colors()) {
-			cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
-			// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
-			if (++i == 4) {
-				i = 0;
-				cout << endl;
+		// cout << Theme::theme_dir << ", " << Theme::user_theme_dir << endl;
+		// for (auto& s : Theme::themes) {
+		// 	cout << s << endl;
+		// }
+
+		// exit(0);
+
+		string key;
+		bool no_redraw = false;
+		auto theme_index = v_index(Theme::themes, Config::getS("color_theme"));
+		while (key != "q") {
+			key.clear();
+
+			if (not no_redraw) {
+				cout << "\nTheme generation of " << fs::path(Config::getS("color_theme")).filename().replace_extension("") << " took " << time_micros() - thts << "μs" << endl;
+
+				cout << "Colors:" << endl;
+				uint i = 0;
+				for(auto& item : Theme::test_colors()) {
+					cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
+					// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
+					if (++i == 4) {
+						i = 0;
+						cout << endl;
+					}
+				}
+				cout << Fx::reset << endl;
+
+
+				cout << "Gradients:";
+				for (auto& [name, cvec] : Theme::test_gradients()) {
+					cout << endl << rjust(name + ":", 10);
+					for (auto& color : cvec) {
+						cout << color << "■";
+					}
+
+					cout << Fx::reset << endl;
+				}
 			}
-		}
-		cout << Fx::reset << endl;
 
-
-		cout << "Gradients:";
-		for (auto& [name, cvec] : Theme::test_gradients()) {
-			cout << endl << rjust(name + ":", 10);
-			for (auto& color : cvec) {
-				cout << color << "■";
+			no_redraw = true;
+			key = Input::wait();
+			if (key.empty()) continue;
+			thts = time_micros();
+			if (key == "right") {
+				if (theme_index == Theme::themes.size() - 1) theme_index = 0;
+				else theme_index++;
 			}
+			else if (key == "left") {
+				if (theme_index == 0) theme_index = Theme::themes.size() - 1;
+				else theme_index--;
+			}
+			else continue;
+			no_redraw = false;
+			Config::set("color_theme", Theme::themes.at(theme_index));
+			Theme::setTheme();
 
-			cout << Fx::reset << endl;
 		}
 
 
@@ -496,7 +532,7 @@ int main(int argc, char **argv){
 			// else y++;
 			// if (y == 100 or y == 0) flip = not flip;
 			if (Input::poll()) {
-				if (Input::get() == "space") Input::wait(true);
+				if (Input::get() == "space") Input::wait();
 				else break;
 			}
 			sleep_ms(50);
