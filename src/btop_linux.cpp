@@ -128,20 +128,18 @@ namespace Proc {
 
 		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
-			children++;
 			if (collapsed) {
 				out_procs.back().cpu_p += p.cpu_p;
 				out_procs.back().mem += p.mem;
 				out_procs.back().threads += p.threads;
 			}
+			else children++;
 			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), prefix);
 		}
 		if (collapsed) return;
 
-		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] ")) {
-			out_procs.back().prefix.resize(out_procs.back().prefix.size() - 8);
-			out_procs.back().prefix += " └─ ";
-		}
+		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] "))
+			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
 
 		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : prefix);
 	}
@@ -161,12 +159,9 @@ namespace Proc {
 		string short_str;
 		auto uptime = system_uptime();
 		vector<proc_info> procs;
-		vector<uint> pid_list;
 		procs.reserve((numpids + 10));
-		pid_list.reserve(numpids + 10);
 		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
-		(void)tree;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
@@ -210,7 +205,6 @@ namespace Proc {
 			if (d.is_directory() and isdigit(pid_str[0])) {
 				npids++;
 				proc_info new_proc (stoul(pid_str));
-				pid_list.push_back(new_proc.pid);
 
 				//* Cache program name, command and username
 				if (not cache.contains(new_proc.pid)) {
@@ -225,7 +219,7 @@ namespace Proc {
 
 					pread.open(d.path() / "cmdline");
 					if (pread.good()) {
-						string tmpstr = "";
+						string tmpstr;
 						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + ' ';
 						pread.close();
 						if (not cmd.empty()) cmd.pop_back();
@@ -269,63 +263,69 @@ namespace Proc {
 				//* Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (pread.good()) {
-					getline(pread, long_string);
-					pread.close();
-					size_t s_count = 0, c_pos = 0;
+
+					//? Check cached name for whitespace characters and set offset to get correct fields from stat file
+					size_t offset = rng::count(cache.at(new_proc.pid).name, ' ');
+					size_t x = 0, next_x = 3;
 					uint64_t cpu_t = 0;
-
 					try {
-						//? Skip pid and comm field and find comm fields closing ')'
-						size_t s_pos = pid_str.size() + cache.at(new_proc.pid).name.size() + 4;
-						if (long_string.at(s_pos - 2) != ')')
-							s_pos = long_string.find_last_of(')') + 2;
-						while (s_count++ <= 37) {
-							c_pos = long_string.find(' ', s_pos);
-							if (c_pos == string::npos) break;
+						while (not pread.eof()) {
+							if (++x > 40 + offset) break;
 
-							switch (s_count) {
-								case 1: { //? Process state
-									new_proc.state = long_string[s_pos];
+							if (x-offset < next_x) {
+								pread.ignore(SSmax, ' ');
+								continue;
+							}
+							else
+								getline(pread, short_str, ' ');
+
+							switch (x-offset) {
+								case 3: { //? Process state
+									new_proc.state = short_str[0];
 									break;
 								}
-								case 2: { //? Process parent pid
-									new_proc.ppid = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 4: { //? Process parent pid
+									new_proc.ppid = stoull(short_str);
+									next_x = 14;
 									break;
 								}
-								case 12: { //? Process utime
-									cpu_t = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 14: { //? Process utime
+									cpu_t = stoull(short_str);
 									break;
 								}
-								case 13: { //? Process stime
-									cpu_t += stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 15: { //? Process stime
+									cpu_t += stoull(short_str);
+									next_x = 19;
 									break;
 								}
-								case 17: { //? Process nice value
-									new_proc.p_nice = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 19: { //? Process nice value
+									new_proc.p_nice = stoull(short_str);
 									break;
 								}
-								case 18: { //? Process number of threads
-									new_proc.threads = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 20: { //? Process number of threads
+									new_proc.threads = stoull(short_str);
+									next_x = (new_cache) ? 22 : 40;
 									break;
 								}
-								case 20: { //? Cache cpu seconds
-									if (new_cache) cache[new_proc.pid].cpu_s = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 22: { //? Cache cpu seconds
+									cache[new_proc.pid].cpu_s = stoull(short_str);
+									next_x = 40;
 									break;
 								}
-								case 37: { //? CPU number last executed on
-									new_proc.cpu_n = stoull(long_string.substr(s_pos, c_pos - s_pos));
+								case 40: { //? CPU number last executed on
+									new_proc.cpu_n = stoull(short_str);
 									break;
 								}
 							}
-
-							s_pos = c_pos + 1;
 						}
+						pread.close();
+
 					}
 					catch (...) {
 						continue;
 					}
 
-					if (s_count < 19) continue;
+					if (x-offset < 22) continue;
 
 					//? Process cpu usage since last update
 					new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
@@ -366,7 +366,7 @@ namespace Proc {
 		}
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
-		if (sorting == "cpu lazy" and not tree and not reverse) {
+		if (not tree and not reverse and sorting == "cpu lazy") {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
 				if (i <= 5 and procs[i].cpu_p > max)
@@ -388,6 +388,7 @@ namespace Proc {
 			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);
 
 			string prefix = " ├─ ";
+			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, prefix);
 			}
@@ -399,8 +400,11 @@ namespace Proc {
 		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
 			counter = 0;
 			unordered_flat_map<uint, p_cache> r_cache;
-			r_cache.reserve(pid_list.size());
-			rng::for_each(pid_list, [&r_cache](const auto &p){ if (cache.contains(p)) r_cache[p] = cache.at(p); });
+			r_cache.reserve(procs.size());
+			rng::for_each(procs, [&r_cache](const auto &p){
+				if (cache.contains(p.pid))
+					r_cache[p.pid] = cache.at(p.pid);
+			});
 			cache.swap(r_cache);
 		}
 
