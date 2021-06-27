@@ -100,10 +100,10 @@ namespace Proc {
 			size_t depth = 0;
 			bool collapsed = false;
 		};
-		unordered_flat_map<uint, p_cache> cache;
+		unordered_flat_map<size_t, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
 
-		uint counter = 0;
+		int counter = 0;
 	}
 	uint64_t old_cputimes = 0;
 	size_t numpids = 500;
@@ -121,22 +121,38 @@ namespace Proc {
 	};
 
 	//* Generate process tree list
-	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, const int cur_depth, const bool collapsed, const string& prefix){
+	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& prefix, const string& filter, bool found){
 		auto cur_pos = out_procs.size();
-		if (not collapsed)
+		bool filtering = false;
+
+		//? If filtering, include children of matching processes
+		if (not filter.empty() and not found) {
+			if (std::to_string(cur_proc.pid).find(filter) == string::npos
+			and cur_proc.name.find(filter) == string::npos
+			and cur_proc.cmd.find(filter) == string::npos
+			and cur_proc.user.find(filter) == string::npos) {
+				filtering = true;
+			}
+			else {
+				found = true;
+				cur_depth = 0;
+			}
+		}
+
+		if (not collapsed and not filtering)
 			out_procs.push_back(cur_proc);
 
 		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
-			if (collapsed) {
+			if (collapsed and not filtering) {
 				out_procs.back().cpu_p += p.cpu_p;
 				out_procs.back().mem += p.mem;
 				out_procs.back().threads += p.threads;
 			}
 			else children++;
-			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), prefix);
+			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), prefix, filter, found);
 		}
-		if (collapsed) return;
+		if (collapsed or filtering) return;
 
 		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] "))
 			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
@@ -248,7 +264,7 @@ namespace Proc {
 				}
 
 				//* Match filter if defined
-				if (not filter.empty()
+				if (not tree and not filter.empty()
 					and pid_str.find(filter) == string::npos
 					and cache[new_proc.pid].name.find(filter) == string::npos
 					and cache[new_proc.pid].cmd.find(filter) == string::npos
@@ -390,7 +406,7 @@ namespace Proc {
 			string prefix = " ├─ ";
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
-				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, prefix);
+				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, prefix, filter, false);
 			}
 			procs.swap(tree_procs);
 		}
@@ -399,7 +415,7 @@ namespace Proc {
 		//* Clear dead processes from cache at a regular interval
 		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
 			counter = 0;
-			unordered_flat_map<uint, p_cache> r_cache;
+			unordered_flat_map<size_t, p_cache> r_cache;
 			r_cache.reserve(procs.size());
 			rng::for_each(procs, [&r_cache](const auto &p){
 				if (cache.contains(p.pid))

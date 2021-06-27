@@ -40,12 +40,12 @@ namespace Symbols {
 namespace Draw {
 
 	struct BoxConf {
-		uint x=0, y=0;
-		uint width=0, height=0;
+		size_t x=0, y=0;
+		size_t width=0, height=0;
 		string line_color = "", title = "", title2 = "";
 		bool fill = true;
-		uint num=0;
-		uint w_percent=0, h_percent=0;
+		size_t num=0;
+		size_t w_percent=0, h_percent=0;
 	};
 
 	//* Create a box using values from a BoxConf struct and return as a string

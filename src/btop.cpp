@@ -390,7 +390,7 @@ int main(int argc, char **argv){
 				cout << "\nTheme generation of " << fs::path(Config::getS("color_theme")).filename().replace_extension("") << " took " << time_micros() - thts << "μs" << endl;
 
 				cout << "Colors:" << endl;
-				uint i = 0;
+				size_t i = 0;
 				for(auto& item : Theme::test_colors()) {
 					cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
 					// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
@@ -596,11 +596,11 @@ int main(int argc, char **argv){
 
 
 
-	uint lc;
+	size_t lc;
 	string ostring;
 	uint64_t tsl, timestamp2, rcount = 0;
 	list<uint64_t> avgtimes = {0};
-	uint timer = 2000;
+	size_t timer = 2000;
 	bool filtering = false;
 	vector<string> greyscale;
 	string filter;
@@ -608,7 +608,7 @@ int main(int argc, char **argv){
 	string key;
 
 	int xc;
-	for (uint i : iota(0, (int)Term::height - 19)){
+	for (size_t i : iota(0, (int)Term::height - 19)){
 		xc = 230 - i * 150 / (Term::height - 20);
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}

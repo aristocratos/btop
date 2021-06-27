@@ -26,13 +26,6 @@ tab-size = 4
 using std::string, robin_hood::unordered_flat_map, std::cin;
 using namespace Tools;
 
-/* The input functions relies on the following std::cin options being set:
-	cin.sync_with_stdio(false);
-	cin.tie(NULL);
-	These will automatically be set when running Term::init() from btop_tools.cpp
-*/
-
-//* Functions and variables for handling keyboard and mouse input
 namespace Input {
 	namespace {
 		//* Map for translating key codes to readable values
@@ -102,7 +95,6 @@ namespace Input {
 		return get();
 	}
 
-	//* Clears last entered key
 	void clear(){
 		last.clear();
 	}

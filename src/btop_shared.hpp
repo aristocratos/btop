@@ -49,7 +49,7 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		uint64_t pid;
+		size_t pid;
 		string name = "", cmd = "";
 		size_t threads = 0;
 		string user = "";

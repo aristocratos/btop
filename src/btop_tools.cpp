@@ -85,8 +85,8 @@ namespace Term {
 
 	bool initialized = false;
 	bool resized = false;
-	uint width = 0;
-	uint height = 0;
+	size_t width = 0;
+	size_t height = 0;
 	string fg, bg, current_tty;
 
 	const string hide_cursor = Fx::e + "?25l";
@@ -252,7 +252,7 @@ namespace Tools {
 		return out;
 	}
 
-	void sleep_ms(const uint& ms) {
+	void sleep_ms(const size_t& ms) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 	}
 
@@ -293,9 +293,9 @@ namespace Tools {
 		return (newstr.empty()) ? str : newstr + (string)oldstr;
 	}
 
-	string sec_to_dhms(uint sec){
+	string sec_to_dhms(size_t sec){
 		string out;
-		uint d, h, m;
+		size_t d, h, m;
 		d = sec / (3600 * 24);
 		sec %= 3600 * 24;
 		h = sec / 3600;
@@ -309,9 +309,9 @@ namespace Tools {
 		return out;
 	}
 
-	string floating_humanizer(uint64_t value, bool shorten, uint start, bool bit, bool per_second){
+	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second){
 		string out;
-		uint mult = (bit) ? 8 : 1;
+		size_t mult = (bit) ? 8 : 1;
 		static const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
 		static const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
 		auto& units = (bit) ? Units_bit : Units_byte;
@@ -402,7 +402,7 @@ namespace Logger {
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(uint level, string& msg){
+	void log_write(size_t level, string& msg){
 		if (loglevel < level or logfile.empty()) return;
 		atomic_wait_set(busy, true);
 		std::error_code ec;

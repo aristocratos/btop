@@ -91,8 +91,8 @@ namespace Mv {
 namespace Term {
 	extern bool initialized;
 	extern bool resized;
-	extern uint width;
-	extern uint height;
+	extern size_t width;
+	extern size_t height;
 	extern string fg, bg, current_tty;
 
 	//* Hide terminal cursor
@@ -198,7 +198,7 @@ namespace Tools {
 	vector<string> ssplit(const string& str, const char delim = ' ');
 
 	//* Put current thread to sleep for <ms> milliseconds
-	void sleep_ms(const uint& ms);
+	void sleep_ms(const size_t& ms);
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string ljust(string str, const size_t x, bool utf=false, bool escape=false, bool lim=true);
@@ -210,13 +210,13 @@ namespace Tools {
 	string trans(const string& str);
 
 	//* Convert seconds to format "Xd HH:MM:SS" and return string
-	string sec_to_dhms(uint sec);
+	string sec_to_dhms(size_t sec);
 
 	//* Scales up in steps of 1024 to highest possible unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
 	//* short=True always returns 0 decimals and shortens unit to 1 character
-	string floating_humanizer(uint64_t value, bool shorten=false, uint start=0, bool bit=false, bool per_second=false);
+	string floating_humanizer(uint64_t value, bool shorten=false, size_t start=0, bool bit=false, bool per_second=false);
 
 	//* Add std::string operator "*" : Repeat string <str> <n> number of times
 	std::string operator*(string str, size_t n);
@@ -229,7 +229,7 @@ namespace Tools {
 
 	//* Waits for <atom> to not be <val> and then sets it to <val> again
 	void atomic_wait_set(std::atomic<bool>& atom, bool val=true);
-	
+
 }
 
 //* Simple logging implementation
@@ -238,7 +238,7 @@ namespace Logger {
 	extern std::filesystem::path logfile;
 
 	void set(string level); //* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void log_write(uint level, string& msg);
+	void log_write(size_t level, string& msg);
 	void error(string msg);
 	void warning(string msg);
 	void info(string msg);

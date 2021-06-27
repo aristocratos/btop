@@ -107,12 +107,12 @@ namespace Draw {
 		out = Fx::reset + lcolor;
 
 		//* Draw horizontal lines
-		for (uint hpos : {c.y, c.y + c.height - 1}){
+		for (size_t hpos : {c.y, c.y + c.height - 1}){
 			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width - 1);
 		}
 
 		//* Draw vertical lines and fill if enabled
-		for (uint hpos : iota(c.y + 1, c.y + c.height - 1)){
+		for (size_t hpos : iota(c.y + 1, c.y + c.height - 1)){
 			out += Mv::to(hpos, c.x) + Symbols::v_line +
 				((c.fill) ? string(c.width - 2, ' ') : Mv::r(c.width - 2)) +
 				Symbols::v_line;
