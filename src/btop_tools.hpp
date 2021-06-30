@@ -225,7 +225,7 @@ namespace Tools {
 	string strf_time(string strf);
 
 	//* Waits for <atom> to not be <val>
-	void atomic_wait(std::atomic<bool>& atom, bool val=true);
+	void atomic_wait(const std::atomic<bool>& atom, bool val=true);
 
 	//* Waits for <atom> to not be <val> and then sets it to <val> again
 	void atomic_wait_set(std::atomic<bool>& atom, bool val=true);

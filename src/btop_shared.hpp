@@ -32,7 +32,7 @@ namespace Global {
 }
 
 namespace Tools {
-	//* Platform specific function for system_uptime
+	//* Platform specific function for system_uptime (seconds since last restart)
 	double system_uptime();
 }
 
@@ -45,6 +45,8 @@ namespace Proc {
 	extern size_t numpids;
 	extern std::atomic<bool> stop;
 	extern std::atomic<bool> collecting;
+
+	//? Contains the valid sorting options for processes
 	extern vector<string> sort_vector;
 
 	//* Container for process information
@@ -59,6 +61,14 @@ namespace Proc {
 		uint64_t cpu_n = 0, p_nice = 0, ppid = 0;
 		string prefix = "";
 	};
+
+	//* Container for process info box
+	struct detail_container {
+		proc_info entry;
+		string elapsed, parent, status, io_read, io_write;
+	};
+
+	extern detail_container detailed;
 
 	extern vector<proc_info> current_procs;
 

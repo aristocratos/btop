@@ -211,12 +211,14 @@ namespace Config {
 			{"tty_mode", false},
 			{"force_tty", false},
 			{"lowcolor", false},
+			{"show_detailed", false},
 		};
 		unordered_flat_map<string, bool> boolsTmp;
 
 		unordered_flat_map<string, int> ints = {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
+			{"detailed_pid", 0},
 		};
 		unordered_flat_map<string, int> intsTmp;
 
@@ -273,6 +275,7 @@ namespace Config {
 	}
 
 	void unlock(){
+		if (not locked) return;
 		atomic_wait_set(writelock);
 
 		for (auto& item : stringsTmp){

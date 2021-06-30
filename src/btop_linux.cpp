@@ -95,6 +95,7 @@ namespace Proc {
 	namespace {
 		struct p_cache {
 			string name, cmd, user;
+			size_t name_offset;
 			uint64_t cpu_t = 0, cpu_s = 0;
 			string prefix = "";
 			size_t depth = 0;
@@ -120,8 +121,10 @@ namespace Proc {
 		"cpu lazy",
 	};
 
+	detail_container detailed;
+
 	//* Generate process tree list
-	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& prefix, const string& filter, bool found){
+	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false){
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
@@ -150,14 +153,46 @@ namespace Proc {
 				out_procs.back().threads += p.threads;
 			}
 			else children++;
-			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), prefix, filter, found);
+			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), filter, found);
 		}
 		if (collapsed or filtering) return;
 
 		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] "))
 			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
 
-		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : prefix);
+		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : " ├─ ");
+	}
+
+	//* Get datiled info for selected process
+	void _collect_details(proc_info p){
+		fs::path pid_path = Shared::proc_path / std::to_string(p.pid);
+
+		detailed.entry = p;
+		ifstream d_read;
+
+		//* Get RSS mem from smaps
+		if (fs::exists(pid_path / "smaps")) {
+			pid_path /= "smaps";
+			d_read.open(pid_path);
+			if (d_read.good()) {
+				uint64_t rss = 0;
+				string val;
+				try {
+					while (not d_read.eof()) {
+						d_read.ignore(SSmax, 'R');
+						if (d_read.peek() == 's') {
+							d_read.ignore(SSmax, ':');
+							getline(d_read, val, 'k');
+							rss += stoull(val) << 10;
+						}
+					}
+					detailed.entry.mem = rss;
+				}
+				catch (std::invalid_argument const&) {}
+				catch (std::out_of_range const&) {}
+			}
+			d_read.close();
+		}
 	}
 
 	vector<proc_info> current_procs;
@@ -166,10 +201,12 @@ namespace Proc {
 	vector<proc_info>& collect(){
 		atomic_wait_set(collecting);
 		auto& sorting = Config::getS("proc_sorting");
-		auto& reverse = Config::getB("proc_reversed");
+		auto reverse = Config::getB("proc_reversed");
 		auto& filter = Config::getS("proc_filter");
-		auto& per_core = Config::getB("proc_per_core");
-		auto& tree = Config::getB("proc_tree");
+		auto per_core = Config::getB("proc_per_core");
+		auto tree = Config::getB("proc_tree");
+		auto show_detailed = Config::getB("show_detailed");
+		size_t detailed_pid = Config::getI("detailed_pid");
 		ifstream pread;
 		string long_string;
 		string short_str;
@@ -178,6 +215,7 @@ namespace Proc {
 		procs.reserve((numpids + 10));
 		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
+		bool got_detailed = false;
 
 		//* Update uid_user map if /etc/passwd changed since last run
 		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
@@ -218,154 +256,160 @@ namespace Proc {
 
 			bool new_cache = false;
 			string pid_str = d.path().filename();
-			if (d.is_directory() and isdigit(pid_str[0])) {
-				npids++;
-				proc_info new_proc (stoul(pid_str));
+			if (not isdigit(pid_str[0])) continue;
 
-				//* Cache program name, command and username
-				if (not cache.contains(new_proc.pid)) {
-					string name, cmd, user;
-					new_cache = true;
-					pread.open(d.path() / "comm");
-					if (pread.good()) {
-						getline(pread, name);
-						pread.close();
-					}
-					else continue;
+			npids++;
+			proc_info new_proc (stoul(pid_str));
 
-					pread.open(d.path() / "cmdline");
-					if (pread.good()) {
-						string tmpstr;
-						while(getline(pread, tmpstr, '\0')) cmd += tmpstr + ' ';
-						pread.close();
-						if (not cmd.empty()) cmd.pop_back();
-					}
-					else continue;
+			//* Cache program name, command and username
+			if (not cache.contains(new_proc.pid)) {
+				string name, cmd, user;
+				new_cache = true;
+				pread.open(d.path() / "comm");
+				if (not pread.good()) continue;
+				getline(pread, name);
+				pread.close();
+				size_t name_offset = rng::count(name, ' ');
 
-					pread.open(d.path() / "status");
-					if (pread.good()) {
-						string uid;
-						while (not pread.eof()){
-							string line;
-							getline(pread, line, ':');
-							if (line == "Uid") {
-								pread.ignore();
-								getline(pread, uid, '\t');
-								break;
-							} else {
-								pread.ignore(SSmax, '\n');
-							}
-						}
-						pread.close();
-						user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+
+				pread.open(d.path() / "cmdline");
+				if (not pread.good()) continue;
+				long_string.clear();
+				while(getline(pread, long_string, '\0')) cmd += long_string + ' ';
+				pread.close();
+				if (not cmd.empty()) cmd.pop_back();
+
+
+				pread.open(d.path() / "status");
+				if (not pread.good()) continue;
+				string uid;
+				string line;
+				while (not pread.eof()){
+					getline(pread, line, ':');
+					if (line == "Uid") {
+						pread.ignore();
+						getline(pread, uid, '\t');
+						break;
+					} else {
+						pread.ignore(SSmax, '\n');
 					}
-					else continue;
-					cache[new_proc.pid] = {name, cmd, user};
 				}
+				pread.close();
+				user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 
-				//* Match filter if defined
-				if (not tree and not filter.empty()
-					and pid_str.find(filter) == string::npos
-					and cache[new_proc.pid].name.find(filter) == string::npos
-					and cache[new_proc.pid].cmd.find(filter) == string::npos
-					and cache[new_proc.pid].user.find(filter) == string::npos) {
-						if (new_cache) cache.erase(new_proc.pid);
-						continue;
-				}
-				new_proc.name = cache[new_proc.pid].name;
-				new_proc.cmd = cache[new_proc.pid].cmd;
-				new_proc.user = cache[new_proc.pid].user;
-
-				//* Parse /proc/[pid]/stat
-				pread.open(d.path() / "stat");
-				if (pread.good()) {
-
-					//? Check cached name for whitespace characters and set offset to get correct fields from stat file
-					size_t offset = rng::count(cache.at(new_proc.pid).name, ' ');
-					size_t x = 0, next_x = 3;
-					uint64_t cpu_t = 0;
-					try {
-						while (not pread.eof()) {
-							if (++x > 40 + offset) break;
-
-							if (x-offset < next_x) {
-								pread.ignore(SSmax, ' ');
-								continue;
-							}
-							else
-								getline(pread, short_str, ' ');
-
-							switch (x-offset) {
-								case 3: { //? Process state
-									new_proc.state = short_str[0];
-									break;
-								}
-								case 4: { //? Process parent pid
-									new_proc.ppid = stoull(short_str);
-									next_x = 14;
-									break;
-								}
-								case 14: { //? Process utime
-									cpu_t = stoull(short_str);
-									break;
-								}
-								case 15: { //? Process stime
-									cpu_t += stoull(short_str);
-									next_x = 19;
-									break;
-								}
-								case 19: { //? Process nice value
-									new_proc.p_nice = stoull(short_str);
-									break;
-								}
-								case 20: { //? Process number of threads
-									new_proc.threads = stoull(short_str);
-									next_x = (new_cache) ? 22 : 40;
-									break;
-								}
-								case 22: { //? Cache cpu seconds
-									cache[new_proc.pid].cpu_s = stoull(short_str);
-									next_x = 40;
-									break;
-								}
-								case 40: { //? CPU number last executed on
-									new_proc.cpu_n = stoull(short_str);
-									break;
-								}
-							}
-						}
-						pread.close();
-
-					}
-					catch (...) {
-						continue;
-					}
-
-					if (x-offset < 22) continue;
-
-					//? Process cpu usage since last update
-					new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
-
-					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = ((double)cpu_t / Shared::clk_tck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clk_tck));
-
-					//? Update cache with latest cpu times
-					cache[new_proc.pid].cpu_t = cpu_t;
-				}
-				else continue;
-
-				//* Get RSS memory in bytes from /proc/[pid]/statm
-				pread.open(d.path() / "statm");
-				if (pread.good()) {
-					pread.ignore(SSmax, ' ');
-					getline(pread, short_str, ' ');
-					pread.close();
-					new_proc.mem = stoull(short_str) * Shared::page_size;
-				}
-
-				//? Push process to vector
-				procs.push_back(new_proc);
+				cache[new_proc.pid] = {name, cmd, user, name_offset};
 			}
+
+			//* Match filter if defined
+			if (not tree and not filter.empty()
+				and not (show_detailed and new_proc.pid == detailed_pid)
+				and pid_str.find(filter) == string::npos
+				and cache[new_proc.pid].name.find(filter) == string::npos
+				and cache[new_proc.pid].cmd.find(filter) == string::npos
+				and cache[new_proc.pid].user.find(filter) == string::npos) {
+					if (new_cache) cache.erase(new_proc.pid);
+					continue;
+			}
+			new_proc.name = cache[new_proc.pid].name;
+			new_proc.cmd = cache[new_proc.pid].cmd;
+			new_proc.user = cache[new_proc.pid].user;
+
+			//* Parse /proc/[pid]/stat
+			pread.open(d.path() / "stat");
+			if (not pread.good()) continue;
+
+			//? Check cached value for whitespace characters in name and set offset to get correct fields from stat file
+			size_t& offset = cache.at(new_proc.pid).name_offset;
+			short_str.clear();
+			size_t x = 0, next_x = 3;
+			uint64_t cpu_t = 0;
+			try {
+				for (;;) {
+					while (++x - offset < next_x) {
+						pread.ignore(SSmax, ' ');
+					}
+
+					getline(pread, short_str, ' ');
+
+					switch (x-offset) {
+						case 3: { //? Process state
+							new_proc.state = short_str[0];
+							continue;
+						}
+						case 4: { //? Parent pid
+							new_proc.ppid = stoull(short_str);
+							next_x = 14;
+							continue;
+						}
+						case 14: { //? Process utime
+							cpu_t = stoull(short_str);
+							continue;
+						}
+						case 15: { //? Process stime
+							cpu_t += stoull(short_str);
+							next_x = 19;
+							continue;
+						}
+						case 19: { //? Nice value
+							new_proc.p_nice = stoull(short_str);
+							continue;
+						}
+						case 20: { //? Number of threads
+							new_proc.threads = stoull(short_str);
+							next_x = (new_cache) ? 22 : 24;
+							continue;
+						}
+						case 22: { //? Save cpu seconds to cache if missing
+							cache[new_proc.pid].cpu_s = stoull(short_str);
+							next_x = 24;
+							continue;
+						}
+						case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~ 20x)
+							new_proc.mem = stoull(short_str) * Shared::page_size;
+							next_x = 40;
+							continue;
+						}
+						case 40: { //? CPU number last executed on
+							new_proc.cpu_n = stoull(short_str);
+							goto stat_loop_done;
+						}
+					}
+				}
+
+			}
+			catch (std::invalid_argument const&) { continue; }
+			catch (std::out_of_range const&) { continue; }
+			catch (std::ios_base::failure const&) {}
+
+			stat_loop_done:
+			pread.close();
+
+			if (x-offset < 24) continue;
+
+			// _parse_smaps(new_proc);
+
+			//? Process cpu usage since last update
+			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
+
+			//? Process cumulative cpu usage since process start
+			new_proc.cpu_c = ((double)cpu_t / Shared::clk_tck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clk_tck));
+
+			//? Update cache with latest cpu times
+			cache[new_proc.pid].cpu_t = cpu_t;
+
+			//? Update the details info box for process if active
+			if (show_detailed and new_proc.pid == detailed_pid) {
+				_collect_details(new_proc);
+				got_detailed = true;
+			}
+
+			//? Push process to vector
+			procs.push_back(new_proc);
+
+		}
+
+		if (show_detailed and not got_detailed) {
+			detailed.entry.state = 'X';
 		}
 
 		//* Sort processes
@@ -403,10 +447,9 @@ namespace Proc {
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);
 
-			string prefix = " ├─ ";
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
-				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, prefix, filter, false);
+				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, filter);
 			}
 			procs.swap(tree_procs);
 		}

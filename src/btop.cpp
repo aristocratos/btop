@@ -599,7 +599,7 @@ int main(int argc, char **argv){
 	size_t lc;
 	string ostring;
 	uint64_t tsl, timestamp2, rcount = 0;
-	list<uint64_t> avgtimes = {0};
+	list<uint64_t> avgtimes;
 	size_t timer = 2000;
 	bool filtering = false;
 	vector<string> greyscale;
@@ -657,8 +657,8 @@ int main(int argc, char **argv){
 
 
 
-		if (rcount > 0) avgtimes.push_front(timestamp);
-		if (avgtimes.size() > 100) avgtimes.pop_back();
+		avgtimes.push_front(timestamp);
+		if (avgtimes.size() > 30) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
 		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<

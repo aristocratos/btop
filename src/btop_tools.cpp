@@ -362,12 +362,12 @@ namespace Tools {
 
 	#if (__GNUC__ > 10)
 		//* Redirects to atomic wait
-		void atomic_wait(atomic<bool>& atom, bool val){
+		void atomic_wait(const atomic<bool>& atom, bool val){
 			atom.wait(val);
 		}
 	#else
 		//* Crude implementation of atomic wait for GCC 10
-		void atomic_wait(atomic<bool>& atom, bool val){
+		void atomic_wait(const atomic<bool>& atom, bool val){
 			while (atom == val) std::this_thread::sleep_for(std::chrono::microseconds(1));
 		}
 	#endif

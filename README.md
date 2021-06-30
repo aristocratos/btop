@@ -17,7 +17,6 @@
 * [Themes](#themes)
 * [Support and funding](#support-and-funding)
 * [Prerequisites](#prerequisites) (Read this if you are having issues!)
-* [Dependencies](#dependencies)
 * [Screenshots](#screenshots)
 * [Installation](#installation)
 * [Configurability](#configurability)
@@ -67,7 +66,7 @@ Btop++ uses the same theme files as bpytop and bashtop (some color values missin
 
 See [themes](https://github.com/aristocratos/btop/tree/master/themes) folder for available themes.
 
-The `make install` command places the default themes in `[/usr/local]/share/btop/themes`.
+The `make install` command places the default themes in `[$PREFIX or /usr/local]/share/btop/themes`.
 User created themes should be placed in `$XDG_CONFIG_HOME/btop/themes` or `$HOME/.config/btop/themes`.
 
 Let me know if you want to contribute with new themes.
@@ -82,15 +81,16 @@ Any support is greatly appreciated!
 
 ## Prerequisites
 
-For correct display, a terminal with support for:
+For best experience, a terminal with support for:
 
 * 24-bit truecolor ([See list of terminals with truecolor support](https://gist.github.com/XVilka/8346728))
 * 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" argument.
+ (16 color TTY mode now available as well.)
 * Wide characters (Are sometimes problematic in web-based terminals)
 
 Also needs a UTF8 locale and a font that covers:
 
-* Unicode Block “Braille Patterns” U+2800 - U+28FF
+* Unicode Block “Braille Patterns” U+2800 - U+28FF (Not needed in TTY mode or with graphs set to type: block or tty.)
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
@@ -107,14 +107,6 @@ If text are misaligned and you are using Konsole or Yakuake, turning off "Bi-Dir
 
 Characters clipping in to each other or text/border misalignments is not bugs caused by bpytop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
 Look to the creators of the terminal emulator you use to fix these issues if the previous mentioned fixes don't work for you.
-
-## Dependencies
-
-None
-
-### Compiling from source
-
-Needs at least G++ 10, preferably 11 (or higher) to make use of some C++20 functionality.
 
 ## Screenshots
 
@@ -134,7 +126,14 @@ Options menu.
 
 #### Manual compilation and installation
 
-Requires GCC/G++ 10 or higher!
+Needs at least GCC/G++ 10, preferably 11 (or higher) to make use of some C++20 functionality.
+
+>Install dependencies (Ubuntu 21.04 Hirsute)
+
+``` bash
+sudo apt install git build-essential gcc-11 g++-11
+	# On earlier Ubuntu versions that don't have gcc-11 and g++-11 replace with gcc-10 and g++-10
+```
 
 >Clone and compile
 
@@ -142,13 +141,23 @@ Requires GCC/G++ 10 or higher!
 git clone https://github.com/aristocratos/btop.git
 cd btop
 make
+	# use "make -jX" where X is your number of cores for multithreaded compilation
 ```
 
 >to install
 
 ``` bash
 sudo make install
+	# use "make install PREFIX=/target/dir" to set target, default: /usr/local
+	# only use "sudo" when installing to a NON user owned directory
 ```
+
+>to make btop always run as root (to enable signal sending to any process and for /proc read permissions on some systems)
+
+``` bash
+make su-setuid
+```
+
 
 >to uninstall
 
@@ -156,10 +165,16 @@ sudo make install
 sudo make uninstall
 ```
 
->to remove any compiled files
+>to remove any object files
 
 ```bash
 make clean
+```
+
+>to remove all object files, binaries and created directories
+
+```bash
+make distclean
 ```
 
 ## Configurability

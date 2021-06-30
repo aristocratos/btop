@@ -106,25 +106,25 @@ namespace Draw {
 
 		out = Fx::reset + lcolor;
 
-		//* Draw horizontal lines
+		//? Draw horizontal lines
 		for (size_t hpos : {c.y, c.y + c.height - 1}){
 			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width - 1);
 		}
 
-		//* Draw vertical lines and fill if enabled
+		//? Draw vertical lines and fill if enabled
 		for (size_t hpos : iota(c.y + 1, c.y + c.height - 1)){
 			out += Mv::to(hpos, c.x) + Symbols::v_line +
 				((c.fill) ? string(c.width - 2, ' ') : Mv::r(c.width - 2)) +
 				Symbols::v_line;
 		}
 
-		//* Draw corners
+		//? Draw corners
 		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
 				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
 				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
 				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
 
-		//* Draw titles if defined
+		//? Draw titles if defined
 		if (not c.title.empty()){
 			out += Mv::to(c.y, c.x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + c.title +
 			Fx::ub + lcolor + Symbols::title_right;
@@ -199,7 +199,7 @@ namespace Draw {
 						if (no_zero and horizon == height - 1 and i != -1 and result[ai] == 0) result[ai] = 1;
 					}
 				}
-				//? Generate braille symbol from 5x5 2D vector
+				//? Generate graph symbol from 5x5 2D vector
 				graphs[current][horizon] += (height == 1 and result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
 			}
 			if (mult and i > data_offset) last = data_value;

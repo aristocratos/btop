@@ -2,7 +2,21 @@ PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/btop/doc
 
 #Compiler and Linker
-CXX			:= g++
+CXX := g++
+
+#If using g++ try to make sure we are using version 11 or 10
+ifeq ($(CXX),g++)
+	CXX_VERSION = $(shell $(CXX) -dumpversion)
+	ifneq ($(shell test $(CXX_VERSION) -ge 11; echo $$?),0)
+		ifneq ($(shell command -v g++-11),)
+			CXX := g++-11
+		else ifneq ($(shell test $(CXX_VERSION) -eq 10; echo $$?),0)
+			ifneq ($(shell command -v g++-10),)
+				CXX := g++-10
+			endif
+		endif
+	endif
+endif
 
 #The Target Binary Program
 TARGET		:= btop
@@ -20,9 +34,6 @@ OBJEXT		:= o
 CXXFLAGS	:= -std=c++20 -pthread -O3 -Wall -Wextra -Wno-stringop-overread -pedantic
 INC			:= -I$(INCDIR) -I$(SRCDIR)
 
-#---------------------------------------------------------------------------------
-#DO NOT EDIT BELOW THIS LINE
-#---------------------------------------------------------------------------------
 SOURCES		:= $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
 OBJECTS		:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
@@ -34,12 +45,12 @@ directories:
 	@mkdir -p $(TARGETDIR)
 	@mkdir -p $(BUILDDIR)
 
-#Clean only Objecst
+#Clean only Objects
 clean:
 	@rm -rf $(BUILDDIR)
 
 #Full Clean, Objects and Binaries
-dist-clean: clean
+distclean: clean
 	@rm -rf $(TARGETDIR)
 
 install:
@@ -49,6 +60,14 @@ install:
 	@cp -p README.md $(DESTDIR)$(DOCDIR)
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
+
+#Set suid bit for btop to root, will make btop run as root regardless of actual user
+su-setuid:
+	@su --session-command "make as-root-setuid" root
+
+as-root-setuid:
+	@chown root:root $(DESTDIR)$(PREFIX)/bin/btop
+	@chmod 4755 $(DESTDIR)$(PREFIX)/bin/btop
 
 uninstall:
 	@rm -rf $(DESTDIR)$(PREFIX)/bin/btop
