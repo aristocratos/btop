@@ -21,8 +21,9 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <robin_hood.h>
+#include <deque>
 
-using std::string, std::vector, robin_hood::unordered_flat_map;
+using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
 
 namespace Symbols {
 	extern const string h_line;
@@ -74,30 +75,44 @@ namespace Draw {
 		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
-		void _create(const vector<long long>& data, int data_offset);
+		void _create(const deque<long long>& data, int data_offset);
 
 	public:
 		//* Set graph options and initialize with data
-		void operator()(int width, int height, string color_gradient, const vector<long long>& data, string symbol="default", bool invert=false, bool no_zero=false, long long max_value=0, long long offset=0);
+		void operator()(int width, int height, string color_gradient, const deque<long long>& data, string symbol="default", bool invert=false, bool no_zero=false, long long max_value=0, long long offset=0);
 
 		//* Add last value from back of <data> and return string representation of graph
-		string& operator()(const vector<long long>& data, bool data_same=false);
+		string& operator()(const deque<long long>& data, bool data_same=false);
 
 		//* Return string representation of graph
 		string& operator()();
 	};
 
+	//* Calculate sizes of boxes, draw outlines and save to enabled boxes namespaces
+	void calcSizes();
+
 }
 
-namespace Box {
+namespace Cpu {
 
+	extern Draw::BoxConf box;
 
+}
 
+namespace Mem {
+
+	extern Draw::BoxConf box;
+
+}
+
+namespace Net {
+
+	extern Draw::BoxConf box;
 
 }
 
 namespace Proc {
 
-	// Draw::BoxConf box;
+	extern Draw::BoxConf box;
 
 }

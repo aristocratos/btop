@@ -222,6 +222,8 @@ namespace Config {
 		};
 		unordered_flat_map<string, int> intsTmp;
 
+		vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+
 		bool _locked(const string& name){
 			atomic_wait(writelock);
 			if (not write_new and rng::find_if(descriptions, [&name](const auto& a){ return a.at(0) == name; }) != descriptions.end())
@@ -297,6 +299,13 @@ namespace Config {
 		writelock = false;
 	}
 
+	bool check_boxes(string boxes){
+		for (auto& box : ssplit(boxes)) {
+			if (not v_contains(valid_boxes, box)) return false;
+		}
+		return true;
+	}
+
 	void load(fs::path conf_file, vector<string>& load_errors){
 		if (conf_file.empty())
 			return;
@@ -352,6 +361,8 @@ namespace Config {
 						load_errors.push_back("Invalid log_level: " + value);
 					else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
 						load_errors.push_back("Invalid graph symbol identifier: " + value);
+					else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
+						load_errors.push_back("Invalid box name in shown_boxes. Using default.");
 					else
 						strings.at(name) = value;
 				}

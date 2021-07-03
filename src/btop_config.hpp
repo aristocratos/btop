@@ -32,6 +32,9 @@ namespace Config {
 
 	extern const vector<string> valid_graph_symbols;
 
+	//* Check if string only contains space seperated valid names for boxes
+	bool check_boxes(string boxes);
+
 	//* Return bool for config key <name>
 	const bool& getB(string name);
 

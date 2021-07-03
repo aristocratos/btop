@@ -363,6 +363,7 @@ namespace Theme {
 		themes.push_back("TTY");
 
 		for (const auto& path : { theme_dir, user_theme_dir } ) {
+			if (path.empty()) continue;
 			for (auto& file : fs::directory_iterator(path)){
 				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1) {
 					themes.push_back(file.path().c_str());

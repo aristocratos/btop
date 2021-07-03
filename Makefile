@@ -55,19 +55,15 @@ distclean: clean
 
 install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
-	@cp -p bin/btop $(DESTDIR)$(PREFIX)/bin/btop
+	@cp -p $(TARGETDIR)/btop $(DESTDIR)$(PREFIX)/bin/btop
 	@mkdir -p $(DESTDIR)$(DOCDIR)
 	@cp -p README.md $(DESTDIR)$(DOCDIR)
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
 
-#Set suid bit for btop to root, will make btop run as root regardless of actual user
+#Set suid bit for btop to root, will make btop run with admin privileges regardless of actual user
 su-setuid:
-	@su --session-command "make as-root-setuid" root
-
-as-root-setuid:
-	@chown root:root $(DESTDIR)$(PREFIX)/bin/btop
-	@chmod 4755 $(DESTDIR)$(PREFIX)/bin/btop
+	@su --session-command "chown root:root $(DESTDIR)$(PREFIX)/bin/btop && chmod 4755 $(DESTDIR)$(PREFIX)/bin/btop" root
 
 uninstall:
 	@rm -rf $(DESTDIR)$(PREFIX)/bin/btop
@@ -78,8 +74,8 @@ uninstall:
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
 #Link
-$(TARGET): $(OBJECTS)
-	$(CXX) -o $(TARGETDIR)/$(TARGET) $^
+btop: $(OBJECTS)
+	$(CXX) -o $(TARGETDIR)/btop $^
 
 #Compile
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)

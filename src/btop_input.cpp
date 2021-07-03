@@ -66,12 +66,15 @@ namespace Input {
 		};
 	}
 
+	std::atomic<bool> interrupt (false);
+
 	string last = "";
 
 	bool poll(int timeout){
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
+			if (interrupt) { interrupt = false; return false; }
 			sleep_ms(timeout < 10 ? timeout : 10);
 			timeout -= 10;
 		}
@@ -91,7 +94,10 @@ namespace Input {
 	}
 
 	string wait(){
-		while (cin.rdbuf()->in_avail() < 1) sleep_ms(10);
+		while (cin.rdbuf()->in_avail() < 1) {
+			if (interrupt) { interrupt = false; return string(); }
+			sleep_ms(10);
+		}
 		return get();
 	}
 

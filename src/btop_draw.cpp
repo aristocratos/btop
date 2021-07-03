@@ -25,7 +25,9 @@ tab-size = 4
 #include <btop_draw.hpp>
 #include <btop_config.hpp>
 #include <btop_theme.hpp>
+#include <btop_shared.hpp>
 #include <btop_tools.hpp>
+
 
 using std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor;
 
@@ -98,7 +100,6 @@ namespace Draw {
 
 	using namespace Tools;
 
-	//* Create a box using values from a BoxConf struct and return as a string
 	string createBox(BoxConf c){
 		string out;
 		string lcolor = (c.line_color.empty()) ? Theme::c("div_line") : c.line_color;
@@ -137,7 +138,7 @@ namespace Draw {
 		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
 	}
 
-
+	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	void Meter::operator()(int width, string color_gradient, bool invert) {
 		this->width = width;
 		this->color_gradient = color_gradient;
@@ -164,7 +165,8 @@ namespace Draw {
 		return out;
 	}
 
-	void Graph::_create(const vector<long long>& data, int data_offset) {
+	//* Graph class ------------------------------------------------------------------------------------------------------------>
+	void Graph::_create(const deque<long long>& data, int data_offset) {
 		const bool mult = (data.size() - data_offset > 1);
 		if (mult and (data.size() - data_offset) % 2 != 0) data_offset--;
 		auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
@@ -203,7 +205,6 @@ namespace Draw {
 				graphs[current][horizon] += (height == 1 and result[0] + result[1] == 0) ? Mv::r(1) : graph_symbol[(result[0] * 5 + result[1])];
 			}
 			if (mult and i > data_offset) last = data_value;
-
 		}
 		last = data_value;
 		if (height == 1)
@@ -219,8 +220,7 @@ namespace Draw {
 		out += Fx::reset;
 	}
 
-
-	void Graph::operator()(int width, int height, string color_gradient, const vector<long long>& data, string symbol, bool invert, bool no_zero, long long max_value, long long offset) {
+	void Graph::operator()(int width, int height, string color_gradient, const deque<long long>& data, string symbol, bool invert, bool no_zero, long long max_value, long long offset) {
 		graphs[true].clear(); graphs[false].clear();
 		this->width = width; this->height = height;
 		this->invert = invert; this->offset = offset;
@@ -246,8 +246,7 @@ namespace Draw {
 		this->_create(data, data_offset);
 	}
 
-
-	string& Graph::operator()(const vector<long long>& data, bool data_same) {
+	string& Graph::operator()(const deque<long long>& data, bool data_same) {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
@@ -263,18 +262,38 @@ namespace Draw {
 	string& Graph::operator()() {
 		return out;
 	}
+	//*------------------------------------------------------------------------------------------------------------------------->
+
+	void calcSizes(){
+
+	}
 
 }
 
-namespace Box {
+namespace Cpu {
 
+	Draw::BoxConf box;
+	string background;
 
+}
 
+namespace Mem {
+
+	Draw::BoxConf box;
+	string background;
+
+}
+
+namespace Net {
+
+	Draw::BoxConf box;
+	string background;
 
 }
 
 namespace Proc {
 
-	// Draw::BoxConf box;
+	Draw::BoxConf box;
+	string background;
 
 }

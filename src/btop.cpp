@@ -16,7 +16,6 @@ indent = tab
 tab-size = 4
 */
 
-
 #include <string>
 #include <array>
 #include <list>
@@ -32,6 +31,7 @@ tab-size = 4
 #include <robin_hood.h>
 #include <cmath>
 #include <iostream>
+#include <exception>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -77,7 +77,6 @@ namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
 
-
 namespace Global {
 	string banner;
 	size_t banner_width = 0;
@@ -89,7 +88,7 @@ namespace Global {
 
 	uint64_t start_time;
 
-	bool quitting = false;
+	atomic<bool> quitting (false);
 
 	bool arg_tty = false;
 	bool arg_low_color = false;
@@ -277,12 +276,12 @@ int main(int argc, char **argv){
 	}
 	if (std::error_code ec; not Global::self_path.empty()) {
 			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
-			if (ec or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
+			if (ec or not fs::is_directory(Theme::theme_dir) or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
 		}
 
 	if (Theme::theme_dir.empty()) {
 		for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
-			if (fs::exists(fs::path(theme_path)) and access(theme_path, R_OK) != -1) {
+			if (fs::is_directory(fs::path(theme_path)) and access(theme_path, R_OK) != -1) {
 				Theme::theme_dir = fs::path(theme_path);
 				break;
 			}
@@ -465,7 +464,7 @@ int main(int argc, char **argv){
 
 	if (false) {
 
-		vector<long long> mydata;
+		deque<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 		// mydata.push_back(0);
@@ -606,6 +605,7 @@ int main(int argc, char **argv){
 	string filter;
 	string filter_cur;
 	string key;
+	vector<Proc::proc_info> plist;
 
 	int xc;
 	for (size_t i : iota(0, (int)Term::height - 19)){
@@ -613,14 +613,20 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	string pbox = Draw::createBox({.x = 1, .y = 10, .width = Term::width, .height = Term::height - 16, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
+	string pbox = Draw::createBox({.x = 1, .y = 10, .width = Term::width, .height = Term::height - 18, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
 	pbox += Mv::r(1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
 			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Fx::reset + Mv::save;
 
 	while (key != "q") {
 		timestamp = time_micros();
 		tsl = time_ms() + timer;
-		auto plist = Proc::collect();
+		try {
+			plist = Proc::collect();
+		}
+		catch (std::exception const& e) {
+			Logger::error("Caught exception in Proc::collect() : "s + e.what());
+			exit(1);
+		}
 		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
@@ -645,21 +651,25 @@ int main(int argc, char **argv){
 					cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
 					cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
 				}
-				ostring += Mv::r(1) + (Config::getB("tty_mode") ? "" : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " " + (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
+				ostring += Mv::r(1) + (Config::getB("tty_mode") ? "" : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
+						+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
 						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
 						+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
 						+ "\n";
 			}
-			if (lc++ > Term::height - 21) break;
+			if (lc++ > Term::height - 23) break;
 		}
 
-		while (lc++ < Term::height - 19) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
+		while (lc++ < Term::height - 21) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
 
 
 
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 30) avgtimes.pop_back();
 		cout << pbox << ostring << Fx::reset << "\n" << endl;
+		cout << "  Details for " << Proc::detailed.entry.name << " (" << Proc::detailed.entry.pid << ")  Status: " << Proc::detailed.status << "  Elapsed: " << Proc::detailed.elapsed
+			 << "  Mem: " << floating_humanizer(Proc::detailed.entry.mem) << "         "
+			 << "\n  Parent: " << Proc::detailed.parent << "  IO in/out: " << Proc::detailed.io_read << "/" << Proc::detailed.io_write << "        " << endl;
 		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
 			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " <<
@@ -675,6 +685,7 @@ int main(int argc, char **argv){
 				else if (ulen(key) == 1 ) filter.append(key);
 				else { key.clear(); continue; }
 				if (filter != Config::getS("proc_filter")) Config::set("proc_filter", filter);
+				key.clear();
 				break;
 			}
 			else if (key == "q") break;
@@ -693,6 +704,12 @@ int main(int argc, char **argv){
 			else if (key == "r") Config::flip("proc_reversed");
 			else if (key == "c") Config::flip("proc_per_core");
 			else if (key == "delete") { filter.clear(); Config::set("proc_filter", filter); }
+			else if (key == "d" ) {
+				Config::flip("show_detailed");
+				if (Config::getB("show_detailed")) {
+					Config::set("detailed_pid", (int)plist.at(0).pid);
+				}
+			}
 			else continue;
 			break;
 		}

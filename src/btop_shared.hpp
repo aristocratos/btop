@@ -22,8 +22,10 @@ tab-size = 4
 #include <vector>
 #include <filesystem>
 #include <atomic>
+#include <deque>
+#include <robin_hood.h>
 
-using std::string, std::vector;
+using std::string, std::vector, std::deque, robin_hood::unordered_flat_map;
 
 namespace Global {
 	extern const string Version;
@@ -49,6 +51,9 @@ namespace Proc {
 	//? Contains the valid sorting options for processes
 	extern vector<string> sort_vector;
 
+	//? Translation from process state char to explanative string
+	extern unordered_flat_map<char, string> proc_states;
+
 	//* Container for process information
 	struct proc_info {
 		size_t pid;
@@ -65,13 +70,14 @@ namespace Proc {
 	//* Container for process info box
 	struct detail_container {
 		proc_info entry;
-		string elapsed, parent, status, io_read, io_write;
+		string elapsed, parent, status, io_read, io_write, memory;
+		size_t last_pid = 0;
+		bool skip_smaps = false;
+		deque<long long> cpu_percent;
 	};
 
 	extern detail_container detailed;
 
-	extern vector<proc_info> current_procs;
-
 	//* Collects and sorts process information from /proc, saves and returns reference to Proc::current_procs;
-	vector<proc_info>& collect();
+	vector<proc_info>& collect(bool return_last=false);
 }

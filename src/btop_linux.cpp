@@ -25,7 +25,6 @@ tab-size = 4
 #include <filesystem>
 #include <ranges>
 #include <list>
-#include <robin_hood.h>
 #include <cmath>
 #include <iostream>
 #include <cmath>
@@ -39,7 +38,7 @@ tab-size = 4
 
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize,
-		std::round, std::string_literals::operator""s, robin_hood::unordered_flat_map;
+		std::round, std::string_literals::operator""s;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -101,6 +100,8 @@ namespace Proc {
 			size_t depth = 0;
 			bool collapsed = false;
 		};
+
+		vector<proc_info> current_procs;
 		unordered_flat_map<size_t, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
 
@@ -119,6 +120,19 @@ namespace Proc {
 		"memory",
 		"cpu direct",
 		"cpu lazy",
+	};
+	unordered_flat_map<char, string> proc_states = {
+		{'R', "Running"},
+		{'S', "Sleeping"},
+		{'D', "Waiting"},
+		{'Z', "Zombie"},
+		{'T', "Stopped"},
+		{'t', "Tracing"},
+		{'X', "Dead"},
+		{'x', "Dead"},
+		{'K', "Wakekill"},
+		{'W', "Unknown"},
+		{'P', "Parked"}
 	};
 
 	detail_container detailed;
@@ -163,42 +177,100 @@ namespace Proc {
 		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : " ├─ ");
 	}
 
-	//* Get datiled info for selected process
-	void _collect_details(proc_info p){
-		fs::path pid_path = Shared::proc_path / std::to_string(p.pid);
+	//* Get detailed info for selected process
+	void _collect_details(size_t pid, uint64_t uptime, vector<proc_info>& procs, bool is_filtered){
+		fs::path pid_path = Shared::proc_path / std::to_string(pid);
 
-		detailed.entry = p;
+		if (pid != detailed.last_pid) {
+			detailed.last_pid = pid;
+			detailed.cpu_percent.clear();
+			detailed.parent.clear();
+			detailed.io_read.clear();
+			detailed.io_write.clear();
+			detailed.skip_smaps = false;
+		}
+
+		//? Copy proc_info for process from proc vector
+		auto p = rng::find(procs, pid, &proc_info::pid);
+		detailed.entry = *p;
+
+		//? Update cpu percent deque for process cpu graph
+		detailed.cpu_percent.push_back(round(detailed.entry.cpu_c));
+		while (detailed.cpu_percent.size() > Term::width) detailed.cpu_percent.pop_front();
+
+		//? Process runtime
+		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clk_tck));
+
+		//? Get parent process name
+		if (detailed.parent.empty() and cache.contains(detailed.entry.ppid)) detailed.parent = cache.at(detailed.entry.ppid).name;
+
+		//? Expand process status from single char to explanative string
+		detailed.status = (proc_states.contains(detailed.entry.state)) ? proc_states.at(detailed.entry.state) : "Unknown";
+
 		ifstream d_read;
+		string short_str;
 
-		//* Get RSS mem from smaps
-		if (fs::exists(pid_path / "smaps")) {
-			pid_path /= "smaps";
-			d_read.open(pid_path);
+		//? Try to get RSS mem from proc/[pid]/smaps
+		detailed.memory.clear();
+		if (not detailed.skip_smaps and fs::exists(pid_path / "smaps")) {
+			d_read.open(pid_path / "smaps");
 			if (d_read.good()) {
 				uint64_t rss = 0;
-				string val;
 				try {
 					while (not d_read.eof()) {
 						d_read.ignore(SSmax, 'R');
 						if (d_read.peek() == 's') {
 							d_read.ignore(SSmax, ':');
-							getline(d_read, val, 'k');
-							rss += stoull(val) << 10;
+							getline(d_read, short_str, 'k');
+							rss += stoull(short_str);
 						}
 					}
-					detailed.entry.mem = rss;
+					if (rss == detailed.entry.mem >> 10)
+						detailed.skip_smaps = true;
+					else
+						detailed.memory = floating_humanizer(rss, false, 1);
 				}
 				catch (std::invalid_argument const&) {}
 				catch (std::out_of_range const&) {}
 			}
 			d_read.close();
 		}
+		if (detailed.memory.empty()) detailed.memory = floating_humanizer(detailed.entry.mem, false);
+
+		//? Get bytes read and written from proc/[pid]/io
+		if (fs::exists(pid_path / "io")) {
+			d_read.open(pid_path / "io");
+			if (d_read.good()) {
+				try {
+					string name;
+					while (not d_read.eof()) {
+						getline(d_read, name, ':');
+						if (name.ends_with("read_bytes")) {
+							getline(d_read, short_str);
+							detailed.io_read = floating_humanizer(stoull(short_str));
+						}
+						else if (name.ends_with("write_bytes")) {
+							getline(d_read, short_str);
+							detailed.io_write = floating_humanizer(stoull(short_str));
+							break;
+						}
+						else
+							d_read.ignore(SSmax, '\n');
+					}
+				}
+				catch (std::invalid_argument const&) {}
+				catch (std::out_of_range const&) {}
+			}
+			d_read.close();
+		}
+
+		if (is_filtered) procs.erase(p);
+
 	}
 
-	vector<proc_info> current_procs;
-
-	//* Collects and sorts process information from /proc, saves to and returns reference to Proc::current_procs;
-	vector<proc_info>& collect(){
+	//* Collects and sorts process information from /proc
+	vector<proc_info>& collect(bool return_last){
+		if (return_last) return current_procs;
 		atomic_wait_set(collecting);
 		auto& sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
@@ -210,14 +282,15 @@ namespace Proc {
 		ifstream pread;
 		string long_string;
 		string short_str;
-		auto uptime = system_uptime();
+		double uptime = system_uptime();
 		vector<proc_info> procs;
 		procs.reserve((numpids + 10));
 		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
 		bool got_detailed = false;
+		bool detailed_filtered = false;
 
-		//* Update uid_user map if /etc/passwd changed since last run
+		//? Update uid_user map if /etc/passwd changed since last run
 		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
 			string r_uid, r_user;
 			Shared::passwd_time = fs::last_write_time(Shared::passwd_path);
@@ -254,7 +327,6 @@ namespace Proc {
 				return current_procs;
 			}
 
-			bool new_cache = false;
 			string pid_str = d.path().filename();
 			if (not isdigit(pid_str[0])) continue;
 
@@ -264,7 +336,6 @@ namespace Proc {
 			//* Cache program name, command and username
 			if (not cache.contains(new_proc.pid)) {
 				string name, cmd, user;
-				new_cache = true;
 				pread.open(d.path() / "comm");
 				if (not pread.good()) continue;
 				getline(pread, name);
@@ -302,13 +373,14 @@ namespace Proc {
 
 			//* Match filter if defined
 			if (not tree and not filter.empty()
-				and not (show_detailed and new_proc.pid == detailed_pid)
 				and pid_str.find(filter) == string::npos
 				and cache[new_proc.pid].name.find(filter) == string::npos
 				and cache[new_proc.pid].cmd.find(filter) == string::npos
 				and cache[new_proc.pid].user.find(filter) == string::npos) {
-					if (new_cache) cache.erase(new_proc.pid);
-					continue;
+					if (show_detailed and new_proc.pid == detailed_pid)
+						detailed_filtered = true;
+					else
+						continue;
 			}
 			new_proc.name = cache[new_proc.pid].name;
 			new_proc.cmd = cache[new_proc.pid].cmd;
@@ -356,7 +428,7 @@ namespace Proc {
 						}
 						case 20: { //? Number of threads
 							new_proc.threads = stoull(short_str);
-							next_x = (new_cache) ? 22 : 24;
+							next_x = (cache[new_proc.pid].cpu_s == 0) ? 22 : 24;
 							continue;
 						}
 						case 22: { //? Save cpu seconds to cache if missing
@@ -386,8 +458,6 @@ namespace Proc {
 
 			if (x-offset < 24) continue;
 
-			// _parse_smaps(new_proc);
-
 			//? Process cpu usage since last update
 			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
 
@@ -397,9 +467,7 @@ namespace Proc {
 			//? Update cache with latest cpu times
 			cache[new_proc.pid].cpu_t = cpu_t;
 
-			//? Update the details info box for process if active
-			if (show_detailed and new_proc.pid == detailed_pid) {
-				_collect_details(new_proc);
+			if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 				got_detailed = true;
 			}
 
@@ -408,8 +476,12 @@ namespace Proc {
 
 		}
 
-		if (show_detailed and not got_detailed) {
-			detailed.entry.state = 'X';
+		//* Update the details info box for process if active
+		if (show_detailed and got_detailed) {
+			_collect_details(detailed_pid, round(uptime), procs, detailed_filtered);
+		}
+		else if (show_detailed and not got_detailed) {
+			detailed.status = "Dead";
 		}
 
 		//* Sort processes

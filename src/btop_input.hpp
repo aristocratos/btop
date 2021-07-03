@@ -19,6 +19,7 @@ tab-size = 4
 #pragma once
 
 #include <string>
+#include <atomic>
 
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
@@ -28,6 +29,8 @@ tab-size = 4
 
 //* Functions and variables for handling keyboard and mouse input
 namespace Input {
+
+	extern std::atomic<bool> interrupt;
 
 	//* Last entered key
 	extern std::string last;
