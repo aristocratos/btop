@@ -90,6 +90,15 @@ namespace Shared {
 
 }
 
+namespace Cpu {
+	bool got_sensors = false;
+	string cpuName = "";
+}
+
+namespace Mem {
+	bool has_swap = false;
+}
+
 namespace Proc {
 	namespace {
 		struct p_cache {
@@ -144,10 +153,10 @@ namespace Proc {
 
 		//? If filtering, include children of matching processes
 		if (not filter.empty() and not found) {
-			if (std::to_string(cur_proc.pid).find(filter) == string::npos
-			and cur_proc.name.find(filter) == string::npos
-			and cur_proc.cmd.find(filter) == string::npos
-			and cur_proc.user.find(filter) == string::npos) {
+			if (not s_contains(std::to_string(cur_proc.pid), filter)
+			and not s_contains(cur_proc.name, filter)
+			and not s_contains(cur_proc.cmd, filter)
+			and not s_contains(cur_proc.user, filter)) {
 				filtering = true;
 			}
 			else {
@@ -373,10 +382,10 @@ namespace Proc {
 
 			//* Match filter if defined
 			if (not tree and not filter.empty()
-				and pid_str.find(filter) == string::npos
-				and cache[new_proc.pid].name.find(filter) == string::npos
-				and cache[new_proc.pid].cmd.find(filter) == string::npos
-				and cache[new_proc.pid].user.find(filter) == string::npos) {
+				and not s_contains(pid_str, filter)
+				and not s_contains(cache[new_proc.pid].name, filter)
+				and not s_contains(cache[new_proc.pid].cmd, filter)
+				and not s_contains(cache[new_proc.pid].user, filter)) {
 					if (show_detailed and new_proc.pid == detailed_pid)
 						detailed_filtered = true;
 					else
@@ -436,7 +445,7 @@ namespace Proc {
 							next_x = 24;
 							continue;
 						}
-						case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~ 20x)
+						case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
 							new_proc.mem = stoull(short_str) * Shared::page_size;
 							next_x = 40;
 							continue;
@@ -487,14 +496,14 @@ namespace Proc {
 		//* Sort processes
 		auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
 		switch (v_index(sort_vector, sorting)) {
-				case 0: { rng::sort(procs, cmp, &proc_info::pid); break; }
-				case 1: { rng::sort(procs, cmp, &proc_info::name); break; }
-				case 2: { rng::sort(procs, cmp, &proc_info::cmd); break; }
+				case 0: { rng::sort(procs, cmp, &proc_info::pid); 	  break; }
+				case 1: { rng::sort(procs, cmp, &proc_info::name);	  break; }
+				case 2: { rng::sort(procs, cmp, &proc_info::cmd); 	  break; }
 				case 3: { rng::sort(procs, cmp, &proc_info::threads); break; }
-				case 4: { rng::sort(procs, cmp, &proc_info::user); break; }
-				case 5: { rng::sort(procs, cmp, &proc_info::mem); break; }
-				case 6: { rng::sort(procs, cmp, &proc_info::cpu_p); break; }
-				case 7: { rng::sort(procs, cmp, &proc_info::cpu_c); break; }
+				case 4: { rng::sort(procs, cmp, &proc_info::user); 	  break; }
+				case 5: { rng::sort(procs, cmp, &proc_info::mem); 	  break; }
+				case 6: { rng::sort(procs, cmp, &proc_info::cpu_p);   break; }
+				case 7: { rng::sort(procs, cmp, &proc_info::cpu_c);   break; }
 		}
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
@@ -515,6 +524,7 @@ namespace Proc {
 		//* Generate tree view if enabled
 		if (tree) {
 			vector<proc_info> tree_procs;
+			tree_procs.reserve(procs.size());
 
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);

@@ -212,6 +212,7 @@ namespace Config {
 			{"force_tty", false},
 			{"lowcolor", false},
 			{"show_detailed", false},
+			{"proc_filtering", false},
 		};
 		unordered_flat_map<string, bool> boolsTmp;
 
@@ -278,6 +279,7 @@ namespace Config {
 
 	void unlock(){
 		if (not locked) return;
+		atomic_wait(Runner::active);
 		atomic_wait_set(writelock);
 
 		for (auto& item : stringsTmp){

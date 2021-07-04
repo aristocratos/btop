@@ -85,8 +85,8 @@ namespace Term {
 
 	bool initialized = false;
 	bool resized = false;
-	size_t width = 0;
-	size_t height = 0;
+	int width = 0;
+	int height = 0;
 	string fg, bg, current_tty;
 
 	const string hide_cursor = Fx::e + "?25l";

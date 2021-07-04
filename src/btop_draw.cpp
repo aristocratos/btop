@@ -29,9 +29,11 @@ tab-size = 4
 #include <btop_tools.hpp>
 
 
-using std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor;
+using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
+		std::to_string;
 
 namespace rng = std::ranges;
+using namespace Tools;
 
 namespace Symbols {
 	const string h_line			= "─";
@@ -98,44 +100,42 @@ namespace Symbols {
 
 namespace Draw {
 
-	using namespace Tools;
-
-	string createBox(BoxConf c){
+	string createBox(int x, int y, int width, int height, string line_color, bool fill, string title, string title2, int num){
 		string out;
-		string lcolor = (c.line_color.empty()) ? Theme::c("div_line") : c.line_color;
-		string numbering = (c.num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(c.num) : Symbols::superscript[c.num]);
+		string lcolor = (line_color.empty()) ? Theme::c("div_line") : line_color;
+		string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(num) : Symbols::superscript[num]);
 
 		out = Fx::reset + lcolor;
 
 		//? Draw horizontal lines
-		for (size_t hpos : {c.y, c.y + c.height - 1}){
-			out += Mv::to(hpos, c.x) + Symbols::h_line * (c.width - 1);
+		for (int hpos : {y, y + height - 1}){
+			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (size_t hpos : iota(c.y + 1, c.y + c.height - 1)){
-			out += Mv::to(hpos, c.x) + Symbols::v_line +
-				((c.fill) ? string(c.width - 2, ' ') : Mv::r(c.width - 2)) +
+		for (int hpos : iota(y + 1, y + height - 1)){
+			out += Mv::to(hpos, x) + Symbols::v_line +
+				((fill) ? string(width - 2, ' ') : Mv::r(width - 2)) +
 				Symbols::v_line;
 		}
 
 		//? Draw corners
-		out += 	Mv::to(c.y, c.x) + Symbols::left_up +
-				Mv::to(c.y, c.x + c.width - 1) + Symbols::right_up +
-				Mv::to(c.y + c.height - 1, c.x) + Symbols::left_down +
-				Mv::to(c.y + c.height - 1, c.x + c.width - 1) + Symbols::right_down;
+		out += 	Mv::to(y, x) + Symbols::left_up +
+				Mv::to(y, x + width - 1) + Symbols::right_up +
+				Mv::to(y + height - 1, x) + Symbols::left_down +
+				Mv::to(y + height - 1, x + width - 1) + Symbols::right_down;
 
 		//? Draw titles if defined
-		if (not c.title.empty()){
-			out += Mv::to(c.y, c.x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + c.title +
+		if (not title.empty()){
+			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
-		if (not c.title2.empty()){
-			out += Mv::to(c.y + c.height - 1, c.x + 2) + Symbols::title_left + Theme::c("title") + c.title2 +
+		if (not title2.empty()){
+			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left + Theme::c("title") + title2 +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
 
-		return out + Fx::reset + Mv::to(c.y + 1, c.x + 1);
+		return out + Fx::reset + Mv::to(y + 1, x + 1);
 	}
 
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
@@ -264,36 +264,258 @@ namespace Draw {
 	}
 	//*------------------------------------------------------------------------------------------------------------------------->
 
-	void calcSizes(){
-
-	}
-
 }
 
 namespace Cpu {
 
-	Draw::BoxConf box;
-	string background;
+	int width_p = 100, height_p = 32;
+	int min_w = 60, min_h = 8;
+	int x = 1, y = 1, width, height;
+	int b_columns, b_column_size;
+	int b_x, b_y, b_width, b_height;
+	bool shown = true, redraw = true;
+	string box;
 
 }
 
 namespace Mem {
 
-	Draw::BoxConf box;
-	string background;
+	int width_p = 45, height_p = 38;
+	int min_w = 36, min_h = 10;
+	int x = 1, y, width, height;
+	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
+	bool shown = true, redraw = true;
+	string box;
 
 }
 
 namespace Net {
 
-	Draw::BoxConf box;
-	string background;
+	int width_p = 45, height_p = 30;
+	int min_w = 3, min_h = 6;
+	int x = 1, y, width, height;
+	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
+	int graph_height;
+	bool shown = true, redraw = true;
+	string box;
 
 }
 
 namespace Proc {
 
-	Draw::BoxConf box;
-	string background;
+	int width_p = 55, height_p = 68;
+	int min_w = 44, min_h = 16;
+	int x, y, width, height;
+	int current_y, current_h, select_max;
+	bool shown = true, redraw = true;
 
+	string box;
+	vector<string> greyscale;
+	vector<string> colorfade;
+
+	string draw(vector<proc_info> plist){
+		auto& filter = Config::getS("proc_filter");
+		auto& filtering = Config::getB("proc_filtering");
+		auto& proc_tree = Config::getB("proc_tree");
+		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode"));
+		string out;
+		if (redraw) {
+			redraw = false;
+			out = box;
+			greyscale.clear();
+			for (int xc = 0; size_t i : iota(0, height - 3)){
+				xc = 230 - i * 150 / (Term::height - 20);
+				greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
+			}
+			out += Mv::to(y, x) + Mv::r(12)
+				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
+				+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
+				+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter)));
+		}
+
+		if (not proc_tree)
+			out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " "
+				+ ljust("Command:", width - 70) + " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
+				+ " " + rjust("Cpu%", 14) + Fx::ub;
+		else
+			out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " "
+				+ ljust("Command:", width - 70) + " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
+				+ " " + rjust("Cpu%", 14) + Fx::ub;
+
+		int lc = 0;
+		for (auto& p : plist){
+			if (not proc_tree) {
+				out += Mv::to(y+2+lc, x+1) + (proc_gradient ? greyscale[lc] : "") + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " "
+					+ ljust(p.cmd, width - 67, true) + " " + rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " "
+					+ rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+					+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4));
+			}
+			else {
+				string cmd_cond;
+				if (not p.cmd.empty()) {
+					cmd_cond = p.cmd.substr(0, min(p.cmd.find(' '), p.cmd.size()));
+					cmd_cond = cmd_cond.substr(min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
+				}
+				out += Mv::to(y+2+lc, x+1) + (proc_gradient ? greyscale[lc] : "") + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
+						+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), width - 41, true) + " "
+						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+						+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4));
+			}
+			if (lc++ > height - 5) break;
+		}
+
+		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 3, ' ');
+
+		return out;
+	}
+
+}
+
+namespace Draw {
+	void calcSizes(){
+		Config::unlock();
+		auto& boxes = Config::getS("shown_boxes");
+
+		Cpu::box.clear();
+		Mem::box.clear();
+		Net::box.clear();
+		Proc::box.clear();
+
+		Cpu::width = Mem::width = Net::width = Proc::width = 0;
+		Cpu::height = Mem::height = Net::height = Proc::height = 0;
+		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
+
+		Cpu::shown = s_contains(boxes, "cpu") ? true : false;
+		Mem::shown = s_contains(boxes, "mem") ? true : false;
+		Net::shown = s_contains(boxes, "net") ? true : false;
+		Proc::shown = s_contains(boxes, "proc") ? true : false;
+
+		//* Calculate and draw cpu box outlines
+		if (Cpu::shown) {
+			using namespace Cpu;
+			width = round(Term::width * width_p / 100);
+			height = max(8, (int)round(Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+
+			b_columns = max(1, (int)ceil((Global::coreCount + 1) / (height - 5)));
+			if (b_columns * (21 + 12 * got_sensors) < width - (width / 3)) {
+				b_column_size = 2;
+				b_width = (21 + 12 * got_sensors) * b_columns - (b_columns - 1);
+			}
+			else if (b_columns * (15 + 6 * got_sensors) < width - (width / 3)) {
+				b_column_size = 1;
+				b_width = (15 + 6 * got_sensors) * b_columns - (b_columns - 1);
+			}
+			else if (b_columns * (8 + 6 * got_sensors) < width - (width / 3)) {
+				b_column_size = 0;
+			}
+			else {
+				b_columns = (width - width / 3) / (8 + 6 * got_sensors);
+				b_column_size = 0;
+			}
+
+			if (b_column_size == 0) b_width = (8 + 6 * got_sensors) * b_columns + 1;
+			b_height = min(height - 2, (int)ceil(Global::coreCount / b_columns) + 4);
+
+			b_x = width - b_width - 1;
+			b_y = y + ceil((height - 2) / 2) - ceil(b_height / 2) + 1;
+
+			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "cpu", "", 1);
+			box += Mv::to(y, x + 10) + Theme::c("cpu_box") + Symbols::title_left + Fx::b + Theme::c("hi_fg")
+				+ 'M' + Theme::c("title") + "enu" + Fx::ub + Theme::c("cpu_box") + Symbols::title_right;
+
+			auto& custom = Config::getS("custom_cpu_name");
+			box += createBox(b_x, b_y, b_width, b_height, "", false, uresize((custom.empty() ? cpuName : custom) , b_width - 14));
+		}
+
+		//* Calculate and draw mem box outlines
+		if (Mem::shown) {
+			using namespace Mem;
+			auto& show_disks = Config::getB("show_disks");
+			auto& swap_disk = Config::getB("swap_disk");
+			auto& mem_graphs = Config::getB("mem_graphs");
+
+			// int hp;
+			// if (not Cpu::shown) hp = Net::shown ? 60 : 98;
+			// else if (not Net::shown) hp = 98 - Cpu::height_p;
+			// else hp = height_p;
+
+			width = round(Term::width * (Proc::shown ? width_p : 100) / 100);
+			height = round(Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+			if (height + Cpu::height > Term::height) height = Term::height - Cpu::height;
+			y = Cpu::height + 1;
+
+			if (show_disks) {
+				mem_width = ceil((width - 3) / 2);
+				disks_width = width - mem_width - 3;
+				mem_width += mem_width % 2;
+				divider = x + mem_width;
+			}
+			else
+				mem_width = width - 1;
+
+			item_height = has_swap and not swap_disk ? 6 : 4;
+			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
+				mem_size = 3;
+			else if (mem_width > 25)
+				mem_size = 2;
+			else
+				mem_size = 1;
+
+			mem_meter = max(0, width - (disks_width * show_disks) - (mem_size > 2 ? 9 : 20));
+			if (mem_size == 1) mem_meter += 6;
+
+			if (mem_graphs) {
+				graph_height = max(1, (int)round(((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
+				if (graph_height > 1) mem_meter += 6;
+			}
+			else
+				graph_height = 0;
+
+			if (show_disks) {
+				disk_meter = max(0, width - mem_width - 23);
+				if (disks_width < 25) disk_meter += 10;
+			}
+
+			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
+			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
+				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+			if (show_disks) {
+				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c("div_line");
+				for (auto i : iota(1, height - 1))
+					box += Mv::to(y + i, divider) + Symbols::v_line;
+			}
+		}
+
+		//* Calculate and draw net box outlines
+		if (Net::shown) {
+			using namespace Net;
+			width = round(Term::width * (Proc::shown ? width_p : 100) / 100);
+			height = Term::height - Cpu::height - Mem::height;
+			y = Term::height - height + 1;
+			b_width = (width > 45) ? 27 : 19;
+			b_height = (height > 10) ? 9 : height - 2;
+			b_x = width - b_width - 1;
+			b_y = y + ((height - 2) / 2) - b_height / 2 + 1;
+			d_graph_height = round((height - 2) / 2);
+			u_graph_height = height - 2 - d_graph_height;
+
+			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);
+			box += createBox(b_x, b_y, b_width, b_height, "", false, "download", "upload");
+		}
+
+		//* Calculate and draw proc box outlines
+		if (Proc::shown) {
+			using namespace Proc;
+			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
+			height = Term::height - Cpu::height;
+			x = Term::width - width + 1;
+			y = Cpu::height + 1;
+			current_y = y;
+			current_h = height;
+			select_max = height - 3;
+
+			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+		}
+
+	}
 }

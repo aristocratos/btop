@@ -219,14 +219,9 @@ void banner_gen() {
 			+ Fx::i + "v" + Global::Version + Fx::ui;
 }
 
-//* Threading test function
-// string my_worker(int x){
-// 	for (int i = 0; i < 100 + (x * 100); i++){
-// 		sleep_ms(10);
-// 		if (Global::stop_all.load()) return "Thread stopped! x=" + to_string(x);
-// 	}
-// 	return "Thread done! x=" + to_string(x);
-// }
+namespace Runner {
+	atomic<bool> active (false);
+}
 
 
 //? --------------------------------------------- Main starts here! ---------------------------------------------------
@@ -351,23 +346,33 @@ int main(int argc, char **argv){
 
 	Global::debuginit = true;
 
+	Draw::calcSizes();
+	// cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+
 	// cout << Theme("main_bg") << Term::clear << flush;
 	// bool thread_test = false;
 
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
+	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::clear << endl;
 
-	cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
+	// cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
 
-	cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
-	// cout << string(Term::width - 1, '-') << endl;
-	size_t blen = (Term::width > 200) ? 200 : Term::width;
-	if (Term::width > 203) cout << Mv::r(Term::width / 2 - blen / 2) << flush;
-	int ill = 0;
-	for (int i : iota(0, (int)blen)){
-		ill = (i <= (int)blen / 2) ? i : ill - 1;
-		cout << Theme::g("used")[ill] << Symbols::h_line;
+	// cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
+	// // cout << string(Term::width - 1, '-') << endl;
+	// size_t blen = (Term::width > 200) ? 200 : Term::width;
+	// if (Term::width > 203) cout << Mv::r(Term::width / 2 - blen / 2) << flush;
+	// int ill = 0;
+	// for (int i : iota(0, (int)blen)){
+	// 	ill = (i <= (int)blen / 2) ? i : ill - 1;
+	// 	cout << Theme::g("used")[ill] << Symbols::h_line;
+	// }
+	// cout << Fx::reset << endl;
+
+	if (false) {
+		Draw::calcSizes();
+		cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+		Input::wait();
+		exit(0);
 	}
-	cout << Fx::reset << endl;
 
 	//* Test theme
 	if (false) {
@@ -479,9 +484,9 @@ int main(int argc, char **argv){
 		Draw::Graph kgraph2 {};
 		Draw::Graph kgraph3 {};
 
-		cout << Draw::createBox({.x = 5, .y = 10, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "braille", .fill = false, .num = 1}) << Mv::save;
-		cout << Draw::createBox({.x = 5, .y = 23, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "block", .fill = false, .num = 2});
-		cout << Draw::createBox({.x = 5, .y = 36, .width = Term::width - 10, .height = 12, .line_color = Theme::c("proc_box"), .title = "tty", .fill = false, .num = 3}) << flush;
+		cout << Draw::createBox(5, 10, Term::width - 10, 12, Theme::c("proc_box"), false, "braille", "", 1) << Mv::save;
+		cout << Draw::createBox(5, 23, Term::width - 10, 12, Theme::c("proc_box"), false, "block", "", 2);
+		cout << Draw::createBox(5, 36, Term::width - 10, 12, Theme::c("proc_box"), false, "tty", "", 3) << flush;
 		// Draw::Meter kmeter {};
 		// Draw::Graph kgraph2 {};
 		// Draw::Graph kgraph3 {};
@@ -595,12 +600,10 @@ int main(int argc, char **argv){
 
 
 
-	size_t lc;
 	string ostring;
 	uint64_t tsl, timestamp2, rcount = 0;
 	list<uint64_t> avgtimes;
 	size_t timer = 2000;
-	bool filtering = false;
 	vector<string> greyscale;
 	string filter;
 	string filter_cur;
@@ -613,9 +616,9 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	string pbox = Draw::createBox({.x = 1, .y = 10, .width = Term::width, .height = Term::height - 18, .line_color = Theme::c("proc_box"), .title = "testbox", .title2 = "below", .fill = false, .num = 7});
-	pbox += Mv::r(1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
-			ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Fx::reset + Mv::save;
+	// string pbox = Draw::createBox(1, 10, Term::width, Term::height - 18, Theme::c("proc_box"), false, "testbox", "below", 7);
+	// pbox += Mv::r(1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
+	// 		ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Fx::reset + Mv::save;
 
 	while (key != "q") {
 		timestamp = time_micros();
@@ -630,62 +633,62 @@ int main(int argc, char **argv){
 		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
-		lc = 0;
+		// lc = 0;
 
-		ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
-			+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
-			+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-				+ string(Config::getS("proc_sorting")), Term::width - 23 - ulen(filter)))
-			+ Mv::restore;
+		// ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
+		// 	+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
+		// 	+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
+		// 		+ string(Config::getS("proc_sorting")), Term::width - 23 - ulen(filter)))
+		// 	+ Mv::restore;
 
-		for (auto& p : plist){
-			if (not Config::getB("proc_tree")) {
-				ostring += Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
-						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-						+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
-						+ "\n";
-			}
-			else {
-				string cmd_cond;
-				if (not p.cmd.empty()) {
-					cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
-					cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
-				}
-				ostring += Mv::r(1) + (Config::getB("tty_mode") ? "" : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
-						+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
-						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-						+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
-						+ "\n";
-			}
-			if (lc++ > Term::height - 23) break;
-		}
+		// for (auto& p : plist){
+		// 	if (not Config::getB("proc_tree")) {
+		// 		ostring += Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
+		// 				+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+		// 				+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
+		// 				+ "\n";
+		// 	}
+		// 	else {
+		// 		string cmd_cond;
+		// 		if (not p.cmd.empty()) {
+		// 			cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
+		// 			cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
+		// 		}
+		// 		ostring += Mv::r(1) + (Config::getB("tty_mode") ? "" : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
+		// 				+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
+		// 				+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
+		// 				+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
+		// 				+ "\n";
+		// 	}
+		// 	if (lc++ > Term::height - 23) break;
+		// }
 
-		while (lc++ < Term::height - 21) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
+		// while (lc++ < Term::height - 21) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
 
-
+		ostring = Proc::draw(plist);
 
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 30) avgtimes.pop_back();
-		cout << pbox << ostring << Fx::reset << "\n" << endl;
+		cout << ostring << Fx::reset << Mv::to(2, 2) << endl;
 		cout << "  Details for " << Proc::detailed.entry.name << " (" << Proc::detailed.entry.pid << ")  Status: " << Proc::detailed.status << "  Elapsed: " << Proc::detailed.elapsed
 			 << "  Mem: " << floating_humanizer(Proc::detailed.entry.mem) << "         "
 			 << "\n  Parent: " << Proc::detailed.parent << "  IO in/out: " << Proc::detailed.io_read << "/" << Proc::detailed.io_write << "        " << endl;
-		cout << Mv::to(Term::height - 4, 1) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
+		cout << Mv::to(4, 2) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
-			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " <<
-			++rcount << ". Time: " << strf_time("%X   ") << endl;
+			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << endl;
 
 		while (time_ms() < tsl) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();
 			else { key.clear() ; continue; }
-			if (filtering) {
-				if (key == "enter") filtering = false;
+			if (Config::getB("proc_filtering")) {
+				if (key == "enter") Config::set("proc_filtering", false);
 				else if (key == "backspace" and not filter.empty()) filter = uresize(filter, ulen(filter) - 1);
 				else if (key == "space") filter.push_back(' ');
 				else if (ulen(key) == 1 ) filter.append(key);
 				else { key.clear(); continue; }
 				if (filter != Config::getS("proc_filter")) Config::set("proc_filter", filter);
 				key.clear();
+				Proc::redraw = true;
 				break;
 			}
 			else if (key == "q") break;
@@ -699,7 +702,7 @@ int main(int argc, char **argv){
 				if (++cur_i > (int)Proc::sort_vector.size() - 1) cur_i = 0;
 				Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 			}
-			else if (key == "f") filtering = true;
+			else if (key == "f") Config::flip("proc_filtering");
 			else if (key == "t") Config::flip("proc_tree");
 			else if (key == "r") Config::flip("proc_reversed");
 			else if (key == "c") Config::flip("proc_per_core");
@@ -711,8 +714,10 @@ int main(int argc, char **argv){
 				}
 			}
 			else continue;
+			Proc::redraw = true;
 			break;
 		}
+		cout << Mv::to(Term::height - 3, 1) << flush;
 	}
 
 	// cout << "Found " << plist.size() << " pids\n" << endl;

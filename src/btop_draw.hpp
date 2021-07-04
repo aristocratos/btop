@@ -40,17 +40,8 @@ namespace Symbols {
 
 namespace Draw {
 
-	struct BoxConf {
-		size_t x=0, y=0;
-		size_t width=0, height=0;
-		string line_color = "", title = "", title2 = "";
-		bool fill = true;
-		size_t num=0;
-		size_t w_percent=0, h_percent=0;
-	};
-
-	//* Create a box using values from a BoxConf struct and return as a string
-	string createBox(BoxConf c);
+	//* Create a box and return as a string
+	string createBox(int x, int y, int width, int height, string line_color="", bool fill=false, string title="", string title2="", int num=0);
 
 	//* Class holding a percentage meter
 	class Meter {
@@ -95,24 +86,22 @@ namespace Draw {
 
 namespace Cpu {
 
-	extern Draw::BoxConf box;
+
 
 }
 
 namespace Mem {
 
-	extern Draw::BoxConf box;
+
 
 }
 
 namespace Net {
 
-	extern Draw::BoxConf box;
+
 
 }
 
 namespace Proc {
-
-	extern Draw::BoxConf box;
 
 }

@@ -33,6 +33,12 @@ namespace Global {
 	extern string banner;
 }
 
+namespace Runner {
+
+	extern std::atomic<bool> active;
+
+}
+
 namespace Tools {
 	//* Platform specific function for system_uptime (seconds since last restart)
 	double system_uptime();
@@ -43,10 +49,29 @@ namespace Shared {
 	void init();
 }
 
+namespace Cpu {
+	extern string box, cpuName;
+	extern bool shown, redraw, got_sensors;
+}
+
+namespace Mem {
+	extern string box;
+	extern bool has_swap, shown, redraw;
+}
+
+namespace Net {
+	extern string box;
+	extern bool shown, redraw;
+}
+
 namespace Proc {
 	extern size_t numpids;
 	extern std::atomic<bool> stop;
 	extern std::atomic<bool> collecting;
+
+	extern string box;
+	extern bool shown, redraw;
+	extern int current_y, current_h, select_max;
 
 	//? Contains the valid sorting options for processes
 	extern vector<string> sort_vector;
@@ -80,4 +105,6 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc, saves and returns reference to Proc::current_procs;
 	vector<proc_info>& collect(bool return_last=false);
+
+	string draw(vector<proc_info> plist);
 }

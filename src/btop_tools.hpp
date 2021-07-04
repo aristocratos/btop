@@ -91,8 +91,8 @@ namespace Mv {
 namespace Term {
 	extern bool initialized;
 	extern bool resized;
-	extern size_t width;
-	extern size_t height;
+	extern int width;
+	extern int height;
 	extern string fg, bg, current_tty;
 
 	//* Hide terminal cursor
@@ -156,9 +156,15 @@ namespace Tools {
 	string str_to_lower(const string& str);
 
 	//* Check if vector <vec> contains value <find_val>
-	template <typename T>
-	bool v_contains(const vector<T>& vec, const T find_val) {
+	template <typename T, typename T2>
+	bool v_contains(const vector<T>& vec, const T2 find_val) {
 		return std::ranges::find(vec, find_val) != vec.end();
+	}
+
+	//* Check if string <str> contains value <find_val>
+	template <typename T>
+	bool s_contains(const string& str, const T find_val) {
+		return str.find(find_val) != string::npos;
 	}
 
 	//* Return index of <find_val> from vector <vec>, returns size of <vec> if <find_val> is not present
