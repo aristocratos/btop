@@ -265,6 +265,10 @@ namespace Theme {
 			gradients.clear();
 			array<string, 101> c_gradient;
 			bool t_to_256 = Config::getB("lowcolor");
+			rgbs.insert({
+				{"proc_start", rgbs["main_fg"]}, {"proc_mid", {-1, -1, -1}}, {"proc_end", rgbs["inactive_fg"]},
+				{"proc_color_start", rgbs["inactive_fg"]}, {"proc_color_mid", {-1, -1, -1}}, {"proc_color_end", rgbs["process_start"]}
+				});
 			for (auto& [name, source_arr] : rgbs) {
 				if (not name.ends_with("_start")) continue;
 				array<array<int, 3>, 101> dec_arr;

@@ -205,7 +205,7 @@ namespace Proc {
 
 		//? Update cpu percent deque for process cpu graph
 		detailed.cpu_percent.push_back(round(detailed.entry.cpu_c));
-		while (detailed.cpu_percent.size() > Term::width) detailed.cpu_percent.pop_front();
+		while (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
 		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clk_tck));

@@ -347,7 +347,7 @@ int main(int argc, char **argv){
 	Global::debuginit = true;
 
 	Draw::calcSizes();
-	// cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+	cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
 
 	// cout << Theme("main_bg") << Term::clear << flush;
 	// bool thread_test = false;

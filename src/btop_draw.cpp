@@ -267,7 +267,6 @@ namespace Draw {
 }
 
 namespace Cpu {
-
 	int width_p = 100, height_p = 32;
 	int min_w = 60, min_h = 8;
 	int x = 1, y = 1, width, height;
@@ -279,7 +278,6 @@ namespace Cpu {
 }
 
 namespace Mem {
-
 	int width_p = 45, height_p = 38;
 	int min_w = 36, min_h = 10;
 	int x = 1, y, width, height;
@@ -290,7 +288,6 @@ namespace Mem {
 }
 
 namespace Net {
-
 	int width_p = 45, height_p = 30;
 	int min_w = 3, min_h = 6;
 	int x = 1, y, width, height;
@@ -302,70 +299,105 @@ namespace Net {
 }
 
 namespace Proc {
-
 	int width_p = 55, height_p = 68;
 	int min_w = 44, min_h = 16;
 	int x, y, width, height;
-	int current_y, current_h, select_max;
+	int select_max;
 	bool shown = true, redraw = true;
 
 	string box;
-	vector<string> greyscale;
-	vector<string> colorfade;
 
 	string draw(vector<proc_info> plist){
 		auto& filter = Config::getS("proc_filter");
 		auto& filtering = Config::getB("proc_filtering");
 		auto& proc_tree = Config::getB("proc_tree");
+		bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid") );
 		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode"));
+		auto& proc_colors = Config::getB("proc_colors");
+		uint64_t total_mem = 16328872 << 10;
+		int y = show_detailed ? Proc::y + 9 : Proc::y;
+		int height = show_detailed ? Proc::height - 9 : Proc::height;
 		string out;
+		//* If true, redraw elements not needed to be updated every cycle
 		if (redraw) {
 			redraw = false;
 			out = box;
-			greyscale.clear();
-			for (int xc = 0; size_t i : iota(0, height - 3)){
-				xc = 230 - i * 150 / (Term::height - 20);
-				greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
-			}
+			select_max = height - 3;
+
 			out += Mv::to(y, x) + Mv::r(12)
 				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
 				+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
 				+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter)));
+
+			if (not proc_tree)
+				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " "
+					+ ljust("Command:", width - 70) + " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
+					+ " " + rjust("Cpu%", 14) + Fx::ub;
+			else
+				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + ljust("Tree:", width - 44)
+					+ " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
+					+ " " + rjust("Cpu%", 14) + Fx::ub;
 		}
 
-		if (not proc_tree)
-			out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " "
-				+ ljust("Command:", width - 70) + " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
-				+ " " + rjust("Cpu%", 14) + Fx::ub;
-		else
-			out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " "
-				+ ljust("Command:", width - 70) + " Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
-				+ " " + rjust("Cpu%", 14) + Fx::ub;
-
+		//* Iteration over processes
 		int lc = 0;
 		for (auto& p : plist){
-			if (not proc_tree) {
-				out += Mv::to(y+2+lc, x+1) + (proc_gradient ? greyscale[lc] : "") + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " "
-					+ ljust(p.cmd, width - 67, true) + " " + rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " "
-					+ rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-					+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4));
+			//? Set correct gradient colors if enabled
+			string c_color, m_color, t_color, g_color;
+			string end = proc_colors ? Theme::c("main_fg") + Fx::ub : Fx::ub;
+			if (proc_colors) { //! and not is_selected
+				array<string, 3> colors;
+				for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / total_mem), (int)p.threads / 3}) {
+					if (proc_gradient) {
+						int val = (min(v, 100) + 100) - lc * 100 / select_max;
+						if (val < 100) colors[i++] = Theme::g("proc_color")[val];
+						else colors[i++] = Theme::g("process")[val - 100];
+					}
+					else
+						colors[i++] = Theme::g("process")[min(v, 100)];
+				}
+				c_color = colors[0]; m_color = colors[1]; t_color = colors[2];
 			}
+			else
+				c_color = m_color = t_color = Fx::b;
+			if (proc_gradient) { //! and not is_selected
+				g_color = Theme::g("proc")[lc * 100 / select_max];
+			}
+
+			string cpu_str = to_string(p.cpu_p);
+			if (p.cpu_p < 10 or p.cpu_p >= 100) cpu_str.resize(3);
+
+			//? Normal view line
+			if (not proc_tree) {
+				out += Mv::to(y+2+lc, x+1)
+					+ g_color + rjust(to_string(p.pid), 8) + " "
+					+ c_color + ljust(p.name, 16) + end + " "
+					+ g_color + ljust(p.cmd, width - 67, true) + " ";
+			}
+			//? Tree view line
 			else {
+				//? Add process executable name if not same as /proc/comm
 				string cmd_cond;
 				if (not p.cmd.empty()) {
 					cmd_cond = p.cmd.substr(0, min(p.cmd.find(' '), p.cmd.size()));
 					cmd_cond = cmd_cond.substr(min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
 				}
-				out += Mv::to(y+2+lc, x+1) + (proc_gradient ? greyscale[lc] : "") + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
-						+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), width - 41, true) + " "
-						+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-						+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4));
+				string pid_str = to_string(p.pid);
+				int size_justify = ulen(p.prefix) + pid_str.size() + p.name.size() + 43;
+				out += Mv::to(y+2+lc, x+1)
+					+ g_color + p.prefix + pid_str + " "
+					+ c_color + p.name + end + " "
+					+ g_color + ljust((not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), width - size_justify, true) + " ";
 			}
+			//? Common end of line
+			out += t_color + rjust(to_string(p.threads), 5) + end + " "
+				+ g_color + ljust(p.user, 10) + " "
+				+ m_color + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ') + end
+				+ c_color + rjust(cpu_str, 4) + end;
 			if (lc++ > height - 5) break;
 		}
 
 		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 3, ' ');
-
 		return out;
 	}
 
@@ -433,11 +465,6 @@ namespace Draw {
 			auto& show_disks = Config::getB("show_disks");
 			auto& swap_disk = Config::getB("swap_disk");
 			auto& mem_graphs = Config::getB("mem_graphs");
-
-			// int hp;
-			// if (not Cpu::shown) hp = Net::shown ? 60 : 98;
-			// else if (not Net::shown) hp = 98 - Cpu::height_p;
-			// else hp = height_p;
 
 			width = round(Term::width * (Proc::shown ? width_p : 100) / 100);
 			height = round(Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
@@ -510,9 +537,6 @@ namespace Draw {
 			height = Term::height - Cpu::height;
 			x = Term::width - width + 1;
 			y = Cpu::height + 1;
-			current_y = y;
-			current_h = height;
-			select_max = height - 3;
 
 			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
 		}

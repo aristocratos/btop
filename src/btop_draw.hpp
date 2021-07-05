@@ -22,8 +22,9 @@ tab-size = 4
 #include <vector>
 #include <robin_hood.h>
 #include <deque>
+#include <atomic>
 
-using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
+using std::string, std::vector, robin_hood::unordered_flat_map, std::deque, std::atomic;
 
 namespace Symbols {
 	extern const string h_line;
@@ -87,11 +88,9 @@ namespace Draw {
 namespace Cpu {
 
 
-
 }
 
 namespace Mem {
-
 
 
 }
@@ -99,9 +98,9 @@ namespace Mem {
 namespace Net {
 
 
-
 }
 
 namespace Proc {
+
 
 }

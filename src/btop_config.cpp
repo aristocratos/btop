@@ -175,7 +175,8 @@ namespace Config {
 			{"net_upload", "10M"},
 			{"net_iface", ""},
 			{"log_level", "WARNING"},
-			{"proc_filter", ""}
+			{"proc_filter", ""},
+			{"proc_command", ""},
 		};
 		unordered_flat_map<string, string> stringsTmp;
 
