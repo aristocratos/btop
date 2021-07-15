@@ -39,6 +39,8 @@ namespace Symbols {
 	extern const string div_down;
 }
 
+//! See btop_shared.hpp for draw & misc functions for boxes
+
 namespace Draw {
 
 	//* Create a box and return as a string
@@ -82,25 +84,5 @@ namespace Draw {
 
 	//* Calculate sizes of boxes, draw outlines and save to enabled boxes namespaces
 	void calcSizes();
-
-}
-
-namespace Cpu {
-
-
-}
-
-namespace Mem {
-
-
-}
-
-namespace Net {
-
-
-}
-
-namespace Proc {
-
 
 }

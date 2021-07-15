@@ -117,7 +117,9 @@ namespace Proc {
 		int counter = 0;
 	}
 	uint64_t old_cputimes = 0;
-	size_t numpids = 500;
+	int numpids = 0;
+	size_t reserve_pids = 500;
+	bool tree_state = false;
 	atomic<bool> stop (false);
 	atomic<bool> collecting (false);
 	vector<string> sort_vector = {
@@ -165,8 +167,18 @@ namespace Proc {
 			}
 		}
 
-		if (not collapsed and not filtering)
+		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
+			if (auto& cmdline = cache.at(cur_proc.pid).cmd; not cmdline.empty() and not cmdline.starts_with("(")) {
+				cmdline = cmdline.substr(0, std::min(cmdline.find(' '), cmdline.size()));
+				cmdline = cmdline.substr(std::min(cmdline.find_last_of('/') + 1, cmdline.size()));
+				if (cmdline == cur_proc.name)
+					cmdline.clear();
+				else
+					cmdline = '(' + cmdline + ')';
+				out_procs.back().cmd = cmdline;
+			}
+		}
 
 		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
@@ -180,10 +192,10 @@ namespace Proc {
 		}
 		if (collapsed or filtering) return;
 
-		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("] "))
+		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("]─"))
 			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
 
-		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+] " : "[-] ") : " ├─ ");
+		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+]─" : "[-]─") : " ├─ ");
 	}
 
 	//* Get detailed info for selected process
@@ -286,6 +298,10 @@ namespace Proc {
 		auto& filter = Config::getS("proc_filter");
 		auto per_core = Config::getB("proc_per_core");
 		auto tree = Config::getB("proc_tree");
+		if (tree_state != tree) {
+			cache.clear();
+			tree_state = tree;
+		}
 		auto show_detailed = Config::getB("show_detailed");
 		size_t detailed_pid = Config::getI("detailed_pid");
 		ifstream pread;
@@ -293,7 +309,7 @@ namespace Proc {
 		string short_str;
 		double uptime = system_uptime();
 		vector<proc_info> procs;
-		procs.reserve((numpids + 10));
+		procs.reserve(reserve_pids + 10);
 		int npids = 0;
 		int cmult = (per_core) ? Global::coreCount : 1;
 		bool got_detailed = false;
@@ -437,7 +453,12 @@ namespace Proc {
 						}
 						case 20: { //? Number of threads
 							new_proc.threads = stoull(short_str);
-							next_x = (cache[new_proc.pid].cpu_s == 0) ? 22 : 24;
+							if (cache[new_proc.pid].cpu_s == 0) {
+								next_x = 22;
+								cache[new_proc.pid].cpu_t = cpu_t;
+							}
+							else
+								next_x = 24;
 							continue;
 						}
 						case 22: { //? Save cpu seconds to cache if missing
@@ -550,8 +571,9 @@ namespace Proc {
 		}
 
 		old_cputimes = cputimes;
+		numpids = (int)procs.size();
 		current_procs.swap(procs);
-		numpids = npids;
+		reserve_pids = npids;
 		collecting = false;
 		return current_procs;
 	}

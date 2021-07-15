@@ -221,6 +221,9 @@ namespace Config {
 			{"update_ms", 2000},
 			{"proc_update_mult", 2},
 			{"detailed_pid", 0},
+			{"selected_pid", 0},
+			{"proc_start", 0},
+			{"proc_selected", 0},
 		};
 		unordered_flat_map<string, int> intsTmp;
 
@@ -297,6 +300,12 @@ namespace Config {
 			bools.at(item.first) = item.second;
 		}
 		boolsTmp.clear();
+
+		if (Proc::shown) {
+			ints.at("selected_pid") = Proc::selected_pid;
+			ints.at("proc_start") = Proc::start;
+			ints.at("proc_selected") = Proc::selected;
+		}
 
 		locked = false;
 		writelock = false;

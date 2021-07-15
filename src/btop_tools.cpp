@@ -19,13 +19,11 @@ tab-size = 4
 #include <cmath>
 #include <iostream>
 #include <fstream>
-#include <chrono>
 #include <ctime>
 #include <sstream>
 #include <iomanip>
 #include <utility>
 #include <robin_hood.h>
-#include <thread>
 
 #include <unistd.h>
 #include <termios.h>
@@ -34,8 +32,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using 	std::string_view, std::array, std::regex, std::max, std::to_string, std::cin,
-		std::atomic, robin_hood::unordered_flat_map;
+using std::string_view, std::array, std::regex, std::max, std::to_string, std::cin, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -62,10 +59,6 @@ namespace Fx {
 	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
 
 	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
-
-	string uncolor(const string& s){
-		return regex_replace(s, color_regex, "");
-	}
 }
 
 //* Collection of escape codes and functions for cursor manipulation
@@ -83,10 +76,9 @@ namespace Mv {
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
 
-	bool initialized = false;
-	bool resized = false;
-	int width = 0;
-	int height = 0;
+	atomic<bool> initialized = false;
+	atomic<int> width = 0;
+	atomic<int> height = 0;
 	string fg, bg, current_tty;
 
 	const string hide_cursor = Fx::e + "?25l";
@@ -100,6 +92,8 @@ namespace Term {
 	const string mouse_off = Fx::e + "?1002l";
 	const string mouse_direct_on = Fx::e + "?1003h";
 	const string mouse_direct_off = Fx::e + "?1003l";
+	const string sync_start = Fx::e + "?2026h";
+	const string sync_end = Fx::e + "?2026l";
 
 	namespace {
 		struct termios initial_settings;
@@ -126,15 +120,17 @@ namespace Term {
 		}
 	}
 
-	bool refresh(){
+	bool refresh(bool update){
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 		if (width != w.ws_col or height != w.ws_row) {
-			width = w.ws_col;
-			height = w.ws_row;
-			resized = true;
+			if (update) {
+				width = w.ws_col;
+				height = w.ws_row;
+			}
+			return true;
 		}
-		return resized;
+		return false;
 	}
 
 	bool init(){
@@ -148,7 +144,6 @@ namespace Term {
 				echo(false);
 				linebuffered(false);
 				refresh();
-				resized = false;
 			}
 		}
 		return initialized;
@@ -168,13 +163,7 @@ namespace Term {
 
 namespace Tools {
 
-	size_t ulen(string str, const bool escape){
-		if (escape) str = std::regex_replace(str, Fx::escape_regex, "");
-		return rng::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
-	}
-
 	string uresize(string str, const size_t len){
-		if (str.size() < 1) return str;
 		if (len < 1) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
 			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
@@ -187,61 +176,19 @@ namespace Tools {
 		return str;
 	}
 
-	string str_to_upper(const string& str){
-		string out = str;
-		rng::for_each(out, [](auto& c){ c = ::toupper(c); } );
-		return out;
-	}
-
-	string str_to_lower(const string& str){
-		string out = str;
-		rng::for_each(out, [](char& c){ c = ::tolower(c); } );
-		return out;
-	}
-
-	uint64_t time_s(){
-		return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-	}
-
-	uint64_t time_ms(){
-		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-	}
-
-	uint64_t time_micros(){
-		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-	}
-
-	bool isbool(string& str){
-		return (str == "true") or (str == "false") or (str == "True") or (str == "False");
-	}
-
-	bool stobool(string& str){
-		return (str == "true" or str == "True");
-	}
-
-	bool isint(string& str){
-		if (str.empty()) return false;
-		size_t offset = (str[0] == '-' ? 1 : 0);
-		return all_of(str.begin() + offset, str.end(), ::isdigit);
-	}
-
-	string ltrim(const string& str, const string t_str){
+	string ltrim(const string& str, const string& t_str){
 		string_view str_v = str;
 		while (str_v.starts_with(t_str)) str_v.remove_prefix(t_str.size());
 		return (string)str_v;
 	}
 
-	string rtrim(const string& str, const string t_str){
+	string rtrim(const string& str, const string& t_str){
 		string_view str_v = str;
 		while (str_v.ends_with(t_str)) str_v.remove_suffix(t_str.size());
 		return (string)str_v;
 	}
 
-	string trim(const string& str, const string t_str){
-		return ltrim(rtrim(str, t_str), t_str);
-	}
-
-	vector<string> ssplit(const string& str, const char delim){
+	vector<string> ssplit(const string& str, const char& delim){
 		vector<string> out;
 		for (const auto& s : str 	| rng::views::split(delim)
 									| rng::views::transform([](auto &&rng) {
@@ -252,28 +199,24 @@ namespace Tools {
 		return out;
 	}
 
-	void sleep_ms(const size_t& ms) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-	}
-
-	string ljust(string str, const size_t x, bool utf, bool escape, bool lim){
-		if (utf or escape) {
-			if (not escape and lim and ulen(str) > x) str = uresize(str, x);
-			return str + string(max((int)(x - ulen(str, escape)), 0), ' ');
+	string ljust(string str, const size_t x, const bool utf, const bool limit){
+		if (utf) {
+			if (limit and ulen(str) > x) str = uresize(str, x);
+			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
-			if (lim and str.size() > x) str.resize(x);
+			if (limit and str.size() > x) str.resize(x);
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
-	string rjust(string str, const size_t x, bool utf, bool escape, bool lim){
-		if (utf or escape) {
-			if (not escape and lim and ulen(str) > x) str = uresize(str, x);
-			return string(max((int)(x - ulen(str, escape)), 0), ' ') + str;
+	string rjust(string str, const size_t x, const bool utf, const bool limit){
+		if (utf) {
+			if (limit and ulen(str) > x) str = uresize(str, x);
+			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
-			if (lim and str.size() > x) str.resize(x);
+			if (limit and str.size() > x) str.resize(x);
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
 	}
@@ -344,37 +287,19 @@ namespace Tools {
 	}
 
 	std::string operator*(string str, size_t n){
-		string out;
-		out.reserve(str.size() * n);
-		while (n-- > 0) out.append(str);
-		return out;
+		if (n == 0) return "";
+		str.reserve(str.size() * n);
+		for (string org_str = str; n > 1; n--) str.append(org_str);
+		return str;
 	}
 
-	string strf_time(string strf){
+	string strf_time(const string& strf){
 		auto now = std::chrono::system_clock::now();
 		auto in_time_t = std::chrono::system_clock::to_time_t(now);
 		std::tm bt {};
 		std::stringstream ss;
 		ss << std::put_time(localtime_r(&in_time_t, &bt), strf.c_str());
 		return ss.str();
-	}
-
-
-	#if (__GNUC__ > 10)
-		//* Redirects to atomic wait
-		void atomic_wait(const atomic<bool>& atom, bool val){
-			atom.wait(val);
-		}
-	#else
-		//* Crude implementation of atomic wait for GCC 10
-		void atomic_wait(const atomic<bool>& atom, bool val){
-			while (atom == val) std::this_thread::sleep_for(std::chrono::microseconds(1));
-		}
-	#endif
-
-	void atomic_wait_set(atomic<bool>& atom, bool val){
-		atomic_wait(atom, val);
-		atom = val;
 	}
 
 }
@@ -387,7 +312,7 @@ namespace Logger {
 		string tdf = "%Y/%m/%d (%T) | ";
 	}
 
-	vector<string> log_levels = {
+	const vector<string> log_levels = {
 			"DISABLED",
 			"ERROR",
 			"WARNING",
@@ -398,11 +323,11 @@ namespace Logger {
 	size_t loglevel;
 	fs::path logfile;
 
-	void set(string level){
+	void set(const string level){
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(size_t level, string& msg){
+	void log_write(const size_t level, const string& msg){
 		if (loglevel < level or logfile.empty()) return;
 		atomic_wait_set(busy, true);
 		std::error_code ec;
@@ -420,21 +345,5 @@ namespace Logger {
 		}
 		else logfile.clear();
 		busy = false;
-	}
-
-	void error(string msg){
-		log_write(1, msg);
-	}
-
-	void warning(string msg){
-		log_write(2, msg);
-	}
-
-	void info(string msg){
-		log_write(3, msg);
-	}
-
-	void debug(string msg){
-		log_write(4, msg);
 	}
 }

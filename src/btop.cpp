@@ -88,6 +88,7 @@ namespace Global {
 
 	uint64_t start_time;
 
+	atomic<bool> resized (false);
 	atomic<bool> quitting (false);
 
 	bool arg_tty = false;
@@ -137,19 +138,51 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-void clean_quit(int sig){
+//* Handler for SIGWINCH and general resizing events
+void _resize(bool force=false){
+	if (Term::refresh(false) or force) {
+		Global::resized = true;
+		if (Runner::active) {
+			Runner::stop = true;
+			atomic_wait(Runner::active);
+		}
+		Term::refresh();
+	}
+	else return;
+
+	while (true) {
+		sleep_ms(100);
+		if (not Term::refresh()) break;
+	}
+
+	Input::interrupt = true;
+	Draw::calcSizes();
+}
+
+//* Exit handler; stops threads, restores terminal and saves config changes
+void clean_quit(int sig=-1){
 	if (Global::quitting) return;
+	Global::quitting = true;
+	if (Runner::active) {
+		Runner::stop = true;
+		atomic_wait(Runner::active);
+	}
 	if (Term::initialized) {
 		Term::restore();
 		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	}
-	Global::quitting = true;
+
 	Config::write();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 	if (sig != -1) exit(sig);
 }
 
-void sleep_now(){
+//* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
+void _sleep(){
+	if (Runner::active) {
+		Runner::stop = true;
+		atomic_wait(Runner::active);
+	}
 	if (Term::initialized) {
 		Term::restore();
 		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
@@ -157,12 +190,16 @@ void sleep_now(){
 	std::raise(SIGSTOP);
 }
 
-void resume_now(){
+//* Handler for SIGCONT; re-initialize terminal and force a resize event
+void _resume(){
 	Term::init();
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
+	_resize(true);
 }
 
-void _exit_handler() { clean_quit(-1); }
+void _exit_handler() {
+	clean_quit(-1);
+}
 
 void _signal_handler(int sig) {
 	switch (sig) {
@@ -170,10 +207,13 @@ void _signal_handler(int sig) {
 			clean_quit(0);
 			break;
 		case SIGTSTP:
-			sleep_now();
+			_sleep();
 			break;
 		case SIGCONT:
-			resume_now();
+			_resume();
+			break;
+		case SIGWINCH:
+			_resize();
 			break;
 	}
 }
@@ -221,6 +261,7 @@ void banner_gen() {
 
 namespace Runner {
 	atomic<bool> active (false);
+	atomic<bool> stop (false);
 }
 
 
@@ -239,6 +280,7 @@ int main(int argc, char **argv){
 	std::signal(SIGINT, _signal_handler);
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
+	std::signal(SIGWINCH, _signal_handler);
 
 	//? Linux init
 	#if defined(LINUX)
@@ -344,28 +386,15 @@ int main(int argc, char **argv){
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 
-	Global::debuginit = true;
+	Global::debuginit = false;
 
 	Draw::calcSizes();
-	cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
 
-	// cout << Theme("main_bg") << Term::clear << flush;
-	// bool thread_test = false;
 
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::clear << endl;
 
-	// cout << Theme::c("main_fg") << Theme::c("main_bg") << Term::clear << endl;
+	cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
 
-	// cout << Mv::r(Term::width / 2 - Global::banner_width / 2) << Global::banner << endl;
-	// // cout << string(Term::width - 1, '-') << endl;
-	// size_t blen = (Term::width > 200) ? 200 : Term::width;
-	// if (Term::width > 203) cout << Mv::r(Term::width / 2 - blen / 2) << flush;
-	// int ill = 0;
-	// for (int i : iota(0, (int)blen)){
-	// 	ill = (i <= (int)blen / 2) ? i : ill - 1;
-	// 	cout << Theme::g("used")[ill] << Symbols::h_line;
-	// }
-	// cout << Fx::reset << endl;
 
 	if (false) {
 		Draw::calcSizes();
@@ -374,16 +403,22 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
+	// if (true) {
+	// 	cout << Term::clear << flush;
+	// 	unordered_flat_map<string, string(*)(string)> korvs = {
+	// 		{"korv1", korv1},
+	// 		{"korv2", korv2},
+	// 	};
+
+	// 	// auto hej = korv1;
+
+	// 	cout << korvs["korv1"]("hejsan") << endl;
+	// 	cout << korvs["korv2"]("hejsan igen") << endl;
+	// 	exit(0);
+	// }
+
 	//* Test theme
 	if (false) {
-
-		// cout << Theme::theme_dir << ", " << Theme::user_theme_dir << endl;
-		// for (auto& s : Theme::themes) {
-		// 	cout << s << endl;
-		// }
-
-		// exit(0);
-
 		string key;
 		bool no_redraw = false;
 		auto theme_index = v_index(Theme::themes, Config::getS("color_theme"));
@@ -397,7 +432,6 @@ int main(int argc, char **argv){
 				size_t i = 0;
 				for(auto& item : Theme::test_colors()) {
 					cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
-					// << Theme::dec(item.first)[0] << ":" << Theme::dec(item.first)[1] << ":" << Theme::dec(item.first)[2] << ;
 					if (++i == 4) {
 						i = 0;
 						cout << endl;
@@ -440,45 +474,13 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-	if (false) {
-		string first = "Test number 1 OF 45, or?";
-		cout << str_to_lower(first) << endl;
-		cout << str_to_upper(first) << endl;
-		exit(0);
-	}
-
-
-	if (false) {
-		Draw::Meter kmeter;
-		kmeter(Term::width - 2, "cpu", false);
-		cout << kmeter(25) << endl;
-		cout << kmeter(0) << endl;
-		cout << kmeter(50) << endl;
-		cout << kmeter(100) << endl;
-		cout << kmeter(50) << endl;
-		exit(0);
-	}
-
-	if (false) {
-		cout << fs::absolute(fs::current_path() / "..") << endl;
-		cout << Global::self_path << endl;
-		cout << Theme::theme_dir << endl;
-		cout << Config::conf_dir << endl;
-		exit(0);
-	}
 
 	if (false) {
 
 		deque<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
-		// mydata.push_back(0);
-		// mydata.push_back(0);
 		mydata.push_back(50);
-
-
-		// for (long long i = 0; i <= 100; i++) mydata.push_back(i);
-		// for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 
 		Draw::Graph kgraph {};
 		Draw::Graph kgraph2 {};
@@ -487,54 +489,28 @@ int main(int argc, char **argv){
 		cout << Draw::createBox(5, 10, Term::width - 10, 12, Theme::c("proc_box"), false, "braille", "", 1) << Mv::save;
 		cout << Draw::createBox(5, 23, Term::width - 10, 12, Theme::c("proc_box"), false, "block", "", 2);
 		cout << Draw::createBox(5, 36, Term::width - 10, 12, Theme::c("proc_box"), false, "tty", "", 3) << flush;
-		// Draw::Meter kmeter {};
-		// Draw::Graph kgraph2 {};
-		// Draw::Graph kgraph3 {};
-
 		auto kts = time_micros();
-		kgraph(Term::width - 12, 10, "cpu", mydata, "braille", false, false);
-		kgraph2(Term::width - 12, 10, "cpu", mydata, "block", false, false);
-		kgraph3(Term::width - 12, 10, "cpu", mydata, "tty", false, false);
+		kgraph(Term::width - 13, 10, "cpu", mydata, "braille", false, false);
+		kgraph2(Term::width - 13, 10, "cpu", mydata, "block", false, false);
+		kgraph3(Term::width - 13, 10, "cpu", mydata, "tty", false, false);
 
-		// kmeter(Term::width - 12, "process");
-		// cout << Mv::save << kgraph(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
-
-		// exit(0);
-		// kgraph2(Term::width, 10, "process", mydata, true, false);
-		// kgraph3(Term::width, 1, "process", mydata, false, false);
-		// cout << kgraph() << endl;
-		// cout << kgraph2() << endl;
-		// exit(0);
 
 		cout 	<< Mv::restore << kgraph(mydata, true)
 				<< Mv::restore << Mv::d(13) << kgraph2(mydata, true)
-				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << endl
+				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << '\n'
 				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
-		// cout << Mv::save << kgraph(mydata, true) << "\n" << kgraph2(mydata, true) << "\n" << kgraph3(mydata, true) << "\n" << kmeter(mydata.back()) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
-		// sleep_ms(1000);
-		// mydata.push_back(50);
-		// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n\nInit took " << time_micros() - kts << " μs.       " << endl;
-		// exit(0);
 
-		// long long y = 0;
-		// bool flip = false;
 		list<uint64_t> ktavg;
 		while (true) {
 			mydata.back() = std::rand() % 101;
-			// mydata.back() = y;
 			kts = time_micros();
-			// cout << Mv::restore << " "s * Term::width << "\n" << " "s * Term::width << endl;
-			cout 	<< Mv::restore << kgraph(mydata)
+			cout 	<< Term::sync_start << Mv::restore << kgraph(mydata)
 					<< Mv::restore << Mv::d(13) << kgraph2(mydata)
 					<< Mv::restore << Mv::d(26) << kgraph3(mydata)
-					<< endl;
-			// cout << Mv::restore << kgraph(mydata) << "\n" << kgraph2(mydata) << "\n" << " "s * Term::width << Mv::l(Term::width) << kgraph3(mydata) << "\n" << kmeter(mydata.back()) << endl;
+					<< Term::sync_end << endl;
 			ktavg.push_front(time_micros() - kts);
 			if (ktavg.size() > 100) ktavg.pop_back();
 			cout << Mv::d(1) << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
-			// if (flip) y--;
-			// else y++;
-			// if (y == 100 or y == 0) flip = not flip;
 			if (Input::poll()) {
 				if (Input::get() == "space") Input::wait();
 				else break;
@@ -565,34 +541,6 @@ int main(int argc, char **argv){
 	}
 
 
-	// if (thread_test){
-
-	// 	unordered_flat_map<int, future<string>> runners;
-	// 	unordered_flat_map<int, string> outputs;
-
-	// 	for (int i : iota(0, 10)){
-	// 		runners[i] = async(my_worker, i);
-	// 	}
-	// 	// uint i = 0;
-	// 	while (outputs.size() < 10){
-
-	// 		for (int i : iota(0, 10)){
-	// 			if (runners[i].valid() and runners[i].wait_for(std::chrono::milliseconds(10)) == future_status::ready) {
-	// 				outputs[i] = runners[i].get();
-	// 				cout << "Thread " << i << " : " << outputs[i] << endl;
-	// 			}
-	// 		}
-
-	// 		// if (++i >= 10) i = 0;
-	// 		if (outputs.size() >= 8) Global::stop_all.store(true);
-	// 	}
-	// }
-
-
-
-	cout << "Up for " << sec_to_dhms(round(system_uptime())) << endl;
-
-
 //*------>>>>>> Proc testing
 
 
@@ -616,13 +564,10 @@ int main(int argc, char **argv){
 		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
 	}
 
-	// string pbox = Draw::createBox(1, 10, Term::width, Term::height - 18, Theme::c("proc_box"), false, "testbox", "below", 7);
-	// pbox += Mv::r(1) + Theme::c("title") + Fx::b + rjust("Pid:", 8) + " " + ljust("Program:", 16) + " " + ljust("Command:", Term::width - 70) + " Threads: " +
-	// 		ljust("User:", 10) + " " + rjust("MemB", 5) + " " + rjust("Cpu%", 14) + "\n" + Fx::reset + Mv::save;
-
 	while (key != "q") {
 		timestamp = time_micros();
 		tsl = time_ms() + timer;
+		Config::lock();
 		try {
 			plist = Proc::collect();
 		}
@@ -633,51 +578,21 @@ int main(int argc, char **argv){
 		timestamp2 = time_micros();
 		timestamp = timestamp2 - timestamp;
 		ostring.clear();
-		// lc = 0;
-
-		// ostring = Mv::u(2) + Mv::l(Term::width) + Mv::r(12)
-		// 	+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
-		// 	+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-		// 		+ string(Config::getS("proc_sorting")), Term::width - 23 - ulen(filter)))
-		// 	+ Mv::restore;
-
-		// for (auto& p : plist){
-		// 	if (not Config::getB("proc_tree")) {
-		// 		ostring += Mv::r(1) + greyscale[lc] + rjust(to_string(p.pid), 8) + " " + ljust(p.name, 16) + " " + ljust(p.cmd, Term::width - 66, true) + " "
-		// 				+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-		// 				+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
-		// 				+ "\n";
-		// 	}
-		// 	else {
-		// 		string cmd_cond;
-		// 		if (not p.cmd.empty()) {
-		// 			cmd_cond = p.cmd.substr(0, std::min(p.cmd.find(' '), p.cmd.size()));
-		// 			cmd_cond = cmd_cond.substr(std::min(cmd_cond.find_last_of('/') + 1, cmd_cond.size()));
-		// 		}
-		// 		ostring += Mv::r(1) + (Config::getB("tty_mode") ? "" : greyscale[lc]) + ljust(p.prefix + to_string(p.pid) + " " + p.name + " "
-		// 				+ (not cmd_cond.empty() and cmd_cond != p.name ? "(" + cmd_cond + ")" : ""), Term::width - 40, true) + " "
-		// 				+ rjust(to_string(p.threads), 5) + " " + ljust(p.user, 10) + " " + rjust(floating_humanizer(p.mem, true), 5) + string(11, ' ')
-		// 				+ (p.cpu_p < 10 or p.cpu_p >= 100 ? rjust(to_string(p.cpu_p), 3) + " " : rjust(to_string(p.cpu_p), 4))
-		// 				+ "\n";
-		// 	}
-		// 	if (lc++ > Term::height - 23) break;
-		// }
-
-		// while (lc++ < Term::height - 21) ostring += Mv::r(1) + string(Term::width - 2, ' ') + "\n";
 
 		ostring = Proc::draw(plist);
+		Config::unlock();
 
 		avgtimes.push_front(timestamp);
 		if (avgtimes.size() > 30) avgtimes.pop_back();
-		cout << ostring << Fx::reset << Mv::to(2, 2) << endl;
+		cout << Term::sync_start << ostring << Fx::reset << Mv::to(2, 2) << '\n';
 		cout << "  Details for " << Proc::detailed.entry.name << " (" << Proc::detailed.entry.pid << ")  Status: " << Proc::detailed.status << "  Elapsed: " << Proc::detailed.elapsed
 			 << "  Mem: " << floating_humanizer(Proc::detailed.entry.mem) << "         "
-			 << "\n  Parent: " << Proc::detailed.parent << "  IO in/out: " << Proc::detailed.io_read << "/" << Proc::detailed.io_write << "        " << endl;
+			 << "\n  Parent: " << Proc::detailed.parent << "  IO in/out: " << Proc::detailed.io_read << "/" << Proc::detailed.io_write << "        ";
 		cout << Mv::to(4, 2) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
 			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
-			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << endl;
+			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << Term::sync_end << flush;
 
-		while (time_ms() < tsl) {
+		while (time_ms() < tsl and not Global::resized) {
 			if (Input::poll(tsl - time_ms())) key = Input::get();
 			else { key.clear() ; continue; }
 			if (Config::getB("proc_filtering")) {
@@ -707,20 +622,23 @@ int main(int argc, char **argv){
 			else if (key == "r") Config::flip("proc_reversed");
 			else if (key == "c") Config::flip("proc_per_core");
 			else if (key == "delete") { filter.clear(); Config::set("proc_filter", filter); }
-			else if (key == "d" ) {
-				Config::flip("show_detailed");
-				if (Config::getB("show_detailed")) {
-					Config::set("detailed_pid", (int)plist.at(0).pid);
-				}
+			else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
+				Proc::selection(key);
+				cout << Proc::draw(plist) << flush;
+				continue;
 			}
+
 			else continue;
 			Proc::redraw = true;
 			break;
 		}
+		if (Global::resized) {
+			cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+			Global::resized = false;
+		}
 		cout << Mv::to(Term::height - 3, 1) << flush;
 	}
 
-	// cout << "Found " << plist.size() << " pids\n" << endl;
 
 //*-----<<<<<
 

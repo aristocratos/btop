@@ -25,7 +25,7 @@ tab-size = 4
 #include <deque>
 #include <robin_hood.h>
 
-using std::string, std::vector, std::deque, robin_hood::unordered_flat_map;
+using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic;
 
 namespace Global {
 	extern const string Version;
@@ -35,7 +35,8 @@ namespace Global {
 
 namespace Runner {
 
-	extern std::atomic<bool> active;
+	extern atomic<bool> active;
+	extern atomic<bool> stop;
 
 }
 
@@ -65,13 +66,15 @@ namespace Net {
 }
 
 namespace Proc {
-	extern size_t numpids;
-	extern std::atomic<bool> stop;
-	extern std::atomic<bool> collecting;
+	extern int numpids;
+	extern atomic<bool> stop;
+	extern atomic<bool> collecting;
 
 	extern string box;
 	extern bool shown, redraw;
 	extern int current_y, current_h, select_max;
+	extern atomic<int> detailed_pid;
+	extern int selected_pid, start, selected;
 
 	//? Contains the valid sorting options for processes
 	extern vector<string> sort_vector;
@@ -103,8 +106,12 @@ namespace Proc {
 
 	extern detail_container detailed;
 
-	//* Collects and sorts process information from /proc, saves and returns reference to Proc::current_procs;
+	//* Collect and sort process information from /proc, saves and returns reference to Proc::current_procs;
 	vector<proc_info>& collect(bool return_last=false);
 
+	//* Update current selection and view
+	void selection(string cmd_key);
+
+	//* Draw contents of proc box using <plist> as data source
 	string draw(vector<proc_info> plist);
 }
