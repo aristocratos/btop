@@ -141,16 +141,16 @@ void argumentParser(int argc, char **argv){
 	}
 }
 
-//* Handler for SIGWINCH and general resizing events
-void _resize(bool force=false){
-	if (Term::refresh(false) or force) {
+//* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
+void term_resize(bool force=false){
+	if (auto refreshed = Term::refresh() or force) {
+		if (force and refreshed) force = false;
 		Global::resized = true;
 		Runner::stop();
-		Term::refresh();
 	}
 	else return;
 
-	while (true) {
+	while (not force) {
 		sleep_ms(100);
 		if (not Term::refresh()) break;
 	}
@@ -188,7 +188,7 @@ void _sleep(){
 void _resume(){
 	Term::init();
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
-	_resize(true);
+	term_resize(true);
 }
 
 void _exit_handler() {
@@ -207,7 +207,7 @@ void _signal_handler(int sig) {
 			_resume();
 			break;
 		case SIGWINCH:
-			_resize();
+			term_resize();
 			break;
 	}
 }
@@ -267,37 +267,34 @@ namespace Runner {
 		string out;
 		out.reserve(output.size());
 
-		try {
-			for (auto& box : boxes) {
-				if (stopping) break;
-				try {
-					if (box == "cpu") {
-						out += Cpu::draw(Cpu::collect(no_update), force_redraw);
-					}
-					else if (box == "mem") {
-						out += Mem::draw(Mem::collect(no_update), force_redraw);
-					}
-					else if (box == "net") {
-						out += Net::draw(Net::collect(no_update), force_redraw);
-					}
-					else if (box == "proc") {
-						out += Proc::draw(Proc::collect(no_update), force_redraw);
-					}
+		for (auto& box : boxes) {
+			if (stopping) break;
+			try {
+				if (box == "cpu") {
+					out += Cpu::draw(Cpu::collect(no_update), force_redraw);
 				}
-				catch (const std::exception& e) {
-					string fname = box;
-					fname[0] = toupper(fname[0]);
-					throw std::runtime_error(fname + "::draw(" + fname + "::collect(no_update=" + (no_update ? "true" : "false")
-						+ "), force_redraw=" + (force_redraw ? "true" : "false") + ") : " + (string)e.what());
+				else if (box == "mem") {
+					out += Mem::draw(Mem::collect(no_update), force_redraw);
+				}
+				else if (box == "net") {
+					out += Net::draw(Net::collect(no_update), force_redraw);
+				}
+				else if (box == "proc") {
+					out += Proc::draw(Proc::collect(no_update), force_redraw);
 				}
 			}
-		}
-		catch (std::exception& e) {
-			Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
-			Logger::error(Global::exit_error_msg);
-			Global::thread_exception = true;
-			Input::interrupt = true;
-			stopping = true;
+			catch (const std::exception& e) {
+				string fname = box;
+				fname[0] = toupper(fname[0]);
+				Global::exit_error_msg = "Exception in runner thread -> "
+					+ fname + "::draw(" + fname + "::collect(no_update=" + (no_update ? "true" : "false")
+					+ "), force_redraw=" + (force_redraw ? "true" : "false") + ") : " + (string)e.what();
+				Logger::error(Global::exit_error_msg);
+				Global::thread_exception = true;
+				Input::interrupt = true;
+				stopping = true;
+				break;
+			}
 		}
 
 		if (stopping) {
@@ -325,7 +322,7 @@ namespace Runner {
 		active = true;
 		Config::lock();
 		vector<string> boxes;
-		if (box.empty()) boxes = Config::current_boxes;
+		if (box == "all") boxes = Config::current_boxes;
 		else boxes.push_back(box);
 		std::thread run_thread(_runner, boxes, no_update, force_redraw, input_interrupt);
 		run_thread.detach();
@@ -475,7 +472,7 @@ int main(int argc, char **argv){
 
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::clear << endl;
 
-	cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 
 
 	//* Test theme
@@ -562,7 +559,7 @@ int main(int argc, char **argv){
 				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
 
 		list<uint64_t> ktavg;
-		while (true) {
+		for (;;) {
 			mydata.back() = std::rand() % 101;
 			kts = time_micros();
 			cout 	<< Term::sync_start << Mv::restore << kgraph(mydata)
@@ -592,36 +589,50 @@ int main(int argc, char **argv){
 	list<uint64_t> avgtimes;
 
 	try {
-		while (true) {
+		while (not true not_eq not false) {
 			if (Global::thread_exception) clean_quit(1);
+			uint64_t update_ms = Config::getI("update_ms");
 
+			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
+			term_resize();
+
+			//? Print out boxes outlines and trigger secondary thread to redraw if terminal has been resized
+			if (Global::resized) {
+				cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
+				Global::resized = false;
+				if (time_ms() < future_time)
+					Runner::run("all", true, true);
+			}
+
+			//? Print out any available output from secondary thread
 			if (Runner::has_output) {
 				cout << Term::sync_start << Runner::get_output() << Term::sync_end << flush;
 
-				//! DEBUG stats
+				//! DEBUG stats -->
 				avgtimes.push_front(Runner::time_spent);
 				if (avgtimes.size() > 30) avgtimes.pop_back();
 				cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(avgtimes.front()), 5) << " μs. Average: " <<
 					rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
 					" samples. Run count: " << ++rcount << ".    " << flush;
+				//! <--
 			}
 
+			//? Start collect & draw thread at the interval set by <update_ms> config value
 			if (time_ms() >= future_time) {
-				Runner::run();
-				future_time = time_ms() + Config::getI("update_ms");
+				Runner::run("all");
+				future_time = time_ms() + update_ms;
 			}
 
-			while (time_ms() < future_time and not Global::resized) {
-				if (Input::poll(future_time - time_ms()))
+			//? Loop over input polling and input action processing and check for external clock changes
+			for (auto current_time = time_ms(); current_time < future_time and not Global::resized; current_time = time_ms()) {
+				if (future_time - current_time > update_ms)
+					future_time = current_time;
+				else if (Input::poll(future_time - current_time))
 					Input::process(Input::get());
 				else
 					break;
 			}
-			if (Global::resized) {
-				// cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
-				Global::resized = false;
-				future_time = time_ms();
-			}
+
 		}
 	}
 	catch (std::exception& e) {
@@ -630,8 +641,4 @@ int main(int argc, char **argv){
 		clean_quit(1);
 	}
 
-
-//*-----<<<<<
-
-	return 0;
 }

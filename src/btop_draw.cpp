@@ -351,20 +351,20 @@ namespace Proc {
 			else selected++;
 		}
 		else if (cmd_key == "page_up") {
-			if (start == 0) selected = 0;
+			if (selected > 0 and start == 0) selected = 0;
 			else start = max(0, start - (height - 3));
 		}
 		else if (cmd_key == "page_down") {
-			if (start >= numpids - select_max)	selected = select_max;
+			if (selected > 0 and start >= numpids - select_max) selected = select_max;
 			else start = clamp(start + select_max, 0, max(0, numpids - select_max));
 		}
 		else if (cmd_key == "home") {
 			start = 0;
-			selected = (selected > 0) ? 1 : 0;
+			if (selected > 0) selected = 1;
 		}
 		else if (cmd_key == "end") {
 			start = max(0, numpids - select_max);
-			selected = select_max;
+			if (selected > 0) selected = select_max;
 		}
 
 		Config::set("proc_start", start);
@@ -510,7 +510,6 @@ namespace Proc {
 
 namespace Draw {
 	void calcSizes(){
-		Config::unlock();
 		auto& boxes = Config::getS("shown_boxes");
 
 		Cpu::box.clear();

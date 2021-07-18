@@ -498,9 +498,8 @@ namespace Proc {
 				}
 
 			}
-			catch (std::invalid_argument const&) { continue; }
-			catch (std::out_of_range const&) { continue; }
-			catch (std::ios_base::failure const&) {}
+			catch (const std::invalid_argument&) { continue; }
+			catch (const std::out_of_range&) { continue; }
 
 			stat_loop_done:
 			pread.close();

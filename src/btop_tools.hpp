@@ -137,8 +137,8 @@ namespace Term {
 	//* Escape sequence for end of synchronized output
 	extern const string sync_end;
 
-	//* Returns true if terminal has been resized, updates width and height if update=true
-	bool refresh(bool update=true);
+	//* Returns true if terminal has been resized and updates width and height
+	bool refresh();
 
 	//* Check for a valid tty, save terminal options and set new options
 	bool init();

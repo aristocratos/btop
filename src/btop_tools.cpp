@@ -120,14 +120,12 @@ namespace Term {
 		}
 	}
 
-	bool refresh(bool update){
+	bool refresh(){
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 		if (width != w.ws_col or height != w.ws_row) {
-			if (update) {
-				width = w.ws_col;
-				height = w.ws_row;
-			}
+			width = w.ws_col;
+			height = w.ws_row;
 			return true;
 		}
 		return false;
@@ -144,6 +142,7 @@ namespace Term {
 				echo(false);
 				linebuffered(false);
 				refresh();
+				Global::resized = false;
 			}
 		}
 		return initialized;

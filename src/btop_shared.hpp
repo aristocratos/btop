@@ -36,6 +36,7 @@ namespace Global {
 	extern atomic<bool> thread_exception;
 	extern int coreCount;
 	extern string banner;
+	extern atomic<bool> resized;
 }
 
 namespace Runner {
