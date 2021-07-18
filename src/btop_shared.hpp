@@ -24,11 +24,16 @@ tab-size = 4
 #include <atomic>
 #include <deque>
 #include <robin_hood.h>
+#include <array>
 
-using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic;
+using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
+
+void clean_quit(int sig=-1);
 
 namespace Global {
 	extern const string Version;
+	extern string exit_error_msg;
+	extern atomic<bool> thread_exception;
 	extern int coreCount;
 	extern string banner;
 }
@@ -36,7 +41,10 @@ namespace Global {
 namespace Runner {
 
 	extern atomic<bool> active;
-	extern atomic<bool> stop;
+	extern atomic<bool> stopping;
+
+	void run(const string box="", const bool no_update=false, const bool force_redraw=false, const bool input_interrupt=true);
+	void stop();
 
 }
 
@@ -53,22 +61,65 @@ namespace Shared {
 namespace Cpu {
 	extern string box, cpuName;
 	extern bool shown, redraw, got_sensors;
+
+	struct cpu_info {
+		vector<deque<long long>> percent;
+		vector<deque<long long>> temp;
+		array<float, 3> load_avg;
+	};
+
+	//* Collect cpu stats and temperatures
+	cpu_info& collect(const bool return_last=false);
+
+	//* Draw contents of cpu box using <cpu> as source
+	string draw(const cpu_info& cpu, bool force_redraw=false);
 }
 
 namespace Mem {
 	extern string box;
 	extern bool has_swap, shown, redraw;
+
+	struct disk_info {
+		uint64_t total = 0, used = 0;
+	};
+
+	struct mem_info {
+		uint64_t total = 0, available = 0, cached = 0, free = 0;
+		unordered_flat_map<string, deque<long long>> percent;
+		unordered_flat_map<string, deque<long long>> disks_io;
+		unordered_flat_map<string, disk_info> disks;
+	};
+
+	//* Collect mem & disks stats
+	mem_info& collect(const bool return_last=false);
+
+	//* Draw contents of mem box using <mem> as source
+	string draw(const mem_info& mem, bool force_redraw=false);
 }
 
 namespace Net {
 	extern string box;
 	extern bool shown, redraw;
+
+	struct net_stat {
+		uint64_t speed = 0, top = 0, total = 0;
+	};
+
+	struct net_info {
+		unordered_flat_map<string, deque<long long>> bandwidth;
+		unordered_flat_map<string, net_stat> stat;
+		string ip_addr;
+	};
+
+	//* Collect net upload/download stats
+	net_info& collect(const bool return_last=false);
+
+	//* Draw contents of net box using <net> as source
+	string draw(const net_info& net, bool force_redraw=false);
 }
 
 namespace Proc {
-	extern int numpids;
-	extern atomic<bool> stop;
-	extern atomic<bool> collecting;
+	extern atomic<int> numpids;
 
 	extern string box;
 	extern bool shown, redraw;
@@ -106,12 +157,12 @@ namespace Proc {
 
 	extern detail_container detailed;
 
-	//* Collect and sort process information from /proc, saves and returns reference to Proc::current_procs;
-	vector<proc_info>& collect(bool return_last=false);
+	//* Collect and sort process information from /proc
+	vector<proc_info>& collect(const bool return_last=false);
 
 	//* Update current selection and view
 	void selection(string cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
-	string draw(vector<proc_info> plist);
+	string draw(const vector<proc_info>& plist, bool force_redraw=false);
 }

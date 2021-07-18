@@ -81,6 +81,9 @@ namespace Global {
 	string banner;
 	size_t banner_width = 0;
 
+	string exit_error_msg;
+	atomic<bool> thread_exception (false);
+
 	fs::path self_path;
 
 	bool debuginit = false;
@@ -142,10 +145,7 @@ void argumentParser(int argc, char **argv){
 void _resize(bool force=false){
 	if (Term::refresh(false) or force) {
 		Global::resized = true;
-		if (Runner::active) {
-			Runner::stop = true;
-			atomic_wait(Runner::active);
-		}
+		Runner::stop();
 		Term::refresh();
 	}
 	else return;
@@ -160,29 +160,23 @@ void _resize(bool force=false){
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
-void clean_quit(int sig=-1){
+void clean_quit(int sig){
 	if (Global::quitting) return;
 	Global::quitting = true;
-	if (Runner::active) {
-		Runner::stop = true;
-		atomic_wait(Runner::active);
-	}
+	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
 		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	}
-
 	Config::write();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
+	if (not Global::exit_error_msg.empty()) cout << Global::exit_error_msg << endl;
 	if (sig != -1) exit(sig);
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
 void _sleep(){
-	if (Runner::active) {
-		Runner::stop = true;
-		atomic_wait(Runner::active);
-	}
+	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
 		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
@@ -259,9 +253,97 @@ void banner_gen() {
 			+ Fx::i + "v" + Global::Version + Fx::ui;
 }
 
+//? Manages secondary thread for collection and drawing of boxes
 namespace Runner {
 	atomic<bool> active (false);
-	atomic<bool> stop (false);
+	atomic<bool> stopping (false);
+	atomic<bool> has_output (false);
+	atomic<uint64_t> time_spent (0);
+
+	string output;
+
+	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw, const bool interrupt) {
+		auto timestamp = time_micros();
+		string out;
+		out.reserve(output.size());
+
+		try {
+			for (auto& box : boxes) {
+				if (stopping) break;
+				try {
+					if (box == "cpu") {
+						out += Cpu::draw(Cpu::collect(no_update), force_redraw);
+					}
+					else if (box == "mem") {
+						out += Mem::draw(Mem::collect(no_update), force_redraw);
+					}
+					else if (box == "net") {
+						out += Net::draw(Net::collect(no_update), force_redraw);
+					}
+					else if (box == "proc") {
+						out += Proc::draw(Proc::collect(no_update), force_redraw);
+					}
+				}
+				catch (const std::exception& e) {
+					string fname = box;
+					fname[0] = toupper(fname[0]);
+					throw std::runtime_error(fname + "::draw(" + fname + "::collect(no_update=" + (no_update ? "true" : "false")
+						+ "), force_redraw=" + (force_redraw ? "true" : "false") + ") : " + (string)e.what());
+				}
+			}
+		}
+		catch (std::exception& e) {
+			Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
+			Logger::error(Global::exit_error_msg);
+			Global::thread_exception = true;
+			Input::interrupt = true;
+			stopping = true;
+		}
+
+		if (stopping) {
+			active = false;
+			active.notify_all();
+			return;
+		}
+
+		if (out.empty()) {
+			out += "No boxes shown!";
+		}
+
+		output.swap(out);
+		time_spent = time_micros() - timestamp;
+		has_output = true;
+		if (interrupt) Input::interrupt = true;
+
+		active = false;
+		active.notify_one();
+	}
+
+	void run(const string box, const bool no_update, const bool force_redraw, const bool input_interrupt) {
+		active.wait(true);
+		if (stopping) return;
+		active = true;
+		Config::lock();
+		vector<string> boxes;
+		if (box.empty()) boxes = Config::current_boxes;
+		else boxes.push_back(box);
+		std::thread run_thread(_runner, boxes, no_update, force_redraw, input_interrupt);
+		run_thread.detach();
+	}
+
+	void stop() {
+		stopping = true;
+		active.wait(true);
+		Config::unlock();
+		stopping = false;
+	}
+
+	string get_output() {
+		active.wait(true);
+		Config::unlock();
+		has_output = false;
+		return output;
+	}
 }
 
 
@@ -396,27 +478,6 @@ int main(int argc, char **argv){
 	cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
 
 
-	if (false) {
-		Draw::calcSizes();
-		cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
-		Input::wait();
-		exit(0);
-	}
-
-	// if (true) {
-	// 	cout << Term::clear << flush;
-	// 	unordered_flat_map<string, string(*)(string)> korvs = {
-	// 		{"korv1", korv1},
-	// 		{"korv2", korv2},
-	// 	};
-
-	// 	// auto hej = korv1;
-
-	// 	cout << korvs["korv1"]("hejsan") << endl;
-	// 	cout << korvs["korv2"]("hejsan igen") << endl;
-	// 	exit(0);
-	// }
-
 	//* Test theme
 	if (false) {
 		string key;
@@ -474,7 +535,7 @@ int main(int argc, char **argv){
 		exit(0);
 	}
 
-
+	//* Test graphs
 	if (false) {
 
 		deque<long long> mydata;
@@ -524,119 +585,49 @@ int main(int argc, char **argv){
 	}
 
 
-	if (false) {
-		cout << Config::getS("log_level") << endl;
 
-		vector<string> vv = {"hej", "vad", "du"};
-		vector<int> vy;
+	//* ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
-		cout << v_contains(vv, "vad"s) << endl;
-		cout << v_index(vv, "hej"s) << endl;
-		cout << v_index(vv, "du"s) << endl;
-		cout << v_index(vv, "kodkod"s) << endl;
-		cout << v_index(vy, 4) << endl;
-
-
-		exit(0);
-	}
-
-
-//*------>>>>>> Proc testing
-
-
-	auto timestamp = time_ms();
-
-
-
-	string ostring;
-	uint64_t tsl, timestamp2, rcount = 0;
+	uint64_t future_time = time_ms(), rcount = 0;
 	list<uint64_t> avgtimes;
-	size_t timer = 2000;
-	vector<string> greyscale;
-	string filter;
-	string filter_cur;
-	string key;
-	vector<Proc::proc_info> plist;
 
-	int xc;
-	for (size_t i : iota(0, (int)Term::height - 19)){
-		xc = 230 - i * 150 / (Term::height - 20);
-		greyscale.push_back(Theme::dec_to_color(xc, xc, xc));
+	try {
+		while (true) {
+			if (Global::thread_exception) clean_quit(1);
+
+			if (Runner::has_output) {
+				cout << Term::sync_start << Runner::get_output() << Term::sync_end << flush;
+
+				//! DEBUG stats
+				avgtimes.push_front(Runner::time_spent);
+				if (avgtimes.size() > 30) avgtimes.pop_back();
+				cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(avgtimes.front()), 5) << " μs. Average: " <<
+					rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
+					" samples. Run count: " << ++rcount << ".    " << flush;
+			}
+
+			if (time_ms() >= future_time) {
+				Runner::run();
+				future_time = time_ms() + Config::getI("update_ms");
+			}
+
+			while (time_ms() < future_time and not Global::resized) {
+				if (Input::poll(future_time - time_ms()))
+					Input::process(Input::get());
+				else
+					break;
+			}
+			if (Global::resized) {
+				// cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
+				Global::resized = false;
+				future_time = time_ms();
+			}
+		}
 	}
-
-	while (key != "q") {
-		timestamp = time_micros();
-		tsl = time_ms() + timer;
-		Config::lock();
-		try {
-			plist = Proc::collect();
-		}
-		catch (std::exception const& e) {
-			Logger::error("Caught exception in Proc::collect() : "s + e.what());
-			exit(1);
-		}
-		timestamp2 = time_micros();
-		timestamp = timestamp2 - timestamp;
-		ostring.clear();
-
-		ostring = Proc::draw(plist);
-		Config::unlock();
-
-		avgtimes.push_front(timestamp);
-		if (avgtimes.size() > 30) avgtimes.pop_back();
-		cout << Term::sync_start << ostring << Fx::reset << Mv::to(2, 2) << '\n';
-		cout << "  Details for " << Proc::detailed.entry.name << " (" << Proc::detailed.entry.pid << ")  Status: " << Proc::detailed.status << "  Elapsed: " << Proc::detailed.elapsed
-			 << "  Mem: " << floating_humanizer(Proc::detailed.entry.mem) << "         "
-			 << "\n  Parent: " << Proc::detailed.parent << "  IO in/out: " << Proc::detailed.io_read << "/" << Proc::detailed.io_write << "        ";
-		cout << Mv::to(4, 2) << "Processes call took: " << rjust(to_string(timestamp), 5) << " μs. Average: " <<
-			rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
-			" samples. Drawing took: " << time_micros() - timestamp2 << " μs.\nNumber of processes: " << Proc::numpids << ". Number in vector: " << plist.size() << ". Run count: " << ++rcount << ". Time: " << strf_time("%X   ") << Term::sync_end << flush;
-
-		while (time_ms() < tsl and not Global::resized) {
-			if (Input::poll(tsl - time_ms())) key = Input::get();
-			else { key.clear() ; continue; }
-			if (Config::getB("proc_filtering")) {
-				if (key == "enter") Config::set("proc_filtering", false);
-				else if (key == "backspace" and not filter.empty()) filter = uresize(filter, ulen(filter) - 1);
-				else if (key == "space") filter.push_back(' ');
-				else if (ulen(key) == 1 ) filter.append(key);
-				else { key.clear(); continue; }
-				if (filter != Config::getS("proc_filter")) Config::set("proc_filter", filter);
-				key.clear();
-				Proc::redraw = true;
-				break;
-			}
-			else if (key == "q") break;
-			else if (key == "left") {
-				int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
-				if (--cur_i < 0) cur_i = Proc::sort_vector.size() - 1;
-				Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
-			}
-			else if (key == "right") {
-				int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
-				if (++cur_i > (int)Proc::sort_vector.size() - 1) cur_i = 0;
-				Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
-			}
-			else if (key == "f") Config::flip("proc_filtering");
-			else if (key == "t") Config::flip("proc_tree");
-			else if (key == "r") Config::flip("proc_reversed");
-			else if (key == "c") Config::flip("proc_per_core");
-			else if (key == "delete") { filter.clear(); Config::set("proc_filter", filter); }
-			else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
-				Proc::selection(key);
-				cout << Proc::draw(plist) << flush;
-				continue;
-			}
-
-			else continue;
-			Proc::redraw = true;
-			break;
-		}
-		if (Global::resized) {
-			cout << Cpu::box << Mem::box << Net::box << Proc::box << flush;
-			Global::resized = false;
-		}
-		cout << Mv::to(Term::height - 3, 1) << flush;
+	catch (std::exception& e) {
+		Global::exit_error_msg = "Exception in main loop -> " + (string)e.what();
+		Logger::error(Global::exit_error_msg);
+		clean_quit(1);
 	}
 
 

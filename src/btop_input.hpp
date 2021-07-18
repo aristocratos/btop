@@ -47,4 +47,7 @@ namespace Input {
 	//* Clears last entered key
 	void clear();
 
+	//* Process actions for input <key>
+	void process(const std::string key);
+
 }

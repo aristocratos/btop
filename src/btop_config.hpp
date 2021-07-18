@@ -32,17 +32,19 @@ namespace Config {
 
 	extern const vector<string> valid_graph_symbols;
 
+	extern vector<string> current_boxes;
+
 	//* Check if string only contains space seperated valid names for boxes
 	bool check_boxes(string boxes);
 
 	//* Return bool for config key <name>
-	const bool& getB(string name);
+	const bool& getB(const string& name);
 
 	//* Return integer for config key <name>
-	const int& getI(string name);
+	const int& getI(const string& name);
 
 	//* Return string for config key <name>
-	const string& getS(string name);
+	const string& getS(const string& name);
 
 	//* Set config key <name> to bool <value>
 	void set(string name, bool value);

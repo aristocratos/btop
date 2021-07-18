@@ -267,25 +267,6 @@ namespace Tools {
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
 
-	//* Waits for <atom> to not be <val>
-	#if (__GNUC__ > 10)
-		//* Redirects to atomic wait
-		inline void atomic_wait(const atomic<bool>& atom, bool val=true){
-			atom.wait(val);
-		}
-	#else
-		//* Crude implementation of atomic wait for GCC 10
-		inline void atomic_wait(const atomic<bool>& atom, bool val=true){
-			while (atom == val) std::this_thread::sleep_for(std::chrono::microseconds(1));
-		}
-	#endif
-
-	//* Waits for <atom> to not be <val> and then sets it to <val> again
-	inline void atomic_wait_set(std::atomic<bool>& atom, bool val=true){
-		atomic_wait(atom, val);
-		atom = val;
-	};
-
 }
 
 //* Simple logging implementation

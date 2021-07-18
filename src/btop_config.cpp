@@ -230,7 +230,7 @@ namespace Config {
 		vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
 
 		bool _locked(const string& name){
-			atomic_wait(writelock);
+			writelock.wait(true);
 			if (not write_new and rng::find_if(descriptions, [&name](const auto& a){ return a.at(0) == name; }) != descriptions.end())
 				write_new = true;
 			return locked.load();
@@ -240,17 +240,19 @@ namespace Config {
 	fs::path conf_dir;
 	fs::path conf_file;
 
+	vector<string> current_boxes;
+
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 
-	const bool& getB(string name){
+	const bool& getB(const string& name){
 		return bools.at(name);
 	}
 
-	const int& getI(string name){
+	const int& getI(const string& name){
 		return ints.at(name);
 	}
 
-	const string& getS(string name){
+	const string& getS(const string& name){
 		return strings.at(name);
 	}
 
@@ -278,13 +280,19 @@ namespace Config {
 	}
 
 	void lock(){
-		atomic_wait_set(locked);
+		writelock.wait(true);
+		locked = true;
 	}
 
 	void unlock(){
 		if (not locked) return;
-		atomic_wait(Runner::active);
-		atomic_wait_set(writelock);
+		writelock = true;
+
+		if (Proc::shown) {
+			ints.at("selected_pid") = Proc::selected_pid;
+			ints.at("proc_start") = Proc::start;
+			ints.at("proc_selected") = Proc::selected;
+		}
 
 		for (auto& item : stringsTmp){
 			strings.at(item.first) = item.second;
@@ -301,20 +309,17 @@ namespace Config {
 		}
 		boolsTmp.clear();
 
-		if (Proc::shown) {
-			ints.at("selected_pid") = Proc::selected_pid;
-			ints.at("proc_start") = Proc::start;
-			ints.at("proc_selected") = Proc::selected;
-		}
-
 		locked = false;
 		writelock = false;
+		writelock.notify_all();
 	}
 
 	bool check_boxes(string boxes){
-		for (auto& box : ssplit(boxes)) {
+		auto new_boxes = ssplit(boxes);
+		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
 		}
+		current_boxes.swap(new_boxes);
 		return true;
 	}
 
@@ -342,10 +347,12 @@ namespace Config {
 				}
 				string name, value;
 				getline(cread, name, '=');
+				if (name.ends_with(' ')) name = trim(name);
 				if (not v_contains(valid_names, name)) {
 					cread.ignore(SSmax, '\n');
 					continue;
 				}
+				cread >> std::ws;
 
 				if (bools.contains(name)) {
 					cread >> value;
@@ -362,7 +369,6 @@ namespace Config {
 						ints.at(name) = stoi(value);
 				}
 				else if (strings.contains(name)) {
-					cread >> std::ws;
 					if (cread.peek() == '"') {
 						cread.ignore(1);
 						getline(cread, value, '"');
@@ -393,10 +399,14 @@ namespace Config {
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version;
 			for (auto [name, description] : descriptions) {
-				cwrite << "\n\n" << (description.empty() ? "" : description + "\n") << name << "=";
-				if (strings.contains(name)) cwrite << "\"" << strings.at(name) << "\"";
-				else if (ints.contains(name)) cwrite << ints.at(name);
-				else if (bools.contains(name)) cwrite << (bools.at(name) ? "True" : "False");
+				cwrite 	<< "\n\n" << (description.empty() ? "" : description + "\n")
+						<< name << " = ";
+				if (strings.contains(name))
+					cwrite << "\"" << strings.at(name) << "\"";
+				else if (ints.contains(name))
+					cwrite << ints.at(name);
+				else if (bools.contains(name))
+					cwrite << (bools.at(name) ? "True" : "False");
 			}
 			cwrite.close();
 		}

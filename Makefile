@@ -4,17 +4,11 @@ DOCDIR ?= $(PREFIX)/share/btop/doc
 #Compiler and Linker
 CXX := g++
 
-#If using g++ try to make sure we are using version 11 or 10
-ifeq ($(CXX),g++)
-	CXX_VERSION = $(shell $(CXX) -dumpversion)
-	ifneq ($(shell test $(CXX_VERSION) -ge 11; echo $$?),0)
-		ifneq ($(shell command -v g++-11),)
-			CXX := g++-11
-		else ifneq ($(shell test $(CXX_VERSION) -eq 10; echo $$?),0)
-			ifneq ($(shell command -v g++-10),)
-				CXX := g++-10
-			endif
-		endif
+#Try to make sure we are using GCC/G++ version 11 or later
+CXX_VERSION = $(shell $(CXX) -dumpversion)
+ifneq ($(shell test $(CXX_VERSION) -ge 11; echo $$?),0)
+	ifneq ($(shell command -v g++-11),)
+		CXX := g++-11
 	endif
 endif
 
@@ -75,7 +69,7 @@ uninstall:
 
 #Link
 btop: $(OBJECTS)
-	$(CXX) -o $(TARGETDIR)/btop $^
+	$(CXX) -o $(TARGETDIR)/btop $^ -pthread
 
 #Compile
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)

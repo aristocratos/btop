@@ -126,7 +126,7 @@ Options menu.
 
 #### Manual compilation and installation
 
-Needs at least GCC/G++ 10, preferably 11 (or higher) to make use of some C++20 functionality.
+Needs GCC/G++ 11 or higher, (GCC 10 is missing some C++20 features).
 
 >Install dependencies (Ubuntu 21.04 Hirsute)
 

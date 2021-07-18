@@ -275,6 +275,16 @@ namespace Cpu {
 	bool shown = true, redraw = true;
 	string box;
 
+	string draw(const cpu_info& cpu, bool force_redraw) {
+		(void)cpu;
+		string out;
+		if (redraw or force_redraw) {
+			redraw = false;
+			out += box;
+		}
+		return out;
+	}
+
 }
 
 namespace Mem {
@@ -284,6 +294,16 @@ namespace Mem {
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
 	bool shown = true, redraw = true;
 	string box;
+
+	string draw(const mem_info& mem, bool force_redraw) {
+		(void)mem;
+		string out;
+		if (redraw or force_redraw) {
+			redraw = false;
+			out += box;
+		}
+		return out;
+	}
 
 }
 
@@ -295,6 +315,16 @@ namespace Net {
 	int graph_height;
 	bool shown = true, redraw = true;
 	string box;
+
+	string draw(const net_info& net, bool force_redraw) {
+		(void)net;
+		string out;
+		if (redraw or force_redraw) {
+			redraw = false;
+			out += box;
+		}
+		return out;
+	}
 
 }
 
@@ -311,6 +341,7 @@ namespace Proc {
 	void selection(string cmd_key) {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
+		int numpids = Proc::numpids;
 		if (cmd_key == "up" and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
@@ -340,7 +371,7 @@ namespace Proc {
 		Config::set("proc_selected", selected);
 	}
 
-	string draw(vector<proc_info> plist){
+	string draw(const vector<proc_info>& plist, bool force_redraw){
 		auto& filter = Config::getS("proc_filter");
 		auto& filtering = Config::getB("proc_filtering");
 		auto& proc_tree = Config::getB("proc_tree");
@@ -352,9 +383,10 @@ namespace Proc {
 		uint64_t total_mem = 16328872 << 10;
 		int y = show_detailed ? Proc::y + 9 : Proc::y;
 		int height = show_detailed ? Proc::height - 9 : Proc::height;
+		int numpids = Proc::numpids;
 		string out;
 		//* If true, redraw elements not needed to be updated every cycle
-		if (redraw) {
+		if (redraw or force_redraw) {
 			redraw = false;
 			out = box;
 			out += Mv::to(y, x) + Mv::r(12)

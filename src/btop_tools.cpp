@@ -329,7 +329,8 @@ namespace Logger {
 
 	void log_write(const size_t level, const string& msg){
 		if (loglevel < level or logfile.empty()) return;
-		atomic_wait_set(busy, true);
+		busy.wait(true);
+		busy = true;
 		std::error_code ec;
 		if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 			auto old_log = logfile;
@@ -345,5 +346,6 @@ namespace Logger {
 		}
 		else logfile.clear();
 		busy = false;
+		busy.notify_one();
 	}
 }

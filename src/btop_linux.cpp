@@ -93,10 +93,34 @@ namespace Shared {
 namespace Cpu {
 	bool got_sensors = false;
 	string cpuName = "";
+
+	cpu_info current_cpu;
+
+	cpu_info& collect(const bool return_last) {
+		(void)return_last;
+		return current_cpu;
+	}
 }
 
 namespace Mem {
 	bool has_swap = false;
+
+	mem_info current_mem;
+
+	mem_info& collect(const bool return_last) {
+		(void)return_last;
+		return current_mem;
+	}
+
+}
+
+namespace Net {
+	net_info current_net;
+
+	net_info& collect(const bool return_last) {
+		(void)return_last;
+		return current_net;
+	}
 }
 
 namespace Proc {
@@ -117,11 +141,9 @@ namespace Proc {
 		int counter = 0;
 	}
 	uint64_t old_cputimes = 0;
-	int numpids = 0;
+	atomic<int> numpids = 0;
 	size_t reserve_pids = 500;
 	bool tree_state = false;
-	atomic<bool> stop (false);
-	atomic<bool> collecting (false);
 	vector<string> sort_vector = {
 		"pid",
 		"name",
@@ -150,6 +172,7 @@ namespace Proc {
 
 	//* Generate process tree list
 	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false){
+		if (Runner::stopping) return;
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
@@ -290,9 +313,8 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	vector<proc_info>& collect(bool return_last){
+	vector<proc_info>& collect(const bool return_last){
 		if (return_last) return current_procs;
-		atomic_wait_set(collecting);
 		auto& sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
 		auto& filter = Config::getS("proc_filter");
@@ -345,12 +367,9 @@ namespace Proc {
 
 		//* Iterate over all pids in /proc
 		for (auto& d: fs::directory_iterator(Shared::proc_path)){
-			if (pread.is_open()) pread.close();
-			if (stop) {
-				collecting = false;
-				stop = false;
+			if (Runner::stopping)
 				return current_procs;
-			}
+			if (pread.is_open()) pread.close();
 
 			string pid_str = d.path().filename();
 			if (not isdigit(pid_str[0])) continue;
@@ -554,6 +573,8 @@ namespace Proc {
 			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, filter);
 			}
+
+			if (Runner::stopping) return current_procs;
 			procs.swap(tree_procs);
 		}
 
@@ -574,7 +595,6 @@ namespace Proc {
 		numpids = (int)procs.size();
 		current_procs.swap(procs);
 		reserve_pids = npids;
-		collecting = false;
 		return current_procs;
 	}
 }
