@@ -16,10 +16,8 @@ indent = tab
 tab-size = 4
 */
 
-
 #include <cmath>
 #include <vector>
-#include <unordered_map>
 #include <ranges>
 #include <algorithm>
 #include <fstream>
@@ -28,17 +26,23 @@ tab-size = 4
 #include <btop_config.hpp>
 #include <btop_theme.hpp>
 
-using 	std::round, std::vector, robin_hood::unordered_flat_map, std::stoi, std::views::iota, std::array,
+using 	std::round, std::vector, std::stoi, std::views::iota,
 		std::clamp, std::max, std::min, std::ceil, std::to_string;
 using namespace Tools;
 namespace rng = std::ranges;
 namespace fs = std::filesystem;
+
+string Term::fg, Term::bg;
+string Fx::reset = reset_base;
 
 namespace Theme {
 
 	fs::path theme_dir;
 	fs::path user_theme_dir;
 	vector<string> themes;
+	unordered_flat_map<string, string> colors;
+	unordered_flat_map<string, array<int, 3>> rgbs;
+	unordered_flat_map<string, array<string, 101>> gradients;
 
 	const unordered_flat_map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
@@ -131,18 +135,21 @@ namespace Theme {
 	};
 
 	namespace {
-		//* Convert 24-bit colors to 256 colors using 6x6x6 color cube
-		int truecolor_to_256(int r, int g, int b){
-			if (round((double)r / 11) == round((double)g / 11) and round((double)g / 11) == round((double)b / 11)) {
-				return 232 + round((double)r / 11);
-			} else {
+		//* Convert 24-bit colors to 256 colors
+		int truecolor_to_256(const int& r, const int& g, const int& b) {
+			//? Use upper 232-255 greyscale values if the downscaled red, green and blue are the same value
+			if (int red = round((double)r / 11); red == round((double)g / 11) and round((double)g / 11) == round((double)b / 11)) {
+				return 232 + red;
+			}
+			//? Else use 6x6x6 color cube to calculate approximate colors
+			else {
 				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
 			}
 		}
 	}
 
-	string hex_to_color(string hexa, bool t_to_256, string depth){
-		if (hexa.size() > 1){
+	string hex_to_color(string hexa, const bool& t_to_256, const string& depth) {
+		if (hexa.size() > 1) {
 			hexa.erase(0, 1);
 			for (auto& c : hexa) if (not isxdigit(c)) {
 				Logger::error("Invalid hex value: " + hexa);
@@ -150,17 +157,17 @@ namespace Theme {
 			}
 			string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 
-			if (hexa.size() == 2){
+			if (hexa.size() == 2) {
 				int h_int = stoi(hexa, 0, 16);
-				if (t_to_256){
+				if (t_to_256) {
 					return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 				} else {
 					string h_str = to_string(h_int);
 					return pre + h_str + ";" + h_str + ";" + h_str + "m";
 				}
 			}
-			else if (hexa.size() == 6){
-				if (t_to_256){
+			else if (hexa.size() == 6) {
+				if (t_to_256) {
 					return pre + to_string(truecolor_to_256(
 						stoi(hexa.substr(0, 2), 0, 16),
 						stoi(hexa.substr(2, 2), 0, 16),
@@ -178,7 +185,7 @@ namespace Theme {
 		return "";
 	}
 
-	string dec_to_color(int r, int g, int b, bool t_to_256, string depth){
+	string dec_to_color(int r, int g, int b, const bool& t_to_256, const string& depth) {
 		string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 		r = std::clamp(r, 0, 255);
 		g = std::clamp(g, 0, 255);
@@ -188,21 +195,17 @@ namespace Theme {
 	}
 
 	namespace {
-		unordered_flat_map<string, string> colors;
-		unordered_flat_map<string, array<int, 3>> rgbs;
-		unordered_flat_map<string, array<string, 101>> gradients;
-
 		//* Convert hex color to a array of decimals
-		array<int, 3> hex_to_dec(string hexa){
-			if (hexa.size() > 1){
+		array<int, 3> hex_to_dec(string hexa) {
+			if (hexa.size() > 1) {
 				hexa.erase(0, 1);
 				for (auto& c : hexa) if (not isxdigit(c)) return array<int, 3>{-1, -1, -1};
 
-				if (hexa.size() == 2){
+				if (hexa.size() == 2) {
 					int h_int = stoi(hexa, 0, 16);
 					return array<int, 3>{h_int, h_int, h_int};
 				}
-				else if (hexa.size() == 6){
+				else if (hexa.size() == 6) {
 						return array<int, 3>{
 							stoi(hexa.substr(0, 2), 0, 16),
 							stoi(hexa.substr(2, 2), 0, 16),
@@ -214,12 +217,12 @@ namespace Theme {
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
-		void generateColors(unordered_flat_map<string, string> source){
+		void generateColors(const unordered_flat_map<string, string>& source) {
 			vector<string> t_rgb;
 			string depth;
-			bool t_to_256 = Config::getB("lowcolor");
+			const bool& t_to_256 = Config::getB("lowcolor");
 			colors.clear(); rgbs.clear();
-			for (auto& [name, color] : Default_theme) {
+			for (const auto& [name, color] : Default_theme) {
 				if (name == "main_bg" and not Config::getB("theme_background")) {
 						colors[name] = "\x1b[49m";
 						rgbs[name] = {-1, -1, -1};
@@ -252,70 +255,102 @@ namespace Theme {
 						}
 					}
 				}
-				if (colors[name].empty()) {
+				if (not colors.contains(name) and not is_in(name, "meter_bg", "process_start", "process_mid", "process_end", "graph_text")) {
 					Logger::debug("Missing color value for \"" + name + "\". Using value from default.");
 					colors[name] = hex_to_color(color, t_to_256, depth);
-					rgbs[name] = array<int, 3>{-1, -1, -1};
+					rgbs[name] = hex_to_dec(color);
 				}
+			}
+			//? Set fallback values for optional colors not defined in theme file
+			if (not colors.contains("meter_bg")) {
+				colors["meter_bg"] = colors.at("inactive_fg");
+				rgbs["meter_bg"] = rgbs.at("inactive_fg");
+			}
+			if (not colors.contains("process_start")) {
+				colors["process_start"] = colors.at("cpu_start");
+				colors["process_mid"] = colors.at("cpu_mid");
+				colors["process_end"] = colors.at("cpu_end");
+				rgbs["process_start"] = rgbs.at("cpu_start");
+				rgbs["process_mid"] = rgbs.at("cpu_mid");
+				rgbs["process_end"] = rgbs.at("cpu_end");
+			}
+			if (not colors.contains("graph_text")) {
+				colors["graph_text"] = colors.at("inactive_fg");
+				rgbs["graph_text"] = rgbs.at("inactive_fg");
 			}
 		}
 
 		//* Generate color gradients from two or three colors, 101 values indexed 0-100
-		void generateGradients(){
+		void generateGradients() {
 			gradients.clear();
-			array<string, 101> c_gradient;
-			bool t_to_256 = Config::getB("lowcolor");
-			rgbs.insert({
-				{"proc_start", rgbs["main_fg"]}, {"proc_mid", {-1, -1, -1}}, {"proc_end", rgbs["inactive_fg"]},
-				{"proc_color_start", rgbs["inactive_fg"]}, {"proc_color_mid", {-1, -1, -1}}, {"proc_color_end", rgbs["process_start"]}
-				});
-			for (auto& [name, source_arr] : rgbs) {
+			const bool& t_to_256 = Config::getB("lowcolor");
+
+			//? Insert values for processes greyscale gradient and processes color gradient
+			rgbs.insert({	{ "proc_start", 		rgbs["main_fg"]			},
+							{ "proc_mid", 			{-1, -1, -1}			},
+							{ "proc_end", 			rgbs["inactive_fg"]		},
+							{ "proc_color_start", 	rgbs["inactive_fg"]		},
+							{ "proc_color_mid", 	{-1, -1, -1}			},
+							{ "proc_color_end", 	rgbs["process_start"]	},
+			});
+
+			for (const auto& [name, source_arr] : rgbs) {
 				if (not name.ends_with("_start")) continue;
-				array<array<int, 3>, 101> dec_arr;
-				dec_arr[0][0] = -1;
-				string wname = rtrim(name, "_start");
-				array<array<int, 3>, 3> rgb_array = {source_arr, rgbs[wname + "_mid"], rgbs[wname + "_end"]};
+				const string color_name = rtrim(name, "_start");
 
-				//? Only start iteration if gradient has a _end color value defined
-				if (rgb_array[2][0] >= 0) {
+				//? input_colors[start,mid,end][red,green,blue]
+				const array<array<int, 3>, 3> input_colors = {
+					source_arr,
+					rgbs[color_name + "_mid"],
+					rgbs[color_name + "_end"]
+				};
 
-					//? Split iteration in two passes of 50 + 51 instead of 101 if gradient has _start, _mid and _end values defined
-					int cur_range = (rgb_array[1][0] >= 0) ? 50 : 100;
-					for (int rgb : iota(0, 3)){
+				//? output_colors[red,green,blue][0-100]
+				array<array<int, 3>, 101> output_colors;
+				output_colors[0][0] = -1;
+
+				//? Only start iteration if gradient has an end color defined
+				if (input_colors[2][0] >= 0) {
+
+					//? Split iteration in two passes of 50 + 51 instead of one pass of 101 if gradient has start, mid and end values defined
+					int current_range = (input_colors[1][0] >= 0) ? 50 : 100;
+					for (const int& rgb : iota(0, 3)) {
 						int start = 0, offset = 0;
-						int end = (cur_range == 50) ? 1 : 2;
-						for (int i : iota(0, 101)) {
-							dec_arr[i][rgb] = rgb_array[start][rgb] + (i - offset) * (rgb_array[end][rgb] - rgb_array[start][rgb]) / cur_range;
+						int end = (current_range == 50) ? 1 : 2;
+						for (const int& i : iota(0, 101)) {
+							output_colors[i][rgb] = input_colors[start][rgb] + (i - offset) * (input_colors[end][rgb] - input_colors[start][rgb]) / current_range;
 
-							//? Switch source arrays from _start/_mid to _mid/_end at 50 passes if _mid is defined
-							if (i == cur_range) { ++start; ++end; offset = 50;}
+							//? Switch source arrays from start->mid to mid->end at 50 passes if mid is defined
+							if (i == current_range) { ++start; ++end; offset = 50; }
 						}
 					}
 				}
-				if (dec_arr[0][0] != -1) {
-					int y = 0;
-					for (auto& arr : dec_arr) c_gradient[y++] = dec_to_color(arr[0], arr[1], arr[2], t_to_256);
+				//? Generate color escape codes for the generated rgb decimals
+				array<string, 101> color_gradient;
+				if (output_colors[0][0] != -1) {
+					for (int y = 0; const auto& [red, green, blue] : output_colors)
+						color_gradient[y++] = dec_to_color(red, green, blue, t_to_256);
 				}
 				else {
-					//? If only _start was defined fill array with _start color
-					c_gradient.fill(colors[name]);
+					//? If only start was defined fill array with start color
+					color_gradient.fill(colors[name]);
 				}
-				gradients[wname].swap(c_gradient);
+				gradients[color_name] = std::move(color_gradient);
 			}
 		}
 
 		//* Set colors and generate gradients for the TTY theme
-		void generateTTYColors(){
+		void generateTTYColors() {
 			rgbs.clear();
 			gradients.clear();
 			colors = TTY_theme;
 
-			for (auto& c : colors) {
+			for (const auto& c : colors) {
 				if (not c.first.ends_with("_start")) continue;
-				string base_name = rtrim(c.first, "_start");
+				const string base_name = rtrim(c.first, "_start");
 				string section = "_start";
 				int split = colors.at(base_name + "_mid").empty() ? 50 : 33;
-				for (int i : iota(0, 101)) {
+				for (const int& i : iota(0, 101)) {
 					gradients[base_name][i] = colors.at(base_name + section);
 					if (i == split) {
 						section = (split == 33) ? "_mid" : "_end";
@@ -326,9 +361,9 @@ namespace Theme {
 		}
 
 		//* Load a .theme file from disk
-		auto loadFile(string filename){
+		auto loadFile(const string& filename) {
 			unordered_flat_map<string, string> theme_out;
-			fs::path filepath = filename;
+			const fs::path filepath = filename;
 			if (not fs::exists(filepath))
 				return Default_theme;
 
@@ -354,21 +389,20 @@ namespace Theme {
 
 					theme_out[name] = value;
 				}
-				themefile.close();
 				return theme_out;
 			}
 			return Default_theme;
 		}
 	}
 
-	void updateThemes(){
+	void updateThemes() {
 		themes.clear();
 		themes.push_back("Default");
 		themes.push_back("TTY");
 
 		for (const auto& path : { theme_dir, user_theme_dir } ) {
 			if (path.empty()) continue;
-			for (auto& file : fs::directory_iterator(path)){
+			for (auto& file : fs::directory_iterator(path)) {
 				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1) {
 					themes.push_back(file.path().c_str());
 				}
@@ -377,7 +411,7 @@ namespace Theme {
 
 	}
 
-	void setTheme(){
+	void setTheme() {
 		string theme = Config::getS("color_theme");
 		if (theme == "TTY" or Config::getB("tty_mode"))
 			generateTTYColors();
@@ -388,28 +422,6 @@ namespace Theme {
 		Term::fg = colors.at("main_fg");
 		Term::bg = colors.at("main_bg");
 		Fx::reset = Fx::reset_base + Term::fg + Term::bg;
-	}
-
-	//* Return escape code for color <name>
-	const string& c(string name){
-		return colors.at(name);
-	}
-
-	//* Return array of escape codes for color gradient <name>
-	const array<string, 101>& g(string name){
-		return gradients.at(name);
-	}
-
-	//* Return array of red, green and blue in decimal for color <name>
-	const std::array<int, 3>& dec(string name){
-		return rgbs.at(name);
-	}
-
-	unordered_flat_map<string, string>& test_colors(){
-		return colors;
-	}
-	unordered_flat_map<string, std::array<string, 101>>& test_gradients(){
-		return gradients;
 	}
 
 }

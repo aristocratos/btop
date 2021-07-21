@@ -72,7 +72,7 @@ namespace Input {
 
 	string last = "";
 
-	bool poll(int timeout){
+	bool poll(int timeout) {
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
 			if (cin.rdbuf()->in_avail() > 0) return true;
@@ -83,10 +83,10 @@ namespace Input {
 		return false;
 	}
 
-	string get(){
+	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (not key.empty()){
+		if (not key.empty()) {
 			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
 			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
 			else if (ulen(key) > 1) key = "";
@@ -95,7 +95,7 @@ namespace Input {
 		return key;
 	}
 
-	string wait(){
+	string wait() {
 		while (cin.rdbuf()->in_avail() < 1) {
 			if (interrupt) { interrupt = false; return ""; }
 			sleep_ms(10);
@@ -103,11 +103,11 @@ namespace Input {
 		return get();
 	}
 
-	void clear(){
+	void clear() {
 		last.clear();
 	}
 
-	void process(const string key){
+	void process(const string key) {
 		if (key.empty()) return;
 		try {
 			auto& filtering = Config::getB("proc_filtering");
@@ -120,28 +120,58 @@ namespace Input {
 				bool keep_going = false;
 				if (filtering) {
 					string filter = Config::getS("proc_filter");
-					if (key == "enter") Config::set("proc_filtering", false);
-					else if (key == "backspace" and not filter.empty()) filter = uresize(filter, ulen(filter) - 1);
-					else if (key == "space") filter.push_back(' ');
-					else if (ulen(key) == 1) filter.append(key);
-					else return;
+					if (key == "enter")
+						Config::set("proc_filtering", false);
+
+					else if (key == "backspace" and not filter.empty())
+						filter = uresize(filter, ulen(filter) - 1);
+
+					else if (key == "space")
+						filter.push_back(' ');
+
+					else if (ulen(key) == 1)
+						filter.append(key);
+
+					else
+						return;
+
 					Config::set("proc_filter", filter);
 				}
 				else if (key == "left") {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
-					if (--cur_i < 0) cur_i = Proc::sort_vector.size() - 1;
+					if (--cur_i < 0)
+						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
 				else if (key == "right") {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
-					if (++cur_i > (int)Proc::sort_vector.size() - 1) cur_i = 0;
+					if (++cur_i > (int)Proc::sort_vector.size() - 1)
+						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "f") { Config::flip("proc_filtering"); recollect = false; }
-				else if (key == "t") Config::flip("proc_tree");
-				else if (key == "r") Config::flip("proc_reversed");
-				else if (key == "c") Config::flip("proc_per_core");
-				else if (key == "delete" and not Config::getS("proc_filter").empty()) Config::set("proc_filter", ""s);
+				else if (key == "f") {
+					Config::flip("proc_filtering");
+					recollect = false;
+				}
+				else if (key == "t")
+					Config::flip("proc_tree");
+
+				else if (key == "r")
+					Config::flip("proc_reversed");
+
+				else if (key == "c")
+					Config::flip("proc_per_core");
+
+				else if (key == "delete" and not Config::getS("proc_filter").empty())
+					Config::set("proc_filter", ""s);
+
+				else if (key == "ö") {
+					if (Global::overlay.empty())
+						Global::overlay = Mv::to(Term::height / 2, Term::width / 2) + "\x1b[1;32mTESTING";
+					else
+						Global::overlay.clear();
+					Runner::run("all", true, true);
+				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
 					Proc::selection(key);
 					recollect = false;

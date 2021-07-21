@@ -22,24 +22,8 @@ tab-size = 4
 #include <vector>
 #include <robin_hood.h>
 #include <deque>
-#include <atomic>
 
-using std::string, std::vector, robin_hood::unordered_flat_map, std::deque, std::atomic;
-
-namespace Symbols {
-	extern const string h_line;
-	extern const string v_line;
-	extern const string left_up;
-	extern const string right_up;
-	extern const string left_down;
-	extern const string right_down;
-	extern const string title_left;
-	extern const string title_right;
-	extern const string div_up;
-	extern const string div_down;
-}
-
-//! See btop_shared.hpp for draw & misc functions for boxes
+using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
 
 namespace Draw {
 
@@ -60,7 +44,7 @@ namespace Draw {
 		string operator()(int value);
 	};
 
-	//* Class holding a graph
+	//* Class holding a percentage graph
 	class Graph {
 		string out, color_gradient, symbol = "default";
 		int width = 0, height = 0;

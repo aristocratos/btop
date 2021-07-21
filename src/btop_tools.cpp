@@ -32,46 +32,11 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::string_view, std::array, std::regex, std::max, std::to_string, std::cin, robin_hood::unordered_flat_map;
+using std::string_view, std::array, std::max, std::to_string, std::cin, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
-
-//* Collection of escape codes for text style and formatting
-namespace Fx {
-	const string e = "\x1b[";
-	const string b = e + "1m";
-	const string ub = e + "22m";
-	const string d = e + "2m";
-	const string ud = e + "22m";
-	const string i = e + "3m";
-	const string ui = e + "23m";
-	const string ul = e + "4m";
-	const string uul = e + "24m";
-	const string bl = e + "5m";
-	const string ubl = e + "25m";
-	const string s = e + "9m";
-	const string us = e + "29m";
-	const string reset_base = e + "0m";
-	string reset = reset_base;
-
-	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
-
-	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
-}
-
-//* Collection of escape codes and functions for cursor manipulation
-namespace Mv {
-	const string to(int line, int col){ return Fx::e + to_string(line) + ";" + to_string(col) + "f";}
-	const string r(int x){ return Fx::e + to_string(x) + "C";}
-	const string l(int x){ return Fx::e + to_string(x) + "D";}
-	const string u(int x){ return Fx::e + to_string(x) + "A";}
-	const string d(int x) { return Fx::e + to_string(x) + "B";}
-	const string save = Fx::e + "s";
-	const string restore = Fx::e + "u";
-}
-
 
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
@@ -79,27 +44,13 @@ namespace Term {
 	atomic<bool> initialized = false;
 	atomic<int> width = 0;
 	atomic<int> height = 0;
-	string fg, bg, current_tty;
-
-	const string hide_cursor = Fx::e + "?25l";
-	const string show_cursor = Fx::e + "?25h";
-	const string alt_screen = Fx::e + "?1049h";
-	const string normal_screen = Fx::e + "?1049l";
-	const string clear = Fx::e + "2J" + Fx::e + "0;0f";
-	const string clear_end = Fx::e + "0J";
-	const string clear_begin = Fx::e + "1J";
-	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h";
-	const string mouse_off = Fx::e + "?1002l";
-	const string mouse_direct_on = Fx::e + "?1003h";
-	const string mouse_direct_off = Fx::e + "?1003l";
-	const string sync_start = Fx::e + "?2026h";
-	const string sync_end = Fx::e + "?2026l";
+	string current_tty;
 
 	namespace {
 		struct termios initial_settings;
 
 		//* Toggle terminal input echo
-		bool echo(bool on=true){
+		bool echo(bool on=true) {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ECHO;
@@ -108,7 +59,7 @@ namespace Term {
 		}
 
 		//* Toggle need for return key when reading input
-		bool linebuffered(bool on=true){
+		bool linebuffered(bool on=true) {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ICANON;
@@ -120,7 +71,7 @@ namespace Term {
 		}
 	}
 
-	bool refresh(){
+	bool refresh() {
 		struct winsize w;
 		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 		if (width != w.ws_col or height != w.ws_row) {
@@ -131,8 +82,8 @@ namespace Term {
 		return false;
 	}
 
-	bool init(){
-		if (not initialized){
+	bool init() {
+		if (not initialized) {
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
@@ -148,7 +99,7 @@ namespace Term {
 		return initialized;
 	}
 
-	void restore(){
+	void restore() {
 		if (initialized) {
 			echo(true);
 			linebuffered(true);
@@ -162,7 +113,7 @@ namespace Term {
 
 namespace Tools {
 
-	string uresize(string str, const size_t len){
+	string uresize(string str, const size_t len) {
 		if (len < 1) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
 			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
@@ -175,19 +126,19 @@ namespace Tools {
 		return str;
 	}
 
-	string ltrim(const string& str, const string& t_str){
+	string ltrim(const string& str, const string& t_str) {
 		string_view str_v = str;
 		while (str_v.starts_with(t_str)) str_v.remove_prefix(t_str.size());
 		return (string)str_v;
 	}
 
-	string rtrim(const string& str, const string& t_str){
+	string rtrim(const string& str, const string& t_str) {
 		string_view str_v = str;
 		while (str_v.ends_with(t_str)) str_v.remove_suffix(t_str.size());
 		return (string)str_v;
 	}
 
-	vector<string> ssplit(const string& str, const char& delim){
+	vector<string> ssplit(const string& str, const char& delim) {
 		vector<string> out;
 		for (const auto& s : str 	| rng::views::split(delim)
 									| rng::views::transform([](auto &&rng) {
@@ -198,7 +149,7 @@ namespace Tools {
 		return out;
 	}
 
-	string ljust(string str, const size_t x, const bool utf, const bool limit){
+	string ljust(string str, const size_t x, const bool utf, const bool limit) {
 		if (utf) {
 			if (limit and ulen(str) > x) str = uresize(str, x);
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
@@ -209,7 +160,7 @@ namespace Tools {
 		}
 	}
 
-	string rjust(string str, const size_t x, const bool utf, const bool limit){
+	string rjust(string str, const size_t x, const bool utf, const bool limit) {
 		if (utf) {
 			if (limit and ulen(str) > x) str = uresize(str, x);
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
@@ -220,12 +171,11 @@ namespace Tools {
 		}
 	}
 
-	string trans(const string& str){
-		size_t pos;
+	string trans(const string& str) {
 		string_view oldstr = str;
 		string newstr;
 		newstr.reserve(str.size());
-		while ((pos = oldstr.find(' ')) != string::npos){
+		for (size_t pos; (pos = oldstr.find(' ')) != string::npos;) {
 			newstr.append(oldstr.substr(0, pos));
 			size_t x = 0;
 			while (pos + x < oldstr.size() and oldstr.at(pos + x) == ' ') x++;
@@ -235,34 +185,29 @@ namespace Tools {
 		return (newstr.empty()) ? str : newstr + (string)oldstr;
 	}
 
-	string sec_to_dhms(size_t sec){
-		string out;
-		size_t d, h, m;
-		d = sec / (3600 * 24);
-		sec %= 3600 * 24;
-		h = sec / 3600;
-		sec %= 3600;
-		m = sec / 60;
-		sec %= 60;
-		if (d>0) out = to_string(d) + "d ";
-		out += ((h<10) ? "0" : "") + to_string(h) + ":";
-		out += ((m<10) ? "0" : "") + to_string(m) + ":";
-		out += ((sec<10) ? "0" : "") + to_string(sec);
+	string sec_to_dhms(size_t seconds) {
+		size_t days = seconds / 86400; seconds %= 86400;
+		size_t hours = seconds / 3600; seconds %= 3600;
+		size_t minutes = seconds / 60; seconds %= 60;
+		string out 	= (days > 0 ? to_string(days) + "d " : "")
+					+ (hours < 10 ? "0" : "") + to_string(hours) + ":"
+					+ (minutes < 10 ? "0" : "") + to_string(minutes) + ":"
+					+ (seconds < 10 ? "0" : "") + to_string(seconds);
 		return out;
 	}
 
-	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second){
+	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
 		string out;
-		size_t mult = (bit) ? 8 : 1;
+		const size_t mult = (bit) ? 8 : 1;
 		static const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
 		static const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
-		auto& units = (bit) ? Units_bit : Units_byte;
+		const auto& units = (bit) ? Units_bit : Units_byte;
 
 		value *= 100 * mult;
 
-		while (value >= 102400){
+		while (value >= 102400) {
 			value >>= 10;
-			if (value < 100){
+			if (value < 100) {
 				out = to_string(value);
 				break;
 			}
@@ -274,7 +219,7 @@ namespace Tools {
 			else if (out.size() == 3 and start > 0) out.insert(1, ".");
 			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}
-		if (shorten){
+		if (shorten) {
 				if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
 				if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
 				out.push_back(units[start][0]);
@@ -285,16 +230,15 @@ namespace Tools {
 		return out;
 	}
 
-	std::string operator*(string str, size_t n){
-		if (n == 0) return "";
-		str.reserve(str.size() * n);
-		for (string org_str = str; n > 1; n--) str.append(org_str);
-		return str;
+	std::string operator*(const string& str, size_t n) {
+		string new_str;
+		new_str.reserve(str.size() * n);
+		for (; n > 0; n--) new_str.append(str);
+		return new_str;
 	}
 
-	string strf_time(const string& strf){
-		auto now = std::chrono::system_clock::now();
-		auto in_time_t = std::chrono::system_clock::to_time_t(now);
+	string strf_time(const string& strf) {
+		auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 		std::tm bt {};
 		std::stringstream ss;
 		ss << std::put_time(localtime_r(&in_time_t, &bt), strf.c_str());
@@ -308,25 +252,17 @@ namespace Logger {
 	namespace {
 		std::atomic<bool> busy (false);
 		bool first = true;
-		string tdf = "%Y/%m/%d (%T) | ";
+		const string tdf = "%Y/%m/%d (%T) | ";
 	}
-
-	const vector<string> log_levels = {
-			"DISABLED",
-			"ERROR",
-			"WARNING",
-			"INFO",
-			"DEBUG",
-	};
 
 	size_t loglevel;
 	fs::path logfile;
 
-	void set(const string level){
+	void set(const string& level) {
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(const size_t level, const string& msg){
+	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
 		busy.wait(true);
 		busy = true;
@@ -341,7 +277,6 @@ namespace Logger {
 			std::ofstream lwrite(logfile, std::ios::app);
 			if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
 			lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
-			lwrite.close();
 		}
 		else logfile.clear();
 		busy = false;

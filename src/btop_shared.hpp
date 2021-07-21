@@ -28,7 +28,8 @@ tab-size = 4
 
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
 
-void clean_quit(int sig=-1);
+void clean_quit(const int sig=-1);
+void banner_gen();
 
 namespace Global {
 	extern const string Version;
@@ -37,14 +38,16 @@ namespace Global {
 	extern int coreCount;
 	extern string banner;
 	extern atomic<bool> resized;
+	extern string overlay;
 }
 
 namespace Runner {
 
 	extern atomic<bool> active;
+	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
 
-	void run(const string box="", const bool no_update=false, const bool force_redraw=false, const bool input_interrupt=true);
+	void run(const string& box="", const bool no_update=false, const bool force_redraw=false, const bool input_interrupt=true);
 	void stop();
 
 }
@@ -162,7 +165,7 @@ namespace Proc {
 	vector<proc_info>& collect(const bool return_last=false);
 
 	//* Update current selection and view
-	void selection(string cmd_key);
+	void selection(const string& cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
 	string draw(const vector<proc_info>& plist, bool force_redraw=false);

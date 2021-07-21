@@ -18,24 +18,15 @@ tab-size = 4
 
 #if defined(__linux__)
 
-#include <string>
-#include <vector>
-#include <atomic>
 #include <fstream>
-#include <filesystem>
 #include <ranges>
-#include <list>
 #include <cmath>
-#include <iostream>
 #include <cmath>
-
 #include <unistd.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
-
-
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize,
 		std::round, std::string_literals::operator""s;
@@ -46,7 +37,7 @@ using namespace Tools;
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Tools {
-	double system_uptime(){
+	double system_uptime() {
 		string upstr;
 		ifstream pread("/proc/uptime");
 		getline(pread, upstr, ' ');
@@ -63,13 +54,11 @@ namespace Shared {
 	long page_size;
 	long clk_tck;
 
-	void init(){
+	void init() {
 		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (proc_path.empty()) {
-			string errmsg = "Proc filesystem not found or no permission to read from it!";
-			Logger::error(errmsg);
-			std::cout << "ERROR: " << errmsg << std::endl;
-			exit(1);
+			Global::exit_error_msg = "Proc filesystem not found or no permission to read from it!";
+			clean_quit(1);
 		}
 
 		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
@@ -84,7 +73,7 @@ namespace Shared {
 		clk_tck = sysconf(_SC_CLK_TCK);
 		if (clk_tck <= 0) {
 			clk_tck = 100;
-			Logger::warning("Could not get system clocks per second. Defaulting to 100, processes cpu usage might be incorrect.");
+			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 	}
 
@@ -171,7 +160,7 @@ namespace Proc {
 	detail_container detailed;
 
 	//* Generate process tree list
-	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false){
+	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false) {
 		if (Runner::stopping) return;
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
@@ -193,12 +182,13 @@ namespace Proc {
 		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
 			if (auto& cmdline = cache.at(cur_proc.pid).cmd; not cmdline.empty() and not cmdline.starts_with("(")) {
-				cmdline = cmdline.substr(0, std::min(cmdline.find(' '), cmdline.size()));
-				cmdline = cmdline.substr(std::min(cmdline.find_last_of('/') + 1, cmdline.size()));
-				if (cmdline == cur_proc.name)
+				std::string_view cmd_view = cmdline;
+				cmd_view = cmd_view.substr(0, std::min(cmd_view.find(' '), cmd_view.size()));
+				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
+				if (cmd_view == cur_proc.name)
 					cmdline.clear();
 				else
-					cmdline = '(' + cmdline + ')';
+					cmdline = '(' + (string)cmd_view + ')';
 				out_procs.back().cmd = cmdline;
 			}
 		}
@@ -222,7 +212,7 @@ namespace Proc {
 	}
 
 	//* Get detailed info for selected process
-	void _collect_details(size_t pid, uint64_t uptime, vector<proc_info>& procs, bool is_filtered){
+	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs, const bool is_filtered) {
 		fs::path pid_path = Shared::proc_path / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
@@ -274,8 +264,8 @@ namespace Proc {
 					else
 						detailed.memory = floating_humanizer(rss, false, 1);
 				}
-				catch (std::invalid_argument const&) {}
-				catch (std::out_of_range const&) {}
+				catch (const std::invalid_argument&) {}
+				catch (const std::out_of_range&) {}
 			}
 			d_read.close();
 		}
@@ -302,8 +292,8 @@ namespace Proc {
 							d_read.ignore(SSmax, '\n');
 					}
 				}
-				catch (std::invalid_argument const&) {}
-				catch (std::out_of_range const&) {}
+				catch (const std::invalid_argument&) {}
+				catch (const std::out_of_range&) {}
 			}
 			d_read.close();
 		}
@@ -313,27 +303,27 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	vector<proc_info>& collect(const bool return_last){
+	vector<proc_info>& collect(const bool return_last) {
 		if (return_last) return current_procs;
-		auto& sorting = Config::getS("proc_sorting");
-		auto reverse = Config::getB("proc_reversed");
-		auto& filter = Config::getS("proc_filter");
-		auto per_core = Config::getB("proc_per_core");
-		auto tree = Config::getB("proc_tree");
+		const auto& sorting = Config::getS("proc_sorting");
+		const auto& reverse = Config::getB("proc_reversed");
+		const auto& filter = Config::getS("proc_filter");
+		const auto& per_core = Config::getB("proc_per_core");
+		const auto& tree = Config::getB("proc_tree");
 		if (tree_state != tree) {
 			cache.clear();
 			tree_state = tree;
 		}
-		auto show_detailed = Config::getB("show_detailed");
-		size_t detailed_pid = Config::getI("detailed_pid");
+		const auto& show_detailed = Config::getB("show_detailed");
+		const size_t detailed_pid = Config::getI("detailed_pid");
 		ifstream pread;
 		string long_string;
 		string short_str;
-		double uptime = system_uptime();
+		const double uptime = system_uptime();
 		vector<proc_info> procs;
 		procs.reserve(reserve_pids + 10);
 		int npids = 0;
-		int cmult = (per_core) ? Global::coreCount : 1;
+		const int cmult = (per_core) ? Global::coreCount : 1;
 		bool got_detailed = false;
 		bool detailed_filtered = false;
 
@@ -344,7 +334,7 @@ namespace Proc {
 			uid_user.clear();
 			pread.open(Shared::passwd_path);
 			if (pread.good()) {
-				while (not pread.eof()){
+				while (not pread.eof()) {
 					getline(pread, r_user, ':');
 					pread.ignore(SSmax, ':');
 					getline(pread, r_uid, ':');
@@ -366,12 +356,12 @@ namespace Proc {
 		else return current_procs;
 
 		//* Iterate over all pids in /proc
-		for (auto& d: fs::directory_iterator(Shared::proc_path)){
+		for (const auto& d: fs::directory_iterator(Shared::proc_path)) {
 			if (Runner::stopping)
 				return current_procs;
 			if (pread.is_open()) pread.close();
 
-			string pid_str = d.path().filename();
+			const string pid_str = d.path().filename();
 			if (not isdigit(pid_str[0])) continue;
 
 			npids++;
@@ -386,7 +376,6 @@ namespace Proc {
 				pread.close();
 				size_t name_offset = rng::count(name, ' ');
 
-
 				pread.open(d.path() / "cmdline");
 				if (not pread.good()) continue;
 				long_string.clear();
@@ -394,12 +383,11 @@ namespace Proc {
 				pread.close();
 				if (not cmd.empty()) cmd.pop_back();
 
-
 				pread.open(d.path() / "status");
 				if (not pread.good()) continue;
 				string uid;
 				string line;
-				while (not pread.eof()){
+				while (not pread.eof()) {
 					getline(pread, line, ':');
 					if (line == "Uid") {
 						pread.ignore();
@@ -533,7 +521,7 @@ namespace Proc {
 		}
 
 		//* Sort processes
-		auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
+		const auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
 		switch (v_index(sort_vector, sorting)) {
 				case 0: { rng::sort(procs, cmp, &proc_info::pid); 	  break; }
 				case 1: { rng::sort(procs, cmp, &proc_info::name);	  break; }
@@ -548,15 +536,17 @@ namespace Proc {
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
 		if (not tree and not reverse and sorting == "cpu lazy") {
 			double max = 10.0, target = 30.0;
-			for (size_t i = 0, offset = 0; i < procs.size(); i++) {
+			for (size_t i = 0, x = 0, offset = 0; i < procs.size(); i++) {
 				if (i <= 5 and procs[i].cpu_p > max)
 					max = procs[i].cpu_p;
 				else if (i == 6)
 					target = (max > 30.0) ? max : 10.0;
 				if (i == offset and procs[i].cpu_p > 30.0)
 					offset++;
-				else if (procs[i].cpu_p > target)
+				else if (procs[i].cpu_p > target) {
 					rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
+					if (++x > 10) break;
+				}
 			}
 		}
 
@@ -569,12 +559,12 @@ namespace Proc {
 			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
-			for (auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+			for (const auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, filter);
 			}
 
 			if (Runner::stopping) return current_procs;
-			procs.swap(tree_procs);
+			procs = std::move(tree_procs);
 		}
 
 
@@ -583,17 +573,17 @@ namespace Proc {
 			counter = 0;
 			unordered_flat_map<size_t, p_cache> r_cache;
 			r_cache.reserve(procs.size());
-			rng::for_each(procs, [&r_cache](const auto &p){
+			rng::for_each(procs, [&r_cache](const auto &p) {
 				if (cache.contains(p.pid))
 					r_cache[p.pid] = cache.at(p.pid);
 			});
-			cache.swap(r_cache);
+			cache = std::move(r_cache);
 		}
 
 		old_cputimes = cputimes;
 		numpids = (int)procs.size();
-		current_procs.swap(procs);
 		reserve_pids = npids;
+		current_procs = std::move(procs);
 		return current_procs;
 	}
 }

@@ -16,19 +16,11 @@ indent = tab
 tab-size = 4
 */
 
-#include <string>
-#include <array>
-#include <list>
-#include <vector>
 #include <csignal>
 #include <thread>
-#include <future>
-#include <atomic>
 #include <numeric>
 #include <ranges>
-#include <filesystem>
 #include <unistd.h>
-#include <robin_hood.h>
 #include <cmath>
 #include <iostream>
 #include <exception>
@@ -58,8 +50,14 @@ tab-size = 4
 	#error Platform not supported!
 #endif
 
+using std::string, std::string_view, std::vector, std::array, std::atomic, std::endl, std::cout, std::min;
+using std::flush, std::endl, std::string_literals::operator""s, std::to_string;
+namespace fs = std::filesystem;
+namespace rng = std::ranges;
+using namespace Tools;
+
 namespace Global {
-	const std::vector<std::array<std::string, 2>> Banner_src = {
+	const vector<array<string, 2>> Banner_src = {
 		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
 		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
 		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
@@ -67,19 +65,12 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const std::string Version = "0.0.30";
+	const string Version = "0.0.30";
+
 	int coreCount;
-}
-
-using std::string, std::vector, std::array, robin_hood::unordered_flat_map, std::atomic, std::endl, std::cout, std::views::iota, std::list, std::accumulate;
-using std::flush, std::endl, std::future, std::string_literals::operator""s, std::future_status, std::to_string, std::round;
-namespace fs = std::filesystem;
-namespace rng = std::ranges;
-using namespace Tools;
-
-namespace Global {
 	string banner;
 	size_t banner_width = 0;
+	string overlay;
 
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
@@ -88,6 +79,7 @@ namespace Global {
 
 	bool debuginit = false;
 	bool debug = false;
+	bool utf_force = false;
 
 	uint64_t start_time;
 
@@ -100,15 +92,10 @@ namespace Global {
 
 
 //* A simple argument parser
-void argumentParser(int argc, char **argv){
-	string argument;
+void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
-		argument = argv[i];
-		if (argument == "-v" or argument == "--version") {
-			cout << "btop version: " << Global::Version << endl;
-			exit(0);
-		}
-		else if (argument == "-h" or argument == "--help") {
+		string argument = argv[i];
+		if (argument == "-h" or argument == "--help") {
 			cout 	<< "usage: btop [-h] [-v] [-/+t] [--debug]\n\n"
 					<< "optional arguments:\n"
 					<< "  -h, --help            show this help message and exit\n"
@@ -116,12 +103,18 @@ void argumentParser(int argc, char **argv){
 					<< "  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
 					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					<< "  +t, --tty_off         force (OFF) tty mode\n"
+					<< "  --utf-foce			force start even if no UTF-8 locale was detected"
 					<< "  --debug               start with loglevel set to DEBUG, overriding value set in config\n"
 					<< endl;
 			exit(0);
 		}
-		else if (argument == "--debug")
-			Global::debug = true;
+		if (argument == "-v" or argument == "--version") {
+			cout << "btop version: " << Global::Version << endl;
+			exit(0);
+		}
+		else if (argument == "-lc" or argument == "--low-color") {
+			Global::arg_low_color = true;
+		}
 		else if (argument == "-t" or argument == "--tty_on") {
 			Config::set("tty_mode", true);
 			Global::arg_tty = true;
@@ -130,9 +123,10 @@ void argumentParser(int argc, char **argv){
 			Config::set("tty_mode", false);
 			Global::arg_tty = true;
 		}
-		else if (argument == "-lc" or argument == "--low-color") {
-			Global::arg_low_color = true;
-		}
+		else if (argument == "--utf-force")
+			Global::utf_force = true;
+		else if (argument == "--debug")
+			Global::debug = true;
 		else {
 			cout << " Unknown argument: " << argument << "\n" <<
 			" Use -h or --help for help." <<  endl;
@@ -142,7 +136,7 @@ void argumentParser(int argc, char **argv){
 }
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
-void term_resize(bool force=false){
+void term_resize(bool force=false) {
 	if (auto refreshed = Term::refresh() or force) {
 		if (force and refreshed) force = false;
 		Global::resized = true;
@@ -160,7 +154,7 @@ void term_resize(bool force=false){
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
-void clean_quit(int sig){
+void clean_quit(const int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
@@ -168,14 +162,17 @@ void clean_quit(int sig){
 		Term::restore();
 		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
 	}
+	if (not Global::exit_error_msg.empty()) {
+		Logger::error(Global::exit_error_msg);
+		cout << "ERROR: " << Global::exit_error_msg << endl;
+	}
 	Config::write();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
-	if (not Global::exit_error_msg.empty()) cout << Global::exit_error_msg << endl;
 	if (sig != -1) exit(sig);
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
-void _sleep(){
+void _sleep() {
 	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
@@ -185,7 +182,7 @@ void _sleep(){
 }
 
 //* Handler for SIGCONT; re-initialize terminal and force a resize event
-void _resume(){
+void _resume() {
 	Term::init();
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
 	term_resize(true);
@@ -195,7 +192,7 @@ void _exit_handler() {
 	clean_quit(-1);
 }
 
-void _signal_handler(int sig) {
+void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
 			clean_quit(0);
@@ -212,24 +209,22 @@ void _signal_handler(int sig) {
 	}
 }
 
-//? Generate the btop++ banner
+//* Generate the btop++ banner
 void banner_gen() {
-	size_t z = 0;
-	string b_color, bg, fg, oc, letter;
-	auto& lowcolor = Config::getB("lowcolor");
-	int bg_i;
 	Global::banner.clear();
 	Global::banner_width = 0;
-	auto tty_mode = (Config::getB("tty_mode"));
-	for (auto line: Global::Banner_src) {
-		if (auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
+	string b_color, bg, fg, oc, letter;
+	auto& lowcolor = Config::getB("lowcolor");
+	auto& tty_mode = Config::getB("tty_mode");
+	for (size_t z = 0; const auto& line : Global::Banner_src) {
+		if (const auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
 		if (tty_mode) {
 			fg = (z > 2) ? "\x1b[31m" : "\x1b[91m";
 			bg = (z > 2) ? "\x1b[90m" : "\x1b[37m";
 		}
 		else {
 			fg = Theme::hex_to_color(line[0], lowcolor);
-			bg_i = 120 - z * 12;
+			int bg_i = 120 - z * 12;
 			bg = Theme::dec_to_color(bg_i, bg_i, bg_i, lowcolor);
 		}
 		for (size_t i = 0; i < line[1].size(); i += 3) {
@@ -253,34 +248,33 @@ void banner_gen() {
 			+ Fx::i + "v" + Global::Version + Fx::ui;
 }
 
-//? Manages secondary thread for collection and drawing of boxes
+//* Manages secondary thread for collection and drawing of boxes
 namespace Runner {
 	atomic<bool> active (false);
 	atomic<bool> stopping (false);
-	atomic<bool> has_output (false);
-	atomic<uint64_t> time_spent (0);
 
 	string output;
+	string overlay;
 
+	//* Secondary thread; run collect, draw and print out
 	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw, const bool interrupt) {
 		auto timestamp = time_micros();
-		string out;
-		out.reserve(output.size());
+		output.clear();
 
-		for (auto& box : boxes) {
+		for (const auto& box : boxes) {
 			if (stopping) break;
 			try {
 				if (box == "cpu") {
-					out += Cpu::draw(Cpu::collect(no_update), force_redraw);
+					output += Cpu::draw(Cpu::collect(no_update), force_redraw);
 				}
 				else if (box == "mem") {
-					out += Mem::draw(Mem::collect(no_update), force_redraw);
+					output += Mem::draw(Mem::collect(no_update), force_redraw);
 				}
 				else if (box == "net") {
-					out += Net::draw(Net::collect(no_update), force_redraw);
+					output += Net::draw(Net::collect(no_update), force_redraw);
 				}
 				else if (box == "proc") {
-					out += Proc::draw(Proc::collect(no_update), force_redraw);
+					output += Proc::draw(Proc::collect(no_update), force_redraw);
 				}
 			}
 			catch (const std::exception& e) {
@@ -289,7 +283,6 @@ namespace Runner {
 				Global::exit_error_msg = "Exception in runner thread -> "
 					+ fname + "::draw(" + fname + "::collect(no_update=" + (no_update ? "true" : "false")
 					+ "), force_redraw=" + (force_redraw ? "true" : "false") + ") : " + (string)e.what();
-				Logger::error(Global::exit_error_msg);
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -303,31 +296,39 @@ namespace Runner {
 			return;
 		}
 
-		if (out.empty()) {
-			out += "No boxes shown!";
+		if (output.empty()) {
+			output += "No boxes shown!";
 		}
 
-		output.swap(out);
-		time_spent = time_micros() - timestamp;
-		has_output = true;
+		//? If overlay isn't empty, print output without color and effects and then print overlay over
+		cout << Term::sync_start << (overlay.empty() ? output : Theme::c("inactive_fg") + Fx::uncolor(output) + overlay) << Term::sync_end << flush;
+
+		//! DEBUG stats -->
+		cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.    " << flush;
+
 		if (interrupt) Input::interrupt = true;
 
 		active = false;
-		active.notify_one();
+		active.notify_all();
 	}
 
-	void run(const string box, const bool no_update, const bool force_redraw, const bool input_interrupt) {
+	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all" for all boxes
+	void run(const string& box, const bool no_update, const bool force_redraw, const bool input_interrupt) {
 		active.wait(true);
+		Config::unlock();
 		if (stopping) return;
 		active = true;
 		Config::lock();
-		vector<string> boxes;
-		if (box == "all") boxes = Config::current_boxes;
-		else boxes.push_back(box);
-		std::thread run_thread(_runner, boxes, no_update, force_redraw, input_interrupt);
+		if (not Global::overlay.empty())
+			overlay = Global::overlay;
+		else if (not overlay.empty())
+			overlay.clear();
+
+		std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw, input_interrupt);
 		run_thread.detach();
 	}
 
+	//* Stops any secondary thread running and unlocks config
 	void stop() {
 		stopping = true;
 		active.wait(true);
@@ -335,25 +336,20 @@ namespace Runner {
 		stopping = false;
 	}
 
-	string get_output() {
-		active.wait(true);
-		Config::unlock();
-		has_output = false;
-		return output;
-	}
 }
 
 
-//? --------------------------------------------- Main starts here! ---------------------------------------------------
-int main(int argc, char **argv){
+//* --------------------------------------------- Main starts here! ---------------------------------------------------
+int main(int argc, char **argv) {
 
-	//? Init
+	//? ------------------------------------------------ INIT ---------------------------------------------------------
 
 	Global::start_time = time_s();
 
-	cout.setf(std::ios::boolalpha);
+	//? Call argument parser if launched with arguments
 	if (argc > 1) argumentParser(argc, argv);
 
+	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
 	std::atexit(_exit_handler);
 	std::at_quick_exit(_exit_handler);
 	std::signal(SIGINT, _signal_handler);
@@ -365,14 +361,15 @@ int main(int argc, char **argv){
 	#if defined(LINUX)
 		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (Global::coreCount < 1) Global::coreCount = 1;
-		{
-			std::error_code ec;
-			Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
+
+		{ std::error_code ec;
+		Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
 		}
+
 	#endif
 
-	//? Setup paths for config, log and themes
-	for (auto env : {"XDG_CONFIG_HOME", "HOME"}) {
+	//? Setup paths for config, log and user themes
+	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
 		if (getenv(env) != NULL and access(getenv(env), W_OK) != -1) {
 			Config::conf_dir = fs::path(getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
 			break;
@@ -381,7 +378,7 @@ int main(int argc, char **argv){
 	if (not Config::conf_dir.empty()) {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
 			cout << "WARNING: Could not create or access btop config directory. Logging and config saving disabled." << endl;
-			cout << "Make sure your $HOME environment variable is correctly set to fix this." << endl;
+			cout << "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
 		}
 		else {
 			Config::conf_file = Config::conf_dir / "btop.conf";
@@ -390,11 +387,12 @@ int main(int argc, char **argv){
 			if (not fs::exists(Theme::user_theme_dir) and not fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
 		}
 	}
+	//? Try to find global btop theme path relative to binary path
 	if (std::error_code ec; not Global::self_path.empty()) {
 			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
 			if (ec or not fs::is_directory(Theme::theme_dir) or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
 		}
-
+	//? If relative path failed, check two most common absolute paths
 	if (Theme::theme_dir.empty()) {
 		for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
 			if (fs::is_directory(fs::path(theme_path)) and access(theme_path, R_OK) != -1) {
@@ -415,14 +413,36 @@ int main(int argc, char **argv){
 
 		Logger::info("Logger set to " + Config::getS("log_level"));
 
-		for (auto& err_str : load_errors) Logger::warning(err_str);
+		for (const auto& err_str : load_errors) Logger::warning(err_str);
 	}
 
-	if (not string(getenv("LANG")).ends_with("UTF-8") and not string(getenv("LANG")).ends_with("utf-8")) {
-		string err_msg = "No UTF-8 locale was detected! Symbols might not look as intended.\n"
-						 "Make sure your $LANG evironment variable is set and with a UTF-8 locale.";
-		Logger::warning(err_msg);
-		cout << "WARNING: " << err_msg << endl;
+	//? Try to find and set a UTF-8 locale
+	if (bool found = false; not str_to_upper((string)std::setlocale(LC_ALL, NULL)).ends_with("UTF-8")) {
+		if (const string lang = (string)getenv("LANG"); str_to_upper(lang).ends_with("UTF-8")) {
+			found = true;
+			std::setlocale(LC_ALL, lang.c_str());
+		}
+		else if (const string loc = std::locale("").name(); not loc.empty()) {
+			try {
+				for (auto& l : ssplit(loc, ';')) {
+					if (str_to_upper(l).ends_with("UTF-8")) {
+						found = true;
+						std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str());
+						break;
+					}
+				}
+			}
+			catch (const std::out_of_range&) { found = false; }
+		}
+
+		if (not found and Global::utf_force)
+			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
+		else if (not found) {
+			Global::exit_error_msg = "No UTF-8 locale detected! Use --utf-force argument to start anyway.";
+			clean_quit(1);
+		}
+		else
+			Logger::debug("Setting LC_ALL=" + (string)std::setlocale(LC_ALL, NULL));
 	}
 
 	//? Initialize terminal and set options
@@ -443,52 +463,54 @@ int main(int argc, char **argv){
 		Logger::info("Real tty detected, setting 16 color mode and using tty friendly graph symbols");
 	}
 
-
-
-	//? Platform init and error check
+	//? Platform dependent init and error check
 	Shared::init();
 
-
-
-	// Config::set("truecolor", false);
-
-	auto thts = time_micros();
-
-	//? Update theme list and generate the theme
+	//? Update list of available themes and generate the selected theme
 	Theme::updateThemes();
 	Theme::setTheme();
 
 	//? Create the btop++ banner
 	banner_gen();
 
+	//? Calculate sizes of all boxes
+	Draw::calcSizes();
+
+	//? Start first collection and drawing run
+	Runner::run();
+
+	Global::debuginit = false; //! Debug -- remove
+
+	//? Switch to alternative terminal buffer, hide cursor, and print out box outlines
+	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor;
+	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
+
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
 
 
-	Global::debuginit = false;
+	if (false) {
 
-	Draw::calcSizes();
+		cout << "Current: " << std::setlocale(LC_ALL, NULL) << endl;
+		exit(0);
 
-
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::clear << endl;
-
-	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
-
+	}
 
 	//* Test theme
 	if (false) {
 		string key;
 		bool no_redraw = false;
+		Config::unlock();
 		auto theme_index = v_index(Theme::themes, Config::getS("color_theme"));
+		uint64_t timer = 0;
 		while (key != "q") {
 			key.clear();
 
 			if (not no_redraw) {
-				cout << "\nTheme generation of " << fs::path(Config::getS("color_theme")).filename().replace_extension("") << " took " << time_micros() - thts << "μs" << endl;
 
-				cout << "Colors:" << endl;
+				cout << Fx::reset << Term::clear << "Theme: " << Config::getS("color_theme") << ". Generation took " << timer << " μs." << endl;
 				size_t i = 0;
-				for(auto& item : Theme::test_colors()) {
+				for(const auto& item : Theme::colors) {
 					cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
 					if (++i == 4) {
 						i = 0;
@@ -499,7 +521,7 @@ int main(int argc, char **argv){
 
 
 				cout << "Gradients:";
-				for (auto& [name, cvec] : Theme::test_gradients()) {
+				for (const auto& [name, cvec] : Theme::gradients) {
 					cout << endl << rjust(name + ":", 10);
 					for (auto& color : cvec) {
 						cout << color << "■";
@@ -512,7 +534,6 @@ int main(int argc, char **argv){
 			no_redraw = true;
 			key = Input::wait();
 			if (key.empty()) continue;
-			thts = time_micros();
 			if (key == "right") {
 				if (theme_index == Theme::themes.size() - 1) theme_index = 0;
 				else theme_index++;
@@ -524,7 +545,9 @@ int main(int argc, char **argv){
 			else continue;
 			no_redraw = false;
 			Config::set("color_theme", Theme::themes.at(theme_index));
+			timer = time_micros();
 			Theme::setTheme();
+			timer = time_micros() - timer;
 
 		}
 
@@ -558,7 +581,6 @@ int main(int argc, char **argv){
 				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << '\n'
 				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
 
-		list<uint64_t> ktavg;
 		for (;;) {
 			mydata.back() = std::rand() % 101;
 			kts = time_micros();
@@ -566,9 +588,7 @@ int main(int argc, char **argv){
 					<< Mv::restore << Mv::d(13) << kgraph2(mydata)
 					<< Mv::restore << Mv::d(26) << kgraph3(mydata)
 					<< Term::sync_end << endl;
-			ktavg.push_front(time_micros() - kts);
-			if (ktavg.size() > 100) ktavg.pop_back();
-			cout << Mv::d(1) << "Time: " << ktavg.front() << " μs.  Avg: " << accumulate(ktavg.begin(), ktavg.end(), 0) / ktavg.size() << "  μs.     " << flush;
+			cout << Mv::d(1) << "Time: " << time_micros() - kts << " μs.     " << flush;
 			if (Input::poll()) {
 				if (Input::get() == "space") Input::wait();
 				else break;
@@ -583,15 +603,15 @@ int main(int argc, char **argv){
 
 
 
-	//* ------------------------------------------------ MAIN LOOP ----------------------------------------------------
+	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
-	uint64_t future_time = time_ms(), rcount = 0;
-	list<uint64_t> avgtimes;
+	uint64_t update_ms = Config::getI("update_ms");
+	auto future_time = time_ms();
 
 	try {
 		while (not true not_eq not false) {
+			//? Check for exceptions in secondary thread and exit with fail signal if true
 			if (Global::thread_exception) clean_quit(1);
-			uint64_t update_ms = Config::getI("update_ms");
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
 			term_resize();
@@ -604,31 +624,28 @@ int main(int argc, char **argv){
 					Runner::run("all", true, true);
 			}
 
-			//? Print out any available output from secondary thread
-			if (Runner::has_output) {
-				cout << Term::sync_start << Runner::get_output() << Term::sync_end << flush;
-
-				//! DEBUG stats -->
-				avgtimes.push_front(Runner::time_spent);
-				if (avgtimes.size() > 30) avgtimes.pop_back();
-				cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(avgtimes.front()), 5) << " μs. Average: " <<
-					rjust(to_string(accumulate(avgtimes.begin(), avgtimes.end(), 0) / avgtimes.size()), 5) << " μs of " << avgtimes.size() <<
-					" samples. Run count: " << ++rcount << ".    " << flush;
-				//! <--
-			}
-
-			//? Start collect & draw thread at the interval set by <update_ms> config value
+			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
 			if (time_ms() >= future_time) {
 				Runner::run("all");
+				update_ms = Config::getI("update_ms");
 				future_time = time_ms() + update_ms;
 			}
 
-			//? Loop over input polling and input action processing and check for external clock changes
+			//? Loop over input polling and input action processing
 			for (auto current_time = time_ms(); current_time < future_time and not Global::resized; current_time = time_ms()) {
+
+				//? Check for external clock changes to avoid a timer bugs
 				if (future_time - current_time > update_ms)
 					future_time = current_time;
-				else if (Input::poll(future_time - current_time))
+
+				//? Poll for input and process any input detected
+				else if (Input::poll(min(1000ul, future_time - current_time))) {
+					if (not Runner::active)
+						Config::unlock();
 					Input::process(Input::get());
+				}
+
+				//? Break the loop at 1000ms intervals or if input polling was interrupted
 				else
 					break;
 			}
@@ -637,7 +654,6 @@ int main(int argc, char **argv){
 	}
 	catch (std::exception& e) {
 		Global::exit_error_msg = "Exception in main loop -> " + (string)e.what();
-		Logger::error(Global::exit_error_msg);
 		clean_quit(1);
 	}
 

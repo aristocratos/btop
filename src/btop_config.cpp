@@ -17,7 +17,6 @@ tab-size = 4
 */
 
 #include <array>
-#include <robin_hood.h>
 #include <ranges>
 #include <atomic>
 #include <fstream>
@@ -26,215 +25,214 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using robin_hood::unordered_flat_map, std::map, std::array, std::atomic;
+using std::array, std::atomic;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
-	namespace {
-		atomic<bool> locked (false);
-		atomic<bool> writelock (false);
-		bool write_new;
 
-		vector<array<string, 2>> descriptions = {
-			{"color_theme", 		"#* Full path to a bashtop/bpytop/btop++ formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes."},
+	atomic<bool> locked (false);
+	atomic<bool> writelock (false);
+	bool write_new;
 
-			{"theme_background", 	"#* If the theme set background should be shown, set to False if you want terminal background transparency."},
+	const vector<array<string, 2>> descriptions = {
+		{"color_theme", 		"#* Full path to a bashtop/bpytop/btop++ formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes."},
 
-			{"truecolor", 			"#* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false."},
+		{"theme_background", 	"#* If the theme set background should be shown, set to False if you want terminal background transparency."},
 
-			{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
-									"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
+		{"truecolor", 			"#* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false."},
 
-			{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
-									"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"
-									"#* \"block\" has half the resolution of braille but uses more common characters.\n"
-									"#* \"tty\" uses only 3 different symbols but will work with most fonts and should work in a real TTY.\n"
-									"#* Note that \"tty\" only has half the horizontal resolution of the other two, so will show a shorter historical view."},
+		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
+								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
-			{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
+								"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"
+								"#* \"block\" has half the resolution of braille but uses more common characters.\n"
+								"#* \"tty\" uses only 3 different symbols but will work with most fonts and should work in a real TTY.\n"
+								"#* Note that \"tty\" only has half the horizontal resolution of the other two, so will show a shorter historical view."},
 
-			{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-			{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-			{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-			{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
+		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-			{"update_ms", 			"#* Update time in milliseconds, increases automatically if set below internal loops processing time, recommended 2000 ms or above for better sample times for graphs."},
+		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
 
-			{"proc_update_mult", 	"#* Processes update multiplier, sets how often the process list is updated as a multiplier of \"update_ms\".\n"
-									"#* Set to 2 or higher to greatly decrease bpytop cpu usage. (Only integers)."},
+		{"update_ms", 			"#* Update time in milliseconds, increases automatically if set below internal loops processing time, recommended 2000 ms or above for better sample times for graphs."},
 
-			{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu responsive\",\n"
-									"#* \"cpu lazy\" updates top process over time, \"cpu responsive\" updates top process directly."},
+		{"proc_update_mult", 	"#* Processes update multiplier, sets how often the process list is updated as a multiplier of \"update_ms\".\n"
+								"#* Set to 2 or higher to greatly decrease bpytop cpu usage. (Only integers)."},
 
-			{"proc_reversed",		"#* Reverse sorting order, True or False."},
+		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu responsive\",\n"
+								"#* \"cpu lazy\" updates top process over time, \"cpu responsive\" updates top process directly."},
 
-			{"proc_tree",			"#* Show processes as a tree."},
+		{"proc_reversed",		"#* Reverse sorting order, True or False."},
 
-			{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
+		{"proc_tree",			"#* Show processes as a tree."},
 
-			{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
+		{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
 
-			{"proc_per_core", 		"#* If process cpu usage should be of the core it's running on or usage of the total available cpu power."},
+		{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
 
-			{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
+		{"proc_per_core", 		"#* If process cpu usage should be of the core it's running on or usage of the total available cpu power."},
 
-			{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
-									"#* Select from a list of detected attributes from the options menu."},
+		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
-			{"cpu_graph_lower", 	"#* Sets the CPU stat shown in lower half of the CPU graph, \"total\" is always available.\n"
-									"#* Select from a list of detected attributes from the options menu."},
+		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
+								"#* Select from a list of detected attributes from the options menu."},
 
-			{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
+		{"cpu_graph_lower", 	"#* Sets the CPU stat shown in lower half of the CPU graph, \"total\" is always available.\n"
+								"#* Select from a list of detected attributes from the options menu."},
 
-			{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
+		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
-			{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
+		{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
 
-			{"check_temp", 			"#* Show cpu temperature."},
+		{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
 
-			{"cpu_sensor", 			"#* Which sensor to use for cpu temperature, use options menu to select from list of available sensors."},
+		{"check_temp", 			"#* Show cpu temperature."},
 
-			{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
+		{"cpu_sensor", 			"#* Which sensor to use for cpu temperature, use options menu to select from list of available sensors."},
 
-			{"temp_scale", 			"#* Which temperature scale to use, available values: \"celsius\", \"fahrenheit\", \"kelvin\" and \"rankine\"."},
+		{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
 
-			{"show_cpu_freq", 		"#* Show CPU frequency."},
+		{"temp_scale", 			"#* Which temperature scale to use, available values: \"celsius\", \"fahrenheit\", \"kelvin\" and \"rankine\"."},
 
-			{"draw_clock", 			"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable."},
+		{"show_cpu_freq", 		"#* Show CPU frequency."},
 
-			{"background_update", 	"#* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort."},
+		{"draw_clock", 			"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable."},
 
-			{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
+		{"background_update", 	"#* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort."},
 
-			{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with a comma \",\".\n"
-									"#* Begin line with \"exclude=\" to change to exclude filter, otherwise defaults to \"most include\" filter. Example: disks_filter=\"exclude=/boot, /home/user\"."},
+		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
-			{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
+		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with a comma \",\".\n"
+								"#* Begin line with \"exclude=\" to change to exclude filter, otherwise defaults to \"most include\" filter. Example: disks_filter=\"exclude=/boot, /home/user\"."},
 
-			{"show_swap", 			"#* If swap memory should be shown in memory box."},
+		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
-			{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
+		{"show_swap", 			"#* If swap memory should be shown in memory box."},
 
-			{"show_disks", 			"#* If mem box should be split to also show disks info."},
+		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
 
-			{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
+		{"show_disks", 			"#* If mem box should be split to also show disks info."},
 
-			{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
+		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
 
-			{"show_io_stat", 		"#* Toggles if io stats should be shown in regular disk usage view."},
+		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
-			{"io_mode", 			"#* Toggles io mode for disks, showing only big graphs for disk read/write speeds."},
+		{"show_io_stat", 		"#* Toggles if io stats should be shown in regular disk usage view."},
 
-			{"io_graph_combined", 	"#* Set to True to show combined read/write io graphs in io mode."},
+		{"io_mode", 			"#* Toggles io mode for disks, showing only big graphs for disk read/write speeds."},
 
-			{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"device:speed\" separate disks with a comma \",\".\n"
-									"#* Example: \"/dev/sda:100, /dev/sdb:20\"."},
+		{"io_graph_combined", 	"#* Set to True to show combined read/write io graphs in io mode."},
 
-			{"net_download", 		"#* Set fixed values for network graphs, default \"10M\" = 10 Mibibytes, possible units \"K\", \"M\", \"G\", append with \"bit\" for bits instead of bytes, i.e \"100mbit\"."},
+		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"device:speed\" separate disks with a comma \",\".\n"
+								"#* Example: \"/dev/sda:100, /dev/sdb:20\"."},
 
-			{"net_upload", ""},
+		{"net_download", 		"#* Set fixed values for network graphs, default \"10M\" = 10 Mibibytes, possible units \"K\", \"M\", \"G\", append with \"bit\" for bits instead of bytes, i.e \"100mbit\"."},
 
-			{"net_auto", 			"#* Start in network graphs auto rescaling mode, ignores any values set above and rescales down to 10 Kibibytes at the lowest."},
+		{"net_upload", ""},
 
-			{"net_sync", 			"#* Sync the scaling for download and upload to whichever currently has the highest scale."},
+		{"net_auto", 			"#* Start in network graphs auto rescaling mode, ignores any values set above and rescales down to 10 Kibibytes at the lowest."},
 
-			{"net_color_fixed", 	"#* If the network graphs color gradient should scale to bandwidth usage or auto scale, bandwidth usage is based on \"net_download\" and \"net_upload\" values."},
+		{"net_sync", 			"#* Sync the scaling for download and upload to whichever currently has the highest scale."},
 
-			{"net_iface", 			"#* Starts with the Network Interface specified here."},
+		{"net_color_fixed", 	"#* If the network graphs color gradient should scale to bandwidth usage or auto scale, bandwidth usage is based on \"net_download\" and \"net_upload\" values."},
 
-			{"show_battery", 		"#* Show battery stats in top right if battery is present."},
+		{"net_iface", 			"#* Starts with the Network Interface specified here."},
 
-			{"log_level", 			"#* Set loglevel for \"~/.config/bpytop/error.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
-									"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
-		};
+		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
-		unordered_flat_map<string, string> strings = {
-			{"color_theme", "Default"},
-			{"shown_boxes", "cpu mem net proc"},
-			{"graph_symbol", "braille"},
-			{"graph_symbol_cpu", "default"},
-			{"graph_symbol_mem", "default"},
-			{"graph_symbol_net", "default"},
-			{"graph_symbol_proc", "default"},
-			{"proc_sorting", "cpu lazy"},
-			{"cpu_graph_upper", "total"},
-			{"cpu_graph_lower", "total"},
-			{"cpu_sensor", "Auto"},
-			{"temp_scale", "celsius"},
-			{"draw_clock", "%X"},
-			{"custom_cpu_name", ""},
-			{"disks_filter", ""},
-			{"io_graph_speeds", ""},
-			{"net_download", "10M"},
-			{"net_upload", "10M"},
-			{"net_iface", ""},
-			{"log_level", "WARNING"},
-			{"proc_filter", ""},
-			{"proc_command", ""},
-		};
-		unordered_flat_map<string, string> stringsTmp;
+		{"log_level", 			"#* Set loglevel for \"~/.config/bpytop/error.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
+								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
+	};
 
-		unordered_flat_map<string, bool> bools = {
-			{"theme_background", true},
-			{"truecolor", true},
-			{"proc_reversed", false},
-			{"proc_tree", false},
-			{"proc_colors", true},
-			{"proc_gradient", true},
-			{"proc_per_core", false},
-			{"proc_mem_bytes", true},
-			{"cpu_invert_lower", true},
-			{"cpu_single_graph", false},
-			{"show_uptime", true},
-			{"check_temp", true},
-			{"show_coretemp", true},
-			{"show_cpu_freq", true},
-			{"background_update", true},
-			{"mem_graphs", true},
-			{"show_swap", true},
-			{"swap_disk", true},
-			{"show_disks", true},
-			{"only_physical", true},
-			{"use_fstab", false},
-			{"show_io_stat", true},
-			{"io_mode", false},
-			{"io_graph_combined", false},
-			{"net_color_fixed", false},
-			{"net_auto", true},
-			{"net_sync", false},
-			{"show_battery", true},
-			{"tty_mode", false},
-			{"force_tty", false},
-			{"lowcolor", false},
-			{"show_detailed", false},
-			{"proc_filtering", false},
-		};
-		unordered_flat_map<string, bool> boolsTmp;
+	unordered_flat_map<string, string> strings = {
+		{"color_theme", "Default"},
+		{"shown_boxes", "cpu mem net proc"},
+		{"graph_symbol", "braille"},
+		{"graph_symbol_cpu", "default"},
+		{"graph_symbol_mem", "default"},
+		{"graph_symbol_net", "default"},
+		{"graph_symbol_proc", "default"},
+		{"proc_sorting", "cpu lazy"},
+		{"cpu_graph_upper", "total"},
+		{"cpu_graph_lower", "total"},
+		{"cpu_sensor", "Auto"},
+		{"temp_scale", "celsius"},
+		{"draw_clock", "%X"},
+		{"custom_cpu_name", ""},
+		{"disks_filter", ""},
+		{"io_graph_speeds", ""},
+		{"net_download", "10M"},
+		{"net_upload", "10M"},
+		{"net_iface", ""},
+		{"log_level", "WARNING"},
+		{"proc_filter", ""},
+		{"proc_command", ""},
+	};
+	unordered_flat_map<string, string> stringsTmp;
 
-		unordered_flat_map<string, int> ints = {
-			{"update_ms", 2000},
-			{"proc_update_mult", 2},
-			{"detailed_pid", 0},
-			{"selected_pid", 0},
-			{"proc_start", 0},
-			{"proc_selected", 0},
-		};
-		unordered_flat_map<string, int> intsTmp;
+	unordered_flat_map<string, bool> bools = {
+		{"theme_background", true},
+		{"truecolor", true},
+		{"proc_reversed", false},
+		{"proc_tree", false},
+		{"proc_colors", true},
+		{"proc_gradient", true},
+		{"proc_per_core", false},
+		{"proc_mem_bytes", true},
+		{"cpu_invert_lower", true},
+		{"cpu_single_graph", false},
+		{"show_uptime", true},
+		{"check_temp", true},
+		{"show_coretemp", true},
+		{"show_cpu_freq", true},
+		{"background_update", true},
+		{"mem_graphs", true},
+		{"show_swap", true},
+		{"swap_disk", true},
+		{"show_disks", true},
+		{"only_physical", true},
+		{"use_fstab", false},
+		{"show_io_stat", true},
+		{"io_mode", false},
+		{"io_graph_combined", false},
+		{"net_color_fixed", false},
+		{"net_auto", true},
+		{"net_sync", false},
+		{"show_battery", true},
+		{"tty_mode", false},
+		{"force_tty", false},
+		{"lowcolor", false},
+		{"show_detailed", false},
+		{"proc_filtering", false},
+	};
+	unordered_flat_map<string, bool> boolsTmp;
 
-		vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+	unordered_flat_map<string, int> ints = {
+		{"update_ms", 2000},
+		{"proc_update_mult", 2},
+		{"detailed_pid", 0},
+		{"selected_pid", 0},
+		{"proc_start", 0},
+		{"proc_selected", 0},
+	};
+	unordered_flat_map<string, int> intsTmp;
 
-		bool _locked(const string& name){
-			writelock.wait(true);
-			if (not write_new and rng::find_if(descriptions, [&name](const auto& a){ return a.at(0) == name; }) != descriptions.end())
-				write_new = true;
-			return locked.load();
-		}
+	vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+
+	bool _locked(const string& name) {
+		writelock.wait(true);
+		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
+			write_new = true;
+		return locked.load();
 	}
 
 	fs::path conf_dir;
@@ -242,36 +240,22 @@ namespace Config {
 
 	vector<string> current_boxes;
 
-	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
-
-	const bool& getB(const string& name){
-		return bools.at(name);
-	}
-
-	const int& getI(const string& name){
-		return ints.at(name);
-	}
-
-	const string& getS(const string& name){
-		return strings.at(name);
-	}
-
-	void set(string name, bool value){
+	void set(string name, bool value) {
 		if (_locked(name)) boolsTmp.insert_or_assign(name, value);
 		else bools.at(name) = value;
 	}
 
-	void set(string name, int value){
+	void set(string name, int value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		ints.at(name) = value;
 	}
 
-	void set(string name, string value){
+	void set(string name, string value) {
 		if (_locked(name)) stringsTmp.insert_or_assign(name, value);
 		else strings.at(name) = value;
 	}
 
-	void flip(string name){
+	void flip(string name) {
 		if (_locked(name)) {
 			if (boolsTmp.contains(name)) boolsTmp.at(name) = not boolsTmp.at(name);
 			else boolsTmp.insert_or_assign(name, (not bools.at(name)));
@@ -279,42 +263,49 @@ namespace Config {
 		else bools.at(name) = not bools.at(name);
 	}
 
-	void lock(){
+	void lock() {
 		writelock.wait(true);
 		locked = true;
 	}
 
-	void unlock(){
+	void unlock() {
 		if (not locked) return;
+		writelock.wait(true);
 		writelock = true;
 
-		if (Proc::shown) {
-			ints.at("selected_pid") = Proc::selected_pid;
-			ints.at("proc_start") = Proc::start;
-			ints.at("proc_selected") = Proc::selected;
-		}
+		try {
+			if (Proc::shown) {
+				ints.at("selected_pid") = Proc::selected_pid;
+				ints.at("proc_start") = Proc::start;
+				ints.at("proc_selected") = Proc::selected;
+			}
 
-		for (auto& item : stringsTmp){
-			strings.at(item.first) = item.second;
-		}
-		stringsTmp.clear();
+			for (auto& item : stringsTmp) {
+				strings.at(item.first) = item.second;
+			}
+			stringsTmp.clear();
 
-		for (auto& item : intsTmp){
-			ints.at(item.first) = item.second;
-		}
-		intsTmp.clear();
+			for (auto& item : intsTmp) {
+				ints.at(item.first) = item.second;
+			}
+			intsTmp.clear();
 
-		for (auto& item : boolsTmp){
-			bools.at(item.first) = item.second;
+			for (auto& item : boolsTmp) {
+				bools.at(item.first) = item.second;
+			}
+			boolsTmp.clear();
 		}
-		boolsTmp.clear();
+		catch (const std::exception& e) {
+			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
+			clean_quit(1);
+		}
 
 		locked = false;
 		writelock = false;
 		writelock.notify_all();
 	}
 
-	bool check_boxes(string boxes){
+	bool check_boxes(string boxes) {
 		auto new_boxes = ssplit(boxes);
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
@@ -323,7 +314,7 @@ namespace Config {
 		return true;
 	}
 
-	void load(fs::path conf_file, vector<string>& load_errors){
+	void load(fs::path conf_file, vector<string>& load_errors) {
 		if (conf_file.empty())
 			return;
 		else if (not fs::exists(conf_file)) {
@@ -392,7 +383,7 @@ namespace Config {
 		}
 	}
 
-	void write(){
+	void write() {
 		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
 		std::ofstream cwrite(conf_file, std::ios::trunc);

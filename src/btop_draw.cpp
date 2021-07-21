@@ -17,8 +17,6 @@ tab-size = 4
 */
 
 #include <array>
-#include <map>
-#include <ranges>
 #include <algorithm>
 #include <cmath>
 
@@ -32,7 +30,6 @@ tab-size = 4
 using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
 		std::to_string;
 
-namespace rng = std::ranges;
 using namespace Tools;
 
 namespace Symbols {
@@ -100,7 +97,7 @@ namespace Symbols {
 
 namespace Draw {
 
-	string createBox(int x, int y, int width, int height, string line_color, bool fill, string title, string title2, int num){
+	string createBox(int x, int y, int width, int height, string line_color, bool fill, string title, string title2, int num) {
 		string out;
 		string lcolor = (line_color.empty()) ? Theme::c("div_line") : line_color;
 		string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(num) : Symbols::superscript[num]);
@@ -108,12 +105,12 @@ namespace Draw {
 		out = Fx::reset + lcolor;
 
 		//? Draw horizontal lines
-		for (int hpos : {y, y + height - 1}){
+		for (int hpos : {y, y + height - 1}) {
 			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (int hpos : iota(y + 1, y + height - 1)){
+		for (int hpos : iota(y + 1, y + height - 1)) {
 			out += Mv::to(hpos, x) + Symbols::v_line +
 				((fill) ? string(width - 2, ' ') : Mv::r(width - 2)) +
 				Symbols::v_line;
@@ -126,11 +123,11 @@ namespace Draw {
 				Mv::to(y + height - 1, x + width - 1) + Symbols::right_down;
 
 		//? Draw titles if defined
-		if (not title.empty()){
+		if (not title.empty()) {
 			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
-		if (not title2.empty()){
+		if (not title2.empty()) {
 			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left + Theme::c("title") + title2 +
 			Fx::ub + lcolor + Symbols::title_right;
 		}
@@ -186,7 +183,7 @@ namespace Draw {
 			else data_value = data[i];
 			if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
 			//? Vertical iteration over height of graph
-			for (int horizon : iota(0, height)){
+			for (int horizon : iota(0, height)) {
 				int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
 				int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
@@ -338,7 +335,7 @@ namespace Proc {
 
 	string box;
 
-	void selection(string cmd_key) {
+	void selection(const string& cmd_key) {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		int numpids = Proc::numpids;
@@ -371,7 +368,7 @@ namespace Proc {
 		Config::set("proc_selected", selected);
 	}
 
-	string draw(const vector<proc_info>& plist, bool force_redraw){
+	string draw(const vector<proc_info>& plist, bool force_redraw) {
 		auto& filter = Config::getS("proc_filter");
 		auto& filtering = Config::getB("proc_filtering");
 		auto& proc_tree = Config::getB("proc_tree");
@@ -390,7 +387,7 @@ namespace Proc {
 			redraw = false;
 			out = box;
 			out += Mv::to(y, x) + Mv::r(12)
-				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█" + Fx::reset : " "))
+				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█"s + Fx::reset : " "))
 				+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
 				+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter)));
 
@@ -420,7 +417,7 @@ namespace Proc {
 
 		//* Iteration over processes
 		int lc = 0;
-		for (int n=0; auto& p : plist){
+		for (int n=0; auto& p : plist) {
 			if (n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) selected_pid = (int)p.pid;
@@ -463,8 +460,8 @@ namespace Proc {
 			if (not proc_tree) {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
-					+ c_color + ljust(p.name, (width < 70 ? width - 46 : 16)) + end
-					+ (width >= 70 ? g_color + ljust(p.cmd, width - 62, true) : "");
+					+ c_color + ljust(p.name, (width < 70 ? width - 46 : 15)) + end
+					+ (width >= 70 ? g_color + ' ' + ljust(p.cmd, width - 62, true) : "");
 			}
 			//? Tree view line
 			else {
@@ -509,7 +506,7 @@ namespace Proc {
 }
 
 namespace Draw {
-	void calcSizes(){
+	void calcSizes() {
 		auto& boxes = Config::getS("shown_boxes");
 
 		Cpu::box.clear();

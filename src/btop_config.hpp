@@ -20,9 +20,10 @@ tab-size = 4
 
 #include <string>
 #include <vector>
+#include <robin_hood.h>
 #include <filesystem>
 
-using std::string, std::vector;
+using std::string, std::vector, robin_hood::unordered_flat_map;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -30,7 +31,11 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern const vector<string> valid_graph_symbols;
+	extern unordered_flat_map<string, string> strings;
+	extern unordered_flat_map<string, bool> bools;
+	extern unordered_flat_map<string, int> ints;
+
+	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 
 	extern vector<string> current_boxes;
 
@@ -38,13 +43,13 @@ namespace Config {
 	bool check_boxes(string boxes);
 
 	//* Return bool for config key <name>
-	const bool& getB(const string& name);
+	inline const bool& getB(const string& name) { return bools.at(name); }
 
 	//* Return integer for config key <name>
-	const int& getI(const string& name);
+	inline const int& getI(const string& name) { return ints.at(name); }
 
 	//* Return string for config key <name>
-	const string& getS(const string& name);
+	inline const string& getS(const string& name) { return strings.at(name); }
 
 	//* Set config key <name> to bool <value>
 	void set(string name, bool value);
@@ -58,7 +63,7 @@ namespace Config {
 	//* Flip config key bool <name>
 	void flip(string name);
 
-	//* Wait if locked then lock config and cache changes until unlock
+	//* Lock config and cache changes until unlocked
 	void lock();
 
 	//* Unlock config and write any cached values to config
