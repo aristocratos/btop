@@ -132,7 +132,6 @@ Needs GCC/G++ 11 or higher, (GCC 10 is missing some C++20 features).
 
 ``` bash
 sudo apt install git build-essential gcc-11 g++-11
-	# On earlier Ubuntu versions that don't have gcc-11 and g++-11 replace with gcc-10 and g++-10
 ```
 
 >Clone and compile
@@ -141,15 +140,15 @@ sudo apt install git build-essential gcc-11 g++-11
 git clone https://github.com/aristocratos/btop.git
 cd btop
 make
-	# use "make -jX" where X is your number of cores for multithreaded compilation
+# use "make -jX" where X is your number of cores for multithreaded compilation
 ```
 
 >to install
 
 ``` bash
 sudo make install
-	# use "make install PREFIX=/target/dir" to set target, default: /usr/local
-	# only use "sudo" when installing to a NON user owned directory
+# use "make install PREFIX=/target/dir" to set target, default: /usr/local
+# only use "sudo" when installing to a NON user owned directory
 ```
 
 >to make btop always run as root (to enable signal sending to any process and for /proc read permissions on some systems)
