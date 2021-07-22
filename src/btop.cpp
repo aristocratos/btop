@@ -160,7 +160,7 @@ void clean_quit(const int sig) {
 	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
-		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
+		if (not Global::debuginit) cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
 	}
 	if (not Global::exit_error_msg.empty()) {
 		Logger::error(Global::exit_error_msg);
@@ -176,7 +176,7 @@ void _sleep() {
 	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
-		if (not Global::debuginit) cout << Term::normal_screen << Term::show_cursor << flush;
+		if (not Global::debuginit) cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
 	}
 	std::raise(SIGSTOP);
 }
@@ -184,7 +184,7 @@ void _sleep() {
 //* Handler for SIGCONT; re-initialize terminal and force a resize event
 void _resume() {
 	Term::init();
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << flush;
+	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::mouse_on << flush;
 	term_resize(true);
 }
 
@@ -257,7 +257,7 @@ namespace Runner {
 	string overlay;
 
 	//* Secondary thread; run collect, draw and print out
-	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw, const bool interrupt) {
+	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw) {
 		auto timestamp = time_micros();
 		output.clear();
 
@@ -265,16 +265,16 @@ namespace Runner {
 			if (stopping) break;
 			try {
 				if (box == "cpu") {
-					output += Cpu::draw(Cpu::collect(no_update), force_redraw);
+					output += Cpu::draw(Cpu::collect(no_update), force_redraw, no_update);
 				}
 				else if (box == "mem") {
-					output += Mem::draw(Mem::collect(no_update), force_redraw);
+					output += Mem::draw(Mem::collect(no_update), force_redraw, no_update);
 				}
 				else if (box == "net") {
-					output += Net::draw(Net::collect(no_update), force_redraw);
+					output += Net::draw(Net::collect(no_update), force_redraw, no_update);
 				}
 				else if (box == "proc") {
-					output += Proc::draw(Proc::collect(no_update), force_redraw);
+					output += Proc::draw(Proc::collect(no_update), force_redraw, no_update);
 				}
 			}
 			catch (const std::exception& e) {
@@ -306,14 +306,14 @@ namespace Runner {
 		//! DEBUG stats -->
 		cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.    " << flush;
 
-		if (interrupt) Input::interrupt = true;
+		Input::interrupt = true;
 
 		active = false;
 		active.notify_all();
 	}
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all" for all boxes
-	void run(const string& box, const bool no_update, const bool force_redraw, const bool input_interrupt) {
+	void run(const string& box, const bool no_update, const bool force_redraw) {
 		active.wait(true);
 		Config::unlock();
 		if (stopping) return;
@@ -324,7 +324,7 @@ namespace Runner {
 		else if (not overlay.empty())
 			overlay.clear();
 
-		std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw, input_interrupt);
+		std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw);
 		run_thread.detach();
 	}
 
@@ -482,7 +482,7 @@ int main(int argc, char **argv) {
 	Global::debuginit = false; //! Debug -- remove
 
 	//? Switch to alternative terminal buffer, hide cursor, and print out box outlines
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor;
+	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::mouse_on;
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 
 

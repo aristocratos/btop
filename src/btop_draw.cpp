@@ -19,18 +19,21 @@ tab-size = 4
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 
 #include <btop_draw.hpp>
 #include <btop_config.hpp>
 #include <btop_theme.hpp>
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
+#include <btop_input.hpp>
 
 
 using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
 		std::to_string;
 
 using namespace Tools;
+namespace rng = std::ranges;
 
 namespace Symbols {
 	const string h_line			= "─";
@@ -68,7 +71,7 @@ namespace Symbols {
 			"▖", "▄", "▄", "▟", "▟",
 			"▖", "▄", "▄", "▟", "▟",
 			"▌", "▙", "▙", "█", "█",
-			"▌", "▙", "▙", "█", "█"
+			"▌", "▙", "▙", "█", "█",
 		}},
 		{"block_down", {
 			" ", "▝", "▝", "▐", "▐",
@@ -182,20 +185,20 @@ namespace Draw {
 			if (i == -1) { data_value = 0; last = 0; }
 			else data_value = data[i];
 			if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
+
 			//? Vertical iteration over height of graph
 			for (int horizon : iota(0, height)) {
 				int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
 				int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+				int clamp_min = (no_zero and horizon == height - 1 and i != -1) ? 1 : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
-				int ai = 0;
-				for (auto value : {last, data_value}) {
+				for (int ai = 0; auto value : {last, data_value}) {
 					if (value >= cur_high)
 						result[ai++] = 4;
 					else if (value <= cur_low)
-						result[ai++] = 0;
+						result[ai++] = max(clamp_min, 0);
 					else {
-						result[ai++] = round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod);
-						if (no_zero and horizon == height - 1 and i != -1 and result[ai] == 0) result[ai] = 1;
+						result[ai++] = clamp((int)round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod), clamp_min, 4);
 					}
 				}
 				//? Generate graph symbol from 5x5 2D vector
@@ -204,17 +207,21 @@ namespace Draw {
 			if (mult and i > data_offset) last = data_value;
 		}
 		last = data_value;
-		if (height == 1)
-			out = (last < 1 ? Theme::c("inactive_fg") : Theme::g(color_gradient)[last]) + graphs[current][0];
+		out.clear();
+		if (height == 1) {
+			if (not color_gradient.empty())
+				out += (last < 1 and not color_gradient.empty() ? Theme::c("inactive_fg") : Theme::g(color_gradient)[last]);
+			out += graphs[current][0];
+		}
 		else {
-			out.clear();
 			for (int i : iota(0, height)) {
 				if (i > 0) out += Mv::d(1) + Mv::l(width);
-				out += (invert) ? Theme::g(color_gradient)[i * 100 / (height - 1)] : Theme::g(color_gradient)[100 - (i * 100 / (height - 1))];
+				if (not color_gradient.empty())
+					out += (invert) ? Theme::g(color_gradient)[i * 100 / (height - 1)] : Theme::g(color_gradient)[100 - (i * 100 / (height - 1))];
 				out += (invert) ? graphs[current][ (height - 1) - i] : graphs[current][i];
 			}
 		}
-		out += Fx::reset;
+		if (not color_gradient.empty()) out += Fx::reset;
 	}
 
 	void Graph::operator()(int width, int height, string color_gradient, const deque<long long>& data, string symbol, bool invert, bool no_zero, long long max_value, long long offset) {
@@ -247,10 +254,10 @@ namespace Draw {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
-		bool select_graph = (tty_mode ? current : not current);
+		// bool select_graph = tty_mode ? current : not current;
 		for (int i : iota(0, height)) {
-			if (graphs[select_graph][i].starts_with(Fx::e)) graphs[current][i].erase(0, 4);
-			else graphs[select_graph][i].erase(0, 3);
+			if (graphs[current][i][1] == '[') graphs[current][i].erase(0, 4);
+			else graphs[current][i].erase(0, 3);
 		}
 		this->_create(data, (int)data.size() - 1);
 		return out;
@@ -272,8 +279,9 @@ namespace Cpu {
 	bool shown = true, redraw = true;
 	string box;
 
-	string draw(const cpu_info& cpu, bool force_redraw) {
+	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		(void)cpu;
+		(void)data_same;
 		string out;
 		if (redraw or force_redraw) {
 			redraw = false;
@@ -292,8 +300,9 @@ namespace Mem {
 	bool shown = true, redraw = true;
 	string box;
 
-	string draw(const mem_info& mem, bool force_redraw) {
+	string draw(const mem_info& mem, const bool force_redraw, const bool data_same) {
 		(void)mem;
+		(void)data_same;
 		string out;
 		if (redraw or force_redraw) {
 			redraw = false;
@@ -313,8 +322,9 @@ namespace Net {
 	bool shown = true, redraw = true;
 	string box;
 
-	string draw(const net_info& net, bool force_redraw) {
+	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
 		(void)net;
+		(void)data_same;
 		string out;
 		if (redraw or force_redraw) {
 			redraw = false;
@@ -332,16 +342,25 @@ namespace Proc {
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
 	int selected_pid = 0;
+	unordered_flat_map<size_t, Draw::Graph> p_graphs;
+	unordered_flat_map<size_t, int> p_counters;
+	int counter = 0;
 
 	string box;
 
-	void selection(const string& cmd_key) {
+	bool selection(const string& cmd_key) {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		int numpids = Proc::numpids;
 		if (cmd_key == "up" and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
+		}
+		else if (cmd_key == "mouse_scroll_up" and start > 0) {
+			start = max(0, start - 3);
+		}
+		else if (cmd_key == "mouse_scroll_down" and start < numpids - select_max) {
+			start = min(numpids - select_max, start + 3);
 		}
 		else if (cmd_key == "down") {
 			if (start < numpids - select_max and selected == select_max) start++;
@@ -364,17 +383,27 @@ namespace Proc {
 			if (selected > 0) selected = select_max;
 		}
 
-		Config::set("proc_start", start);
-		Config::set("proc_selected", selected);
+		bool changed = false;
+		if (start != Config::getI("proc_start")) {
+			Config::set("proc_start", start);
+			changed = true;
+		}
+		if (selected != Config::getI("proc_selected")) {
+			Config::set("proc_selected", selected);
+			changed = true;
+		}
+		return changed;
 	}
 
-	string draw(const vector<proc_info>& plist, bool force_redraw) {
+	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
 		auto& filter = Config::getS("proc_filter");
 		auto& filtering = Config::getB("proc_filtering");
 		auto& proc_tree = Config::getB("proc_tree");
-		bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid"));
-		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode"));
+		const bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid"));
+		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode"));
 		auto& proc_colors = Config::getB("proc_colors");
+		const auto& graph_symbol = (Config::getB("tty_mode") ? "tty" : Config::getS("graph_symbol_proc"));
+		const auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? "braille_up" : graph_symbol + "_up"))[1];
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		uint64_t total_mem = 16328872 << 10;
@@ -382,15 +411,19 @@ namespace Proc {
 		int height = show_detailed ? Proc::height - 9 : Proc::height;
 		int numpids = Proc::numpids;
 		string out;
-		//* If true, redraw elements not needed to be updated every cycle
+
+		//* Redraw elements not needed to be updated every cycle
 		if (redraw or force_redraw) {
-			redraw = false;
 			out = box;
+			const string title_left = Theme::c("proc_box") + Symbols::title_left;
+			const string title_right = Theme::c("proc_box") + Symbols::title_right;
+			//? Buttons etc. in box titlebar
 			out += Mv::to(y, x) + Mv::r(12)
 				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█"s + Fx::reset : " "))
 				+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
 				+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter)));
 
+			//? Labels for fields in list
 			if (not proc_tree)
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
 					+ rjust("Pid:", 8) + " "
@@ -403,6 +436,8 @@ namespace Proc {
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + ljust("Tree:", width - 40)
 					+ "Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
 					+ " " + rjust("Cpu%", 10) + Fx::ub;
+
+			Input::mouse_mappings["down"] = {2, 2, 10, 10};
 		}
 
 		//* Check bounds of current selection and view
@@ -421,6 +456,22 @@ namespace Proc {
 			if (n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) selected_pid = (int)p.pid;
+
+			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
+			if (not data_same and (p.cpu_p > 0 or p_counters.contains(p.pid))) {
+				if (not p_graphs.contains(p.pid)) {
+					p_graphs[p.pid](5, 1, "", {0}, graph_symbol);
+					p_counters[p.pid] = 0;
+				}
+				else if (p.cpu_p < 0.1) {
+					if (++p_counters[p.pid] >= 10) {
+						p_graphs.erase(p.pid);
+						p_counters.erase(p.pid);
+					}
+				}
+				else
+					p_counters[p.pid] = 0;
+			}
 
 			out += Fx::reset;
 
@@ -485,13 +536,22 @@ namespace Proc {
 			out += t_color + rjust(to_string(p.threads), 5) + end + ' '
 				+ g_color + ljust(p.user, 10) + ' '
 				+ m_color + rjust(floating_humanizer(p.mem, true), 5) + end + ' '
-				+ (is_selected ? "" : Theme::c("inactive_fg")) +  "⡀"s * 5 + ' ' + end
-				+ c_color + rjust(cpu_str, 4) + ' ' + end;
+				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5
+				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs[p.pid]({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + ' ' + end
+				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
 		}
 
 		out += Fx::reset;
-		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 3, ' ');
+		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 2, ' ');
+
+		//* Draw scrollbar if needed
+		if (numpids > select_max) {
+			const int scroll_pos = clamp((int)round((double)start * (select_max - 2) / (numpids - (select_max - 2))), 0, height - 5);
+			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + "↑"
+				+ Mv::to(y + height - 2, x + width - 2) + "↓"
+				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
+		}
 
 		//* Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
@@ -499,7 +559,20 @@ namespace Proc {
 		out += Mv::to(y+height, x+width - 3 - max(9, (int)location.size())) + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right;
 
+		//* Check if all graphs still have running processes at a regular interval
+		if (++counter >= 1000) {
+			for (auto element = p_graphs.begin(); element != p_graphs.end();) {
+				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
+					p_graphs.erase(element);
+					p_counters.erase(element->first);
+				}
+				else
+					++element;
+			}
+		}
+
 		if (selected == 0 and selected_pid != 0) selected_pid = 0;
+		redraw = false;
 		return out + Fx::reset;
 	}
 
@@ -514,6 +587,8 @@ namespace Draw {
 		Net::box.clear();
 		Proc::box.clear();
 
+		Input::mouse_mappings.clear();
+
 		Cpu::width = Mem::width = Net::width = Proc::width = 0;
 		Cpu::height = Mem::height = Net::height = Proc::height = 0;
 		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
@@ -526,10 +601,10 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			width = round(Term::width * width_p / 100);
-			height = max(8, (int)round(Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+			width = round((double)Term::width * width_p / 100);
+			height = max(8, (int)round((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 
-			b_columns = max(1, (int)ceil((Global::coreCount + 1) / (height - 5)));
+			b_columns = max(1, (int)ceil((double)(Global::coreCount + 1) / (height - 5)));
 			if (b_columns * (21 + 12 * got_sensors) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width = (21 + 12 * got_sensors) * b_columns - (b_columns - 1);
@@ -547,10 +622,10 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * got_sensors) * b_columns + 1;
-			b_height = min(height - 2, (int)ceil(Global::coreCount / b_columns) + 4);
+			b_height = min(height - 2, (int)ceil((double)Global::coreCount / b_columns) + 4);
 
 			b_x = width - b_width - 1;
-			b_y = y + ceil((height - 2) / 2) - ceil(b_height / 2) + 1;
+			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
 
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "cpu", "", 1);
 			box += Mv::to(y, x + 10) + Theme::c("cpu_box") + Symbols::title_left + Fx::b + Theme::c("hi_fg")
@@ -567,13 +642,13 @@ namespace Draw {
 			auto& swap_disk = Config::getB("swap_disk");
 			auto& mem_graphs = Config::getB("mem_graphs");
 
-			width = round(Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = round(Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			height = round((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
 			if (height + Cpu::height > Term::height) height = Term::height - Cpu::height;
 			y = Cpu::height + 1;
 
 			if (show_disks) {
-				mem_width = ceil((width - 3) / 2);
+				mem_width = ceil((double)(width - 3) / 2);
 				disks_width = width - mem_width - 3;
 				mem_width += mem_width % 2;
 				divider = x + mem_width;
@@ -593,7 +668,7 @@ namespace Draw {
 			if (mem_size == 1) mem_meter += 6;
 
 			if (mem_graphs) {
-				graph_height = max(1, (int)round(((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
+				graph_height = max(1, (int)round((double)((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
 				if (graph_height > 1) mem_meter += 6;
 			}
 			else
@@ -617,14 +692,14 @@ namespace Draw {
 		//* Calculate and draw net box outlines
 		if (Net::shown) {
 			using namespace Net;
-			width = round(Term::width * (Proc::shown ? width_p : 100) / 100);
+			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 			height = Term::height - Cpu::height - Mem::height;
 			y = Term::height - height + 1;
 			b_width = (width > 45) ? 27 : 19;
 			b_height = (height > 10) ? 9 : height - 2;
 			b_x = width - b_width - 1;
 			b_y = y + ((height - 2) / 2) - b_height / 2 + 1;
-			d_graph_height = round((height - 2) / 2);
+			d_graph_height = round((double)(height - 2) / 2);
 			u_graph_height = height - 2 - d_graph_height;
 
 			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);

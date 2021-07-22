@@ -47,7 +47,7 @@ namespace Runner {
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
 
-	void run(const string& box="", const bool no_update=false, const bool force_redraw=false, const bool input_interrupt=true);
+	void run(const string& box="", const bool no_update=false, const bool force_redraw=false);
 	void stop();
 
 }
@@ -64,6 +64,7 @@ namespace Shared {
 
 namespace Cpu {
 	extern string box, cpuName;
+	extern int x, y, width, height;
 	extern bool shown, redraw, got_sensors;
 
 	struct cpu_info {
@@ -76,11 +77,12 @@ namespace Cpu {
 	cpu_info& collect(const bool return_last=false);
 
 	//* Draw contents of cpu box using <cpu> as source
-	string draw(const cpu_info& cpu, bool force_redraw=false);
+	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
 }
 
 namespace Mem {
 	extern string box;
+	extern int x, y, width, height;
 	extern bool has_swap, shown, redraw;
 
 	struct disk_info {
@@ -98,11 +100,12 @@ namespace Mem {
 	mem_info& collect(const bool return_last=false);
 
 	//* Draw contents of mem box using <mem> as source
-	string draw(const mem_info& mem, bool force_redraw=false);
+	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
 }
 
 namespace Net {
 	extern string box;
+	extern int x, y, width, height;
 	extern bool shown, redraw;
 
 	struct net_stat {
@@ -119,15 +122,16 @@ namespace Net {
 	net_info& collect(const bool return_last=false);
 
 	//* Draw contents of net box using <net> as source
-	string draw(const net_info& net, bool force_redraw=false);
+	string draw(const net_info& net, const bool force_redraw=false, const bool data_same=false);
 }
 
 namespace Proc {
 	extern atomic<int> numpids;
 
 	extern string box;
+	extern int x, y, width, height;
 	extern bool shown, redraw;
-	extern int current_y, current_h, select_max;
+	extern int select_max;
 	extern atomic<int> detailed_pid;
 	extern int selected_pid, start, selected;
 
@@ -165,8 +169,8 @@ namespace Proc {
 	vector<proc_info>& collect(const bool return_last=false);
 
 	//* Update current selection and view
-	void selection(const string& cmd_key);
+	bool selection(const string& cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
-	string draw(const vector<proc_info>& plist, bool force_redraw=false);
+	string draw(const vector<proc_info>& plist, const bool force_redraw=false, const bool data_same=false);
 }

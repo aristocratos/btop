@@ -20,7 +20,10 @@ tab-size = 4
 
 #include <string>
 #include <atomic>
+#include <array>
+#include <robin_hood.h>
 
+using robin_hood::unordered_flat_map, std::array, std::string, std::atomic;
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
 	cin.tie(NULL);
@@ -30,24 +33,33 @@ tab-size = 4
 //* Functions and variables for handling keyboard and mouse input
 namespace Input {
 
-	extern std::atomic<bool> interrupt;
+	struct Mouse_loc {
+		int col, line, width, height;
+	};
+
+	extern unordered_flat_map<string, Mouse_loc> mouse_mappings;
+
+	extern atomic<bool> interrupt;
+
+	//* Mouse column and line position
+	extern array<int, 2> mouse_pos;
 
 	//* Last entered key
-	extern std::string last;
+	extern string last;
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
 	bool poll(int timeout=0);
 
 	//* Get a key or mouse action from input
-	std::string get();
+	string get();
 
 	//* Wait until input is available and return key
-	std::string wait();
+	string wait();
 
 	//* Clears last entered key
 	void clear();
 
 	//* Process actions for input <key>
-	void process(const std::string key);
+	void process(const string key);
 
 }

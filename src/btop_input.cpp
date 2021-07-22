@@ -16,16 +16,15 @@ indent = tab
 tab-size = 4
 */
 
-#include <string>
-#include <robin_hood.h>
 #include <iostream>
 
 #include <btop_input.hpp>
 #include <btop_tools.hpp>
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
+#include <btop_menu.hpp>
 
-using std::string, robin_hood::unordered_flat_map, std::cin, std::string_literals::operator""s;
+using std::cin, std::string_literals::operator""s;
 using namespace Tools;
 
 namespace Input {
@@ -69,6 +68,8 @@ namespace Input {
 	}
 
 	std::atomic<bool> interrupt (false);
+	array<int, 2> mouse_pos;
+	unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
 	string last = "";
 
@@ -86,10 +87,65 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
+		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
 		if (not key.empty()) {
-			if (key.substr(0,2) == Fx::e) key.erase(0, 1);
-			if (Key_escapes.contains(key)) key = Key_escapes.at(key);
-			else if (ulen(key) > 1) key = "";
+			//? Remove escape code prefix if present
+			if (key.substr(0, 2) == Fx::e) {
+				key.erase(0, 1);
+			}
+			//? Detect if input is an mouse event
+			if (key.starts_with("[<")) {
+				std::string_view key_view = key;
+				string mouse_event;
+				if (key_view.starts_with("[<0;") and key_view.ends_with('M')) {
+					mouse_event = "mouse_click";
+					key_view.remove_prefix(4);
+				}
+				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+					mouse_event = "mouse_release";
+					key_view.remove_prefix(4);
+				}
+				else if (key_view.starts_with("[<64;")) {
+					mouse_event = "mouse_scroll_up";
+					key_view.remove_prefix(5);
+				}
+				else if (key_view.starts_with("[<65;")) {
+					mouse_event = "mouse_scroll_down";
+					key_view.remove_prefix(5);
+				}
+				else
+					key.clear();
+
+				//? Get column and line position of mouse and check for any actions mapped to current position
+				if (not key.empty()) {
+					try {
+						const auto delim = key_view.find(';');
+						mouse_pos[0] = stoi((string)key_view.substr(0, delim));
+						mouse_pos[1] = stoi((string)key_view.substr(delim + 1, key_view.find('M', delim)));
+					}
+					catch (const std::invalid_argument&) { mouse_event.clear(); }
+					catch (const std::out_of_range&) { mouse_event.clear(); }
+
+					key = mouse_event;
+
+					if (not Menu::active and key == "mouse_click") {
+						const auto& [col, line] = mouse_pos;
+
+						for (const auto& [mapped_key, pos] : mouse_mappings) {
+							if (col >= pos.col and col < pos.col + pos.width and line >= pos.line and line < pos.line + pos.height) {
+								key = mapped_key;
+								break;
+							}
+						}
+					}
+				}
+
+			}
+			else if (Key_escapes.contains(key))
+				key = Key_escapes.at(key);
+			else if (ulen(key) > 1)
+				key.clear();
+
 			last = key;
 		}
 		return key;
@@ -115,7 +171,7 @@ namespace Input {
 			bool recollect = true;
 			bool redraw = true;
 
-			//* Input actions for proc
+			//? Input actions for proc box
 			if (Proc::shown) {
 				bool keep_going = false;
 				if (filtering) {
@@ -172,10 +228,27 @@ namespace Input {
 						Global::overlay.clear();
 					Runner::run("all", true, true);
 				}
+				else if (key.starts_with("mouse_")) {
+					recollect = redraw = false;
+					const auto& [col, line] = mouse_pos;
+					int y = (Config::getB("show_detailed") ? Proc::y + 9 : Proc::y);
+					if (col >= Proc::x + 1 and col < Proc::x + Proc::width - 1 and line >= y + 1 and line < y + Proc::height - 1) {
+						if (key == "mouse_click") {
+
+						}
+						else
+							if (not Proc::selection(key)) keep_going = true;
+					}
+					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
+						Config::set("proc_selected", 0);
+						keep_going = true;
+					}
+					else
+						keep_going = true;
+				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
-					Proc::selection(key);
-					recollect = false;
-					redraw = false;
+					recollect = redraw = false;
+					if (not Proc::selection(key)) keep_going = true;
 				}
 				else keep_going = true;
 
