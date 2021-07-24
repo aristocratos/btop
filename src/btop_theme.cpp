@@ -48,24 +48,24 @@ namespace Theme {
 		{ "main_bg", "#00" },
 		{ "main_fg", "#cc" },
 		{ "title", "#ee" },
-		{ "hi_fg", "#969696" },
-		{ "selected_bg", "#7e2626" },
+		{ "hi_fg", "#b54040" },
+		{ "selected_bg", "#6a2f2f" },
 		{ "selected_fg", "#ee" },
 		{ "inactive_fg", "#40" },
 		{ "graph_text", "#60" },
 		{ "meter_bg", "#40" },
 		{ "proc_misc", "#0de756" },
-		{ "cpu_box", "#3d7b46" },
-		{ "mem_box", "#8a882e" },
-		{ "net_box", "#423ba5" },
-		{ "proc_box", "#923535" },
+		{ "cpu_box", "#556d59" },
+		{ "mem_box", "#6c6c4b" },
+		{ "net_box", "#5c588d" },
+		{ "proc_box", "#805252" },
 		{ "div_line", "#30" },
 		{ "temp_start", "#4897d4" },
 		{ "temp_mid", "#5474e8" },
 		{ "temp_end", "#ff40b6" },
-		{ "cpu_start", "#50f095" },
-		{ "cpu_mid", "#f2e266" },
-		{ "cpu_end", "#fa1e1e" },
+		{ "cpu_start", "#77ca9b" },
+		{ "cpu_mid", "#cbc06c" },
+		{ "cpu_end", "#dc4c4c" },
 		{ "free_start", "#223014" },
 		{ "free_mid", "#b5e685" },
 		{ "free_end", "#dcff85" },
@@ -93,7 +93,7 @@ namespace Theme {
 		{ "main_bg", "\x1b[0;40m" },
 		{ "main_fg", "\x1b[37m" },
 		{ "title", "\x1b[97m" },
-		{ "hi_fg", "\x1b[31m" },
+		{ "hi_fg", "\x1b[91m" },
 		{ "selected_bg", "\x1b[41m" },
 		{ "selected_fg", "\x1b[97m" },
 		{ "inactive_fg", "\x1b[90m" },
@@ -138,7 +138,7 @@ namespace Theme {
 		//* Convert 24-bit colors to 256 colors
 		int truecolor_to_256(const int& r, const int& g, const int& b) {
 			//? Use upper 232-255 greyscale values if the downscaled red, green and blue are the same value
-			if (int red = round((double)r / 11); red == round((double)g / 11) and round((double)g / 11) == round((double)b / 11)) {
+			if (const int red = round((double)r / 11); red == round((double)g / 11) and red == round((double)b / 11)) {
 				return 232 + red;
 			}
 			//? Else use 6x6x6 color cube to calculate approximate colors

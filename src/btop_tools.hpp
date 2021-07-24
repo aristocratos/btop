@@ -133,6 +133,9 @@ namespace Tools {
 	//* Resize a string consisting of UTF8 characters (only reduces size)
 	string uresize(const string str, const size_t len);
 
+	//* Resize a string consisting of UTF8 characters from left (only reduces size)
+	string luresize(const string str, const size_t len);
+
 	//* Return <str> with only uppercase characters
 	inline string str_to_upper(string str) {
 		std::ranges::for_each(str, [](auto& c) { c = ::toupper(c); } );

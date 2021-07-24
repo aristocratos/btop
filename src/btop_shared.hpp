@@ -62,6 +62,7 @@ namespace Shared {
 	void init();
 }
 
+
 namespace Cpu {
 	extern string box, cpuName;
 	extern int x, y, width, height;

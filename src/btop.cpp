@@ -464,7 +464,13 @@ int main(int argc, char **argv) {
 	}
 
 	//? Platform dependent init and error check
-	Shared::init();
+	try {
+		Shared::init();
+	}
+	catch (const std::exception& e) {
+		Global::exit_error_msg = "Exception in Shared::init() -> " + (string)e.what();
+		clean_quit(1);
+	}
 
 	//? Update list of available themes and generate the selected theme
 	Theme::updateThemes();
@@ -561,19 +567,21 @@ int main(int argc, char **argv) {
 		deque<long long> mydata;
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
-		mydata.push_back(50);
+		// mydata.push_back(50);
+		auto mydata2 = mydata;
+		mydata2.push_back(10);
+		for (long long i = 0; i <= 100; i++) mydata2.push_back(i);
+		for (long long i = 100; i >= 0; i--) mydata2.push_back(i);
 
-		Draw::Graph kgraph {};
-		Draw::Graph kgraph2 {};
-		Draw::Graph kgraph3 {};
+
 
 		cout << Draw::createBox(5, 10, Term::width - 10, 12, Theme::c("proc_box"), false, "braille", "", 1) << Mv::save;
 		cout << Draw::createBox(5, 23, Term::width - 10, 12, Theme::c("proc_box"), false, "block", "", 2);
 		cout << Draw::createBox(5, 36, Term::width - 10, 12, Theme::c("proc_box"), false, "tty", "", 3) << flush;
 		auto kts = time_micros();
-		kgraph(Term::width - 13, 10, "cpu", mydata, "braille", false, false);
-		kgraph2(Term::width - 13, 10, "cpu", mydata, "block", false, false);
-		kgraph3(Term::width - 13, 10, "cpu", mydata, "tty", false, false);
+		Draw::Graph kgraph {Term::width - 13, 10, "cpu", mydata, "block", false, false};
+		Draw::Graph kgraph2 {Term::width - 13, 10, "upload", {0, 1}, "block", false, false};
+		Draw::Graph kgraph3 {Term::width - 13, 10, "download", {}, "block", false, false};
 
 
 		cout 	<< Mv::restore << kgraph(mydata, true)

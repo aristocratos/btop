@@ -47,6 +47,12 @@ namespace Symbols {
 	const string div_up			= "┬";
 	const string div_down		= "┴";
 
+	const string up = "↑";
+	const string down = "↓";
+	const string left = "←";
+	const string right = "→";
+	const string enter = "↲";
+
 	const string meter = "■";
 
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
@@ -71,7 +77,7 @@ namespace Symbols {
 			"▖", "▄", "▄", "▟", "▟",
 			"▖", "▄", "▄", "▟", "▟",
 			"▌", "▙", "▙", "█", "█",
-			"▌", "▙", "▙", "█", "█",
+			"▌", "▙", "▙", "█", "█"
 		}},
 		{"block_down", {
 			" ", "▝", "▝", "▐", "▐",
@@ -100,50 +106,127 @@ namespace Symbols {
 
 namespace Draw {
 
-	string createBox(int x, int y, int width, int height, string line_color, bool fill, string title, string title2, int num) {
-		string out;
-		string lcolor = (line_color.empty()) ? Theme::c("div_line") : line_color;
-		string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(num) : Symbols::superscript[num]);
+	TextEdit::TextEdit() {}
+	TextEdit::TextEdit(string text) : text(text) {
+		pos = this->text.size();
+		upos = ulen(this->text);
+	}
 
-		out = Fx::reset + lcolor;
+	bool TextEdit::command(const string& key) {
+		if (key == "left" and upos > 0) {
+			upos--;
+			pos = uresize(text, upos).size();
+		}
+		else if (key == "right" and pos < text.size()) {
+			upos++;
+			pos = uresize(text, upos).size();
+		}
+		else if (key == "home" and pos > 0) {
+			pos = upos = 0;
+		}
+		else if (key == "end" and pos < text.size()) {
+			pos = text.size();
+			upos = ulen(text);
+		}
+		else if (key == "backspace" and pos > 0) {
+			if (pos == text.size()) {
+				text = uresize(text, --upos);
+				pos = text.size();
+			}
+			else {
+				const string first = uresize(text, --upos);
+				pos = first.size();
+				text = first + text.substr(pos);
+			}
+		}
+		else if (key == "delete" and pos < text.size()) {
+			const string first = uresize(text, upos + 1);
+			text = uresize(first, ulen(first) - 1) + text.substr(first.size());
+		}
+		else if (key == "space") {
+			text.insert(pos++, 1, ' ');
+			upos++;
+		}
+		else if (ulen(key) == 1) {
+			if (key.size() == 1) {
+				text.insert(pos++, 1, key[0]);
+				upos++;
+			}
+			else {
+				const string first = uresize(text, upos) + key;
+				text = first + text.substr(pos);
+				upos++;
+				pos = first.size();
+			}
+		}
+		else
+			return false;
+
+		return true;
+	}
+
+	string TextEdit::operator()(const size_t limit) {
+		if (limit > 0 and ulen(text) + 1 > limit) {
+			try {
+				const size_t half = (size_t)round((double)limit / 2);
+				string first;
+
+				if (upos + half > ulen(text))
+					first = luresize(text.substr(0, pos), limit - (ulen(text) - upos));
+				else if (upos - half < 1)
+					first = text.substr(0, pos);
+				else
+					first = luresize(text.substr(0, pos), half);
+
+				return first + Fx::bl + "█" + Fx::ubl + uresize(text.substr(pos), limit - ulen(first));
+			}
+			catch (const std::exception& e) {
+				Logger::error("In TextEdit::operator() : " + (string)e.what());
+			}
+		}
+		return text.substr(0, pos) + Fx::bl + "█" + Fx::ubl + text.substr(pos);
+	}
+
+	string createBox(const int x, const int y, const int width, const int height, string line_color, const bool fill, const string title, const string title2, const int num) {
+		string out;
+		if (line_color.empty()) line_color = Theme::c("div_line");
+		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (Config::getB("tty_mode") ? std::to_string(num) : Symbols::superscript[num]);
+
+		out = Fx::reset + line_color;
 
 		//? Draw horizontal lines
-		for (int hpos : {y, y + height - 1}) {
+		for (const int& hpos : {y, y + height - 1}) {
 			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (int hpos : iota(y + 1, y + height - 1)) {
-			out += Mv::to(hpos, x) + Symbols::v_line +
-				((fill) ? string(width - 2, ' ') : Mv::r(width - 2)) +
-				Symbols::v_line;
+		for (const int& hpos : iota(y + 1, y + height - 1)) {
+			out += Mv::to(hpos, x) + Symbols::v_line
+				+  ((fill) ? string(width - 2, ' ') : Mv::r(width - 2))
+				+  Symbols::v_line;
 		}
 
 		//? Draw corners
-		out += 	Mv::to(y, x) + Symbols::left_up +
-				Mv::to(y, x + width - 1) + Symbols::right_up +
-				Mv::to(y + height - 1, x) + Symbols::left_down +
-				Mv::to(y + height - 1, x + width - 1) + Symbols::right_down;
+		out += 	Mv::to(y, x) + Symbols::left_up
+			+	Mv::to(y, x + width - 1) + Symbols::right_up
+			+	Mv::to(y + height - 1, x) + Symbols::left_down
+			+	Mv::to(y + height - 1, x + width - 1) + Symbols::right_down;
 
 		//? Draw titles if defined
 		if (not title.empty()) {
-			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title +
-			Fx::ub + lcolor + Symbols::title_right;
+			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title
+				+  Fx::ub + line_color + Symbols::title_right;
 		}
 		if (not title2.empty()) {
-			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left + Theme::c("title") + title2 +
-			Fx::ub + lcolor + Symbols::title_right;
+			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left + Theme::c("title") + title2
+				+  Fx::ub + line_color + Symbols::title_right;
 		}
 
 		return out + Fx::reset + Mv::to(y + 1, x + 1);
 	}
 
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
-	void Meter::operator()(int width, string color_gradient, bool invert) {
-		this->width = width;
-		this->color_gradient = color_gradient;
-		this->invert = invert;
-		cache.clear();
+	Meter::Meter(const int width, const string& color_gradient, const bool invert) : width(width), color_gradient(color_gradient), invert(invert) {
 		cache.insert(cache.begin(), 101, "");
 	}
 
@@ -152,7 +235,7 @@ namespace Draw {
 		value = clamp(value, 0, 100);
 		if (not cache.at(value).empty()) return cache.at(value);
 		string& out = cache.at(value);
-		for (int i : iota(1, width + 1)) {
+		for (const int& i : iota(1, width + 1)) {
 			int y = round((double)i * 100.0 / width);
 			if (value >= y)
 				out += Theme::g(color_gradient)[invert ? 100 - y : y] + Symbols::meter;
@@ -169,7 +252,7 @@ namespace Draw {
 	void Graph::_create(const deque<long long>& data, int data_offset) {
 		const bool mult = (data.size() - data_offset > 1);
 		if (mult and (data.size() - data_offset) % 2 != 0) data_offset--;
-		auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
+		const auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
 		array<int, 2> result;
 		const float mod = (height == 1) ? 0.3 : 0.1;
 		long long data_value = 0;
@@ -187,12 +270,12 @@ namespace Draw {
 			if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
 
 			//? Vertical iteration over height of graph
-			for (int horizon : iota(0, height)) {
-				int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
-				int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
-				int clamp_min = (no_zero and horizon == height - 1 and i != -1) ? 1 : 0;
+			for (const int& horizon : iota(0, height)) {
+				const int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
+				const int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+				const int clamp_min = (no_zero and horizon == height - 1 and i != -1) ? 1 : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
-				for (int ai = 0; auto value : {last, data_value}) {
+				for (int ai = 0; const auto& value : {last, data_value}) {
 					if (value >= cur_high)
 						result[ai++] = 4;
 					else if (value <= cur_low)
@@ -214,7 +297,7 @@ namespace Draw {
 			out += graphs[current][0];
 		}
 		else {
-			for (int i : iota(0, height)) {
+			for (const int& i : iota(0, height)) {
 				if (i > 0) out += Mv::d(1) + Mv::l(width);
 				if (not color_gradient.empty())
 					out += (invert) ? Theme::g(color_gradient)[i * 100 / (height - 1)] : Theme::g(color_gradient)[100 - (i * 100 / (height - 1))];
@@ -224,12 +307,10 @@ namespace Draw {
 		if (not color_gradient.empty()) out += Fx::reset;
 	}
 
-	void Graph::operator()(int width, int height, string color_gradient, const deque<long long>& data, string symbol, bool invert, bool no_zero, long long max_value, long long offset) {
-		graphs[true].clear(); graphs[false].clear();
-		this->width = width; this->height = height;
-		this->invert = invert; this->offset = offset;
-		this->no_zero = no_zero;
-		this->color_gradient = color_gradient;
+	Graph::Graph() {};
+
+	Graph::Graph(int width, int height, const string& color_gradient, const deque<long long>& data, const string& symbol, bool invert, bool no_zero, long long max_value, long long offset)
+	: width(width), height(height), color_gradient(color_gradient), invert(invert), no_zero(no_zero), offset(offset) {
 		if (Config::getB("tty_mode") or symbol == "tty") {
 			tty_mode = true;
 			this->symbol = "tty";
@@ -243,21 +324,22 @@ namespace Draw {
 		if (value_width > width) data_offset = data.size() - width * 2;
 
 		//? Populate the two switching graph vectors and fill empty space if data size < width
-		for (int i : iota(0, height * 2)) {
+		for (const int& i : iota(0, height * 2)) {
+			if (tty_mode and i % 2 != current) continue;
 			graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : " "s) * (width - value_width) : "");
 		}
 		if (data.size() == 0) return;
-		this->_create(data, data_offset);
+		this->_create((data.size() == 1 ? deque{0, data[0]} : data), data_offset);
 	}
 
-	string& Graph::operator()(const deque<long long>& data, bool data_same) {
+	string& Graph::operator()(const deque<long long>& data, const bool data_same) {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
-		// bool select_graph = tty_mode ? current : not current;
-		for (int i : iota(0, height)) {
-			if (graphs[current][i][1] == '[') graphs[current][i].erase(0, 4);
-			else graphs[current][i].erase(0, 3);
+		bool select_graph = (tty_mode) ? current : not current;
+		for (const int& i : iota(0, height)) {
+			if (graphs[select_graph][i][1] == '[') graphs[select_graph][i].erase(0, 4);
+			else graphs[select_graph][i].erase(0, 3);
 		}
 		this->_create(data, (int)data.size() - 1);
 		return out;
@@ -345,6 +427,7 @@ namespace Proc {
 	unordered_flat_map<size_t, Draw::Graph> p_graphs;
 	unordered_flat_map<size_t, int> p_counters;
 	int counter = 0;
+	Draw::TextEdit filter;
 
 	string box;
 
@@ -396,11 +479,9 @@ namespace Proc {
 	}
 
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
-		auto& filter = Config::getS("proc_filter");
-		auto& filtering = Config::getB("proc_filtering");
 		auto& proc_tree = Config::getB("proc_tree");
 		const bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid"));
-		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode"));
+		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("tty_mode") and not Config::getB("lowcolor"));
 		auto& proc_colors = Config::getB("proc_colors");
 		const auto& graph_symbol = (Config::getB("tty_mode") ? "tty" : Config::getS("graph_symbol_proc"));
 		const auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? "braille_up" : graph_symbol + "_up"))[1];
@@ -417,11 +498,48 @@ namespace Proc {
 			out = box;
 			const string title_left = Theme::c("proc_box") + Symbols::title_left;
 			const string title_right = Theme::c("proc_box") + Symbols::title_right;
-			//? Buttons etc. in box titlebar
-			out += Mv::to(y, x) + Mv::r(12)
-				+ trans("Filter: " + filter + (filtering ? Fx::bl + "█"s + Fx::reset : " "))
-				+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-				+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter)));
+			const auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
+			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
+
+			//? Filter
+			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
+				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
+				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
+				+ (filtering ? Theme::c("hi_fg") + ' ' + Symbols::enter : "") + Fx::ub + title_right;
+			if (not filtering) {
+				int f_len = (filter_text.empty() ? 6 : ulen(filter_text) + 2);
+				Input::mouse_mappings["f"] = {y, x + 10, 1, f_len};
+				if (filter_text.empty() and Input::mouse_mappings.contains("delete"))
+					Input::mouse_mappings.erase("delete");
+				else if (not filter_text.empty())
+					Input::mouse_mappings["delete"] = {y, x + 11 + f_len, 1, 3};
+			}
+
+			//? per-core, reverse, tree and sorting
+			const auto& sorting = Config::getS("proc_sorting");
+			const int sort_len = sorting.size();
+			const int sort_pos = x + width - sort_len - 8;
+
+			if (width > 55 + sort_len) {
+				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
+					+ "per-" + Theme::c("hi_fg") + 'c' + Theme::c("title") + "ore" + Fx::ub + title_right;
+			}
+			if (width > 45 + sort_len) {
+				out += Mv::to(y, sort_pos - 15) + title_left + (Config::getB("proc_reversed") ? Fx::b : "") + Theme::c("hi_fg")
+					+ 'r' + Theme::c("title") + "everse" + Fx::ub + title_right;
+			}
+			if (width > 35 + sort_len) {
+				out += Mv::to(y, sort_pos - 6) + title_left + (Config::getB("proc_tree") ? Fx::b : "") + Theme::c("title") + "tre"
+					+ Theme::c("hi_fg") + 'e' + Fx::ub + title_right;
+			}
+			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c("hi_fg") + "< " + Theme::c("title") + sorting + Theme::c("hi_fg")
+				+ " >" + Fx::ub + title_right;
+
+
+			// out += Mv::to(y, x) + Mv::r(12)
+			// 	+ trans("Filter: " + filter_text)
+			// 	+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
+			// 	+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter_text)));
 
 			//? Labels for fields in list
 			if (not proc_tree)
@@ -436,8 +554,6 @@ namespace Proc {
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + ljust("Tree:", width - 40)
 					+ "Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
 					+ " " + rjust("Cpu%", 10) + Fx::ub;
-
-			Input::mouse_mappings["down"] = {2, 2, 10, 10};
 		}
 
 		//* Check bounds of current selection and view
@@ -460,7 +576,7 @@ namespace Proc {
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
 			if (not data_same and (p.cpu_p > 0 or p_counters.contains(p.pid))) {
 				if (not p_graphs.contains(p.pid)) {
-					p_graphs[p.pid](5, 1, "", {0}, graph_symbol);
+					p_graphs[p.pid] = {5, 1, "", {}, graph_symbol};
 					p_counters[p.pid] = 0;
 				}
 				else if (p.cpu_p < 0.1) {

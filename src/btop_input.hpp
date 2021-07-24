@@ -34,9 +34,10 @@ using robin_hood::unordered_flat_map, std::array, std::string, std::atomic;
 namespace Input {
 
 	struct Mouse_loc {
-		int col, line, width, height;
+		int line, col, height, width;
 	};
 
+	//? line, col, height, width
 	extern unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
 	extern atomic<bool> interrupt;

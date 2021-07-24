@@ -240,32 +240,17 @@ namespace Config {
 
 	vector<string> current_boxes;
 
-	void set(string name, bool value) {
-		if (_locked(name)) boolsTmp.insert_or_assign(name, value);
-		else bools.at(name) = value;
+	void lock() {
+		writelock.wait(true);
+		locked = true;
 	}
 
-	void set(string name, int value) {
-		if (_locked(name)) intsTmp.insert_or_assign(name, value);
-		ints.at(name) = value;
-	}
-
-	void set(string name, string value) {
-		if (_locked(name)) stringsTmp.insert_or_assign(name, value);
-		else strings.at(name) = value;
-	}
-
-	void flip(string name) {
+	void flip(const string& name) {
 		if (_locked(name)) {
 			if (boolsTmp.contains(name)) boolsTmp.at(name) = not boolsTmp.at(name);
 			else boolsTmp.insert_or_assign(name, (not bools.at(name)));
 		}
 		else bools.at(name) = not bools.at(name);
-	}
-
-	void lock() {
-		writelock.wait(true);
-		locked = true;
 	}
 
 	void unlock() {
@@ -305,7 +290,7 @@ namespace Config {
 		writelock.notify_all();
 	}
 
-	bool check_boxes(string boxes) {
+	bool check_boxes(const string& boxes) {
 		auto new_boxes = ssplit(boxes);
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
@@ -314,7 +299,7 @@ namespace Config {
 		return true;
 	}
 
-	void load(fs::path conf_file, vector<string>& load_errors) {
+	void load(const fs::path& conf_file, vector<string>& load_errors) {
 		if (conf_file.empty())
 			return;
 		else if (not fs::exists(conf_file)) {

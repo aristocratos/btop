@@ -32,15 +32,20 @@ namespace Config {
 	extern std::filesystem::path conf_file;
 
 	extern unordered_flat_map<string, string> strings;
+	extern unordered_flat_map<string, string> stringsTmp;
 	extern unordered_flat_map<string, bool> bools;
+	extern unordered_flat_map<string, bool> boolsTmp;
 	extern unordered_flat_map<string, int> ints;
+	extern unordered_flat_map<string, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 
 	extern vector<string> current_boxes;
 
 	//* Check if string only contains space seperated valid names for boxes
-	bool check_boxes(string boxes);
+	bool check_boxes(const string& boxes);
+
+	bool _locked(const string& name);
 
 	//* Return bool for config key <name>
 	inline const bool& getB(const string& name) { return bools.at(name); }
@@ -52,16 +57,25 @@ namespace Config {
 	inline const string& getS(const string& name) { return strings.at(name); }
 
 	//* Set config key <name> to bool <value>
-	void set(string name, bool value);
+	inline void set(const string& name, const bool& value) {
+		if (_locked(name)) boolsTmp.insert_or_assign(name, value);
+		else bools.at(name) = value;
+	}
 
 	//* Set config key <name> to int <value>
-	void set(string name, int value);
+	inline void set(const string& name, const int& value) {
+		if (_locked(name)) intsTmp.insert_or_assign(name, value);
+		ints.at(name) = value;
+	}
 
 	//* Set config key <name> to string <value>
-	void set(string name, string value);
+	inline void set(const string& name, const string& value) {
+		if (_locked(name)) stringsTmp.insert_or_assign(name, value);
+		else strings.at(name) = value;
+	}
 
 	//* Flip config key bool <name>
-	void flip(string name);
+	void flip(const string& name);
 
 	//* Lock config and cache changes until unlocked
 	void lock();
@@ -70,8 +84,15 @@ namespace Config {
 	void unlock();
 
 	//* Load the config file from disk
-	void load(std::filesystem::path conf_file, vector<string>& load_errors);
+	void load(const std::filesystem::path& conf_file, vector<string>& load_errors);
 
 	//* Write the config file to disk
 	void write();
 }
+
+
+
+
+
+
+

@@ -114,11 +114,27 @@ namespace Term {
 namespace Tools {
 
 	string uresize(string str, const size_t len) {
-		if (len < 1) return "";
+		if (len < 1 or str.empty()) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
 			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
 			if (x == len + 1) {
 				str.resize(i);
+				str.shrink_to_fit();
+				break;
+			}
+		}
+		return str;
+	}
+
+	string luresize(string str, const size_t len) {
+		if (len < 1 or str.empty()) return "";
+		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
+			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) {
+				x++;
+				last_pos = i;
+			}
+			if (x == len) {
+				str = str.substr(last_pos);
 				str.shrink_to_fit();
 				break;
 			}

@@ -27,18 +27,29 @@ using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
 
 namespace Draw {
 
+	//* An editable text field
+	class TextEdit {
+		size_t pos = 0;
+		size_t upos = 0;
+	public:
+		string text;
+		TextEdit();
+		TextEdit(string text);
+		bool command(const string& key);
+		string operator()(const size_t limit=0);
+	};
+
 	//* Create a box and return as a string
-	string createBox(int x, int y, int width, int height, string line_color="", bool fill=false, string title="", string title2="", int num=0);
+	string createBox(const int x, const int y, const int width, const int height, string line_color="", const bool fill=false, const string title="", const string title2="", const int num=0);
 
 	//* Class holding a percentage meter
 	class Meter {
-		string color_gradient;
-		int width = 0;
-		bool invert = false;
+		const int width;
+		const string color_gradient;
+		const bool invert;
 		vector<string> cache;
 	public:
-		//* Set meter options
-		void operator()(int width, string color_gradient, bool invert = false);
+		Meter(const int width, const string& color_gradient, const bool invert = false);
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value);
@@ -46,21 +57,32 @@ namespace Draw {
 
 	//* Class holding a percentage graph
 	class Graph {
-		string out, color_gradient, symbol = "default";
-		int width = 0, height = 0;
-		long long last = 0, max_value = 0, offset = 0;
-		bool current = true, no_zero = false, invert = false, tty_mode = false;
+		int width, height;
+		string color_gradient;
+		string out, symbol = "default";
+		bool invert, no_zero;
+		long long offset;
+		long long last = 0, max_value = 0;
+		bool current = true, tty_mode = false;
 		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
 		void _create(const deque<long long>& data, int data_offset);
 
 	public:
-		//* Set graph options and initialize with data
-		void operator()(int width, int height, string color_gradient, const deque<long long>& data, string symbol="default", bool invert=false, bool no_zero=false, long long max_value=0, long long offset=0);
+		Graph();
+		Graph(	int width,
+				int height,
+				const string& color_gradient,
+				const deque<long long>& data,
+				const string& symbol="default",
+				bool invert=false,
+				bool no_zero=false,
+				long long max_value=0,
+				long long offset=0);
 
 		//* Add last value from back of <data> and return string representation of graph
-		string& operator()(const deque<long long>& data, bool data_same=false);
+		string& operator()(const deque<long long>& data, const bool data_same=false);
 
 		//* Return string representation of graph
 		string& operator()();
@@ -69,4 +91,8 @@ namespace Draw {
 	//* Calculate sizes of boxes, draw outlines and save to enabled boxes namespaces
 	void calcSizes();
 
+}
+
+namespace Proc {
+	extern Draw::TextEdit filter;
 }

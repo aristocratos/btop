@@ -56,13 +56,12 @@ namespace Shared {
 
 	void init() {
 		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
-		if (proc_path.empty()) {
-			Global::exit_error_msg = "Proc filesystem not found or no permission to read from it!";
-			clean_quit(1);
-		}
+		if (proc_path.empty())
+			throw std::runtime_error("Proc filesystem not found or no permission to read from it!");
 
-		passwd_path = (access("/etc/passwd", R_OK) != -1) ? fs::path("/etc/passwd") : passwd_path;
-		if (passwd_path.empty()) Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
+		passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
+		if (passwd_path.empty())
+			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
 
 		page_size = sysconf(_SC_PAGE_SIZE);
 		if (page_size <= 0) {

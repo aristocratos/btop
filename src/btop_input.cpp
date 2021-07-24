@@ -23,6 +23,7 @@ tab-size = 4
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
 #include <btop_menu.hpp>
+#include <btop_draw.hpp>
 
 using std::cin, std::string_literals::operator""s;
 using namespace Tools;
@@ -72,6 +73,7 @@ namespace Input {
 	unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
 	string last = "";
+	string old_filter;
 
 	bool poll(int timeout) {
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
@@ -115,6 +117,12 @@ namespace Input {
 				}
 				else
 					key.clear();
+
+				if (Config::getB("proc_filtering")) {
+					if (mouse_event == "mouse_click") last = mouse_event;
+					else last.clear();
+					return last;
+				}
 
 				//? Get column and line position of mouse and check for any actions mapped to current position
 				if (not key.empty()) {
@@ -175,23 +183,24 @@ namespace Input {
 			if (Proc::shown) {
 				bool keep_going = false;
 				if (filtering) {
-					string filter = Config::getS("proc_filter");
-					if (key == "enter")
+					if (key == "enter") {
+						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-
-					else if (key == "backspace" and not filter.empty())
-						filter = uresize(filter, ulen(filter) - 1);
-
-					else if (key == "space")
-						filter.push_back(' ');
-
-					else if (ulen(key) == 1)
-						filter.append(key);
-
+						old_filter.clear();
+					}
+					else if (key == "escape" or key == "mouse_click") {
+						Config::set("proc_filter", old_filter);
+						Config::set("proc_filtering", false);
+						old_filter.clear();
+					}
+					else if (Proc::filter.command(key)) {
+						if (Config::getS("proc_filter") != Proc::filter.text)
+							Config::set("proc_filter", Proc::filter.text);
+						else
+							recollect = false;
+					}
 					else
 						return;
-
-					Config::set("proc_filter", filter);
 				}
 				else if (key == "left") {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
@@ -207,6 +216,8 @@ namespace Input {
 				}
 				else if (key == "f") {
 					Config::flip("proc_filtering");
+					Proc::filter = { Config::getS("proc_filter") };
+					old_filter = Proc::filter.text;
 					recollect = false;
 				}
 				else if (key == "t")
