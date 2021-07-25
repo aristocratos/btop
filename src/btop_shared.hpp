@@ -35,7 +35,6 @@ namespace Global {
 	extern const string Version;
 	extern string exit_error_msg;
 	extern atomic<bool> thread_exception;
-	extern int coreCount;
 	extern string banner;
 	extern atomic<bool> resized;
 	extern string overlay;
@@ -60,6 +59,9 @@ namespace Tools {
 namespace Shared {
 	//* Initialize platform specific needed variables and check for errors
 	void init();
+
+	extern long coreCount, page_size, clk_tck;
+	extern uint64_t totalMem;
 }
 
 
@@ -75,7 +77,7 @@ namespace Cpu {
 	};
 
 	//* Collect cpu stats and temperatures
-	cpu_info& collect(const bool return_last=false);
+	cpu_info collect(const bool no_update=false);
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
@@ -98,7 +100,7 @@ namespace Mem {
 	};
 
 	//* Collect mem & disks stats
-	mem_info& collect(const bool return_last=false);
+	mem_info collect(const bool no_update=false);
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
@@ -120,7 +122,7 @@ namespace Net {
 	};
 
 	//* Collect net upload/download stats
-	net_info& collect(const bool return_last=false);
+	net_info collect(const bool no_update=false);
 
 	//* Draw contents of net box using <net> as source
 	string draw(const net_info& net, const bool force_redraw=false, const bool data_same=false);
@@ -144,7 +146,7 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		size_t pid;
+		size_t pid = 0;
 		string name = "", cmd = "";
 		size_t threads = 0;
 		string user = "";
@@ -159,18 +161,21 @@ namespace Proc {
 	struct detail_container {
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
+		long long first_mem = -1;
 		size_t last_pid = 0;
 		bool skip_smaps = false;
 		deque<long long> cpu_percent;
+		deque<long long> mem_bytes;
 	};
 
+	//? Contains all info for proc detailed box
 	extern detail_container detailed;
 
 	//* Collect and sort process information from /proc
-	vector<proc_info>& collect(const bool return_last=false);
+	vector<proc_info> collect(const bool no_update=false);
 
-	//* Update current selection and view
-	bool selection(const string& cmd_key);
+	//* Update current selection and view, returns -1 if no change otherwise the current selection
+	int selection(const string& cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
 	string draw(const vector<proc_info>& plist, const bool force_redraw=false, const bool data_same=false);

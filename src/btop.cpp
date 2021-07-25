@@ -72,10 +72,10 @@ namespace Global {
 	size_t banner_width = 0;
 	string overlay;
 
+	fs::path self_path;
+
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
-
-	fs::path self_path;
 
 	bool debuginit = false;
 	bool debug = false;
@@ -300,7 +300,7 @@ namespace Runner {
 			output += "No boxes shown!";
 		}
 
-		//? If overlay isn't empty, print output without color and effects and then print overlay over
+		//? If overlay isn't empty, print output without color and effects and then print overlay on top
 		cout << Term::sync_start << (overlay.empty() ? output : Theme::c("inactive_fg") + Fx::uncolor(output) + overlay) << Term::sync_end << flush;
 
 		//! DEBUG stats -->
@@ -357,16 +357,6 @@ int main(int argc, char **argv) {
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
 
-	//? Linux init
-	#if defined(LINUX)
-		Global::coreCount = sysconf(_SC_NPROCESSORS_ONLN);
-		if (Global::coreCount < 1) Global::coreCount = 1;
-
-		{ std::error_code ec;
-		Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
-		}
-
-	#endif
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
@@ -388,6 +378,11 @@ int main(int argc, char **argv) {
 		}
 	}
 	//? Try to find global btop theme path relative to binary path
+	#if defined(LINUX)
+	{ 	std::error_code ec;
+		Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
+	}
+	#endif
 	if (std::error_code ec; not Global::self_path.empty()) {
 			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
 			if (ec or not fs::is_directory(Theme::theme_dir) or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
@@ -482,14 +477,14 @@ int main(int argc, char **argv) {
 	//? Calculate sizes of all boxes
 	Draw::calcSizes();
 
-	//? Start first collection and drawing run
-	Runner::run();
-
 	Global::debuginit = false; //! Debug -- remove
 
 	//? Switch to alternative terminal buffer, hide cursor, and print out box outlines
 	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::mouse_on;
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
+
+	//? Start first collection and drawing run
+	Runner::run();
 
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------

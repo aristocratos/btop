@@ -61,6 +61,6 @@ namespace Input {
 	void clear();
 
 	//* Process actions for input <key>
-	void process(const string key);
+	void process(const string& key);
 
 }

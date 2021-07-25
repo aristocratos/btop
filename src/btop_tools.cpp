@@ -32,7 +32,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::string_view, std::array, std::max, std::to_string, std::cin, robin_hood::unordered_flat_map;
+using std::string_view, std::array, std::max, std::floor, std::to_string, std::cin, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -167,23 +167,34 @@ namespace Tools {
 
 	string ljust(string str, const size_t x, const bool utf, const bool limit) {
 		if (utf) {
-			if (limit and ulen(str) > x) str = uresize(str, x);
+			if (limit and ulen(str) > x) return uresize(str, x);
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
-			if (limit and str.size() > x) str.resize(x);
+			if (limit and str.size() > x) { str.resize(x); return str; }
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
 	string rjust(string str, const size_t x, const bool utf, const bool limit) {
 		if (utf) {
-			if (limit and ulen(str) > x) str = uresize(str, x);
+			if (limit and ulen(str) > x) return uresize(str, x);
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
-			if (limit and str.size() > x) str.resize(x);
+			if (limit and str.size() > x) { str.resize(x); return str; };
 			return string(max((int)(x - str.size()), 0), ' ') + str;
+		}
+	}
+
+	string cjust(string str, const size_t x, const bool utf, const bool limit) {
+		if (utf) {
+			if (limit and ulen(str) > x) return uresize(str, x);
+			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
+		}
+		else {
+			if (limit and str.size() > x) { str.resize(x); return str; }
+			return string(max((int)ceil((double)(x - str.size()) / 2), 0), ' ') + str + string(max((int)floor((double)(x - str.size()) / 2), 0), ' ');
 		}
 	}
 

@@ -225,6 +225,9 @@ namespace Tools {
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string rjust(string str, const size_t x, const bool utf=false, const bool limit=true);
 
+	//* Center justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
+	string cjust(string str, const size_t x, const bool utf=false, const bool limit=true);
+
 	//* Replace whitespaces " " with escape code for move right
 	string trans(const string& str);
 

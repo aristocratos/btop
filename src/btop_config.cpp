@@ -83,6 +83,8 @@ namespace Config {
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
+		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (slow but more accurate)"},
+
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
@@ -188,6 +190,7 @@ namespace Config {
 		{"proc_gradient", true},
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
+		{"proc_info_smaps", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"show_uptime", true},
@@ -223,6 +226,7 @@ namespace Config {
 		{"selected_pid", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
+		{"proc_last_selected", 0},
 	};
 	unordered_flat_map<string, int> intsTmp;
 

@@ -265,9 +265,14 @@ namespace Draw {
 		for (int i : iota(data_offset, (int)data.size())) {
 			if (tty_mode and mult and i % 2 != 0) continue;
 			else if (not tty_mode) current = not current;
-			if (i == -1) { data_value = 0; last = 0; }
-			else data_value = data[i];
-			if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
+			if (i == -1) {
+				data_value = 0;
+				last = 0;
+			}
+			else {
+				data_value = data[i];
+				if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
+			}
 
 			//? Vertical iteration over height of graph
 			for (const int& horizon : iota(0, height)) {
@@ -279,7 +284,7 @@ namespace Draw {
 					if (value >= cur_high)
 						result[ai++] = 4;
 					else if (value <= cur_low)
-						result[ai++] = max(clamp_min, 0);
+						result[ai++] = clamp_min;
 					else {
 						result[ai++] = clamp((int)round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod), clamp_min, 4);
 					}
@@ -329,7 +334,9 @@ namespace Draw {
 			graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : " "s) * (width - value_width) : "");
 		}
 		if (data.size() == 0) return;
-		this->_create((data.size() == 1 ? deque{0, data[0]} : data), data_offset);
+		if (data.size() == 1) data_offset--;
+		this->_create(data, data_offset);
+		// this->_create((data.size() == 1 ? deque{0, data[0]} : data), data_offset);
 	}
 
 	string& Graph::operator()(const deque<long long>& data, const bool data_same) {
@@ -428,16 +435,24 @@ namespace Proc {
 	unordered_flat_map<size_t, int> p_counters;
 	int counter = 0;
 	Draw::TextEdit filter;
+	Draw::Graph detailed_cpu_graph;
+	Draw::Graph detailed_mem_graph;
+	int user_size, thread_size, prog_size, cmd_size, tree_size;
+	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 
 	string box;
 
-	bool selection(const string& cmd_key) {
+	int selection(const string& cmd_key) {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
+		auto last_selected = Config::getI("proc_last_selected");
+		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
+
 		int numpids = Proc::numpids;
 		if (cmd_key == "up" and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
+			if (Config::getI("proc_last_selected") > 0) Config::set("proc_last_selected", 0);
 		}
 		else if (cmd_key == "mouse_scroll_up" and start > 0) {
 			start = max(0, start - 3);
@@ -447,11 +462,15 @@ namespace Proc {
 		}
 		else if (cmd_key == "down") {
 			if (start < numpids - select_max and selected == select_max) start++;
+			else if (selected == 0 and last_selected > 0) {
+				selected = last_selected;
+				Config::set("proc_last_selected", 0);
+			}
 			else selected++;
 		}
 		else if (cmd_key == "page_up") {
 			if (selected > 0 and start == 0) selected = 0;
-			else start = max(0, start - (height - 3));
+			else start = max(0, start - select_max);
 		}
 		else if (cmd_key == "page_down") {
 			if (selected > 0 and start >= numpids - select_max) selected = select_max;
@@ -465,6 +484,10 @@ namespace Proc {
 			start = max(0, numpids - select_max);
 			if (selected > 0) selected = select_max;
 		}
+		else if (cmd_key.starts_with("mousey")) {
+			int mouse_y = std::stoi(cmd_key.substr(6));
+			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
+		}
 
 		bool changed = false;
 		if (start != Config::getI("proc_start")) {
@@ -475,7 +498,7 @@ namespace Proc {
 			Config::set("proc_selected", selected);
 			changed = true;
 		}
-		return changed;
+		return (not changed ? -1 : selected);
 	}
 
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
@@ -485,23 +508,82 @@ namespace Proc {
 		auto& proc_colors = Config::getB("proc_colors");
 		const auto& graph_symbol = (Config::getB("tty_mode") ? "tty" : Config::getS("graph_symbol_proc"));
 		const auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? "braille_up" : graph_symbol + "_up"))[1];
+		const auto& mem_bytes = Config::getB("proc_mem_bytes");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		uint64_t total_mem = 16328872 << 10;
-		int y = show_detailed ? Proc::y + 9 : Proc::y;
-		int height = show_detailed ? Proc::height - 9 : Proc::height;
+		const int y = show_detailed ? Proc::y + 8 : Proc::y;
+		const int height = show_detailed ? Proc::height - 8 : Proc::height;
+		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
 		int numpids = Proc::numpids;
 		string out;
+		out.reserve(width * height);
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw or force_redraw) {
 			out = box;
 			const string title_left = Theme::c("proc_box") + Symbols::title_left;
 			const string title_right = Theme::c("proc_box") + Symbols::title_right;
-			const auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
-			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
+			for (const auto& key : {"T", "K", "S", "enter"})
+				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
+
+			//? Adapt sizes of text fields
+			user_size = (width < 75 ? 5 : 10);
+			thread_size = (width < 75 ? - 1 : 4);
+			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33));
+			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - 33 : -1);
+			tree_size = width - user_size - thread_size - 23;
+
+			//? Detailed box
+			if (show_detailed) {
+				const bool alive = detailed.status != "Dead";
+				dgraph_x = x;
+				dgraph_width = max(width / 3, width - 121);
+				d_width = width - dgraph_width - 1;
+				d_x = x + dgraph_width + 1;
+				d_y = Proc::y;
+
+				//? Create cpu and mem graphs if process is alive
+				if (alive) {
+					detailed_cpu_graph = {dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol};
+					detailed_mem_graph = {d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
+				}
+
+				//? Draw structure of details box
+				const string pid_str = to_string(detailed.entry.pid);
+				out += Mv::to(y, x) + title_right + Symbols::h_line + title_left + Theme::c("hi_fg") + Fx::b + Symbols::superscript[4]
+					+ Theme::c("title") + "proc" + Fx::ub + title_right + Symbols::h_line * (width - 10) + title_left
+					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c("title") + pid_str + Fx::ub + title_left
+					+ title_right + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7) + Fx::ub + title_right;
+
+				out += Mv::to(d_y, d_x - 1) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c("div_line");
+				for (const int& i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
+
+				const string& t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
+				const string& hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));
+				const string hide = (selected > 0 ? t_color + "hide " : Theme::c("title") + "hide " + Theme::c("hi_fg"));
+				int mouse_x = d_x + 2;
+				out += Mv::to(d_y, d_x + 1);
+				if (width > 55) {
+					out += title_left + hi_color + Fx::b + 'T' + t_color + "erminate" + Fx::ub + title_right;
+					if (alive and selected == 0) Input::mouse_mappings["T"] = {d_y, mouse_x, 1, 9};
+					mouse_x += 11;
+				}
+				out += title_left + hi_color + Fx::b + 'K' + t_color + "ill" + Fx::ub + title_right
+					+ title_left + hi_color + Fx::b + 'S' + t_color + "ignals" + Fx::ub + title_right
+					+ Mv::to(d_y, d_x + d_width - 10) + title_left + t_color + Fx::b + hide + Symbols::enter + Fx::ub + title_right;
+				if (alive and selected == 0) {
+					Input::mouse_mappings["K"] = {d_y, mouse_x, 1, 4};
+					mouse_x += 6;
+					Input::mouse_mappings["S"] = {d_y, mouse_x, 1, 7};
+				}
+				if (selected == 0) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
+
+			}
 
 			//? Filter
+			const auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
+			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
 				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
@@ -523,40 +605,115 @@ namespace Proc {
 			if (width > 55 + sort_len) {
 				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
 					+ "per-" + Theme::c("hi_fg") + 'c' + Theme::c("title") + "ore" + Fx::ub + title_right;
+				Input::mouse_mappings["c"] = {y, sort_pos - 24, 1, 8};
 			}
 			if (width > 45 + sort_len) {
 				out += Mv::to(y, sort_pos - 15) + title_left + (Config::getB("proc_reversed") ? Fx::b : "") + Theme::c("hi_fg")
 					+ 'r' + Theme::c("title") + "everse" + Fx::ub + title_right;
+				Input::mouse_mappings["r"] = {y, sort_pos - 14, 1, 7};
 			}
 			if (width > 35 + sort_len) {
 				out += Mv::to(y, sort_pos - 6) + title_left + (Config::getB("proc_tree") ? Fx::b : "") + Theme::c("title") + "tre"
 					+ Theme::c("hi_fg") + 'e' + Fx::ub + title_right;
+				Input::mouse_mappings["e"] = {y, sort_pos - 5, 1, 4};
 			}
 			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c("hi_fg") + "< " + Theme::c("title") + sorting + Theme::c("hi_fg")
 				+ " >" + Fx::ub + title_right;
+				Input::mouse_mappings["left"] = {y, sort_pos + 1, 1, 2};
+				Input::mouse_mappings["right"] = {y, sort_pos + sort_len + 3, 1, 2};
 
-
-			// out += Mv::to(y, x) + Mv::r(12)
-			// 	+ trans("Filter: " + filter_text)
-			// 	+ trans(rjust("Per core: " + (Config::getB("proc_per_core") ? "On "s : "Off"s) + "   Sorting: "
-			// 	+ string(Config::getS("proc_sorting")), width - 23 - ulen(filter_text)));
+			//? select, info and signal buttons
+			const string down_button = (selected == select_max and start == numpids - select_max ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
+			const string t_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("title"));
+			const string hi_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("hi_fg"));
+			int mouse_x = x + 14;
+			out += Mv::to(y + height - 1, x + 1) + title_left + Fx::b + hi_color + Symbols::up + Theme::c("title") + " select " + down_button + Fx::ub + title_right
+				+ title_left + Fx::b + t_color + "info " + hi_color + Symbols::enter + Fx::ub + title_right;
+				if (selected > 0) Input::mouse_mappings["enter"] = {y + height - 1, mouse_x, 1, 6};
+				mouse_x += 8;
+			if (width > 60) {
+				out += title_left + Fx::b + hi_color + 'T' + t_color + "erminate" + Fx::ub + title_right;
+				if (selected > 0) Input::mouse_mappings["T"] = {y + height - 1, mouse_x, 1, 9};
+				mouse_x += 11;
+			}
+			if (width > 55) {
+				out += title_left + Fx::b + hi_color + 'K' + t_color + "ill" + Fx::ub + title_right;
+				if (selected > 0) Input::mouse_mappings["K"] = {y + height - 1, mouse_x, 1, 4};
+				mouse_x += 6;
+			}
+			out += title_left + Fx::b + hi_color + 'S' + t_color + "ignals" + Fx::ub + title_right;
+			if (selected > 0) Input::mouse_mappings["S"] = {y + height - 1, mouse_x, 1, 7};
 
 			//? Labels for fields in list
 			if (not proc_tree)
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
-					+ rjust("Pid:", 8) + " "
-					+ ljust("Program:", (width < 70 ? width - 45 : 16))
-					+ (width >= 70 ? ljust("Command:", width - 61) : "")
-					+ (width >= 77 ? Mv::l(4) + "Threads: " : " Tr: ")
-					+ ljust("User:", 10) + " " + rjust("MemB", 5)
-					+ " " + rjust("Cpu%", 10) + Fx::ub;
+					+ rjust("Pid:", 8) + ' '
+					+ ljust("Program:", prog_size) + ' '
+					+ (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
 			else
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b + ljust("Tree:", width - 40)
-					+ "Threads: " + ljust("User:", 10) + " " + rjust("MemB", 5)
-					+ " " + rjust("Cpu%", 10) + Fx::ub;
+				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
+					+ ljust("Tree:", tree_size) + ' ';
+
+			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
+					+ ljust("User:", user_size) + ' '
+					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
+					+ rjust("Cpu%", 10) + Fx::ub;
+		}
+		//* End of redraw block
+
+		//? Draw details box if shown
+		if (show_detailed) {
+			const bool alive = detailed.status != "Dead";
+			const int item_fit = floor((double)(d_width - 2) / 10);
+			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
+
+			//? Graph part of box
+			string cpu_str = (alive ? to_string(detailed.entry.cpu_p) : "");
+			if (alive) {
+				cpu_str.resize((detailed.entry.cpu_p < 10 or detailed.entry.cpu_p >= 100 ? 3 : 4));
+				cpu_str += '%' + Mv::r(1) + (dgraph_width < 20 ? "C" : "Core") + to_string(detailed.entry.cpu_n);
+			}
+			out += Mv::to(d_y + 1, dgraph_x + 1) + detailed_cpu_graph(detailed.cpu_percent, (data_same or not alive))
+				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + cpu_str;
+			for (int i = 0; const auto& l : {'C', 'P', 'U'})
+					out += Mv::to(d_y + 3 + i++, dgraph_x + 1) + l;
+
+			//? Info part of box
+			const string mv_down = Mv::l(item_width) + Mv::d(1) + Fx::ub + Theme::c("main_fg");
+			const string mv_up = Mv::u(1) + Fx::b + Theme::c("title");
+			const string stat_color = (not alive ? Theme::c("inactive_fg") : (detailed.status == "Running" ? Theme::c("proc_misc") : ""));
+			out += Mv::to(d_y + 1, d_x + 1)
+				+ cjust("Status:", item_width) + mv_down + stat_color + cjust(detailed.status, item_width) + mv_up
+				+ cjust("Elapsed:", item_width) + mv_down + cjust(detailed.elapsed, item_width);
+			if (item_fit >= 3) out += mv_up + cjust("IO/R:", item_width) + mv_down + cjust(detailed.io_read, item_width);
+			if (item_fit >= 4) out += mv_up + cjust("IO/W:", item_width) + mv_down + cjust(detailed.io_write, item_width);
+			if (item_fit >= 5) out += mv_up + cjust("Parent:", item_width) + mv_down + cjust(detailed.parent, item_width);
+			if (item_fit >= 6) out += mv_up + cjust("User:", item_width) + mv_down + cjust(detailed.entry.user, item_width);
+			if (item_fit >= 7) out += mv_up + cjust("Nice:", item_width) + mv_down + cjust(to_string(detailed.entry.p_nice), item_width);
+			if (item_fit >= 8) out += mv_up + cjust("Threads:", item_width) + mv_down + cjust(to_string(detailed.entry.threads), item_width);
+
+			const double mem_p = (double)detailed.mem_bytes.back() * 100 / Shared::totalMem;
+			// const int mem_fuzz = min(detailed.mem * 100 / (Shared::totalMem / 10), 100ul);
+			string mem_str = to_string(mem_p);
+			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", d_width / 3)
+				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
+				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (data_same or not alive)) + ' '
+				+ Theme::c("title") + Fx::b + detailed.memory;
+
+			for (int i = 0; const auto& l : {'C', 'M', 'D'})
+				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
+
+			out += Theme::c("main_fg") + Fx::ub;
+			const int cmd_size = ulen(detailed.entry.cmd);
+			for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
+				out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
+					+ cjust(luresize(detailed.entry.cmd, cmd_size - (d_width - 5) * i), d_width - 5, true);
+			}
 		}
 
-		//* Check bounds of current selection and view
+
+		//? Check bounds of current selection and view
 		if (start > 0 and numpids <= select_max)
 			start = 0;
 		if (start > numpids - select_max)
@@ -627,13 +784,13 @@ namespace Proc {
 			if (not proc_tree) {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
-					+ c_color + ljust(p.name, (width < 70 ? width - 46 : 15)) + end
-					+ (width >= 70 ? g_color + ' ' + ljust(p.cmd, width - 62, true) : "");
+					+ c_color + ljust(p.name, prog_size) + ' ' + end
+					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true) + ' ' : "");
 			}
 			//? Tree view line
 			else {
 				string prefix_pid = p.prefix + to_string(p.pid);
-				int width_left = width - 38;
+				int width_left = tree_size;
 				out += Mv::to(y+2+lc, x+1) + g_color + uresize(prefix_pid, width_left) + ' ';
 				width_left -= ulen(prefix_pid);
 				if (width_left > 0) {
@@ -649,11 +806,18 @@ namespace Proc {
 			//? Common end of line
 			string cpu_str = to_string(p.cpu_p);
 			if (p.cpu_p < 10 or p.cpu_p >= 100) cpu_str.resize(3);
-			out += t_color + rjust(to_string(p.threads), 5) + end + ' '
-				+ g_color + ljust(p.user, 10) + ' '
-				+ m_color + rjust(floating_humanizer(p.mem, true), 5) + end + ' '
+			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
+			if (not mem_bytes) {
+				double mem_p = (double)p.mem * 100 / Shared::totalMem;
+				mem_str = to_string(mem_p);
+				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+				mem_str += '%';
+			}
+			out += (thread_size > 0 ? t_color + rjust(to_string(p.threads), thread_size) + ' ' + end : "" )
+				+ g_color + ljust(p.user, user_size) + ' '
+				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5
-				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs[p.pid]({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + ' ' + end
+				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs[p.pid]({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
 		}
@@ -661,25 +825,26 @@ namespace Proc {
 		out += Fx::reset;
 		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 2, ' ');
 
-		//* Draw scrollbar if needed
+		//? Draw scrollbar if needed
 		if (numpids > select_max) {
 			const int scroll_pos = clamp((int)round((double)start * (select_max - 2) / (numpids - (select_max - 2))), 0, height - 5);
-			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + "↑"
-				+ Mv::to(y + height - 2, x + width - 2) + "↓"
+			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
+				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
 				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
 		}
 
-		//* Current selection and number of processes
+		//? Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
 		string loc_clear = Symbols::h_line * max(0ul, 9 - location.size());
 		out += Mv::to(y+height, x+width - 3 - max(9, (int)location.size())) + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right;
 
-		//* Check if all graphs still have running processes at a regular interval
-		if (++counter >= 1000) {
+		//? Clear out left over graphs from dead processes at a regular interval
+		if (not data_same and ++counter >= 1000) {
+			counter = 0;
 			for (auto element = p_graphs.begin(); element != p_graphs.end();) {
 				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
-					p_graphs.erase(element);
+					element = p_graphs.erase(element);
 					p_counters.erase(element->first);
 				}
 				else
@@ -720,7 +885,7 @@ namespace Draw {
 			width = round((double)Term::width * width_p / 100);
 			height = max(8, (int)round((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 
-			b_columns = max(1, (int)ceil((double)(Global::coreCount + 1) / (height - 5)));
+			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 			if (b_columns * (21 + 12 * got_sensors) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width = (21 + 12 * got_sensors) * b_columns - (b_columns - 1);
@@ -738,7 +903,7 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * got_sensors) * b_columns + 1;
-			b_height = min(height - 2, (int)ceil((double)Global::coreCount / b_columns) + 4);
+			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
 
 			b_x = width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;

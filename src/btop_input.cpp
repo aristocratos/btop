@@ -24,6 +24,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_menu.hpp>
 #include <btop_draw.hpp>
+#include <signal.h>
 
 using std::cin, std::string_literals::operator""s;
 using namespace Tools;
@@ -171,12 +172,12 @@ namespace Input {
 		last.clear();
 	}
 
-	void process(const string key) {
+	void process(const string& key) {
 		if (key.empty()) return;
 		try {
 			auto& filtering = Config::getB("proc_filtering");
 			if (not filtering and key == "q") clean_quit(0);
-			bool recollect = true;
+			bool recollect = false;
 			bool redraw = true;
 
 			//? Input actions for proc box
@@ -196,8 +197,6 @@ namespace Input {
 					else if (Proc::filter.command(key)) {
 						if (Config::getS("proc_filter") != Proc::filter.text)
 							Config::set("proc_filter", Proc::filter.text);
-						else
-							recollect = false;
 					}
 					else
 						return;
@@ -218,9 +217,8 @@ namespace Input {
 					Config::flip("proc_filtering");
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;
-					recollect = false;
 				}
-				else if (key == "t")
+				else if (key == "e")
 					Config::flip("proc_tree");
 
 				else if (key == "r")
@@ -240,26 +238,83 @@ namespace Input {
 					Runner::run("all", true, true);
 				}
 				else if (key.starts_with("mouse_")) {
-					recollect = redraw = false;
+					redraw = false;
 					const auto& [col, line] = mouse_pos;
-					int y = (Config::getB("show_detailed") ? Proc::y + 9 : Proc::y);
-					if (col >= Proc::x + 1 and col < Proc::x + Proc::width - 1 and line >= y + 1 and line < y + Proc::height - 1) {
+					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
+					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
+					if (col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1) {
 						if (key == "mouse_click") {
-
+							if (col < Proc::x + Proc::width - 2) {
+								const auto& current_selection = Config::getI("proc_selected");
+								if (current_selection == line - y - 1) {
+									redraw = true;
+									goto proc_mouse_enter;
+								}
+								else if (current_selection == 0 or line - y - 1 == 0)
+									redraw = true;
+								Config::set("proc_selected", line - y - 1);
+								Runner::run("proc", true, false);
+							}
+							else if (line == y + 1) {
+								if (Proc::selection("page_up") == -1) return;
+							}
+							else if (line == y + height - 2) {
+								if (Proc::selection("page_down") == -1) return;
+							}
+							else if (Proc::selection("mousey" + to_string(line - y - 2)) == -1)
+								return;
 						}
 						else
-							if (not Proc::selection(key)) keep_going = true;
+							goto proc_mouse_scroll;
 					}
 					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
 						Config::set("proc_selected", 0);
-						keep_going = true;
+						redraw = true;
 					}
 					else
 						keep_going = true;
 				}
+				else if (key == "enter") {
+					proc_mouse_enter:
+					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
+						return;
+					}
+					else if (Config::getI("proc_selected") > 0 and Config::getI("detailed_pid") != Config::getI("selected_pid")) {
+						Config::set("detailed_pid", Config::getI("selected_pid"));
+						Config::set("proc_last_selected", Config::getI("proc_selected"));
+						Config::set("proc_selected", 0);
+						Config::set("show_detailed", true);
+						recollect = redraw = true;
+					}
+					else if (Config::getB("show_detailed")) {
+						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
+						Config::set("proc_last_selected", 0);
+						Config::set("detailed_pid", 0);
+						Config::set("show_detailed", false);
+						redraw = true;
+					}
+				}
+				else if (key == "T") {
+					Logger::debug(key);
+					return;
+				}
+				else if (key == "K") {
+					Logger::debug(key);
+					return;
+				}
+				else if (key == "S") {
+					Logger::debug(key);
+					return;
+				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
+					proc_mouse_scroll:
 					recollect = redraw = false;
-					if (not Proc::selection(key)) keep_going = true;
+					auto old_selected = Config::getI("proc_selected");
+					auto new_selected = Proc::selection(key);
+					if (new_selected == -1)
+						return;
+					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
+						redraw = true;
 				}
 				else keep_going = true;
 

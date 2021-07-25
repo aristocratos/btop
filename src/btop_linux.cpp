@@ -21,7 +21,6 @@ tab-size = 4
 #include <fstream>
 #include <ranges>
 #include <cmath>
-#include <cmath>
 #include <unistd.h>
 
 #include <btop_shared.hpp>
@@ -29,7 +28,7 @@ tab-size = 4
 #include <btop_tools.hpp>
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize,
-		std::round, std::string_literals::operator""s;
+		std::round, std::max, std::min, std::string_literals::operator""s;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -51,10 +50,16 @@ namespace Shared {
 	fs::path proc_path;
 	fs::path passwd_path;
 	fs::file_time_type passwd_time;
-	long page_size;
-	long clk_tck;
+	uint64_t totalMem;
+	long pageSize, clkTck, coreCount;
 
 	void init() {
+		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		if (Shared::coreCount < 1) {
+			Shared::coreCount = 1;
+			Logger::warning("Could not determine number of cores, defaulting to 1.");
+		}
+
 		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (proc_path.empty())
 			throw std::runtime_error("Proc filesystem not found or no permission to read from it!");
@@ -63,17 +68,26 @@ namespace Shared {
 		if (passwd_path.empty())
 			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
 
-		page_size = sysconf(_SC_PAGE_SIZE);
-		if (page_size <= 0) {
-			page_size = 4096;
+		pageSize = sysconf(_SC_PAGE_SIZE);
+		if (pageSize <= 0) {
+			pageSize = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
 		}
 
-		clk_tck = sysconf(_SC_CLK_TCK);
-		if (clk_tck <= 0) {
-			clk_tck = 100;
+		clkTck = sysconf(_SC_CLK_TCK);
+		if (clkTck <= 0) {
+			clkTck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
+
+		ifstream meminfo(Shared::proc_path / "meminfo");
+		if (meminfo.good()) {
+			meminfo.ignore(SSmax, ':');
+			meminfo >> totalMem;
+			totalMem <<= 10;
+		}
+		if (not meminfo.good() or totalMem == 0)
+			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
 	}
 
 }
@@ -84,8 +98,8 @@ namespace Cpu {
 
 	cpu_info current_cpu;
 
-	cpu_info& collect(const bool return_last) {
-		(void)return_last;
+	cpu_info collect(const bool no_update) {
+		(void)no_update;
 		return current_cpu;
 	}
 }
@@ -95,8 +109,8 @@ namespace Mem {
 
 	mem_info current_mem;
 
-	mem_info& collect(const bool return_last) {
-		(void)return_last;
+	mem_info collect(const bool no_update) {
+		(void)no_update;
 		return current_mem;
 	}
 
@@ -105,8 +119,8 @@ namespace Mem {
 namespace Net {
 	net_info current_net;
 
-	net_info& collect(const bool return_last) {
-		(void)return_last;
+	net_info collect(const bool no_update) {
+		(void)no_update;
 		return current_net;
 	}
 }
@@ -125,13 +139,13 @@ namespace Proc {
 		vector<proc_info> current_procs;
 		unordered_flat_map<size_t, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
+		uint64_t cputimes;
 
 		int counter = 0;
 	}
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	size_t reserve_pids = 500;
-	bool tree_state = false;
 	vector<string> sort_vector = {
 		"pid",
 		"name",
@@ -180,15 +194,14 @@ namespace Proc {
 
 		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
-			if (auto& cmdline = cache.at(cur_proc.pid).cmd; not cmdline.empty() and not cmdline.starts_with("(")) {
-				std::string_view cmd_view = cmdline;
+			if (std::string_view cmd_view = cur_proc.cmd; not cmd_view.empty()) {
+				// std::string_view cmd_view = cmdline;
 				cmd_view = cmd_view.substr(0, std::min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
 				if (cmd_view == cur_proc.name)
-					cmdline.clear();
+					out_procs.back().cmd.clear();
 				else
-					cmdline = '(' + (string)cmd_view + ')';
-				out_procs.back().cmd = cmdline;
+					out_procs.back().cmd = '(' + (string)cmd_view + ')';
 			}
 		}
 
@@ -211,16 +224,13 @@ namespace Proc {
 	}
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs, const bool is_filtered) {
+	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
 		fs::path pid_path = Shared::proc_path / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
+			detailed = {};
 			detailed.last_pid = pid;
-			detailed.cpu_percent.clear();
-			detailed.parent.clear();
-			detailed.io_read.clear();
-			detailed.io_write.clear();
-			detailed.skip_smaps = false;
+			detailed.skip_smaps = (not Config::getB("proc_info_smaps"));
 		}
 
 		//? Copy proc_info for process from proc vector
@@ -228,11 +238,12 @@ namespace Proc {
 		detailed.entry = *p;
 
 		//? Update cpu percent deque for process cpu graph
-		detailed.cpu_percent.push_back(round(detailed.entry.cpu_c));
+		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
 		while (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
-		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clk_tck));
+		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clkTck));
+		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
 		if (detailed.parent.empty() and cache.contains(detailed.entry.ppid)) detailed.parent = cache.at(detailed.entry.ppid).name;
@@ -260,15 +271,26 @@ namespace Proc {
 					}
 					if (rss == detailed.entry.mem >> 10)
 						detailed.skip_smaps = true;
-					else
+					else {
+						detailed.mem_bytes.push_back(rss << 10);
 						detailed.memory = floating_humanizer(rss, false, 1);
+					}
 				}
 				catch (const std::invalid_argument&) {}
 				catch (const std::out_of_range&) {}
 			}
 			d_read.close();
 		}
-		if (detailed.memory.empty()) detailed.memory = floating_humanizer(detailed.entry.mem, false);
+		if (detailed.memory.empty()) {
+			detailed.mem_bytes.push_back(detailed.entry.mem);
+			detailed.memory = floating_humanizer(detailed.entry.mem);
+		}
+		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
+			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Shared::totalMem);
+			redraw = true;
+		}
+
+		while (detailed.mem_bytes.size() > (size_t)Term::width) detailed.mem_bytes.pop_front();
 
 		//? Get bytes read and written from proc/[pid]/io
 		if (fs::exists(pid_path / "io")) {
@@ -296,23 +318,15 @@ namespace Proc {
 			}
 			d_read.close();
 		}
-
-		if (is_filtered) procs.erase(p);
-
 	}
 
 	//* Collects and sorts process information from /proc
-	vector<proc_info>& collect(const bool return_last) {
-		if (return_last) return current_procs;
+	vector<proc_info> collect(const bool no_update) {
 		const auto& sorting = Config::getS("proc_sorting");
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
 		const auto& per_core = Config::getB("proc_per_core");
 		const auto& tree = Config::getB("proc_tree");
-		if (tree_state != tree) {
-			cache.clear();
-			tree_state = tree;
-		}
 		const auto& show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		ifstream pread;
@@ -322,9 +336,12 @@ namespace Proc {
 		vector<proc_info> procs;
 		procs.reserve(reserve_pids + 10);
 		int npids = 0;
-		const int cmult = (per_core) ? Global::coreCount : 1;
+		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
-		bool detailed_filtered = false;
+		if (no_update and not cache.empty()) {
+			procs = current_procs;
+			goto proc_no_update;
+		}
 
 		//? Update uid_user map if /etc/passwd changed since last run
 		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
@@ -345,14 +362,14 @@ namespace Proc {
 		}
 
 		//* Get cpu total times from /proc/stat
-		uint64_t cputimes = 0;
+		cputimes = 0;
 		pread.open(Shared::proc_path / "stat");
 		if (pread.good()) {
 			pread.ignore(SSmax, ' ');
 			for (uint64_t times; pread >> times; cputimes += times);
 			pread.close();
 		}
-		else return current_procs;
+		else throw std::runtime_error("Failure to read /proc/stat");
 
 		//* Iterate over all pids in /proc
 		for (const auto& d: fs::directory_iterator(Shared::proc_path)) {
@@ -402,17 +419,6 @@ namespace Proc {
 				cache[new_proc.pid] = {name, cmd, user, name_offset};
 			}
 
-			//* Match filter if defined
-			if (not tree and not filter.empty()
-				and not s_contains(pid_str, filter)
-				and not s_contains(cache[new_proc.pid].name, filter)
-				and not s_contains(cache[new_proc.pid].cmd, filter)
-				and not s_contains(cache[new_proc.pid].user, filter)) {
-					if (show_detailed and new_proc.pid == detailed_pid)
-						detailed_filtered = true;
-					else
-						continue;
-			}
 			new_proc.name = cache[new_proc.pid].name;
 			new_proc.cmd = cache[new_proc.pid].cmd;
 			new_proc.user = cache[new_proc.pid].user;
@@ -473,11 +479,11 @@ namespace Proc {
 							continue;
 						}
 						case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-							new_proc.mem = stoull(short_str) * Shared::page_size;
-							next_x = 40;
+							new_proc.mem = stoull(short_str) * Shared::pageSize;
+							next_x = 39;
 							continue;
 						}
-						case 40: { //? CPU number last executed on
+						case 39: { //? CPU number last executed on
 							new_proc.cpu_n = stoull(short_str);
 							goto stat_loop_done;
 						}
@@ -497,7 +503,7 @@ namespace Proc {
 			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
 
 			//? Process cumulative cpu usage since process start
-			new_proc.cpu_c = ((double)cpu_t / Shared::clk_tck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clk_tck));
+			new_proc.cpu_c = ((double)cpu_t / Shared::clkTck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clkTck));
 
 			//? Update cache with latest cpu times
 			cache[new_proc.pid].cpu_t = cpu_t;
@@ -511,12 +517,42 @@ namespace Proc {
 
 		}
 
+		//* Clear dead processes from cache at a regular interval
+		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
+			counter = 0;
+			unordered_flat_map<size_t, p_cache> r_cache;
+			r_cache.reserve(procs.size());
+			rng::for_each(procs, [&r_cache](const auto &p) {
+				if (cache.contains(p.pid))
+					r_cache[p.pid] = cache.at(p.pid);
+			});
+			cache = std::move(r_cache);
+		}
+
+		old_cputimes = cputimes;
+		reserve_pids = npids;
+		current_procs = procs;
+
 		//* Update the details info box for process if active
 		if (show_detailed and got_detailed) {
-			_collect_details(detailed_pid, round(uptime), procs, detailed_filtered);
+			_collect_details(detailed_pid, round(uptime), procs);
 		}
-		else if (show_detailed and not got_detailed) {
+		else if (show_detailed and not got_detailed and detailed.status != "Dead") {
 			detailed.status = "Dead";
+			redraw = true;
+		}
+
+		proc_no_update:
+
+		//* Match filter if defined
+		if (not tree and not filter.empty()) {
+			const auto filtered = rng::remove_if(procs, [&filter](const auto& p) {
+					return (not s_contains(to_string(p.pid), filter)
+						and not s_contains(p.name, filter)
+						and not s_contains(p.cmd, filter)
+						and not s_contains(p.user, filter));
+			});
+			procs.erase(filtered.begin(), filtered.end());
 		}
 
 		//* Sort processes
@@ -566,24 +602,9 @@ namespace Proc {
 			procs = std::move(tree_procs);
 		}
 
-
-		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
-			counter = 0;
-			unordered_flat_map<size_t, p_cache> r_cache;
-			r_cache.reserve(procs.size());
-			rng::for_each(procs, [&r_cache](const auto &p) {
-				if (cache.contains(p.pid))
-					r_cache[p.pid] = cache.at(p.pid);
-			});
-			cache = std::move(r_cache);
-		}
-
-		old_cputimes = cputimes;
 		numpids = (int)procs.size();
-		reserve_pids = npids;
-		current_procs = std::move(procs);
-		return current_procs;
+
+		return procs;
 	}
 }
 
