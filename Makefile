@@ -25,7 +25,11 @@ DEPEXT		:= d
 OBJEXT		:= o
 
 #Flags, Libraries and Includes
-CXXFLAGS	:= -std=c++20 -pthread -O3 -Wall -Wextra -Wno-stringop-overread -pedantic
+REQFLAGS	:= -std=c++20 -pthread
+WARNFLAGS	:= -Wall -Wextra -Wno-stringop-overread -pedantic
+OPTFLAGS	:= -O3
+CXXFLAGS	:= $(OPTFLAGS) $(WARNFLAGS)
+LINKFLAGS	+= -pthread
 INC			:= -I$(INCDIR) -I$(SRCDIR)
 
 SOURCES		:= $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
@@ -73,8 +77,8 @@ btop: $(OBJECTS)
 
 #Compile
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
-	$(CXX) $(CXXFLAGS) $(INC) -c -o $@ $<
-	@$(CXX) $(CXXFLAGS) $(INC) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT)
+	$(CXX) $(REQFLAGS) $(CXXFLAGS) $(INC) -c -o $@ $<
+	@$(CXX) $(REQFLAGS) $(CXXFLAGS) $(INC) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT)
 	@cp -f $(BUILDDIR)/$*.$(DEPEXT) $(BUILDDIR)/$*.$(DEPEXT).tmp
 	@sed -e 's|.*:|$(BUILDDIR)/$*.$(OBJEXT):|' < $(BUILDDIR)/$*.$(DEPEXT).tmp > $(BUILDDIR)/$*.$(DEPEXT)
 	@sed -e 's/.*://' -e 's/\\$$//' < $(BUILDDIR)/$*.$(DEPEXT).tmp | fmt -1 | sed -e 's/^ *//' -e 's/$$/:/' >> $(BUILDDIR)/$*.$(DEPEXT)

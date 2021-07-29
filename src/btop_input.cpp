@@ -162,13 +162,14 @@ namespace Input {
 
 	string wait() {
 		while (cin.rdbuf()->in_avail() < 1) {
-			if (interrupt) { interrupt = false; return ""; }
+			// if (interrupt) { interrupt = false; return ""; }
 			sleep_ms(10);
 		}
 		return get();
 	}
 
 	void clear() {
+		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
 		last.clear();
 	}
 
@@ -177,8 +178,22 @@ namespace Input {
 		try {
 			auto& filtering = Config::getB("proc_filtering");
 			if (not filtering and key == "q") clean_quit(0);
-			bool recollect = false;
+			bool no_update = true;
 			bool redraw = true;
+
+			//? Global input actions
+			if (not filtering) {
+				bool keep_going = false;
+				if (is_in(key, "1", "2", "3", "4")) {
+					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
+					Config::toggle_box(boxes.at(std::stoi(key) - 1));
+					term_resize(true);
+				}
+				else
+					keep_going = true;
+
+				if (not keep_going) return;
+			}
 
 			//? Input actions for proc box
 			if (Proc::shown) {
@@ -253,7 +268,6 @@ namespace Input {
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
 								Config::set("proc_selected", line - y - 1);
-								Runner::run("proc", true, false);
 							}
 							else if (line == y + 1) {
 								if (Proc::selection("page_up") == -1) return;
@@ -284,31 +298,35 @@ namespace Input {
 						Config::set("proc_last_selected", Config::getI("proc_selected"));
 						Config::set("proc_selected", 0);
 						Config::set("show_detailed", true);
-						recollect = redraw = true;
 					}
 					else if (Config::getB("show_detailed")) {
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
 						Config::set("proc_last_selected", 0);
 						Config::set("detailed_pid", 0);
 						Config::set("show_detailed", false);
-						redraw = true;
 					}
 				}
-				else if (key == "T") {
+				else if (is_in(key, "+", "-", "space") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
+					atomic_wait(Runner::active);
+					auto& pid = Config::getI("selected_pid");
+					if (key == "+" or key == "space") Proc::expand = pid;
+					if (key == "-" or key == "space") Proc::collapse = pid;
+				}
+				else if (key == "t") {
 					Logger::debug(key);
 					return;
 				}
-				else if (key == "K") {
+				else if (key == "k") {
 					Logger::debug(key);
 					return;
 				}
-				else if (key == "S") {
+				else if (key == "s") {
 					Logger::debug(key);
 					return;
 				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
 					proc_mouse_scroll:
-					recollect = redraw = false;
+					redraw = false;
 					auto old_selected = Config::getI("proc_selected");
 					auto new_selected = Proc::selection(key);
 					if (new_selected == -1)
@@ -319,7 +337,7 @@ namespace Input {
 				else keep_going = true;
 
 				if (not keep_going) {
-					Runner::run("proc", not recollect, redraw);
+					Runner::run("proc", no_update, redraw);
 					return;
 				}
 			}

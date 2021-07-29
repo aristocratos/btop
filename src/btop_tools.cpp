@@ -32,7 +32,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::string_view, std::array, std::max, std::floor, std::to_string, std::cin, robin_hood::unordered_flat_map;
+using std::string_view, std::array, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -93,6 +93,7 @@ namespace Term {
 				echo(false);
 				linebuffered(false);
 				refresh();
+				cout << alt_screen << hide_cursor << mouse_on << flush;
 				Global::resized = false;
 			}
 		}
@@ -104,6 +105,7 @@ namespace Term {
 			echo(true);
 			linebuffered(true);
 			tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
+			cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
 			initialized = false;
 		}
 	}
@@ -113,11 +115,12 @@ namespace Term {
 
 namespace Tools {
 
-	string uresize(string str, const size_t len) {
+	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
-			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
-			if (x == len + 1) {
+			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) x += 2;
+			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
+			if (x >= len + 1) {
 				str.resize(i);
 				str.shrink_to_fit();
 				break;
@@ -126,14 +129,18 @@ namespace Tools {
 		return str;
 	}
 
-	string luresize(string str, const size_t len) {
+	string luresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
-			if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) {
+			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
+				x += 2;
+				last_pos = max(0ul, i - 1);
+			}
+			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) {
 				x++;
 				last_pos = i;
 			}
-			if (x == len) {
+			if (x >= len) {
 				str = str.substr(last_pos);
 				str.shrink_to_fit();
 				break;
@@ -165,9 +172,9 @@ namespace Tools {
 		return out;
 	}
 
-	string ljust(string str, const size_t x, const bool utf, const bool limit) {
+	string ljust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
-			if (limit and ulen(str) > x) return uresize(str, x);
+			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
@@ -176,9 +183,9 @@ namespace Tools {
 		}
 	}
 
-	string rjust(string str, const size_t x, const bool utf, const bool limit) {
+	string rjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
-			if (limit and ulen(str) > x) return uresize(str, x);
+			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
@@ -187,9 +194,9 @@ namespace Tools {
 		}
 	}
 
-	string cjust(string str, const size_t x, const bool utf, const bool limit) {
+	string cjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
-			if (limit and ulen(str) > x) return uresize(str, x);
+			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
 			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
 		}
 		else {
@@ -272,6 +279,15 @@ namespace Tools {
 		return ss.str();
 	}
 
+	atomic_lock::atomic_lock(atomic<bool>& atom) : atom(atom) {
+		while (not this->atom.compare_exchange_strong(this->not_true, true));
+	}
+
+	atomic_lock::~atomic_lock() {
+		this->atom.store(false);
+		atomic_notify(this->atom);
+	}
+
 }
 
 namespace Logger {
@@ -291,22 +307,24 @@ namespace Logger {
 
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
-		busy.wait(true);
-		busy = true;
+		atomic_lock lck(busy);
 		std::error_code ec;
-		if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
-			auto old_log = logfile;
-			old_log += ".1";
-			if (fs::exists(old_log)) fs::remove(old_log, ec);
-			if (not ec) fs::rename(logfile, old_log, ec);
+		try {
+			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
+				auto old_log = logfile;
+				old_log += ".1";
+				if (fs::exists(old_log)) fs::remove(old_log, ec);
+				if (not ec) fs::rename(logfile, old_log, ec);
+			}
+			if (not ec) {
+				std::ofstream lwrite(logfile, std::ios::app);
+				if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
+				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
+			}
+			else logfile.clear();
 		}
-		if (not ec) {
-			std::ofstream lwrite(logfile, std::ios::app);
-			if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
-			lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
+		catch (const std::exception& e) {
+			throw std::runtime_error("Exception in Logger::log_write() : " + (string)e.what());
 		}
-		else logfile.clear();
-		busy = false;
-		busy.notify_one();
 	}
 }

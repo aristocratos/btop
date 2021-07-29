@@ -126,12 +126,13 @@ Options menu.
 
 #### Manual compilation and installation
 
-Needs GCC/G++ 11 or higher, (GCC 10 is missing some C++20 features).
+Needs GCC 10 or higher, (GCC 11 preferably).
 
 >Install dependencies (Ubuntu 21.04 Hirsute)
 
 ``` bash
 sudo apt install git build-essential gcc-11 g++-11
+#gcc-10 g++-10 if on older
 ```
 
 >Clone and compile
@@ -151,9 +152,10 @@ sudo make install
 # only use "sudo" when installing to a NON user owned directory
 ```
 
->to make btop always run as root (to enable signal sending to any process and for /proc read permissions on some systems)
+>to make btop always run as root (no need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems)
 
 ``` bash
+# run after make install and use same PREFIX if any was used at install
 make su-setuid
 ```
 

@@ -71,6 +71,7 @@ namespace Global {
 	string banner;
 	size_t banner_width = 0;
 	string overlay;
+	string clock;
 
 	fs::path self_path;
 
@@ -136,7 +137,7 @@ void argumentParser(const int& argc, char **argv) {
 }
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
-void term_resize(bool force=false) {
+void term_resize(bool force) {
 	if (auto refreshed = Term::refresh() or force) {
 		if (force and refreshed) force = false;
 		Global::resized = true;
@@ -160,13 +161,13 @@ void clean_quit(const int sig) {
 	Runner::stop();
 	if (Term::initialized) {
 		Term::restore();
-		if (not Global::debuginit) cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
 	}
 	if (not Global::exit_error_msg.empty()) {
 		Logger::error(Global::exit_error_msg);
-		cout << "ERROR: " << Global::exit_error_msg << endl;
+		std::cerr << "ERROR: " << Global::exit_error_msg << endl;
 	}
 	Config::write();
+	Input::clear();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 	if (sig != -1) exit(sig);
 }
@@ -174,17 +175,13 @@ void clean_quit(const int sig) {
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
 void _sleep() {
 	Runner::stop();
-	if (Term::initialized) {
-		Term::restore();
-		if (not Global::debuginit) cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
-	}
+	Term::restore();
 	std::raise(SIGSTOP);
 }
 
 //* Handler for SIGCONT; re-initialize terminal and force a resize event
 void _resume() {
 	Term::init();
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::mouse_on << flush;
 	term_resize(true);
 }
 
@@ -255,9 +252,11 @@ namespace Runner {
 
 	string output;
 	string overlay;
+	string clock;
 
 	//* Secondary thread; run collect, draw and print out
 	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw) {
+		atomic_lock lck(active);
 		auto timestamp = time_micros();
 		output.clear();
 
@@ -291,48 +290,57 @@ namespace Runner {
 		}
 
 		if (stopping) {
-			active = false;
-			active.notify_all();
 			return;
 		}
 
-		if (output.empty()) {
-			output += "No boxes shown!";
+		if (boxes.empty()) {
+			output = Term::clear + Mv::to(10, 10) + "No boxes shown!";
 		}
 
 		//? If overlay isn't empty, print output without color and effects and then print overlay on top
-		cout << Term::sync_start << (overlay.empty() ? output : Theme::c("inactive_fg") + Fx::uncolor(output) + overlay) << Term::sync_end << flush;
+		cout << Term::sync_start << (overlay.empty() ? output + clock : Theme::c("inactive_fg") + Fx::uncolor(output + clock) + overlay) << Term::sync_end << flush;
 
 		//! DEBUG stats -->
-		cout << Fx::reset << Mv::to(2, 2) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.    " << flush;
+		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
 
-		Input::interrupt = true;
-
-		active = false;
-		active.notify_all();
+		// Input::interrupt = true;
 	}
 
-	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all" for all boxes
+	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all": all boxes
 	void run(const string& box, const bool no_update, const bool force_redraw) {
-		active.wait(true);
-		Config::unlock();
+		atomic_wait(active);
 		if (stopping) return;
-		active = true;
-		Config::lock();
-		if (not Global::overlay.empty())
-			overlay = Global::overlay;
-		else if (not overlay.empty())
-			overlay.clear();
 
-		std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw);
-		run_thread.detach();
+		if (box == "overlay") {
+			cout << Term::sync_start << Global::overlay << Term::sync_end;
+		}
+		else if (box == "clock") {
+			if (not Global::clock.empty())
+				cout << Term::sync_start << Global::clock << Term::sync_end;
+		}
+		else {
+			Config::unlock();
+			Config::lock();
+
+			if (not Global::overlay.empty())
+				overlay = Global::overlay;
+			else if (not overlay.empty())
+				overlay.clear();
+
+			if (not Global::clock.empty())
+				clock = Global::clock;
+			else if (not clock.empty())
+				clock.clear();
+
+			std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw);
+			run_thread.detach();
+		}
 	}
 
 	//* Stops any secondary thread running and unlocks config
 	void stop() {
 		stopping = true;
-		active.wait(true);
-		Config::unlock();
+		atomic_wait(active);
 		stopping = false;
 	}
 
@@ -357,7 +365,6 @@ int main(int argc, char **argv) {
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
 
-
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
 		if (getenv(env) != NULL and access(getenv(env), W_OK) != -1) {
@@ -367,8 +374,8 @@ int main(int argc, char **argv) {
 	}
 	if (not Config::conf_dir.empty()) {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			cout << "WARNING: Could not create or access btop config directory. Logging and config saving disabled." << endl;
-			cout << "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
+			cout 	<< "WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
+					<< "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
 		}
 		else {
 			Config::conf_file = Config::conf_dir / "btop.conf";
@@ -398,9 +405,10 @@ int main(int argc, char **argv) {
 	}
 
 	//? Config init
-	{	vector<string> load_errors;
-		Config::load(Config::conf_file, load_errors);
+	{	vector<string> load_warnings;
+		Config::load(Config::conf_file, load_warnings);
 
+		if (Config::current_boxes.empty()) Config::check_boxes(Config::getS("shown_boxes"));
 		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
 
 		if (Global::debug) Logger::set("DEBUG");
@@ -408,7 +416,7 @@ int main(int argc, char **argv) {
 
 		Logger::info("Logger set to " + Config::getS("log_level"));
 
-		for (const auto& err_str : load_errors) Logger::warning(err_str);
+		for (const auto& err_str : load_warnings) Logger::warning(err_str);
 	}
 
 	//? Try to find and set a UTF-8 locale
@@ -442,9 +450,7 @@ int main(int argc, char **argv) {
 
 	//? Initialize terminal and set options
 	if (not Term::init()) {
-		string err_msg = "No tty detected!\nbtop++ needs an interactive shell to run.";
-		Logger::error(err_msg);
-		cout << "ERROR: " << err_msg << endl;
+		Global::exit_error_msg = "No tty detected!\nbtop++ needs an interactive shell to run.";
 		clean_quit(1);
 	}
 
@@ -477,14 +483,8 @@ int main(int argc, char **argv) {
 	//? Calculate sizes of all boxes
 	Draw::calcSizes();
 
-	Global::debuginit = false; //! Debug -- remove
-
-	//? Switch to alternative terminal buffer, hide cursor, and print out box outlines
-	if (not Global::debuginit) cout << Term::alt_screen << Term::hide_cursor << Term::mouse_on;
+	//? Print out box outlines
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
-
-	//? Start first collection and drawing run
-	Runner::run();
 
 
 	//* ------------------------------------------------ TESTING ------------------------------------------------------
@@ -563,10 +563,10 @@ int main(int argc, char **argv) {
 		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
 		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
 		// mydata.push_back(50);
-		auto mydata2 = mydata;
-		mydata2.push_back(10);
-		for (long long i = 0; i <= 100; i++) mydata2.push_back(i);
-		for (long long i = 100; i >= 0; i--) mydata2.push_back(i);
+		deque<long long> mydata2 = {2, 3};
+		// mydata2.push_back(10);
+		// for (long long i = 0; i <= 100; i++) mydata2.push_back(i);
+		// for (long long i = 100; i >= 0; i--) mydata2.push_back(i);
 
 
 
@@ -574,9 +574,9 @@ int main(int argc, char **argv) {
 		cout << Draw::createBox(5, 23, Term::width - 10, 12, Theme::c("proc_box"), false, "block", "", 2);
 		cout << Draw::createBox(5, 36, Term::width - 10, 12, Theme::c("proc_box"), false, "tty", "", 3) << flush;
 		auto kts = time_micros();
-		Draw::Graph kgraph {Term::width - 13, 10, "cpu", mydata, "block", false, false};
-		Draw::Graph kgraph2 {Term::width - 13, 10, "upload", {0, 1}, "block", false, false};
-		Draw::Graph kgraph3 {Term::width - 13, 10, "download", {}, "block", false, false};
+		Draw::Graph kgraph {Term::width - 13, 10, "cpu", mydata, "braille", false, false};
+		Draw::Graph kgraph2 {Term::width - 13, 10, "upload", {0}, "braille", false, false};
+		Draw::Graph kgraph3 {Term::width - 13, 10, "download", mydata2, "braille", false, false};
 
 
 		cout 	<< Mv::restore << kgraph(mydata, true)
@@ -584,12 +584,18 @@ int main(int argc, char **argv) {
 				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << '\n'
 				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
 
+		// Input::wait();
+
 		for (;;) {
-			mydata.back() = std::rand() % 101;
+			mydata.push_back(std::rand() % 101);
+			mydata2.push_back(mydata.back());
+			if (mydata.size() > 1000) mydata.pop_front();
+			if (mydata2.size() > 1000) mydata2.pop_front();
+			kgraph3 = {Term::width - 13, 10, "cpu", mydata2, "braille", false, false};
 			kts = time_micros();
 			cout 	<< Term::sync_start << Mv::restore << kgraph(mydata)
 					<< Mv::restore << Mv::d(13) << kgraph2(mydata)
-					<< Mv::restore << Mv::d(26) << kgraph3(mydata)
+					<< Mv::restore << Mv::d(26) << kgraph3(mydata2)
 					<< Term::sync_end << endl;
 			cout << Mv::d(1) << "Time: " << time_micros() - kts << " μs.     " << flush;
 			if (Input::poll()) {

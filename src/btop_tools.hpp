@@ -125,16 +125,17 @@ namespace Term {
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
 
-	//* Return number of UTF8 characters in a string
-	inline size_t ulen(const string& str) {
-		return std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; } );
-	};
+	//* Return number of UTF8 characters in a string (counts UTF-8 characters with a width > 1 as 2 characters)
+	inline size_t ulen(const string& str, const bool wide=false) {
+		return 	std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; })
+			+	(wide ? std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) > 0xef); }) : 0);
+	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
-	string uresize(const string str, const size_t len);
+	string uresize(const string str, const size_t len, const bool wide=false);
 
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
-	string luresize(const string str, const size_t len);
+	string luresize(const string str, const size_t len, const bool wide=false);
 
 	//* Return <str> with only uppercase characters
 	inline string str_to_upper(string str) {
@@ -211,22 +212,22 @@ namespace Tools {
 	//* Left/right-trim <t_str> from <str> and return new string
 	inline string trim(const string& str, const string& t_str = " ") {
 		return ltrim(rtrim(str, t_str), t_str);
-	};
+	}
 
 	//* Split <string> at all occurrences of <delim> and return as vector of strings
 	vector<string> ssplit(const string& str, const char& delim = ' ');
 
 	//* Put current thread to sleep for <ms> milliseconds
-	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); };
+	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string ljust(string str, const size_t x, const bool utf=false, const bool limit=true);
+	string ljust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
 
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string rjust(string str, const size_t x, const bool utf=false, const bool limit=true);
+	string rjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
 
 	//* Center justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string cjust(string str, const size_t x, const bool utf=false, const bool limit=true);
+	string cjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
 
 	//* Replace whitespaces " " with escape code for move right
 	string trans(const string& str);
@@ -245,6 +246,24 @@ namespace Tools {
 
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
+
+#if __GNUC__ < 11
+	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old); }
+	inline void atomic_notify(const atomic<bool>& atom) noexcept { (void)atom; }
+#else
+	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { atom.wait(old); }
+	inline void atomic_notify(const atomic<bool>& atom) noexcept { atom.notify_all(); }
+#endif
+
+	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false and notifies on destruct
+	class atomic_lock {
+		atomic<bool>& atom;
+		bool not_true = false;
+	public:
+		atomic_lock(atomic<bool>& atom);
+		~atomic_lock();
+	};
+
 
 }
 

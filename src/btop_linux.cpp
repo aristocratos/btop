@@ -22,13 +22,15 @@ tab-size = 4
 #include <ranges>
 #include <cmath>
 #include <unistd.h>
+#include <numeric>
+#include <regex>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize,
-		std::round, std::max, std::min, std::string_literals::operator""s;
+		std::round, std::max, std::min, std::clamp, std::string_literals::operator""s;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -45,28 +47,38 @@ namespace Tools {
 	}
 }
 
+namespace Cpu {
+	vector<uint64_t> core_old_totals;
+	vector<uint64_t> core_old_idles;
+	vector<string> available_fields;
+	cpu_info current_cpu;
+}
+
 namespace Shared {
 
-	fs::path proc_path;
+	fs::path procPath;
 	fs::path passwd_path;
 	fs::file_time_type passwd_time;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
+	string cpuName;
 
 	void init() {
-		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
-		if (Shared::coreCount < 1) {
-			Shared::coreCount = 1;
-			Logger::warning("Could not determine number of cores, defaulting to 1.");
-		}
 
-		proc_path = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
-		if (proc_path.empty())
+		//? Shared global variables init
+		procPath = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
+		if (procPath.empty())
 			throw std::runtime_error("Proc filesystem not found or no permission to read from it!");
 
 		passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
 		if (passwd_path.empty())
 			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
+
+		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		if (coreCount < 1) {
+			coreCount = 1;
+			Logger::warning("Could not determine number of cores, defaulting to 1.");
+		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
 		if (pageSize <= 0) {
@@ -80,7 +92,7 @@ namespace Shared {
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 
-		ifstream meminfo(Shared::proc_path / "meminfo");
+		ifstream meminfo(Shared::procPath / "meminfo");
 		if (meminfo.good()) {
 			meminfo.ignore(SSmax, ':');
 			meminfo >> totalMem;
@@ -88,19 +100,205 @@ namespace Shared {
 		}
 		if (not meminfo.good() or totalMem == 0)
 			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
+
+		//? Init for namespace Cpu
+		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
+		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
+		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
+		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Cpu::collect();
+		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
+			if (not vec.empty()) Cpu::available_fields.push_back(field);
+		}
+		Cpu::cpuName = Cpu::get_cpuName();
 	}
 
 }
 
 namespace Cpu {
 	bool got_sensors = false;
-	string cpuName = "";
+	string cpuName;
+	string cpuHz;
 
-	cpu_info current_cpu;
+	const array<string, 10> time_names = {"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
+
+	unordered_flat_map<string, uint64_t> cpu_old = {
+			{"totals", 0},
+			{"idles", 0},
+			{"user", 0},
+			{"nice", 0},
+			{"system", 0},
+			{"idle", 0},
+			{"iowait", 0},
+			{"irq", 0},
+			{"softirq", 0},
+			{"steal", 0},
+			{"guest", 0},
+			{"guest_nice", 0}
+	};
+
+	string get_cpuName() {
+		string name;
+		ifstream cpuinfo(Shared::procPath / "cpuinfo");
+		if (cpuinfo.good()) {
+			for (string instr; getline(cpuinfo, instr, ':') and not instr.starts_with("model name");)
+				cpuinfo.ignore(SSmax, '\n');
+			if (cpuinfo.bad()) return name;
+			cpuinfo.ignore(1);
+			getline(cpuinfo, name);
+			auto name_vec = ssplit(name);
+
+			if ((s_contains(name, "Xeon") or v_contains(name_vec, "Duo")) and v_contains(name_vec, "CPU")) {
+				auto cpu_pos = v_index(name_vec, "CPU"s);
+				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
+					name = name_vec.at(cpu_pos + 1);
+				else
+					name.clear();
+			}
+			else if (v_contains(name_vec, "Ryzen")) {
+				auto ryz_pos = v_index(name_vec, "Ryzen"s);
+				name = "Ryzen"	+ (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "")
+								+ (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
+			}
+			else if (s_contains(name, "Intel") and v_contains(name_vec, "CPU")) {
+				auto cpu_pos = v_index(name_vec, "CPU"s);
+				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
+					name = name_vec.at(cpu_pos + 1);
+				else
+					name.clear();
+			}
+			else
+				name.clear();
+
+			if (name.empty() and not name_vec.empty()) {
+				for (const auto& n : name_vec) {
+					if (n == "@") break;
+					name += n + ' ';
+				}
+				name.pop_back();
+				for (const auto& reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
+										regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
+					name = std::regex_replace(name, reg, "");
+				}
+				name = trim(name);
+			}
+		}
+
+		return name;
+	}
+
+	string get_cpuHz() {
+		static bool failed = false;
+		if (failed) return "";
+		string cpuhz;
+		try {
+			ifstream cpuinfo(Shared::procPath / "cpuinfo");
+			if (cpuinfo.good()) {
+				string instr;
+				while (getline(cpuinfo, instr, ':') and not instr.starts_with("cpu MHz"))
+					cpuinfo.ignore(SSmax, '\n');
+				cpuinfo.ignore(1);
+				getline(cpuinfo, instr);
+				if (instr.empty()) throw std::runtime_error("");
+
+				int hz_int = round(std::stod(instr));
+
+				if (hz_int >= 1000) {
+					if (hz_int >= 10000) cpuhz = to_string((int)round((double)hz_int / 1000)); // Future proof until we reach THz speeds :)
+					else cpuhz = to_string(round((double)hz_int / 100) / 10.0).substr(0, 3);
+					cpuhz += " GHz";
+				}
+				else if (hz_int > 0)
+					cpuhz = to_string(hz_int) + " MHz";
+			}
+		}
+		catch (...) {
+			failed = true;
+			Logger::warning("Failed to get cpu clock speed from /proc/cpuinfo.");
+			cpuhz.clear();
+		}
+
+		return cpuhz;
+	}
 
 	cpu_info collect(const bool no_update) {
-		(void)no_update;
-		return current_cpu;
+		if (no_update and not current_cpu.cpu_percent.at("total").empty()) return current_cpu;
+		auto& cpu = current_cpu;
+		// const auto& cpu_sensor = Config::getS("cpu_sensor");
+
+		string short_str;
+		ifstream cread;
+
+		//? Get cpu total times for all cores from /proc/stat
+		cread.open(Shared::procPath / "stat");
+		if (cread.good()) {
+			for (int i = 0; getline(cread, short_str, ' ') and short_str.starts_with("cpu"); i++) {
+
+				//? Excepted on kernel 2.6.3> : 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
+				vector<uint64_t> times;
+				uint64_t total_sum = 0;
+
+				for (uint64_t val; cread >> val; total_sum += val) {
+					times.push_back(val);
+				}
+				cread.clear();
+				if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
+
+				//? Subtract fields 8-9 and any future unknown fields
+				const uint64_t totals = total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0);
+
+				//? Add iowait field if present
+				const uint64_t idles = times[3] + (times.size() > 4 ? times[4] : 0);
+
+				//? Calculate values for totals from first line of stat
+				if (i == 0) {
+					const uint64_t calc_totals = totals - cpu_old["totals"];
+					const uint64_t calc_idles = idles - cpu_old["idles"];
+					cpu_old["totals"] = totals;
+					cpu_old["idles"] = idles;
+
+					//? Total usage of cpu
+					cpu.cpu_percent["total"].push_back(clamp((uint64_t)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ul, 100ul));
+
+					//? Reduce size if there are more values than needed for graph
+					while ((int)cpu.cpu_percent["total"].size() > Term::width * 2) cpu.cpu_percent["total"].pop_front();
+
+					//? Populate cpu.cpu_percent with all fields from stat
+					for (int ii = 0; const auto& val : times) {
+						cpu.cpu_percent[time_names.at(ii)].push_back(clamp((uint64_t)round((double)(val - cpu_old[time_names.at(ii)]) * 100 / calc_totals), 0ul, 100ul));
+						cpu_old[time_names.at(ii)] = val;
+
+						//? Reduce size if there are more values than needed for graph
+						while ((int)cpu.cpu_percent[time_names.at(ii)].size() > Term::width * 2) cpu.cpu_percent[time_names.at(ii)].pop_front();
+
+						if (++ii == 10) break;
+					}
+				}
+				//? Calculate cpu total for each core
+				else {
+					if (i > Shared::coreCount) break;
+					const uint64_t calc_totals = totals - core_old_totals[i-1];;
+					const uint64_t calc_idles = idles - core_old_idles[i-1];;
+					core_old_totals[i-1] = totals;
+					core_old_idles[i-1] = idles;
+
+					cpu.core_percent[i-1].push_back(clamp((uint64_t)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ul, 100ul));
+
+					//? Reduce size if there are more values than needed for graph
+					if ((int)cpu.core_percent[i-1].size() > 20) cpu.core_percent[i-1].pop_front();
+
+				}
+			}
+			cread.close();
+		}
+		else {
+			throw std::runtime_error("Failed to read /proc/stat");
+		}
+
+		if (Config::getB("show_cpu_freq"))
+			cpuHz = get_cpuHz();
+
+		return cpu;
 	}
 }
 
@@ -143,9 +341,9 @@ namespace Proc {
 
 		int counter = 0;
 	}
+	int collapse = -1, expand = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
-	size_t reserve_pids = 500;
 	vector<string> sort_vector = {
 		"pid",
 		"name",
@@ -174,7 +372,6 @@ namespace Proc {
 
 	//* Generate process tree list
 	void _tree_gen(const proc_info& cur_proc, const vector<proc_info>& in_procs, vector<proc_info>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false) {
-		if (Runner::stopping) return;
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
@@ -195,7 +392,6 @@ namespace Proc {
 		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
 			if (std::string_view cmd_view = cur_proc.cmd; not cmd_view.empty()) {
-				// std::string_view cmd_view = cmdline;
 				cmd_view = cmd_view.substr(0, std::min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
 				if (cmd_view == cur_proc.name)
@@ -225,7 +421,7 @@ namespace Proc {
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
-		fs::path pid_path = Shared::proc_path / std::to_string(pid);
+		fs::path pid_path = Shared::procPath / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
 			detailed = {};
@@ -238,6 +434,7 @@ namespace Proc {
 		detailed.entry = *p;
 
 		//? Update cpu percent deque for process cpu graph
+		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
 		while (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
 
@@ -334,12 +531,12 @@ namespace Proc {
 		string short_str;
 		const double uptime = system_uptime();
 		vector<proc_info> procs;
-		procs.reserve(reserve_pids + 10);
-		int npids = 0;
+		procs.reserve(current_procs.size() + 10);
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 		if (no_update and not cache.empty()) {
 			procs = current_procs;
+			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), procs);
 			goto proc_no_update;
 		}
 
@@ -363,7 +560,7 @@ namespace Proc {
 
 		//* Get cpu total times from /proc/stat
 		cputimes = 0;
-		pread.open(Shared::proc_path / "stat");
+		pread.open(Shared::procPath / "stat");
 		if (pread.good()) {
 			pread.ignore(SSmax, ' ');
 			for (uint64_t times; pread >> times; cputimes += times);
@@ -372,7 +569,7 @@ namespace Proc {
 		else throw std::runtime_error("Failure to read /proc/stat");
 
 		//* Iterate over all pids in /proc
-		for (const auto& d: fs::directory_iterator(Shared::proc_path)) {
+		for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 			if (Runner::stopping)
 				return current_procs;
 			if (pread.is_open()) pread.close();
@@ -380,7 +577,6 @@ namespace Proc {
 			const string pid_str = d.path().filename();
 			if (not isdigit(pid_str[0])) continue;
 
-			npids++;
 			proc_info new_proc (stoul(pid_str));
 
 			//* Cache program name, command and username
@@ -503,7 +699,7 @@ namespace Proc {
 			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
 
 			//? Process cumulative cpu usage since process start
-			new_proc.cpu_c = ((double)cpu_t / Shared::clkTck) / (uptime - (cache[new_proc.pid].cpu_s / Shared::clkTck));
+			new_proc.cpu_c = (double)cpu_t / ((uptime * Shared::clkTck) - cache[new_proc.pid].cpu_s);
 
 			//? Update cache with latest cpu times
 			cache[new_proc.pid].cpu_t = cpu_t;
@@ -518,7 +714,7 @@ namespace Proc {
 		}
 
 		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 10000 or ((int)cache.size() > npids + 100)) {
+		if (++counter >= 10000 or (cache.size() > procs.size() + 100)) {
 			counter = 0;
 			unordered_flat_map<size_t, p_cache> r_cache;
 			r_cache.reserve(procs.size());
@@ -529,10 +725,6 @@ namespace Proc {
 			cache = std::move(r_cache);
 		}
 
-		old_cputimes = cputimes;
-		reserve_pids = npids;
-		current_procs = procs;
-
 		//* Update the details info box for process if active
 		if (show_detailed and got_detailed) {
 			_collect_details(detailed_pid, round(uptime), procs);
@@ -541,6 +733,9 @@ namespace Proc {
 			detailed.status = "Dead";
 			redraw = true;
 		}
+
+		old_cputimes = cputimes;
+		current_procs = procs;
 
 		proc_no_update:
 
@@ -587,6 +782,19 @@ namespace Proc {
 
 		//* Generate tree view if enabled
 		if (tree) {
+			if (collapse > -1 and collapse == expand) {
+				if (cache.contains(collapse)) cache.at(collapse).collapsed = not cache.at(collapse).collapsed;
+				collapse = expand = -1;
+			}
+			else if (collapse > -1) {
+				if (cache.contains(collapse)) cache.at(collapse).collapsed = true;
+				collapse = -1;
+			}
+			else if (expand > -1) {
+				if (cache.contains(expand)) cache.at(expand).collapsed = false;
+				expand = -1;
+			}
+
 			vector<proc_info> tree_procs;
 			tree_procs.reserve(procs.size());
 
@@ -595,10 +803,9 @@ namespace Proc {
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (const auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
-				_tree_gen(p, procs, tree_procs, 0, cache.at(p.pid).collapsed, filter);
+				_tree_gen(p, procs, tree_procs, 0, false, filter);
 			}
 
-			if (Runner::stopping) return current_procs;
 			procs = std::move(tree_procs);
 		}
 

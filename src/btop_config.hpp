@@ -45,6 +45,9 @@ namespace Config {
 	//* Check if string only contains space seperated valid names for boxes
 	bool check_boxes(const string& boxes);
 
+	//* Toggle box and update config string shown_boxes
+	void toggle_box(const string& box);
+
 	bool _locked(const string& name);
 
 	//* Return bool for config key <name>
@@ -84,7 +87,7 @@ namespace Config {
 	void unlock();
 
 	//* Load the config file from disk
-	void load(const std::filesystem::path& conf_file, vector<string>& load_errors);
+	void load(const std::filesystem::path& conf_file, vector<string>& load_warnings);
 
 	//* Write the config file to disk
 	void write();

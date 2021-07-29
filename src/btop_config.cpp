@@ -85,6 +85,8 @@ namespace Config {
 
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (slow but more accurate)"},
 
+		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
+
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
@@ -94,6 +96,8 @@ namespace Config {
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
 		{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
+
+		{"cpu_bottom",			"#* Show cpu box at bottom of screen instead of top."},
 
 		{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
 
@@ -117,6 +121,8 @@ namespace Config {
 								"#* Begin line with \"exclude=\" to change to exclude filter, otherwise defaults to \"most include\" filter. Example: disks_filter=\"exclude=/boot, /home/user\"."},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
+
+		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
 
@@ -191,14 +197,17 @@ namespace Config {
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
 		{"proc_info_smaps", false},
+		{"proc_left", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
+		{"cpu_bottom", false},
 		{"show_uptime", true},
 		{"check_temp", true},
 		{"show_coretemp", true},
 		{"show_cpu_freq", true},
 		{"background_update", true},
 		{"mem_graphs", true},
+		{"mem_below_net", false},
 		{"show_swap", true},
 		{"swap_disk", true},
 		{"show_disks", true},
@@ -233,7 +242,7 @@ namespace Config {
 	vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
 
 	bool _locked(const string& name) {
-		writelock.wait(true);
+		atomic_wait(writelock);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
 		return locked.load();
@@ -245,7 +254,7 @@ namespace Config {
 	vector<string> current_boxes;
 
 	void lock() {
-		writelock.wait(true);
+		atomic_wait(writelock);
 		locked = true;
 	}
 
@@ -259,9 +268,7 @@ namespace Config {
 
 	void unlock() {
 		if (not locked) return;
-		writelock.wait(true);
-		writelock = true;
-
+		atomic_lock lck(writelock);
 		try {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;
@@ -290,8 +297,6 @@ namespace Config {
 		}
 
 		locked = false;
-		writelock = false;
-		writelock.notify_all();
 	}
 
 	bool check_boxes(const string& boxes) {
@@ -299,11 +304,25 @@ namespace Config {
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
 		}
-		current_boxes.swap(new_boxes);
+		current_boxes = move(new_boxes);
 		return true;
 	}
 
-	void load(const fs::path& conf_file, vector<string>& load_errors) {
+	void toggle_box(const string& box) {
+		if (not v_contains(current_boxes, box))
+			current_boxes.push_back(box);
+		else
+			current_boxes.erase(rng::find(current_boxes, box));
+
+		string new_boxes;
+		if (not current_boxes.empty()) {
+			for (const auto& b : current_boxes) new_boxes += b + ' ';
+			new_boxes.pop_back();
+		}
+		Config::set("shown_boxes", new_boxes);
+	}
+
+	void load(const fs::path& conf_file, vector<string>& load_warnings) {
 		if (conf_file.empty())
 			return;
 		else if (not fs::exists(conf_file)) {
@@ -337,14 +356,14 @@ namespace Config {
 				if (bools.contains(name)) {
 					cread >> value;
 					if (not isbool(value))
-						load_errors.push_back("Got an invalid bool value for config name: " + name);
+						load_warnings.push_back("Got an invalid bool value for config name: " + name);
 					else
 						bools.at(name) = stobool(value);
 				}
 				else if (ints.contains(name)) {
 					cread >> value;
 					if (not isint(value))
-						load_errors.push_back("Got an invalid integer value for config name: " + name);
+						load_warnings.push_back("Got an invalid integer value for config name: " + name);
 					else
 						ints.at(name) = stoi(value);
 				}
@@ -356,19 +375,19 @@ namespace Config {
 					else cread >> value;
 
 					if (name == "log_level" and not v_contains(Logger::log_levels, value))
-						load_errors.push_back("Invalid log_level: " + value);
+						load_warnings.push_back("Invalid log_level: " + value);
 					else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
-						load_errors.push_back("Invalid graph symbol identifier: " + value);
+						load_warnings.push_back("Invalid graph symbol identifier: " + value);
 					else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
-						load_errors.push_back("Invalid box name in shown_boxes. Using default.");
+						load_warnings.push_back("Invalid box name(s) in shown_boxes: " + value);
 					else
 						strings.at(name) = value;
 				}
 
 				cread.ignore(SSmax, '\n');
 			}
-			cread.close();
-			if (not load_errors.empty()) write_new = true;
+
+			if (not load_warnings.empty()) write_new = true;
 		}
 	}
 
@@ -388,7 +407,6 @@ namespace Config {
 				else if (bools.contains(name))
 					cwrite << (bools.at(name) ? "True" : "False");
 			}
-			cwrite.close();
 		}
 	}
 }

@@ -21,6 +21,7 @@ tab-size = 4
 #include <ranges>
 #include <algorithm>
 #include <fstream>
+#include <unistd.h>
 
 #include <btop_tools.hpp>
 #include <btop_config.hpp>

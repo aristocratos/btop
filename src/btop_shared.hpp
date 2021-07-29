@@ -29,6 +29,7 @@ tab-size = 4
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
 
 void clean_quit(const int sig=-1);
+void term_resize(bool force=false);
 void banner_gen();
 
 namespace Global {
@@ -38,6 +39,7 @@ namespace Global {
 	extern string banner;
 	extern atomic<bool> resized;
 	extern string overlay;
+	extern string clock;
 }
 
 namespace Runner {
@@ -66,12 +68,26 @@ namespace Shared {
 
 
 namespace Cpu {
-	extern string box, cpuName;
+	extern string box;
 	extern int x, y, width, height;
 	extern bool shown, redraw, got_sensors;
+	extern string cpuName, cpuHz;
 
 	struct cpu_info {
-		vector<deque<long long>> percent;
+		unordered_flat_map<string, deque<long long>> cpu_percent = {
+			{"total", {}},
+			{"user", {}},
+			{"nice", {}},
+			{"system", {}},
+			{"idle", {}},
+			{"iowait", {}},
+			{"irq", {}},
+			{"softirq", {}},
+			{"steal", {}},
+			{"guest", {}},
+			{"guest_nice", {}}
+		};
+		vector<deque<long long>> core_percent;
 		vector<deque<long long>> temp;
 		array<float, 3> load_avg;
 	};
@@ -81,6 +97,12 @@ namespace Cpu {
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
+
+	//* Try to get name of cpu
+	string get_cpuName();
+
+	//* Try to get current cpu clock speed
+	string get_cpuHz();
 }
 
 namespace Mem {
@@ -136,7 +158,7 @@ namespace Proc {
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
-	extern int selected_pid, start, selected;
+	extern int selected_pid, start, selected, collapse, expand;
 
 	//? Contains the valid sorting options for processes
 	extern vector<string> sort_vector;
