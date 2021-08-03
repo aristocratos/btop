@@ -217,7 +217,7 @@ namespace Tools {
 	}
 
 	//* Split <string> at all occurrences of <delim> and return as vector of strings
-	vector<string> ssplit(const string& str, const char& delim = ' ');
+	auto ssplit(const string& str, const char& delim = ' ') -> vector<string>;
 
 	//* Put current thread to sleep for <ms> milliseconds
 	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
@@ -270,7 +270,7 @@ namespace Tools {
 	string readfile(const std::filesystem::path& path, const string& fallback="");
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
-	tuple<long long, string> celsius_to(long long celsius, string scale);
+	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
 
 }
 

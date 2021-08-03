@@ -360,7 +360,7 @@ namespace Runner {
 		}
 	}
 
-	//* Stops any secondary thread running and unlocks config
+	//* Stops any secondary thread running
 	void stop() {
 		stopping = true;
 		atomic_wait(active);

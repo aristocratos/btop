@@ -65,7 +65,7 @@ namespace Cpu {
 	string get_cpuName();
 
 	//* Parse /proc/cpu info for mapping of core ids
-	unordered_flat_map<int, int> get_core_mapping();
+	auto get_core_mapping() -> unordered_flat_map<int, int>;
 
 	struct Sensor {
 		fs::path path;
@@ -393,7 +393,7 @@ namespace Cpu {
 		return cpuhz;
 	}
 
-	unordered_flat_map<int, int> get_core_mapping() {
+	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
 		ifstream cpuinfo("/proc/cpuinfo");
 		if (cpuinfo.good()) {
@@ -442,7 +442,7 @@ namespace Cpu {
 		return core_map;
 	}
 
-	cpu_info collect(const bool no_update) {
+	auto collect(const bool no_update) -> cpu_info {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
 
@@ -538,7 +538,7 @@ namespace Mem {
 
 	mem_info current_mem;
 
-	mem_info collect(const bool no_update) {
+	auto collect(const bool no_update) -> mem_info {
 		(void)no_update;
 		return current_mem;
 	}
@@ -548,7 +548,7 @@ namespace Mem {
 namespace Net {
 	net_info current_net;
 
-	net_info collect(const bool no_update) {
+	auto collect(const bool no_update) -> net_info {
 		(void)no_update;
 		return current_net;
 	}
@@ -745,7 +745,7 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	vector<proc_info> collect(const bool no_update) {
+	auto collect(const bool no_update) -> vector<proc_info> {
 		const auto& sorting = Config::getS("proc_sorting");
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");

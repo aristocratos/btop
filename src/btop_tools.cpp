@@ -163,7 +163,7 @@ namespace Tools {
 		return (string)str_v;
 	}
 
-	vector<string> ssplit(const string& str, const char& delim) {
+	auto ssplit(const string& str, const char& delim) -> vector<string> {
 		vector<string> out;
 		for (const auto& s : str 	| rng::views::split(delim)
 									| rng::views::transform([](auto &&rng) {
@@ -307,7 +307,7 @@ namespace Tools {
 		return (out.empty() ? fallback : out);
 	}
 
-	tuple<long long, string> celsius_to(long long celsius, string scale) {
+	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string> {
 		if (scale == "celsius")
 			return {celsius, "°C"};
 		else if (scale == "fahrenheit")

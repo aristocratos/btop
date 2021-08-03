@@ -95,7 +95,7 @@ namespace Cpu {
 	};
 
 	//* Collect cpu stats and temperatures
-	cpu_info collect(const bool no_update=false);
+	auto collect(const bool no_update=false) -> cpu_info;
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
@@ -118,7 +118,7 @@ namespace Mem {
 	};
 
 	//* Collect mem & disks stats
-	mem_info collect(const bool no_update=false);
+	auto collect(const bool no_update=false) -> mem_info;
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
@@ -140,7 +140,7 @@ namespace Net {
 	};
 
 	//* Collect net upload/download stats
-	net_info collect(const bool no_update=false);
+	auto collect(const bool no_update=false) -> net_info;
 
 	//* Draw contents of net box using <net> as source
 	string draw(const net_info& net, const bool force_redraw=false, const bool data_same=false);
@@ -190,7 +190,7 @@ namespace Proc {
 	extern detail_container detailed;
 
 	//* Collect and sort process information from /proc
-	vector<proc_info> collect(const bool no_update=false);
+	auto collect(const bool no_update=false) -> vector<proc_info>;
 
 	//* Update current selection and view, returns -1 if no change otherwise the current selection
 	int selection(const string& cmd_key);

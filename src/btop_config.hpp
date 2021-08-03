@@ -68,7 +68,7 @@ namespace Config {
 	//* Set config key <name> to int <value>
 	inline void set(const string& name, const int& value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
-		ints.at(name) = value;
+		else ints.at(name) = value;
 	}
 
 	//* Set config key <name> to string <value>

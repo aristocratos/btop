@@ -343,7 +343,7 @@ namespace Input {
 				}
 			}
 
-			//? Input actions for proc box
+			//? Input actions for cpu box
 			if (Cpu::shown) {
 				bool keep_going = false;
 				bool no_update = true;
