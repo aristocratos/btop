@@ -26,9 +26,10 @@ tab-size = 4
 #include <ranges>
 #include <chrono>
 #include <thread>
+#include <tuple>
 
 
-using std::string, std::vector, std::atomic, std::to_string, std::regex;
+using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple;
 
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -124,6 +125,7 @@ namespace Term {
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
+	extern atomic<int> active_locks;
 
 	//* Return number of UTF8 characters in a string (counts UTF-8 characters with a width > 1 as 2 characters)
 	inline size_t ulen(const string& str, const bool wide=false) {
@@ -242,7 +244,7 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, const bool shorten=false, size_t start=0, const bool bit=false, const bool per_second=false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
-	std::string operator*(const string& str, size_t n);
+	std::string operator*(const string& str, int64_t n);
 
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
@@ -264,6 +266,11 @@ namespace Tools {
 		~atomic_lock();
 	};
 
+	//* Read a complete file and return as a string
+	string readfile(const std::filesystem::path& path, const string& fallback="");
+
+	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
+	tuple<long long, string> celsius_to(long long celsius, string scale);
 
 }
 

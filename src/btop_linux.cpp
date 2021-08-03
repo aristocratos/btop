@@ -48,20 +48,45 @@ namespace Tools {
 }
 
 namespace Cpu {
-	vector<uint64_t> core_old_totals;
-	vector<uint64_t> core_old_idles;
+	vector<long long> core_old_totals;
+	vector<long long> core_old_idles;
 	vector<string> available_fields;
 	cpu_info current_cpu;
+	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
+	bool got_sensors = false, cpu_temp_only = false;
+
+	//* Populate found_sensors map
+	bool get_sensors();
+
+	//* Get current cpu clock speed
+	string get_cpuHz();
+
+	//* Search /proc/cpuinfo for a cpu name
+	string get_cpuName();
+
+	//* Parse /proc/cpu info for mapping of core ids
+	unordered_flat_map<int, int> get_core_mapping();
+
+	struct Sensor {
+		fs::path path;
+		string label;
+		int64_t temp = 0;
+		int64_t high = 0;
+		int64_t crit = 0;
+	};
+
+	unordered_flat_map<string, Sensor> found_sensors;
+	string cpu_sensor;
+	vector<string> core_sensors;
+	unordered_flat_map<int, int> core_mapping;
 }
 
 namespace Shared {
 
-	fs::path procPath;
-	fs::path passwd_path;
+	fs::path procPath, passwd_path;
 	fs::file_time_type passwd_time;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
-	string cpuName;
 
 	void init() {
 
@@ -102,6 +127,7 @@ namespace Shared {
 			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
 
 		//? Init for namespace Cpu
+		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
@@ -111,18 +137,21 @@ namespace Shared {
 			if (not vec.empty()) Cpu::available_fields.push_back(field);
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
+		Cpu::got_sensors = Cpu::get_sensors();
+		Cpu::core_mapping = Cpu::get_core_mapping();
+
+
 	}
 
 }
 
 namespace Cpu {
-	bool got_sensors = false;
 	string cpuName;
 	string cpuHz;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
 
-	unordered_flat_map<string, uint64_t> cpu_old = {
+	unordered_flat_map<string, long long> cpu_old = {
 			{"totals", 0},
 			{"idles", 0},
 			{"user", 0},
@@ -148,19 +177,19 @@ namespace Cpu {
 			getline(cpuinfo, name);
 			auto name_vec = ssplit(name);
 
-			if ((s_contains(name, "Xeon") or v_contains(name_vec, "Duo")) and v_contains(name_vec, "CPU")) {
+			if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
 				auto cpu_pos = v_index(name_vec, "CPU"s);
 				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
 					name = name_vec.at(cpu_pos + 1);
 				else
 					name.clear();
 			}
-			else if (v_contains(name_vec, "Ryzen")) {
+			else if (v_contains(name_vec, "Ryzen"s)) {
 				auto ryz_pos = v_index(name_vec, "Ryzen"s);
 				name = "Ryzen"	+ (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "")
 								+ (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
 			}
-			else if (s_contains(name, "Intel") and v_contains(name_vec, "CPU")) {
+			else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
 				auto cpu_pos = v_index(name_vec, "CPU"s);
 				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
 					name = name_vec.at(cpu_pos + 1);
@@ -187,56 +216,254 @@ namespace Cpu {
 		return name;
 	}
 
-	string get_cpuHz() {
-		static bool failed = false;
-		if (failed) return "";
-		string cpuhz;
+	bool get_sensors() {
+		bool got_cpu = false, got_coretemp = false;
+		vector<fs::path> search_paths;
 		try {
-			ifstream cpuinfo(Shared::procPath / "cpuinfo");
-			if (cpuinfo.good()) {
-				string instr;
-				while (getline(cpuinfo, instr, ':') and not instr.starts_with("cpu MHz"))
-					cpuinfo.ignore(SSmax, '\n');
-				cpuinfo.ignore(1);
-				getline(cpuinfo, instr);
-				if (instr.empty()) throw std::runtime_error("");
+			//? Setup up paths to search for sensors
+			if (fs::exists(fs::path("/sys/class/hwmon")) and access("/sys/class/hwmon", R_OK) != -1) {
+				for (const auto& dir : fs::directory_iterator(fs::path("/sys/class/hwmon"))) {
+					fs::path add_path = fs::canonical(dir.path());
+					if (v_contains(search_paths, add_path) or v_contains(search_paths, add_path / "device")) continue;
 
-				int hz_int = round(std::stod(instr));
+					if (s_contains(add_path, "coretemp"))
+						got_coretemp = true;
 
-				if (hz_int >= 1000) {
-					if (hz_int >= 10000) cpuhz = to_string((int)round((double)hz_int / 1000)); // Future proof until we reach THz speeds :)
-					else cpuhz = to_string(round((double)hz_int / 100) / 10.0).substr(0, 3);
-					cpuhz += " GHz";
+					if (fs::exists(add_path / "temp1_input")) {
+						search_paths.push_back(add_path);
+					}
+					else if (fs::exists(add_path / "device/temp1_input"))
+						search_paths.push_back(add_path / "device");
 				}
-				else if (hz_int > 0)
-					cpuhz = to_string(hz_int) + " MHz";
+			}
+			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
+				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
+					fs::path add_path = fs::canonical(d.path());
+
+					if (fs::exists(d.path() / "temp1_input") and not v_contains(search_paths, add_path)) {
+						search_paths.push_back(add_path);
+						got_coretemp = true;
+					}
+				}
+			}
+			//? Scan any found directories for temperature sensors
+			if (not search_paths.empty()) {
+				for (const auto& path : search_paths) {
+					const string pname = readfile(path / "name", path.filename());
+					for (int i = 1; fs::exists(path / string("temp" + to_string(i) + "_input")); i++) {
+						const string basepath = path / string("temp" + to_string(i) + "_");
+						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(i));
+						const string sensor_name = pname + "/" + label;
+						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
+						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
+						const int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
+
+						found_sensors[sensor_name] = {fs::path(basepath + "input"), label, temp, high, crit};
+
+						if (not got_cpu and (label.starts_with("Package id") or label.starts_with("Tdie"))) {
+							got_cpu = true;
+							cpu_sensor = sensor_name;
+						}
+						else if (label.starts_with("Core") or label.starts_with("Tccd")) {
+							got_coretemp = true;
+							if (not v_contains(core_sensors, sensor_name)) core_sensors.push_back(sensor_name);
+						}
+					}
+				}
+			}
+			//? If no good candidate for cpu temp has been found scan /sys/class/thermal
+			if (not got_cpu and fs::exists(fs::path("/sys/class/thermal"))) {
+				const string rootpath = fs::path("/sys/class/thermal/thermal_zone");
+				for (int i = 0; fs::exists(fs::path(rootpath + to_string(i))); i++) {
+					const fs::path basepath = rootpath + to_string(i);
+					if (not fs::exists(basepath / "temp")) continue;
+					const string label = readfile(basepath / "type", "temp" + to_string(i));
+					const string sensor_name = "thermal" + to_string(i) + "/" + label;
+					const int64_t temp = stol(readfile(basepath / "temp", "0")) / 1000;
+
+					int64_t high, crit;
+					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
+						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
+						if (not is_in(trip_type, "high", "critical")) continue;
+						auto& val = (trip_type == "high" ? high : crit);
+						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+					}
+					if (high < 1) high = 80;
+					if (crit < 1) crit = 95;
+
+					found_sensors[sensor_name] = {basepath / "temp", label, temp, high, crit};
+				}
+			}
+
+		}
+		catch (...) {}
+
+		if (not got_coretemp) cpu_temp_only = true;
+		if (cpu_sensor.empty() and not found_sensors.empty()) {
+			for (const auto& [name, sensor] : found_sensors) {
+				if (s_contains(str_to_lower(name), "cpu")) {
+					cpu_sensor = name;
+					break;
+				}
+			}
+			if (cpu_sensor.empty()) {
+				cpu_sensor = found_sensors.begin()->first;
+				Logger::warning("No good candidate for cpu sensor found, using random from all found sensors.");
 			}
 		}
-		catch (...) {
-			failed = true;
-			Logger::warning("Failed to get cpu clock speed from /proc/cpuinfo.");
-			cpuhz.clear();
+
+		return not found_sensors.empty();
+	}
+
+	void update_sensors() {
+		if (cpu_sensor.empty()) return;
+
+		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
+
+		found_sensors.at(cpu_sensor).temp = stol(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
+		current_cpu.temp.at(0).push_back(found_sensors.at(cpu_sensor).temp);
+		current_cpu.temp_max = found_sensors.at(cpu_sensor).crit;
+		if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
+
+		if (Config::getB("show_coretemp") and not cpu_temp_only) {
+			vector<string> done;
+			for (const auto& sensor : core_sensors) {
+				if (v_contains(done, sensor)) continue;
+				found_sensors.at(sensor).temp = stol(readfile(found_sensors.at(sensor).path, "0")) / 1000;
+				done.push_back(sensor);
+			}
+			for (const auto& [core, temp] : core_mapping) {
+				if ((size_t)core + 1 < current_cpu.temp.size() and (size_t)temp < core_sensors.size()) {
+					current_cpu.temp.at(core + 1).push_back(found_sensors.at(core_sensors.at(temp)).temp);
+					if (current_cpu.temp.at(core + 1).size() > 20) current_cpu.temp.at(core + 1).pop_front();
+				}
+			}
+		}
+	}
+
+	string get_cpuHz() {
+		static int failed = 0;
+		if (failed > 4) return ""s;
+		string cpuhz;
+		try {
+			double hz = 0.0;
+			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
+			if (not freq_path.empty()) {
+				hz = stod(readfile(freq_path, "0.0")) / 1000;
+				if (hz <= 0.0 and ++failed >= 2)
+					freq_path.clear();
+			}
+			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
+			if (hz <= 0.0) {
+				ifstream cpufreq(Shared::procPath / "cpuinfo");
+				if (cpufreq.good()) {
+					while (cpufreq.ignore(SSmax, '\n')) {
+						if (cpufreq.peek() == 'c') {
+							cpufreq.ignore(SSmax, ' ');
+							if (cpufreq.peek() == 'M') {
+								cpufreq.ignore(SSmax, ':');
+								cpufreq.ignore(1);
+								cpufreq >> hz;
+								break;
+							}
+						}
+					}
+				}
+			}
+
+			if (hz <= 1 or hz >= 1000000) throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
+
+			if (hz >= 1000) {
+				if (hz >= 10000) cpuhz = to_string((int)round(hz / 1000)); // Future proof until we reach THz speeds :)
+				else cpuhz = to_string(round(hz / 100) / 10.0).substr(0, 3);
+				cpuhz += " GHz";
+			}
+			else if (hz > 0)
+				cpuhz = to_string((int)round(hz)) + " MHz";
+
+		}
+		catch (const std::exception& e) {
+			if (++failed < 5) return ""s;
+			else {
+				Logger::warning("get_cpuHZ() : " + (string)e.what());
+				return ""s;
+			}
 		}
 
 		return cpuhz;
 	}
 
-	cpu_info collect(const bool no_update) {
-		if (no_update and not current_cpu.cpu_percent.at("total").empty()) return current_cpu;
-		auto& cpu = current_cpu;
-		// const auto& cpu_sensor = Config::getS("cpu_sensor");
+	unordered_flat_map<int, int> get_core_mapping() {
+		unordered_flat_map<int, int> core_map;
+		ifstream cpuinfo("/proc/cpuinfo");
+		if (cpuinfo.good()) {
+			int cpu, core;
+			for (string instr; cpuinfo >> instr;) {
+				if (instr == "processor") {
+					cpuinfo.ignore(SSmax, ':');
+					cpuinfo >> cpu;
+				}
+				else if (instr.starts_with("core")) {
+					cpuinfo.ignore(SSmax, ':');
+					cpuinfo >> core;
+					core_map[cpu] = core;
+				}
+				cpuinfo.ignore(SSmax, '\n');
+			}
+		}
 
-		string short_str;
+		if (core_map.size() < (size_t)Shared::coreCount) {
+			if (Shared::coreCount % 2 == 0 and core_map.size() == (size_t)Shared::coreCount / 2) {
+				for (int i = 0; i < Shared::coreCount / 2; i++)
+					core_map[Shared::coreCount / 2 + i] = i;
+			}
+			else {
+				core_map.clear();
+				for (int i = 0; i < Shared::coreCount; i++)
+					core_map[i] = i;
+			}
+		}
+
+		const auto& custom_map = Config::getS("cpu_core_map");
+		if (not custom_map.empty()) {
+			try {
+				for (const auto& split : ssplit(custom_map)) {
+					const auto vals = ssplit(split, ':');
+					if (vals.size() != 2) continue;
+					int change_id = std::stoi(vals.at(0));
+					int new_id = std::stoi(vals.at(1));
+					if (not core_map.contains(change_id) or new_id >= Shared::coreCount) continue;
+					core_map[change_id] = new_id;
+				}
+			}
+			catch (...) {}
+		}
+
+		return core_map;
+	}
+
+	cpu_info collect(const bool no_update) {
+		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
+		auto& cpu = current_cpu;
+
 		ifstream cread;
 
-		//? Get cpu total times for all cores from /proc/stat
-		cread.open(Shared::procPath / "stat");
-		if (cread.good()) {
-			for (int i = 0; getline(cread, short_str, ' ') and short_str.starts_with("cpu"); i++) {
+		try {
+			//? Get cpu load averages from /proc/loadavg
+			cread.open(Shared::procPath / "loadavg");
+			if (cread.good()) {
+				cread >> cpu.load_avg[0] >> cpu.load_avg[1] >> cpu.load_avg[2];
+			}
+			cread.close();
 
-				//? Excepted on kernel 2.6.3> : 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
-				vector<uint64_t> times;
-				uint64_t total_sum = 0;
+			//? Get cpu total times for all cores from /proc/stat
+			cread.open(Shared::procPath / "stat");
+			for (int i = 0; cread.good() and cread.peek() == 'c'; i++) {
+				cread.ignore(SSmax, ' ');
+
+				//? Expected on kernel 2.6.3> : 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
+				vector<long long> times;
+				long long total_sum = 0;
 
 				for (uint64_t val; cread >> val; total_sum += val) {
 					times.push_back(val);
@@ -245,31 +472,31 @@ namespace Cpu {
 				if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
 
 				//? Subtract fields 8-9 and any future unknown fields
-				const uint64_t totals = total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0);
+				const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
 
 				//? Add iowait field if present
-				const uint64_t idles = times[3] + (times.size() > 4 ? times[4] : 0);
+				const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
 
 				//? Calculate values for totals from first line of stat
 				if (i == 0) {
-					const uint64_t calc_totals = totals - cpu_old["totals"];
-					const uint64_t calc_idles = idles - cpu_old["idles"];
-					cpu_old["totals"] = totals;
-					cpu_old["idles"] = idles;
+					const long long calc_totals = max(1ll, totals - cpu_old.at("totals"));
+					const long long calc_idles = max(1ll, idles - cpu_old.at("idles"));
+					cpu_old.at("totals") = totals;
+					cpu_old.at("idles") = idles;
 
 					//? Total usage of cpu
-					cpu.cpu_percent["total"].push_back(clamp((uint64_t)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ul, 100ul));
+					cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 					//? Reduce size if there are more values than needed for graph
-					while ((int)cpu.cpu_percent["total"].size() > Term::width * 2) cpu.cpu_percent["total"].pop_front();
+					while (cpu.cpu_percent.at("total").size() > (size_t)Term::width * 2) cpu.cpu_percent.at("total").pop_front();
 
 					//? Populate cpu.cpu_percent with all fields from stat
 					for (int ii = 0; const auto& val : times) {
-						cpu.cpu_percent[time_names.at(ii)].push_back(clamp((uint64_t)round((double)(val - cpu_old[time_names.at(ii)]) * 100 / calc_totals), 0ul, 100ul));
-						cpu_old[time_names.at(ii)] = val;
+						cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+						cpu_old.at(time_names.at(ii)) = val;
 
 						//? Reduce size if there are more values than needed for graph
-						while ((int)cpu.cpu_percent[time_names.at(ii)].size() > Term::width * 2) cpu.cpu_percent[time_names.at(ii)].pop_front();
+						while (cpu.cpu_percent.at(time_names.at(ii)).size() > (size_t)Term::width * 2) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 						if (++ii == 10) break;
 					}
@@ -277,26 +504,30 @@ namespace Cpu {
 				//? Calculate cpu total for each core
 				else {
 					if (i > Shared::coreCount) break;
-					const uint64_t calc_totals = totals - core_old_totals[i-1];;
-					const uint64_t calc_idles = idles - core_old_idles[i-1];;
-					core_old_totals[i-1] = totals;
-					core_old_idles[i-1] = idles;
+					const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
+					const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
+					core_old_totals.at(i-1) = totals;
+					core_old_idles.at(i-1) = idles;
 
-					cpu.core_percent[i-1].push_back(clamp((uint64_t)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ul, 100ul));
+					cpu.core_percent.at(i-1).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 					//? Reduce size if there are more values than needed for graph
-					if ((int)cpu.core_percent[i-1].size() > 20) cpu.core_percent[i-1].pop_front();
+					if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
 
 				}
 			}
-			cread.close();
 		}
-		else {
-			throw std::runtime_error("Failed to read /proc/stat");
+		catch (const std::exception& e) {
+			Logger::debug("get_cpuHz() : " + (string)e.what());
+			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
+			else throw std::runtime_error("collect() : " + (string)e.what());
 		}
 
 		if (Config::getB("show_cpu_freq"))
 			cpuHz = get_cpuHz();
+
+		if (Config::getB("check_temp") and got_sensors)
+			update_sensors();
 
 		return cpu;
 	}
@@ -455,27 +686,25 @@ namespace Proc {
 		detailed.memory.clear();
 		if (not detailed.skip_smaps and fs::exists(pid_path / "smaps")) {
 			d_read.open(pid_path / "smaps");
-			if (d_read.good()) {
-				uint64_t rss = 0;
-				try {
-					while (not d_read.eof()) {
-						d_read.ignore(SSmax, 'R');
-						if (d_read.peek() == 's') {
-							d_read.ignore(SSmax, ':');
-							getline(d_read, short_str, 'k');
-							rss += stoull(short_str);
-						}
-					}
-					if (rss == detailed.entry.mem >> 10)
-						detailed.skip_smaps = true;
-					else {
-						detailed.mem_bytes.push_back(rss << 10);
-						detailed.memory = floating_humanizer(rss, false, 1);
+			uint64_t rss = 0;
+			try {
+				while (d_read.good()) {
+					d_read.ignore(SSmax, 'R');
+					if (d_read.peek() == 's') {
+						d_read.ignore(SSmax, ':');
+						getline(d_read, short_str, 'k');
+						rss += stoull(short_str);
 					}
 				}
-				catch (const std::invalid_argument&) {}
-				catch (const std::out_of_range&) {}
+				if (rss == detailed.entry.mem >> 10)
+					detailed.skip_smaps = true;
+				else {
+					detailed.mem_bytes.push_back(rss << 10);
+					detailed.memory = floating_humanizer(rss, false, 1);
+				}
 			}
+			catch (const std::invalid_argument&) {}
+			catch (const std::out_of_range&) {}
 			d_read.close();
 		}
 		if (detailed.memory.empty()) {
@@ -492,27 +721,25 @@ namespace Proc {
 		//? Get bytes read and written from proc/[pid]/io
 		if (fs::exists(pid_path / "io")) {
 			d_read.open(pid_path / "io");
-			if (d_read.good()) {
-				try {
-					string name;
-					while (not d_read.eof()) {
-						getline(d_read, name, ':');
-						if (name.ends_with("read_bytes")) {
-							getline(d_read, short_str);
-							detailed.io_read = floating_humanizer(stoull(short_str));
-						}
-						else if (name.ends_with("write_bytes")) {
-							getline(d_read, short_str);
-							detailed.io_write = floating_humanizer(stoull(short_str));
-							break;
-						}
-						else
-							d_read.ignore(SSmax, '\n');
+			try {
+				string name;
+				while (d_read.good()) {
+					getline(d_read, name, ':');
+					if (name.ends_with("read_bytes")) {
+						getline(d_read, short_str);
+						detailed.io_read = floating_humanizer(stoull(short_str));
 					}
+					else if (name.ends_with("write_bytes")) {
+						getline(d_read, short_str);
+						detailed.io_write = floating_humanizer(stoull(short_str));
+						break;
+					}
+					else
+						d_read.ignore(SSmax, '\n');
 				}
-				catch (const std::invalid_argument&) {}
-				catch (const std::out_of_range&) {}
 			}
+			catch (const std::invalid_argument&) {}
+			catch (const std::out_of_range&) {}
 			d_read.close();
 		}
 	}
@@ -571,7 +798,7 @@ namespace Proc {
 		//* Iterate over all pids in /proc
 		for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 			if (Runner::stopping)
-				return current_procs;
+				return procs;
 			if (pread.is_open()) pread.close();
 
 			const string pid_str = d.path().filename();
@@ -629,8 +856,8 @@ namespace Proc {
 			size_t x = 0, next_x = 3;
 			uint64_t cpu_t = 0;
 			try {
-				for (;;) {
-					while (++x - offset < next_x) {
+				while (pread.good()) {
+					while (pread.good() and ++x - offset < next_x) {
 						pread.ignore(SSmax, ' ');
 					}
 
@@ -696,10 +923,10 @@ namespace Proc {
 			if (x-offset < 24) continue;
 
 			//? Process cpu usage since last update
-			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / (cputimes - old_cputimes)) / 10.0;
+			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
 
 			//? Process cumulative cpu usage since process start
-			new_proc.cpu_c = (double)cpu_t / ((uptime * Shared::clkTck) - cache[new_proc.pid].cpu_s);
+			new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache[new_proc.pid].cpu_s);
 
 			//? Update cache with latest cpu times
 			cache[new_proc.pid].cpu_t = cpu_t;
@@ -714,7 +941,7 @@ namespace Proc {
 		}
 
 		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 10000 or (cache.size() > procs.size() + 100)) {
+		if (++counter >= 1000 or (cache.size() > procs.size() + 100)) {
 			counter = 0;
 			unordered_flat_map<size_t, p_cache> r_cache;
 			r_cache.reserve(procs.size());

@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #include <csignal>
-#include <thread>
+#include <pthread.h>
 #include <numeric>
 #include <ranges>
 #include <unistd.h>
@@ -169,6 +169,11 @@ void clean_quit(const int sig) {
 	Config::write();
 	Input::clear();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
+
+	//? Call quick_exit if there is any existing Tools::atomic_lock objects to avoid a segfault from its destructor
+	//! There's probably a better solution to this...
+	if (Tools::active_locks > 0) quick_exit((sig != -1 ? sig : 0));
+
 	if (sig != -1) exit(sig);
 }
 
@@ -253,35 +258,47 @@ namespace Runner {
 	string output;
 	string overlay;
 	string clock;
+	sigset_t mask;
+
+	struct runner_conf {
+		vector<string> boxes;
+		bool no_update = false;
+		bool force_redraw = false;
+	};
+
+	struct runner_conf current_conf;
 
 	//* Secondary thread; run collect, draw and print out
-	void _runner(const vector<string> boxes, const bool no_update, const bool force_redraw) {
+	void * _runner(void * _) {
+		(void) _;
+		pthread_sigmask(SIG_BLOCK, &mask, NULL);
 		atomic_lock lck(active);
 		auto timestamp = time_micros();
 		output.clear();
+		const auto& conf = current_conf;
 
-		for (const auto& box : boxes) {
+		for (const auto& box : conf.boxes) {
 			if (stopping) break;
 			try {
 				if (box == "cpu") {
-					output += Cpu::draw(Cpu::collect(no_update), force_redraw, no_update);
+					output += Cpu::draw(Cpu::collect(conf.no_update), conf.force_redraw, conf.no_update);
 				}
 				else if (box == "mem") {
-					output += Mem::draw(Mem::collect(no_update), force_redraw, no_update);
+					output += Mem::draw(Mem::collect(conf.no_update), conf.force_redraw, conf.no_update);
 				}
 				else if (box == "net") {
-					output += Net::draw(Net::collect(no_update), force_redraw, no_update);
+					output += Net::draw(Net::collect(conf.no_update), conf.force_redraw, conf.no_update);
 				}
 				else if (box == "proc") {
-					output += Proc::draw(Proc::collect(no_update), force_redraw, no_update);
+					output += Proc::draw(Proc::collect(conf.no_update), conf.force_redraw, conf.no_update);
 				}
 			}
 			catch (const std::exception& e) {
 				string fname = box;
 				fname[0] = toupper(fname[0]);
 				Global::exit_error_msg = "Exception in runner thread -> "
-					+ fname + "::draw(" + fname + "::collect(no_update=" + (no_update ? "true" : "false")
-					+ "), force_redraw=" + (force_redraw ? "true" : "false") + ") : " + (string)e.what();
+					+ fname + "::draw(" + fname + "::collect(no_update=" + (conf.no_update ? "true" : "false")
+					+ "), force_redraw=" + (conf.force_redraw ? "true" : "false") + ") : " + (string)e.what();
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -290,20 +307,20 @@ namespace Runner {
 		}
 
 		if (stopping) {
-			return;
+			pthread_exit(NULL);
 		}
 
-		if (boxes.empty()) {
+		if (conf.boxes.empty()) {
 			output = Term::clear + Mv::to(10, 10) + "No boxes shown!";
 		}
 
-		//? If overlay isn't empty, print output without color and effects and then print overlay on top
+		//? If overlay isn't empty, print output without color or effects and then print overlay on top
 		cout << Term::sync_start << (overlay.empty() ? output + clock : Theme::c("inactive_fg") + Fx::uncolor(output + clock) + overlay) << Term::sync_end << flush;
 
 		//! DEBUG stats -->
 		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
 
-		// Input::interrupt = true;
+		pthread_exit(NULL);
 	}
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all": all boxes
@@ -332,8 +349,14 @@ namespace Runner {
 			else if (not clock.empty())
 				clock.clear();
 
-			std::thread run_thread(_runner, (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw);
-			run_thread.detach();
+			current_conf = {(box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw};
+
+			pthread_t runner_id;
+			if (pthread_create(&runner_id, NULL, &_runner, NULL) != 0)
+				throw std::runtime_error("Failed to create _runner thread!");
+
+			if (pthread_detach(runner_id) != 0)
+				throw std::runtime_error("Failed to detach _runner thread!");
 		}
 	}
 
@@ -359,11 +382,15 @@ int main(int argc, char **argv) {
 
 	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
 	std::atexit(_exit_handler);
-	std::at_quick_exit(_exit_handler);
 	std::signal(SIGINT, _signal_handler);
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
+	sigemptyset(&Runner::mask);
+	sigaddset(&Runner::mask, SIGINT);
+	sigaddset(&Runner::mask, SIGTSTP);
+	sigaddset(&Runner::mask, SIGWINCH);
+	sigaddset(&Runner::mask, SIGTERM);
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
@@ -643,8 +670,12 @@ int main(int argc, char **argv) {
 			//? Loop over input polling and input action processing
 			for (auto current_time = time_ms(); current_time < future_time and not Global::resized; current_time = time_ms()) {
 
-				//? Check for external clock changes to avoid a timer bugs
-				if (future_time - current_time > update_ms)
+				//? Check for external clock changes and for changes to the update timer
+				if (update_ms != (uint64_t)Config::getI("update_ms")) {
+					update_ms = Config::getI("update_ms");
+					future_time = time_ms() + update_ms;
+				}
+				else if (future_time - current_time > update_ms)
 					future_time = current_time;
 
 				//? Poll for input and process any input detected

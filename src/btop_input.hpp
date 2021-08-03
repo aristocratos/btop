@@ -22,8 +22,9 @@ tab-size = 4
 #include <atomic>
 #include <array>
 #include <robin_hood.h>
+#include <deque>
 
-using robin_hood::unordered_flat_map, std::array, std::string, std::atomic;
+using robin_hood::unordered_flat_map, std::array, std::string, std::atomic, std::deque;
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
 	cin.tie(NULL);
@@ -46,7 +47,7 @@ namespace Input {
 	extern array<int, 2> mouse_pos;
 
 	//* Last entered key
-	extern string last;
+	extern deque<string> history;
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
 	bool poll(int timeout=0);

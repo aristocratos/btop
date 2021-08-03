@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <iostream>
+#include <ranges>
 
 #include <btop_input.hpp>
 #include <btop_tools.hpp>
@@ -28,6 +29,7 @@ tab-size = 4
 
 using std::cin, std::string_literals::operator""s;
 using namespace Tools;
+namespace rng = std::ranges;
 
 namespace Input {
 	namespace {
@@ -73,7 +75,7 @@ namespace Input {
 	array<int, 2> mouse_pos;
 	unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
-	string last = "";
+	deque<string> history(50, "");
 	string old_filter;
 
 	bool poll(int timeout) {
@@ -120,9 +122,8 @@ namespace Input {
 					key.clear();
 
 				if (Config::getB("proc_filtering")) {
-					if (mouse_event == "mouse_click") last = mouse_event;
-					else last.clear();
-					return last;
+					if (mouse_event == "mouse_click") return mouse_event;
+					else return "";
 				}
 
 				//? Get column and line position of mouse and check for any actions mapped to current position
@@ -155,14 +156,14 @@ namespace Input {
 			else if (ulen(key) > 1)
 				key.clear();
 
-			last = key;
+			history.push_back(key);
+			history.pop_front();
 		}
 		return key;
 	}
 
 	string wait() {
 		while (cin.rdbuf()->in_avail() < 1) {
-			// if (interrupt) { interrupt = false; return ""; }
 			sleep_ms(10);
 		}
 		return get();
@@ -170,7 +171,7 @@ namespace Input {
 
 	void clear() {
 		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
-		last.clear();
+		history.clear();
 	}
 
 	void process(const string& key) {
@@ -178,8 +179,6 @@ namespace Input {
 		try {
 			auto& filtering = Config::getB("proc_filtering");
 			if (not filtering and key == "q") clean_quit(0);
-			bool no_update = true;
-			bool redraw = true;
 
 			//? Global input actions
 			if (not filtering) {
@@ -198,6 +197,8 @@ namespace Input {
 			//? Input actions for proc box
 			if (Proc::shown) {
 				bool keep_going = false;
+				bool no_update = true;
+				bool redraw = true;
 				if (filtering) {
 					if (key == "enter") {
 						Config::set("proc_filter", Proc::filter.text);
@@ -338,6 +339,37 @@ namespace Input {
 
 				if (not keep_going) {
 					Runner::run("proc", no_update, redraw);
+					return;
+				}
+			}
+
+			//? Input actions for proc box
+			if (Cpu::shown) {
+				bool keep_going = false;
+				bool no_update = true;
+				bool redraw = true;
+				static uint64_t last_press = 0;
+
+				if (key == "+" and Config::getI("update_ms") <= 86399900) {
+					int add = (Config::getI("update_ms") <= 86399000 and last_press >= time_ms() - 200
+						and rng::all_of(Input::history, [](const auto& str){ return str == "+"; })
+						? 1000 : 100);
+					Config::set("update_ms", Config::getI("update_ms") + add);
+					last_press = time_ms();
+					redraw = true;
+				}
+				else if (key == "-" and Config::getI("update_ms") >= 200) {
+					int sub = (Config::getI("update_ms") >= 2000 and last_press >= time_ms() - 200
+						and rng::all_of(Input::history, [](const auto& str){ return str == "-"; })
+						? 1000 : 100);
+					Config::set("update_ms", Config::getI("update_ms") - sub);
+					last_press = time_ms();
+					redraw = true;
+				}
+				else keep_going = true;
+
+				if (not keep_going) {
+					Runner::run("cpu", no_update, redraw);
 					return;
 				}
 			}

@@ -63,7 +63,7 @@ namespace Config {
 
 		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
 
-		{"update_ms", 			"#* Update time in milliseconds, increases automatically if set below internal loops processing time, recommended 2000 ms or above for better sample times for graphs."},
+		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
 		{"proc_update_mult", 	"#* Processes update multiplier, sets how often the process list is updated as a multiplier of \"update_ms\".\n"
 								"#* Set to 2 or higher to greatly decrease bpytop cpu usage. (Only integers)."},
@@ -83,7 +83,7 @@ namespace Config {
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
-		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (slow but more accurate)"},
+		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
@@ -106,6 +106,10 @@ namespace Config {
 		{"cpu_sensor", 			"#* Which sensor to use for cpu temperature, use options menu to select from list of available sensors."},
 
 		{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
+
+		{"cpu_core_map",		"#* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.\n"
+								"#* Format \"x:y\" x=core with wrong temp, y=core with correct temp, use space as separator between multiple entries.\n"
+								"#* Example: \"4:0 5:1 6:3\""},
 
 		{"temp_scale", 			"#* Which temperature scale to use, available values: \"celsius\", \"fahrenheit\", \"kelvin\" and \"rankine\"."},
 
@@ -173,6 +177,7 @@ namespace Config {
 		{"cpu_graph_upper", "total"},
 		{"cpu_graph_lower", "total"},
 		{"cpu_sensor", "Auto"},
+		{"cpu_core_map", ""},
 		{"temp_scale", "celsius"},
 		{"draw_clock", "%X"},
 		{"custom_cpu_name", ""},

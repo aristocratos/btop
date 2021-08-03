@@ -34,6 +34,7 @@ void banner_gen();
 
 namespace Global {
 	extern const string Version;
+	extern atomic<bool> quitting;
 	extern string exit_error_msg;
 	extern atomic<bool> thread_exception;
 	extern string banner;
@@ -70,7 +71,7 @@ namespace Shared {
 namespace Cpu {
 	extern string box;
 	extern int x, y, width, height;
-	extern bool shown, redraw, got_sensors;
+	extern bool shown, redraw, got_sensors, cpu_temp_only;
 	extern string cpuName, cpuHz;
 
 	struct cpu_info {
@@ -89,6 +90,7 @@ namespace Cpu {
 		};
 		vector<deque<long long>> core_percent;
 		vector<deque<long long>> temp;
+		long long temp_max = 0;
 		array<float, 3> load_avg;
 	};
 
@@ -97,12 +99,6 @@ namespace Cpu {
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
-
-	//* Try to get name of cpu
-	string get_cpuName();
-
-	//* Try to get current cpu clock speed
-	string get_cpuHz();
 }
 
 namespace Mem {

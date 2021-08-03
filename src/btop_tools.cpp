@@ -115,6 +115,8 @@ namespace Term {
 
 namespace Tools {
 
+	atomic<int> active_locks (0);
+
 	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
@@ -264,7 +266,9 @@ namespace Tools {
 		return out;
 	}
 
-	std::string operator*(const string& str, size_t n) {
+	std::string operator*(const string& str, int64_t n) {
+		if (n < 1 or str.empty()) return "";
+		else if(n == 1) return str;
 		string new_str;
 		new_str.reserve(str.size() * n);
 		for (; n > 0; n--) new_str.append(str);
@@ -280,12 +284,39 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom) : atom(atom) {
+		active_locks++;
 		while (not this->atom.compare_exchange_strong(this->not_true, true));
 	}
 
 	atomic_lock::~atomic_lock() {
+		active_locks--;
 		this->atom.store(false);
 		atomic_notify(this->atom);
+	}
+
+	string readfile(const std::filesystem::path& path, const string& fallback) {
+		if (not fs::exists(path)) return fallback;
+		string out;
+		try {
+			std::ifstream file(path);
+			for (string readstr; getline(file, readstr); out += readstr);
+		}
+		catch (const std::exception& e) {
+			throw std::runtime_error("Exception when reading " + (string)path + " : " + e.what());
+		}
+		return (out.empty() ? fallback : out);
+	}
+
+	tuple<long long, string> celsius_to(long long celsius, string scale) {
+		if (scale == "celsius")
+			return {celsius, "°C"};
+		else if (scale == "fahrenheit")
+			return {(long long)round((double)celsius * 1.8 + 32), "°F"};
+		else if (scale == "kelvin")
+			return {(long long)round((double)celsius + 273.15), "K "};
+		else if (scale == "rankine")
+			return {(long long)round((double)celsius * 1.8 + 491.67), "°R"};
+		return {0, ""};
 	}
 
 }

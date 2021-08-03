@@ -241,6 +241,8 @@ namespace Draw {
 	}
 
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
+	Meter::Meter() {}
+
 	Meter::Meter(const int width, const string& color_gradient, const bool invert) : width(width), color_gradient(color_gradient), invert(invert) {
 		cache.insert(cache.begin(), 101, "");
 	}
@@ -292,9 +294,9 @@ namespace Draw {
 			for (const int& horizon : iota(0, height)) {
 				const int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
 				const int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
-				const int clamp_min = (no_zero and horizon == height - 1 and i != -1) ? 1 : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
 				for (int ai = 0; const auto& value : {last, data_value}) {
+					const int clamp_min = (no_zero and horizon == height - 1 and not (i == -1 and ai == 0)) ? 1 : 0;
 					if (value >= cur_high)
 						result[ai++] = 4;
 					else if (value <= cur_low)
@@ -378,37 +380,149 @@ namespace Cpu {
 	int x = 1, y = 1, width, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
-	bool shown = true, redraw = true;
+	int graph_up_height;
+	bool shown = true, redraw = true, mid_line = false;
 	string box;
+	Draw::Graph graph_upper;
+	Draw::Graph graph_lower;
+	Draw::Meter cpu_meter;
+	vector<Draw::Graph> core_graphs;
+	vector<Draw::Graph> temp_graphs;
 
 	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
-		(void)data_same;
+		if (Runner::stopping) return "";
+		if (force_redraw) redraw = true;
+		const bool show_temps = (Config::getB("check_temp") and got_sensors);
+		auto& single_graph = Config::getB("cpu_single_graph");
+		const bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
+		auto& graph_up_field = Config::getS("cpu_graph_upper");
+		auto& graph_lo_field = Config::getS("cpu_graph_lower");
+		auto& tty_mode = Config::getB("tty_mode");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up"))[1];
+		auto& temp_scale = Config::getS("temp_scale");
 		string out;
 		out.reserve(width * height);
+		//* Redraw elements not needed to be updated every cycle
 		if (redraw or force_redraw) {
 			auto& cpu_bottom = Config::getB("cpu_bottom");
+			mid_line = (not single_graph and graph_up_field != graph_lo_field);
+			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0 ? 1 : 0));
+			const int graph_low_height = height - 2 - graph_up_height - (mid_line ? 1 : 0);
 			const int button_y = cpu_bottom ? y + height - 1 : y;
 			out += box;
 			const string title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 			const string title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
+
+			//? Buttons on title
 			out += Mv::to(button_y, x + 10) + title_left + Theme::c("hi_fg") + Fx::b + 'm' + Theme::c("title") + "enu" + Fx::ub + title_right;
+			Input::mouse_mappings["m"] = {button_y, x + 11, 1, 4};
+			const string update = to_string(Config::getI("update_ms")) + "ms";
+			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
+				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
+			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
+			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
+
+			//? Graphs & meters
+			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", cpu.cpu_percent.at(graph_up_field), graph_symbol};
+			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 : 11), "cpu"};
+			if (not single_graph)
+				graph_lower = Draw::Graph{x + width - b_width - 3, graph_low_height, "cpu", cpu.cpu_percent.at(graph_lo_field), graph_symbol, Config::getB("cpu_invert_lower")};
+			if (mid_line) {
+				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
+					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
+					+ Mv::to(y + graph_up_height + 1, x + ((width - b_width) / 2) - ((graph_up_field.size() + graph_lo_field.size()) / 2) - 4)
+					+ Theme::c("main_fg") + graph_up_field + Mv::r(1) + "▲▼" + Mv::r(1) + graph_lo_field;
+			}
+			if (b_column_size > 0 or extra_width > 0) {
+				core_graphs.clear();
+				for (const auto& core_data : cpu.core_percent) {
+					core_graphs.emplace_back(5 * b_column_size + extra_width, 1, "", core_data, graph_symbol);
+				}
+			}
+			if (show_temps) {
+				temp_graphs.clear();
+				temp_graphs.emplace_back(5, 1, "", cpu.temp.at(0), graph_symbol, false, false, cpu.temp_max, -23);
+				if (not hide_cores) {
+					for (const auto& i : iota((size_t)1, cpu.temp.size())) {
+						temp_graphs.emplace_back(5, 1, "", cpu.temp.at(i), graph_symbol, false, false, cpu.temp_max, -23);
+					}
+				}
+			}
 
 		}
+		try {
+		//? Cpu graphs, cpu clock and cpu meter
+		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(cpu.cpu_percent.at(graph_up_field), (data_same or redraw));
+		if (not single_graph)
+			out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
 
 		if (Config::getB("show_cpu_freq") and not cpuHz.empty())
-			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * max(0ul, 7 - cpuHz.size())
+			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * (7 - cpuHz.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
+		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
+			+ Theme::g("cpu")[cpu.cpu_percent.at("total").back()] + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
+		if (show_temps) {
+			const auto& [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
+			out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("temp")[clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll)]
+				+ temp_graphs.at(0)(cpu.temp.at(0), data_same or redraw) + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+		}
+		out += Theme::c("div_line") + Symbols::v_line;
 
-		//! VALS
+		} catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + (string)e.what()); }
 
-		out += Mv::to(y + 2, x + 5) + Theme::c("title") + Fx::b + ljust("Cpu total=" + to_string(cpu.cpu_percent.at("total").back()), 20);
-		out += Mv::to(y + 4, x + 5);
-		for (int i = 0; const auto& cper : cpu.core_percent) { out += ljust("Core" + to_string(i++) + "=" + to_string(cper.back()), 10); }
+		//? Core text and graphs
+		int cx = 0, cy = 1, cc = 0;
+		for (const auto& n : iota(0, Shared::coreCount)) {
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c("main_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
+				+ ljust(to_string(n), (b_column_size == 0 ? 2 : 3));
+			if (b_column_size > 0 or extra_width > 0)
+				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
+					+ Theme::g("cpu")[cpu.core_percent[n].back()] + core_graphs[n](cpu.core_percent[n], data_same or redraw);
+			else
+				out += Theme::g("cpu")[cpu.core_percent[n].back()];
+			out += rjust(to_string(cpu.core_percent[n].back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
 
-		out += Mv::to(y + 6, x + 5);
-		for (const auto& [name, value] : cpu.cpu_percent) { out += ljust(name + "=" + to_string(value.back()), 12); }
+			if (show_temps and not hide_cores) {
+				const auto& [temp, unit] = celsius_to(cpu.temp.at(n+1).back(), temp_scale);
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("temp")[clamp(cpu.temp.at(n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)]
+					+ temp_graphs.at(n+1)(cpu.temp.at(n+1), data_same or redraw) + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			}
 
+			out += Theme::c("div_line") + Symbols::v_line;
+
+			if (++cy > ceil((double)Shared::coreCount / b_columns) and n != Shared::coreCount - 1) {
+				if (++cc >= b_columns) break;
+				cy = 1; cx = (b_width / b_columns) * cc;
+			}
+		}
+
+		//? Load average
+		if (cy < b_height - 1 and cc <= b_columns) {
+			string lavg_pre;
+			int sep = 1;
+			if (b_column_size == 2 and got_sensors) { lavg_pre = "Load AVG:"; sep = 3; }
+			else if (b_column_size == 2 or (b_column_size == 1 and got_sensors)) { lavg_pre = "LAV:"; }
+			else if (b_column_size == 1 or (b_column_size == 0 and got_sensors)) { lavg_pre = "L"; }
+			string lavg;
+			for (const auto& val : cpu.load_avg) {
+				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
+			}
+			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_pre + lavg;
+		}
+
+		//? Uptime
+		if (Config::getB("show_uptime")) {
+			string upstr = sec_to_dhms(system_uptime());
+			if (upstr.size() > 8) {
+				upstr.resize(upstr.size() - 3);
+				upstr = trans(upstr);
+			}
+			out += Mv::to(y + (single_graph or not Config::getB("cpu_invert_lower") ? 1 : height - 2), x + 2)
+				+ Theme::c("graph_text") + "up" + Mv::r(1) + upstr;
+		}
 
 		redraw = false;
 		return out;
@@ -425,6 +539,7 @@ namespace Mem {
 	string box;
 
 	string draw(const mem_info& mem, const bool force_redraw, const bool data_same) {
+		if (Runner::stopping) return "";
 		(void)mem;
 		(void)data_same;
 		string out = Mv::to(0, 0);
@@ -447,6 +562,7 @@ namespace Net {
 	string box;
 
 	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
+		if (Runner::stopping) return "";
 		(void)net;
 		(void)data_same;
 		string out = Mv::to(0, 0);
@@ -537,17 +653,17 @@ namespace Proc {
 	}
 
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
+		if (Runner::stopping) return "";
 		auto& proc_tree = Config::getB("proc_tree");
 		const bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid"));
 		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
 		auto& proc_colors = Config::getB("proc_colors");
-		const auto& tty_mode = Config::getB("tty_mode");
-		const auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
-		const auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? "braille_up" : graph_symbol + "_up"))[1];
-		const auto& mem_bytes = Config::getB("proc_mem_bytes");
+		auto& tty_mode = Config::getB("tty_mode");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up"))[1];
+		auto& mem_bytes = Config::getB("proc_mem_bytes");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
-		uint64_t total_mem = 16328872 << 10;
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
 		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
@@ -584,7 +700,7 @@ namespace Proc {
 
 				//? Create cpu and mem graphs if process is alive
 				if (alive) {
-					detailed_cpu_graph = {dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol};
+					detailed_cpu_graph = {dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
 					detailed_mem_graph = {d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
 
@@ -646,7 +762,7 @@ namespace Proc {
 			}
 
 			//? Filter
-			const auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
+			auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
 			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
@@ -735,7 +851,7 @@ namespace Proc {
 			string cpu_str = (alive ? to_string(detailed.entry.cpu_p) : "");
 			if (alive) {
 				cpu_str.resize((detailed.entry.cpu_p < 10 or detailed.entry.cpu_p >= 100 ? 3 : 4));
-				cpu_str += '%' + Mv::r(1) + (dgraph_width < 20 ? "C" : "Core") + to_string(detailed.entry.cpu_n + 1);
+				cpu_str += '%' + Mv::r(1) + (dgraph_width < 20 ? "C" : "Core") + to_string(detailed.entry.cpu_n);
 			}
 			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
 				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + cpu_str;
@@ -812,7 +928,7 @@ namespace Proc {
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
 					array<string, 3> colors;
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / total_mem), (int)p.threads / 3}) {
+					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / Shared::totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color")[val];
@@ -892,7 +1008,7 @@ namespace Proc {
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
 
 		//? Clear out left over graphs from dead processes at a regular interval
-		if (not data_same and ++counter >= 1000) {
+		if (not data_same and ++counter >= 100) {
 			counter = 0;
 			for (auto element = p_graphs.begin(); element != p_graphs.end();) {
 				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {

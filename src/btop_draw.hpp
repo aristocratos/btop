@@ -44,11 +44,12 @@ namespace Draw {
 
 	//* Class holding a percentage meter
 	class Meter {
-		const int width;
-		const string color_gradient;
-		const bool invert;
+		int width;
+		string color_gradient;
+		bool invert;
 		vector<string> cache;
 	public:
+		Meter();
 		Meter(const int width, const string& color_gradient, const bool invert = false);
 
 		//* Return a string representation of the meter with given value

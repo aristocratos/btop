@@ -73,7 +73,7 @@ uninstall:
 
 #Link
 btop: $(OBJECTS)
-	$(CXX) -o $(TARGETDIR)/btop $^ -pthread
+	$(CXX) -o $(TARGETDIR)/btop $^ $(LINKFLAGS)
 
 #Compile
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
