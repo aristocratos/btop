@@ -18,6 +18,8 @@ tab-size = 4
 
 #include <csignal>
 #include <pthread.h>
+#include <thread>
+#include <future>
 #include <numeric>
 #include <ranges>
 #include <unistd.h>
@@ -85,6 +87,7 @@ namespace Global {
 	uint64_t start_time;
 
 	atomic<bool> resized (false);
+	atomic<int> resizing (0);
 	atomic<bool> quitting (false);
 
 	bool arg_tty = false;
@@ -138,31 +141,33 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
-	if (auto refreshed = Term::refresh() or force) {
+	if (auto refreshed = Term::refresh(); refreshed or force) {
 		if (force and refreshed) force = false;
-		Global::resized = true;
-		Runner::stop();
 	}
 	else return;
 
+	auto rez_state = ++Global::resizing;
+	if (rez_state > 1) return;
+	Global::resized = true;
+	Runner::stop();
 	while (not force) {
 		sleep_ms(100);
-		if (not Term::refresh()) break;
+		if (rez_state != Global::resizing) rez_state = --Global::resizing;
+		else if (not Term::refresh()) break;
 	}
 
 	Input::interrupt = true;
-	Draw::calcSizes();
+	Global::resizing = 0;
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
-void clean_quit(const int sig) {
+void clean_quit(int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
-	if (Term::initialized) {
-		Term::restore();
-	}
+
 	if (not Global::exit_error_msg.empty()) {
+		sig = 1;
 		Logger::error(Global::exit_error_msg);
 		std::cerr << "ERROR: " << Global::exit_error_msg << endl;
 	}
@@ -170,9 +175,19 @@ void clean_quit(const int sig) {
 	Input::clear();
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
-	//? Call quick_exit if there is any existing Tools::atomic_lock objects to avoid a segfault from its destructor
-	//! There's probably a better solution to this...
-	if (Tools::active_locks > 0) quick_exit((sig != -1 ? sig : 0));
+	//? Wait for any remaining Tools::atomic_lock destructors to finish for max 1000ms
+	for (int i = 0; Tools::active_locks > 0 and i < 100; i++) {
+		sleep_ms(10);
+	}
+
+	if (Term::initialized) {
+		Term::restore();
+	}
+
+	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
+	if (Tools::active_locks > 0) {
+		quick_exit((sig != -1 ? sig : 0));
+	}
 
 	if (sig != -1) exit(sig);
 }
@@ -254,11 +269,13 @@ void banner_gen() {
 namespace Runner {
 	atomic<bool> active (false);
 	atomic<bool> stopping (false);
+	atomic<bool> waiting (false);
 
 	string output;
 	string overlay;
 	string clock;
 	sigset_t mask;
+	pthread_mutex_t mtx;
 
 	struct runner_conf {
 		vector<string> boxes;
@@ -268,14 +285,20 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
-	//* Secondary thread; run collect, draw and print out
+	//? -------------------------------------- Single instance secondary thread ---------------------------------------
 	void * _runner(void * _) {
 		(void) _;
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
+		int ret = pthread_mutex_lock(&mtx);
+		if (active or stopping or ret != 0 or Global::resized) {
+			if (ret == 0) pthread_mutex_unlock(&mtx);
+			pthread_exit(NULL);
+		}
 		atomic_lock lck(active);
 		auto timestamp = time_micros();
-		output.clear();
-		const auto& conf = current_conf;
+		string output;
+		output.reserve(Term::height * Term::width);
+		const auto conf = current_conf;
 
 		for (const auto& box : conf.boxes) {
 			if (stopping) break;
@@ -307,6 +330,7 @@ namespace Runner {
 		}
 
 		if (stopping) {
+			pthread_mutex_unlock(&mtx);
 			pthread_exit(NULL);
 		}
 
@@ -320,13 +344,16 @@ namespace Runner {
 		//! DEBUG stats -->
 		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
 
+		pthread_mutex_unlock(&mtx);
 		pthread_exit(NULL);
 	}
+	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all": all boxes
 	void run(const string& box, const bool no_update, const bool force_redraw) {
+		atomic_lock lck(waiting);
 		atomic_wait(active);
-		if (stopping) return;
+		if (stopping or Global::resized) return;
 
 		if (box == "overlay") {
 			cout << Term::sync_start << Global::overlay << Term::sync_end;
@@ -357,13 +384,25 @@ namespace Runner {
 
 			if (pthread_detach(runner_id) != 0)
 				throw std::runtime_error("Failed to detach _runner thread!");
+
+			for (int i = 0; not active and i < 10; i++) sleep_ms(1);
 		}
 	}
 
 	//* Stops any secondary thread running
 	void stop() {
 		stopping = true;
-		atomic_wait(active);
+		int ret = pthread_mutex_trylock(&mtx);
+		if (ret == EOWNERDEAD or ret == ENOTRECOVERABLE) {
+			if (active) active = false;
+			Global::exit_error_msg = "Runner thread died unexpectedly!";
+			if (not Global::quitting) exit(1);
+		}
+		else if (ret == EBUSY)
+			atomic_wait(active);
+		else if (ret == 0)
+			pthread_mutex_unlock(&mtx);
+		sleep_ms(1);
 		stopping = false;
 	}
 
@@ -514,131 +553,6 @@ int main(int argc, char **argv) {
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 
 
-	//* ------------------------------------------------ TESTING ------------------------------------------------------
-
-
-	if (false) {
-
-		cout << "Current: " << std::setlocale(LC_ALL, NULL) << endl;
-		exit(0);
-
-	}
-
-	//* Test theme
-	if (false) {
-		string key;
-		bool no_redraw = false;
-		Config::unlock();
-		auto theme_index = v_index(Theme::themes, Config::getS("color_theme"));
-		uint64_t timer = 0;
-		while (key != "q") {
-			key.clear();
-
-			if (not no_redraw) {
-
-				cout << Fx::reset << Term::clear << "Theme: " << Config::getS("color_theme") << ". Generation took " << timer << " μs." << endl;
-				size_t i = 0;
-				for(const auto& item : Theme::colors) {
-					cout << rjust(item.first, 15) << ":" << item.second << "■"s * 10 << Fx::reset << "  ";
-					if (++i == 4) {
-						i = 0;
-						cout << endl;
-					}
-				}
-				cout << Fx::reset << endl;
-
-
-				cout << "Gradients:";
-				for (const auto& [name, cvec] : Theme::gradients) {
-					cout << endl << rjust(name + ":", 10);
-					for (auto& color : cvec) {
-						cout << color << "■";
-					}
-
-					cout << Fx::reset << endl;
-				}
-			}
-
-			no_redraw = true;
-			key = Input::wait();
-			if (key.empty()) continue;
-			if (key == "right") {
-				if (theme_index == Theme::themes.size() - 1) theme_index = 0;
-				else theme_index++;
-			}
-			else if (key == "left") {
-				if (theme_index == 0) theme_index = Theme::themes.size() - 1;
-				else theme_index--;
-			}
-			else continue;
-			no_redraw = false;
-			Config::set("color_theme", Theme::themes.at(theme_index));
-			timer = time_micros();
-			Theme::setTheme();
-			timer = time_micros() - timer;
-
-		}
-
-
-		exit(0);
-	}
-
-	//* Test graphs
-	if (false) {
-
-		deque<long long> mydata;
-		for (long long i = 0; i <= 100; i++) mydata.push_back(i);
-		for (long long i = 100; i >= 0; i--) mydata.push_back(i);
-		// mydata.push_back(50);
-		deque<long long> mydata2 = {2, 3};
-		// mydata2.push_back(10);
-		// for (long long i = 0; i <= 100; i++) mydata2.push_back(i);
-		// for (long long i = 100; i >= 0; i--) mydata2.push_back(i);
-
-
-
-		cout << Draw::createBox(5, 10, Term::width - 10, 12, Theme::c("proc_box"), false, "braille", "", 1) << Mv::save;
-		cout << Draw::createBox(5, 23, Term::width - 10, 12, Theme::c("proc_box"), false, "block", "", 2);
-		cout << Draw::createBox(5, 36, Term::width - 10, 12, Theme::c("proc_box"), false, "tty", "", 3) << flush;
-		auto kts = time_micros();
-		Draw::Graph kgraph {Term::width - 13, 10, "cpu", mydata, "braille", false, false};
-		Draw::Graph kgraph2 {Term::width - 13, 10, "upload", {0}, "braille", false, false};
-		Draw::Graph kgraph3 {Term::width - 13, 10, "download", mydata2, "braille", false, false};
-
-
-		cout 	<< Mv::restore << kgraph(mydata, true)
-				<< Mv::restore << Mv::d(13) << kgraph2(mydata, true)
-				<< Mv::restore << Mv::d(26) << kgraph3(mydata, true) << '\n'
-				<< Mv::d(1) << "Init took " << time_micros() - kts << " μs.       " << endl;
-
-		// Input::wait();
-
-		for (;;) {
-			mydata.push_back(std::rand() % 101);
-			mydata2.push_back(mydata.back());
-			if (mydata.size() > 1000) mydata.pop_front();
-			if (mydata2.size() > 1000) mydata2.pop_front();
-			kgraph3 = {Term::width - 13, 10, "cpu", mydata2, "braille", false, false};
-			kts = time_micros();
-			cout 	<< Term::sync_start << Mv::restore << kgraph(mydata)
-					<< Mv::restore << Mv::d(13) << kgraph2(mydata)
-					<< Mv::restore << Mv::d(26) << kgraph3(mydata2)
-					<< Term::sync_end << endl;
-			cout << Mv::d(1) << "Time: " << time_micros() - kts << " μs.     " << flush;
-			if (Input::poll()) {
-				if (Input::get() == "space") Input::wait();
-				else break;
-			}
-			sleep_ms(50);
-		}
-		Input::get();
-
-		exit(0);
-
-	}
-
-
-
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
 	uint64_t update_ms = Config::getI("update_ms");
@@ -647,17 +561,17 @@ int main(int argc, char **argv) {
 	try {
 		while (not true not_eq not false) {
 			//? Check for exceptions in secondary thread and exit with fail signal if true
-			if (Global::thread_exception) clean_quit(1);
+			if (Global::thread_exception) exit(1);
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
 			term_resize();
 
-			//? Print out boxes outlines and trigger secondary thread to redraw if terminal has been resized
+			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
-				cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 				Global::resized = false;
-				if (time_ms() < future_time)
-					Runner::run("all", true, true);
+				Draw::calcSizes();
+				Runner::run("all", true);
+				atomic_wait(Runner::active);
 			}
 
 			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
@@ -668,7 +582,7 @@ int main(int argc, char **argv) {
 			}
 
 			//? Loop over input polling and input action processing
-			for (auto current_time = time_ms(); current_time < future_time and not Global::resized; current_time = time_ms()) {
+			for (auto current_time = time_ms(); current_time < future_time; current_time = time_ms()) {
 
 				//? Check for external clock changes and for changes to the update timer
 				if (update_ms != (uint64_t)Config::getI("update_ms")) {

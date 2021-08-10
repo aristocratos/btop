@@ -28,7 +28,7 @@ tab-size = 4
 
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
 
-void clean_quit(const int sig=-1);
+void clean_quit(int sig=-1);
 void term_resize(bool force=false);
 void banner_gen();
 
@@ -105,16 +105,28 @@ namespace Mem {
 	extern string box;
 	extern int x, y, width, height;
 	extern bool has_swap, shown, redraw;
+	const array<string, 4> mem_names = {"used", "available", "cached", "free"};
+	const array<string, 2> swap_names = {"swap_used", "swap_free"};
+	extern int disk_ios;
 
 	struct disk_info {
-		uint64_t total = 0, used = 0;
+		std::filesystem::path dev;
+		string name;
+		std::filesystem::path stat = "";
+		int64_t total = 0, used = 0, free = 0;
+		int used_percent = 0, free_percent = 0;
+		array<int64_t, 2> old_io = {0, 0};
+		deque<long long> io_read = {};
+		deque<long long> io_write = {};
 	};
 
 	struct mem_info {
-		uint64_t total = 0, available = 0, cached = 0, free = 0;
-		unordered_flat_map<string, deque<long long>> percent;
-		unordered_flat_map<string, deque<long long>> disks_io;
+		unordered_flat_map<string, uint64_t> stats = 	{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
+														{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
+		unordered_flat_map<string, deque<long long>> percent =	{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
+																{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
 		unordered_flat_map<string, disk_info> disks;
+		vector<string> disks_order;
 	};
 
 	//* Collect mem & disks stats
@@ -177,11 +189,11 @@ namespace Proc {
 
 	//* Container for process info box
 	struct detail_container {
+		size_t last_pid = 0;
+		bool skip_smaps = false;
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;
-		size_t last_pid = 0;
-		bool skip_smaps = false;
 		deque<long long> cpu_percent;
 		deque<long long> mem_bytes;
 	};

@@ -121,8 +121,8 @@ namespace Config {
 
 		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
-		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with a comma \",\".\n"
-								"#* Begin line with \"exclude=\" to change to exclude filter, otherwise defaults to \"most include\" filter. Example: disks_filter=\"exclude=/boot, /home/user\"."},
+		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
+								"#* Begin line with \"exclude=\" to change to exclude filter, otherwise defaults to \"most include\" filter. Example: disks_filter=\"exclude=/boot /home/user\"."},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
@@ -144,8 +144,8 @@ namespace Config {
 
 		{"io_graph_combined", 	"#* Set to True to show combined read/write io graphs in io mode."},
 
-		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"device:speed\" separate disks with a comma \",\".\n"
-								"#* Example: \"/dev/sda:100, /dev/sdb:20\"."},
+		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"mountpoint:speed\" separate disks with whitespace \" \".\n"
+								"#* Example: \"/mnt/media:100 /:20 /boot:1\"."},
 
 		{"net_download", 		"#* Set fixed values for network graphs, default \"10M\" = 10 Mibibytes, possible units \"K\", \"M\", \"G\", append with \"bit\" for bits instead of bytes, i.e \"100mbit\"."},
 
@@ -273,6 +273,7 @@ namespace Config {
 
 	void unlock() {
 		if (not locked) return;
+		atomic_wait(Runner::active);
 		atomic_lock lck(writelock);
 		try {
 			if (Proc::shown) {

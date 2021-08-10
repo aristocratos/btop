@@ -24,6 +24,7 @@ tab-size = 4
 #include <unistd.h>
 #include <numeric>
 #include <regex>
+#include <sys/statvfs.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
@@ -36,16 +37,6 @@ namespace rng = std::ranges;
 using namespace Tools;
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
-
-namespace Tools {
-	double system_uptime() {
-		string upstr;
-		ifstream pread("/proc/uptime");
-		getline(pread, upstr, ' ');
-		pread.close();
-		return stod(upstr);
-	}
-}
 
 namespace Cpu {
 	vector<long long> core_old_totals;
@@ -84,7 +75,6 @@ namespace Cpu {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	fs::file_time_type passwd_time;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
 
@@ -140,6 +130,8 @@ namespace Shared {
 		Cpu::got_sensors = Cpu::get_sensors();
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
+		//? Init for namespace Mem
+		Mem::collect();
 
 	}
 
@@ -395,7 +387,9 @@ namespace Cpu {
 
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
-		ifstream cpuinfo("/proc/cpuinfo");
+
+		//? Try to get core mapping from /proc/cpuinfo
+		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
 			int cpu, core;
 			for (string instr; cpuinfo >> instr;) {
@@ -412,8 +406,9 @@ namespace Cpu {
 			}
 		}
 
+		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely map 0-0 1-1 2-2 etc.
 		if (core_map.size() < (size_t)Shared::coreCount) {
-			if (Shared::coreCount % 2 == 0 and core_map.size() == (size_t)Shared::coreCount / 2) {
+			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
 				for (int i = 0; i < Shared::coreCount / 2; i++)
 					core_map[Shared::coreCount / 2 + i] = i;
 			}
@@ -424,6 +419,7 @@ namespace Cpu {
 			}
 		}
 
+		//? Apply user set custom mapping if any
 		const auto& custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
 			try {
@@ -433,7 +429,7 @@ namespace Cpu {
 					int change_id = std::stoi(vals.at(0));
 					int new_id = std::stoi(vals.at(1));
 					if (not core_map.contains(change_id) or new_id >= Shared::coreCount) continue;
-					core_map[change_id] = new_id;
+					core_map.at(change_id) = new_id;
 				}
 			}
 			catch (...) {}
@@ -488,7 +484,7 @@ namespace Cpu {
 					cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 					//? Reduce size if there are more values than needed for graph
-					while (cpu.cpu_percent.at("total").size() > (size_t)Term::width * 2) cpu.cpu_percent.at("total").pop_front();
+					if (cpu.cpu_percent.at("total").size() > (size_t)Term::width * 2) cpu.cpu_percent.at("total").pop_front();
 
 					//? Populate cpu.cpu_percent with all fields from stat
 					for (int ii = 0; const auto& val : times) {
@@ -496,7 +492,7 @@ namespace Cpu {
 						cpu_old.at(time_names.at(ii)) = val;
 
 						//? Reduce size if there are more values than needed for graph
-						while (cpu.cpu_percent.at(time_names.at(ii)).size() > (size_t)Term::width * 2) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+						if (cpu.cpu_percent.at(time_names.at(ii)).size() > (size_t)Term::width * 2) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 						if (++ii == 10) break;
 					}
@@ -535,12 +531,254 @@ namespace Cpu {
 
 namespace Mem {
 	bool has_swap = false;
+	bool disks_fail = false;
+	vector<string> fstab;
+	fs::file_time_type fstab_time;
+	int disk_ios = 0;
 
-	mem_info current_mem;
+
+	mem_info current_mem {};
 
 	auto collect(const bool no_update) -> mem_info {
-		(void)no_update;
-		return current_mem;
+		if (Runner::stopping or no_update) return current_mem;
+		auto& show_swap = Config::getB("show_swap");
+		auto& swap_disk = Config::getB("swap_disk");
+		auto& show_disks = Config::getB("show_disks");
+		auto& mem = current_mem;
+
+		mem.stats.at("swap_total") = 0;
+
+		//? Read memory info from /proc/meminfo
+		ifstream meminfo(Shared::procPath / "meminfo");
+		if (meminfo.good()) {
+			bool got_avail = false;
+			for (string label; meminfo >> label;) {
+				if (label == "MemFree:") {
+					meminfo >> mem.stats.at("free");
+					mem.stats.at("free") <<= 10;
+				}
+				else if (label == "MemAvailable:") {
+					meminfo >> mem.stats.at("available");
+					mem.stats.at("available") <<= 10;
+					got_avail = true;
+				}
+				else if (label == "Cached:") {
+					meminfo >> mem.stats.at("cached");
+					mem.stats.at("cached") <<= 10;
+					if (not show_swap and not swap_disk) break;
+				}
+				else if (label == "SwapTotal:") {
+					meminfo >> mem.stats.at("swap_total");
+					mem.stats.at("swap_total") <<= 10;
+				}
+				else if (label == "SwapFree:") {
+					meminfo >> mem.stats.at("swap_free");
+					mem.stats.at("swap_free") <<= 10;
+					break;
+				}
+				meminfo.ignore(SSmax, '\n');
+			}
+			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
+			mem.stats.at("used") = Shared::totalMem - mem.stats.at("available");
+			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
+		}
+		else
+			throw std::runtime_error("Failed to read /proc/meminfo");
+
+		meminfo.close();
+
+		//? Calculate percentages
+		for (const auto& name : mem_names) {
+			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
+		}
+
+		if (show_swap and mem.stats.at("swap_total") > 0) {
+			for (const auto& name : swap_names) {
+				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+			}
+			has_swap = true;
+		}
+		else
+			has_swap = false;
+
+		//? Remove values beyond whats needed for graph creation
+		for (auto& [ignored, deq] : mem.percent) {
+			if (deq.size() > (size_t)Term::width * 2) deq.pop_front();
+		}
+
+		//? Get disks stats
+		if (show_disks and not disks_fail) {
+			try {
+				auto& disks_filter = Config::getS("disks_filter");
+				bool filter_exclude = false;
+				auto& use_fstab = Config::getB("use_fstab");
+				auto& only_physical = Config::getB("only_physical");
+				auto& disks = mem.disks;
+				ifstream diskread;
+
+				vector<string> filter;
+				if (not disks_filter.empty()) {
+					filter = ssplit(disks_filter);
+					if (filter.at(0).starts_with("exclude=")) {
+						filter_exclude = true;
+						filter.at(0) = filter.at(0).substr(8);
+					}
+				}
+
+				//? Get list of "real" filesystems from /proc/filesystems
+				vector<string> fstypes;
+				if (only_physical and not use_fstab) {
+					fstypes = {"zfs", "wslfs", "drvfs"};
+					diskread.open(Shared::procPath / "filesystems");
+					if (diskread.good()) {
+						for (string fstype; diskread >> fstype;) {
+							if (not is_in(fstype, "nodev", "squashfs", "nullfs"))
+								fstypes.push_back(fstype);
+							diskread.ignore(SSmax, '\n');
+						}
+					}
+					else
+						throw std::runtime_error("Failed to read /proc/filesystems");
+					diskread.close();
+				}
+
+				//? Get disk list to use from fstab if enabled
+				if (use_fstab and fs::last_write_time("/etc/fstab") != fstab_time) {
+					fstab.clear();
+					fstab_time = fs::last_write_time("/etc/fstab");
+					diskread.open("/etc/fstab");
+					if (diskread.good()) {
+						for (string instr; diskread >> instr;) {
+							if (not instr.starts_with('#')) {
+								diskread >> instr;
+								if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+							}
+							diskread.ignore(SSmax, '\n');
+						}
+					}
+					else
+						throw std::runtime_error("Failed to read /etc/fstab");
+					diskread.close();
+				}
+
+				//? Get mounts from /etc/mtab or /proc/self/mounts
+				vector<string> found;
+				diskread.open((fs::exists("/etc/mtab") ? fs::path("/etc/mtab") : Shared::procPath / "self/mounts"));
+				if (diskread.good()) {
+					string dev, mountpoint, fstype;
+					while (not diskread.eof()) {
+						std::error_code ec;
+						diskread >> dev >> mountpoint >> fstype;
+
+						//? Match filter if not empty
+						if (not filter.empty()) {
+							bool match = v_contains(filter, mountpoint);
+							if ((filter_exclude and match) or (not filter_exclude and not match))
+								continue;
+						}
+
+						if ((not use_fstab and not only_physical)
+						or (use_fstab and v_contains(fstab, mountpoint))
+						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
+							found.push_back(mountpoint);
+
+							//? Save mountpoint, name, dev path and path to /sys/block stat file
+							if (not disks.contains(mountpoint)) {
+								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+								if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
+								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+								string devname = disks.at(mountpoint).dev.filename();
+								while (devname.size() >= 2) {
+									if (fs::exists("/sys/block/" + devname + "/stat")) {
+										disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										break;
+									}
+									devname.resize(devname.size() - 1);
+								}
+							}
+
+						}
+						diskread.ignore(SSmax, '\n');
+					}
+					//? Remove disks no longer mounted or filtered out
+					if (swap_disk and has_swap) found.push_back("swap");
+					for (auto i = disks.begin(); i != disks.end();) {
+						if (not v_contains(found, i->first))
+							i = disks.erase(i);
+						else
+							i++;
+					}
+				}
+				else
+					throw std::runtime_error("Failed to get mounts from /etc/mtab and /proc/self/mounts");
+				diskread.close();
+
+				//? Get disk/partition stats
+				for (auto& [mountpoint, disk] : disks) {
+					if (not fs::exists(mountpoint)) continue;
+					struct statvfs vfs;
+					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+						continue;
+					}
+					disk.total = vfs.f_blocks * vfs.f_frsize;
+					disk.free = vfs.f_bfree * vfs.f_frsize;
+					disk.used = disk.total - disk.free;
+					disk.used_percent = round((double)disk.used * 100 / disk.total);
+					disk.free_percent = 100 - disk.used_percent;
+				}
+
+				//? Setup disks order in UI and add swap if enabled
+				mem.disks_order.clear();
+				if (disks.contains("/")) mem.disks_order.push_back("/");
+				if (swap_disk and has_swap) {
+					mem.disks_order.push_back("swap");
+					if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
+					disks.at("swap").total = mem.stats.at("swap_total");
+					disks.at("swap").used = mem.stats.at("swap_used");
+					disks.at("swap").free = mem.stats.at("swap_free");
+					disks.at("swap").used_percent = mem.percent.at("swap_used").back();
+					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
+				}
+				for (const auto& name : found)
+					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+
+				//? Get disks IO
+				int64_t sectors_read, sectors_write;
+				disk_ios = 0;
+				for (auto& [ignored, disk] : disks) {
+					if (disk.stat.empty()) continue;
+					diskread.open(disk.stat);
+					if (diskread.good()) {
+						disk_ios++;
+						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> sectors_read;
+						if (disk.io_read.empty())
+							disk.io_read.push_back(0);
+						else
+							disk.io_read.push_back(max(0l, (sectors_read - disk.old_io.at(0)) * 512));
+						disk.old_io.at(0) = sectors_read;
+						if (disk.io_read.size() > (size_t)Term::width * 2) disk.io_read.pop_front();
+
+						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> sectors_write;
+						if (disk.io_write.empty())
+							disk.io_write.push_back(0);
+						else
+							disk.io_write.push_back(max(0l, (sectors_write - disk.old_io.at(1)) * 512));
+						disk.old_io.at(1) = sectors_write;
+						if (disk.io_write.size() > (size_t)Term::width * 2) disk.io_write.pop_front();
+					}
+					diskread.close();
+				}
+			}
+			catch (const std::exception& e) {
+				Logger::warning("Error in Mem::collect() : " + (string)e.what());
+				disks_fail = true;
+			}
+		}
+
+		return mem;
 	}
 
 }
@@ -568,6 +806,7 @@ namespace Proc {
 		vector<proc_info> current_procs;
 		unordered_flat_map<size_t, p_cache> cache;
 		unordered_flat_map<string, string> uid_user;
+		fs::file_time_type passwd_time;
 		uint64_t cputimes;
 
 		int counter = 0;
@@ -657,17 +896,17 @@ namespace Proc {
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
-			detailed.skip_smaps = (not Config::getB("proc_info_smaps"));
+			detailed.skip_smaps = not Config::getB("proc_info_smaps");
 		}
 
 		//? Copy proc_info for process from proc vector
-		auto p = rng::find(procs, pid, &proc_info::pid);
-		detailed.entry = *p;
+		auto p_info = rng::find(procs, pid, &proc_info::pid);
+		detailed.entry = *p_info;
 
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
-		while (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
+		if (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
 		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clkTck));
@@ -716,7 +955,7 @@ namespace Proc {
 			redraw = true;
 		}
 
-		while (detailed.mem_bytes.size() > (size_t)Term::width) detailed.mem_bytes.pop_front();
+		if (detailed.mem_bytes.size() > (size_t)Term::width) detailed.mem_bytes.pop_front();
 
 		//? Get bytes read and written from proc/[pid]/io
 		if (fs::exists(pid_path / "io")) {
@@ -768,9 +1007,9 @@ namespace Proc {
 		}
 
 		//? Update uid_user map if /etc/passwd changed since last run
-		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != Shared::passwd_time) {
+		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
 			string r_uid, r_user;
-			Shared::passwd_time = fs::last_write_time(Shared::passwd_path);
+			passwd_time = fs::last_write_time(Shared::passwd_path);
 			uid_user.clear();
 			pread.open(Shared::passwd_path);
 			if (pread.good()) {
@@ -781,6 +1020,9 @@ namespace Proc {
 					uid_user[r_uid] = r_user;
 					pread.ignore(SSmax, '\n');
 				}
+			}
+			else {
+				Shared::passwd_path.clear();
 			}
 			pread.close();
 		}
@@ -842,9 +1084,9 @@ namespace Proc {
 				cache[new_proc.pid] = {name, cmd, user, name_offset};
 			}
 
-			new_proc.name = cache[new_proc.pid].name;
-			new_proc.cmd = cache[new_proc.pid].cmd;
-			new_proc.user = cache[new_proc.pid].user;
+			new_proc.name = cache.at(new_proc.pid).name;
+			new_proc.cmd = cache.at(new_proc.pid).cmd;
+			new_proc.user = cache.at(new_proc.pid).user;
 
 			//* Parse /proc/[pid]/stat
 			pread.open(d.path() / "stat");
@@ -856,16 +1098,17 @@ namespace Proc {
 			size_t x = 0, next_x = 3;
 			uint64_t cpu_t = 0;
 			try {
-				while (pread.good()) {
+				for (;;) {
 					while (pread.good() and ++x - offset < next_x) {
 						pread.ignore(SSmax, ' ');
 					}
+					if (pread.bad()) goto stat_loop_done;
 
 					getline(pread, short_str, ' ');
 
 					switch (x-offset) {
 						case 3: { //? Process state
-							new_proc.state = short_str[0];
+							new_proc.state = short_str.at(0);
 							continue;
 						}
 						case 4: { //? Parent pid
@@ -888,16 +1131,16 @@ namespace Proc {
 						}
 						case 20: { //? Number of threads
 							new_proc.threads = stoull(short_str);
-							if (cache[new_proc.pid].cpu_s == 0) {
+							if (cache.at(new_proc.pid).cpu_s == 0) {
 								next_x = 22;
-								cache[new_proc.pid].cpu_t = cpu_t;
+								cache.at(new_proc.pid).cpu_t = cpu_t;
 							}
 							else
 								next_x = 24;
 							continue;
 						}
 						case 22: { //? Save cpu seconds to cache if missing
-							cache[new_proc.pid].cpu_s = stoull(short_str);
+							cache.at(new_proc.pid).cpu_s = stoull(short_str);
 							next_x = 24;
 							continue;
 						}
@@ -923,13 +1166,13 @@ namespace Proc {
 			if (x-offset < 24) continue;
 
 			//? Process cpu usage since last update
-			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache[new_proc.pid].cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
+			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache.at(new_proc.pid).cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
 
 			//? Process cumulative cpu usage since process start
-			new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache[new_proc.pid].cpu_s);
+			new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache.at(new_proc.pid).cpu_s);
 
 			//? Update cache with latest cpu times
-			cache[new_proc.pid].cpu_t = cpu_t;
+			cache.at(new_proc.pid).cpu_t = cpu_t;
 
 			if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 				got_detailed = true;
@@ -994,13 +1237,13 @@ namespace Proc {
 		if (not tree and not reverse and sorting == "cpu lazy") {
 			double max = 10.0, target = 30.0;
 			for (size_t i = 0, x = 0, offset = 0; i < procs.size(); i++) {
-				if (i <= 5 and procs[i].cpu_p > max)
-					max = procs[i].cpu_p;
+				if (i <= 5 and procs.at(i).cpu_p > max)
+					max = procs.at(i).cpu_p;
 				else if (i == 6)
 					target = (max > 30.0) ? max : 10.0;
-				if (i == offset and procs[i].cpu_p > 30.0)
+				if (i == offset and procs.at(i).cpu_p > 30.0)
 					offset++;
-				else if (procs[i].cpu_p > target) {
+				else if (procs.at(i).cpu_p > target) {
 					rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
 					if (++x > 10) break;
 				}
@@ -1039,6 +1282,16 @@ namespace Proc {
 		numpids = (int)procs.size();
 
 		return procs;
+	}
+}
+
+namespace Tools {
+	double system_uptime() {
+		string upstr;
+		ifstream pread(Shared::procPath / "uptime");
+		getline(pread, upstr, ' ');
+		pread.close();
+		return stod(upstr);
 	}
 }
 

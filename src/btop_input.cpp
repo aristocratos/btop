@@ -81,8 +81,8 @@ namespace Input {
 	bool poll(int timeout) {
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
+			if (interrupt) return interrupt = false;
 			if (cin.rdbuf()->in_avail() > 0) return true;
-			if (interrupt) { interrupt = false; return false; }
 			sleep_ms(timeout < 10 ? timeout : 10);
 			timeout -= 10;
 		}
@@ -370,6 +370,22 @@ namespace Input {
 
 				if (not keep_going) {
 					Runner::run("cpu", no_update, redraw);
+					return;
+				}
+			}
+
+			//? Input actions for mem box
+			if (Mem::shown) {
+				bool keep_going = false;
+				bool no_update = true;
+				bool redraw = true;
+
+				if (key == "i") {
+					Config::flip("io_mode");
+				}
+
+				if (not keep_going) {
+					Runner::run("mem", no_update, redraw);
 					return;
 				}
 			}

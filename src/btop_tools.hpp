@@ -139,6 +139,12 @@ namespace Tools {
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
 	string luresize(const string str, const size_t len, const bool wide=false);
 
+	//* Capatilize <str>
+	inline string capitalize(string str) {
+		str.at(0) = toupper(str.at(0));
+		return str;
+	}
+
 	//* Return <str> with only uppercase characters
 	inline string str_to_upper(string str) {
 		std::ranges::for_each(str, [](auto& c) { c = ::toupper(c); } );
@@ -171,7 +177,7 @@ namespace Tools {
 
 	//* Compare <first> with all following values
 	template<typename First, typename ... T>
-	bool is_in(First &&first, T && ... t) {
+	inline bool is_in(const First& first, const T& ... t) {
 		return ((first == t) || ...);
 	}
 

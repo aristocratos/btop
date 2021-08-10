@@ -73,7 +73,7 @@ namespace Term {
 
 	bool refresh() {
 		struct winsize w;
-		ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) return false;
 		if (width != w.ws_col or height != w.ws_row) {
 			width = w.ws_col;
 			height = w.ws_row;
