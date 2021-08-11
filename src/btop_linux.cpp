@@ -1000,214 +1000,216 @@ namespace Proc {
 		procs.reserve(current_procs.size() + 10);
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
+
+		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not cache.empty()) {
 			procs = current_procs;
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), procs);
-			goto proc_no_update;
 		}
-
-		//? Update uid_user map if /etc/passwd changed since last run
-		if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
-			string r_uid, r_user;
-			passwd_time = fs::last_write_time(Shared::passwd_path);
-			uid_user.clear();
-			pread.open(Shared::passwd_path);
-			if (pread.good()) {
-				while (not pread.eof()) {
-					getline(pread, r_user, ':');
-					pread.ignore(SSmax, ':');
-					getline(pread, r_uid, ':');
-					uid_user[r_uid] = r_user;
-					pread.ignore(SSmax, '\n');
-				}
-			}
-			else {
-				Shared::passwd_path.clear();
-			}
-			pread.close();
-		}
-
-		//* Get cpu total times from /proc/stat
-		cputimes = 0;
-		pread.open(Shared::procPath / "stat");
-		if (pread.good()) {
-			pread.ignore(SSmax, ' ');
-			for (uint64_t times; pread >> times; cputimes += times);
-			pread.close();
-		}
-		else throw std::runtime_error("Failure to read /proc/stat");
-
-		//* Iterate over all pids in /proc
-		for (const auto& d: fs::directory_iterator(Shared::procPath)) {
-			if (Runner::stopping)
-				return procs;
-			if (pread.is_open()) pread.close();
-
-			const string pid_str = d.path().filename();
-			if (not isdigit(pid_str[0])) continue;
-
-			proc_info new_proc (stoul(pid_str));
-
-			//* Cache program name, command and username
-			if (not cache.contains(new_proc.pid)) {
-				string name, cmd, user;
-				pread.open(d.path() / "comm");
-				if (not pread.good()) continue;
-				getline(pread, name);
-				pread.close();
-				size_t name_offset = rng::count(name, ' ');
-
-				pread.open(d.path() / "cmdline");
-				if (not pread.good()) continue;
-				long_string.clear();
-				while(getline(pread, long_string, '\0')) cmd += long_string + ' ';
-				pread.close();
-				if (not cmd.empty()) cmd.pop_back();
-
-				pread.open(d.path() / "status");
-				if (not pread.good()) continue;
-				string uid;
-				string line;
-				while (not pread.eof()) {
-					getline(pread, line, ':');
-					if (line == "Uid") {
-						pread.ignore();
-						getline(pread, uid, '\t');
-						break;
-					} else {
+		//* ---------------------------------------------Collection start----------------------------------------------
+		else {
+			//? Update uid_user map if /etc/passwd changed since last run
+			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
+				string r_uid, r_user;
+				passwd_time = fs::last_write_time(Shared::passwd_path);
+				uid_user.clear();
+				pread.open(Shared::passwd_path);
+				if (pread.good()) {
+					while (not pread.eof()) {
+						getline(pread, r_user, ':');
+						pread.ignore(SSmax, ':');
+						getline(pread, r_uid, ':');
+						uid_user[r_uid] = r_user;
 						pread.ignore(SSmax, '\n');
 					}
 				}
+				else {
+					Shared::passwd_path.clear();
+				}
 				pread.close();
-				user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
-
-				cache[new_proc.pid] = {name, cmd, user, name_offset};
 			}
 
-			new_proc.name = cache.at(new_proc.pid).name;
-			new_proc.cmd = cache.at(new_proc.pid).cmd;
-			new_proc.user = cache.at(new_proc.pid).user;
+			//? Get cpu total times from /proc/stat
+			cputimes = 0;
+			pread.open(Shared::procPath / "stat");
+			if (pread.good()) {
+				pread.ignore(SSmax, ' ');
+				for (uint64_t times; pread >> times; cputimes += times);
+				pread.close();
+			}
+			else throw std::runtime_error("Failure to read /proc/stat");
 
-			//* Parse /proc/[pid]/stat
-			pread.open(d.path() / "stat");
-			if (not pread.good()) continue;
+			//? Iterate over all pids in /proc
+			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
+				if (Runner::stopping)
+					return procs;
+				if (pread.is_open()) pread.close();
 
-			//? Check cached value for whitespace characters in name and set offset to get correct fields from stat file
-			size_t& offset = cache.at(new_proc.pid).name_offset;
-			short_str.clear();
-			size_t x = 0, next_x = 3;
-			uint64_t cpu_t = 0;
-			try {
-				for (;;) {
-					while (pread.good() and ++x - offset < next_x) {
-						pread.ignore(SSmax, ' ');
-					}
-					if (pread.bad()) goto stat_loop_done;
+				const string pid_str = d.path().filename();
+				if (not isdigit(pid_str[0])) continue;
 
-					getline(pread, short_str, ' ');
+				proc_info new_proc (stoul(pid_str));
 
-					switch (x-offset) {
-						case 3: { //? Process state
-							new_proc.state = short_str.at(0);
-							continue;
-						}
-						case 4: { //? Parent pid
-							new_proc.ppid = stoull(short_str);
-							next_x = 14;
-							continue;
-						}
-						case 14: { //? Process utime
-							cpu_t = stoull(short_str);
-							continue;
-						}
-						case 15: { //? Process stime
-							cpu_t += stoull(short_str);
-							next_x = 19;
-							continue;
-						}
-						case 19: { //? Nice value
-							new_proc.p_nice = stoull(short_str);
-							continue;
-						}
-						case 20: { //? Number of threads
-							new_proc.threads = stoull(short_str);
-							if (cache.at(new_proc.pid).cpu_s == 0) {
-								next_x = 22;
-								cache.at(new_proc.pid).cpu_t = cpu_t;
-							}
-							else
-								next_x = 24;
-							continue;
-						}
-						case 22: { //? Save cpu seconds to cache if missing
-							cache.at(new_proc.pid).cpu_s = stoull(short_str);
-							next_x = 24;
-							continue;
-						}
-						case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-							new_proc.mem = stoull(short_str) * Shared::pageSize;
-							next_x = 39;
-							continue;
-						}
-						case 39: { //? CPU number last executed on
-							new_proc.cpu_n = stoull(short_str);
-							goto stat_loop_done;
+				//? Cache program name, command and username
+				if (not cache.contains(new_proc.pid)) {
+					string name, cmd, user;
+					pread.open(d.path() / "comm");
+					if (not pread.good()) continue;
+					getline(pread, name);
+					pread.close();
+					size_t name_offset = rng::count(name, ' ');
+
+					pread.open(d.path() / "cmdline");
+					if (not pread.good()) continue;
+					long_string.clear();
+					while(getline(pread, long_string, '\0')) cmd += long_string + ' ';
+					pread.close();
+					if (not cmd.empty()) cmd.pop_back();
+
+					pread.open(d.path() / "status");
+					if (not pread.good()) continue;
+					string uid;
+					string line;
+					while (not pread.eof()) {
+						getline(pread, line, ':');
+						if (line == "Uid") {
+							pread.ignore();
+							getline(pread, uid, '\t');
+							break;
+						} else {
+							pread.ignore(SSmax, '\n');
 						}
 					}
+					pread.close();
+					user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+
+					cache[new_proc.pid] = {name, cmd, user, name_offset};
 				}
 
+				new_proc.name = cache.at(new_proc.pid).name;
+				new_proc.cmd = cache.at(new_proc.pid).cmd;
+				new_proc.user = cache.at(new_proc.pid).user;
+
+				//? Parse /proc/[pid]/stat
+				pread.open(d.path() / "stat");
+				if (not pread.good()) continue;
+
+				//? Check cached value for whitespace characters in name and set offset to get correct fields from stat file
+				size_t& offset = cache.at(new_proc.pid).name_offset;
+				short_str.clear();
+				size_t x = 0, next_x = 3;
+				uint64_t cpu_t = 0;
+				try {
+					for (;;) {
+						while (pread.good() and ++x - offset < next_x) {
+							pread.ignore(SSmax, ' ');
+						}
+						if (pread.bad()) goto stat_loop_done;
+
+						getline(pread, short_str, ' ');
+
+						switch (x-offset) {
+							case 3: { //? Process state
+								new_proc.state = short_str.at(0);
+								continue;
+							}
+							case 4: { //? Parent pid
+								new_proc.ppid = stoull(short_str);
+								next_x = 14;
+								continue;
+							}
+							case 14: { //? Process utime
+								cpu_t = stoull(short_str);
+								continue;
+							}
+							case 15: { //? Process stime
+								cpu_t += stoull(short_str);
+								next_x = 19;
+								continue;
+							}
+							case 19: { //? Nice value
+								new_proc.p_nice = stoull(short_str);
+								continue;
+							}
+							case 20: { //? Number of threads
+								new_proc.threads = stoull(short_str);
+								if (cache.at(new_proc.pid).cpu_s == 0) {
+									next_x = 22;
+									cache.at(new_proc.pid).cpu_t = cpu_t;
+								}
+								else
+									next_x = 24;
+								continue;
+							}
+							case 22: { //? Save cpu seconds to cache if missing
+								cache.at(new_proc.pid).cpu_s = stoull(short_str);
+								next_x = 24;
+								continue;
+							}
+							case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
+								new_proc.mem = stoull(short_str) * Shared::pageSize;
+								next_x = 39;
+								continue;
+							}
+							case 39: { //? CPU number last executed on
+								new_proc.cpu_n = stoull(short_str);
+								goto stat_loop_done;
+							}
+						}
+					}
+
+				}
+				catch (const std::invalid_argument&) { continue; }
+				catch (const std::out_of_range&) { continue; }
+
+				stat_loop_done:
+				pread.close();
+
+				if (x-offset < 24) continue;
+
+				//? Process cpu usage since last update
+				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache.at(new_proc.pid).cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
+
+				//? Process cumulative cpu usage since process start
+				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache.at(new_proc.pid).cpu_s);
+
+				//? Update cache with latest cpu times
+				cache.at(new_proc.pid).cpu_t = cpu_t;
+
+				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
+					got_detailed = true;
+				}
+
+				//? Push process to vector
+				procs.push_back(new_proc);
+
 			}
-			catch (const std::invalid_argument&) { continue; }
-			catch (const std::out_of_range&) { continue; }
 
-			stat_loop_done:
-			pread.close();
-
-			if (x-offset < 24) continue;
-
-			//? Process cpu usage since last update
-			new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache.at(new_proc.pid).cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
-
-			//? Process cumulative cpu usage since process start
-			new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache.at(new_proc.pid).cpu_s);
-
-			//? Update cache with latest cpu times
-			cache.at(new_proc.pid).cpu_t = cpu_t;
-
-			if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
-				got_detailed = true;
+			//? Clear dead processes from cache at a regular interval
+			if (++counter >= 1000 or (cache.size() > procs.size() + 100)) {
+				counter = 0;
+				unordered_flat_map<size_t, p_cache> r_cache;
+				r_cache.reserve(procs.size());
+				rng::for_each(procs, [&r_cache](const auto &p) {
+					if (cache.contains(p.pid))
+						r_cache[p.pid] = cache.at(p.pid);
+				});
+				cache = std::move(r_cache);
 			}
 
-			//? Push process to vector
-			procs.push_back(new_proc);
+			//? Update the details info box for process if active
+			if (show_detailed and got_detailed) {
+				_collect_details(detailed_pid, round(uptime), procs);
+			}
+			else if (show_detailed and not got_detailed and detailed.status != "Dead") {
+				detailed.status = "Dead";
+				redraw = true;
+			}
 
+			old_cputimes = cputimes;
+			current_procs = procs;
 		}
-
-		//* Clear dead processes from cache at a regular interval
-		if (++counter >= 1000 or (cache.size() > procs.size() + 100)) {
-			counter = 0;
-			unordered_flat_map<size_t, p_cache> r_cache;
-			r_cache.reserve(procs.size());
-			rng::for_each(procs, [&r_cache](const auto &p) {
-				if (cache.contains(p.pid))
-					r_cache[p.pid] = cache.at(p.pid);
-			});
-			cache = std::move(r_cache);
-		}
-
-		//* Update the details info box for process if active
-		if (show_detailed and got_detailed) {
-			_collect_details(detailed_pid, round(uptime), procs);
-		}
-		else if (show_detailed and not got_detailed and detailed.status != "Dead") {
-			detailed.status = "Dead";
-			redraw = true;
-		}
-
-		old_cputimes = cputimes;
-		current_procs = procs;
-
-		proc_no_update:
+		//* ---------------------------------------------Collection done-----------------------------------------------
 
 		//* Match filter if defined
 		if (not tree and not filter.empty()) {

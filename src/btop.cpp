@@ -347,10 +347,10 @@ namespace Runner {
 
 		//* Start collection functions for all boxes in async threads and draw in this thread when finished
 		//? Starting order below based on mean time to finish
-		while (box_mask.count() > 0) {
-			if (stopping) break;
-			try {
-				//* PROC
+		try {
+			while (box_mask.count() > 0) {
+				if (stopping) break;
+				//? PROC
 				if (box_mask.test(proc_present)) {
 					if (not box_mask.test(proc_running)) {
 						proc = async(Proc::collect, conf->no_update);
@@ -367,9 +367,10 @@ namespace Runner {
 							throw std::runtime_error("Proc:: -> " + (string)e.what());
 						}
 						box_mask ^= proc_done;
+						continue;
 					}
 				}
-				//* MEM
+				//? MEM
 				if (box_mask.test(mem_present)) {
 					if (not box_mask.test(mem_running)) {
 						mem = async(Mem::collect, conf->no_update);
@@ -386,9 +387,10 @@ namespace Runner {
 							throw std::runtime_error("Mem:: -> " + (string)e.what());
 						}
 						box_mask ^= mem_done;
+						continue;
 					}
 				}
-				//* NET
+				//? NET
 				if (box_mask.test(net_present)) {
 					if (not box_mask.test(net_running)) {
 						net = async(Net::collect, conf->no_update);
@@ -405,9 +407,10 @@ namespace Runner {
 							throw std::runtime_error("Net:: -> " + (string)e.what());
 						}
 						box_mask ^= net_done;
+						continue;
 					}
 				}
-				//* CPU
+				//? CPU
 				if (box_mask.test(cpu_present)) {
 					if (not box_mask.test(cpu_running)) {
 						cpu = async(Cpu::collect, conf->no_update);
@@ -424,16 +427,17 @@ namespace Runner {
 							throw std::runtime_error("Cpu:: -> " + (string)e.what());
 						}
 						box_mask ^= cpu_done;
+						continue;
 					}
 				}
+				sleep_micros(100);
 			}
-			catch (const std::exception& e) {
-				Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
-				Global::thread_exception = true;
-				Input::interrupt = true;
-				stopping = true;
-				break;
-			}
+		}
+		catch (const std::exception& e) {
+			Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
+			Global::thread_exception = true;
+			Input::interrupt = true;
+			stopping = true;
 		}
 
 		if (stopping) {

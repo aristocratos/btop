@@ -229,6 +229,9 @@ namespace Tools {
 	//* Put current thread to sleep for <ms> milliseconds
 	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
+	//* Put current thread to sleep for <micros> microseconds
+	inline void sleep_micros(const size_t& micros) { std::this_thread::sleep_for(std::chrono::microseconds(micros)); }
+
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string ljust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
 

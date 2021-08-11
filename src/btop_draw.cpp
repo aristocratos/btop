@@ -962,8 +962,9 @@ namespace Proc {
 				if (item_fit >= 4) out += cjust("IO/W:", item_width);
 				if (item_fit >= 5) out += cjust("Parent:", item_width);
 				if (item_fit >= 6) out += cjust("User:", item_width);
-				if (item_fit >= 7) out += cjust("Nice:", item_width);
-				if (item_fit >= 8) out += cjust("Threads:", item_width);
+				if (item_fit >= 7) out += cjust("Threads:", item_width);
+				if (item_fit >= 8) out += cjust("Nice:", item_width);
+
 
 				//? Command line
 				for (int i = 0; const auto& l : {'C', 'M', 'D'})
@@ -1084,8 +1085,9 @@ namespace Proc {
 			if (item_fit >= 4) out += cjust(detailed.io_write, item_width);
 			if (item_fit >= 5) out += cjust(detailed.parent, item_width, true);
 			if (item_fit >= 6) out += cjust(detailed.entry.user, item_width, true);
-			if (item_fit >= 7) out += cjust(to_string(detailed.entry.p_nice), item_width);
-			if (item_fit >= 8) out += cjust(to_string(detailed.entry.threads), item_width);
+			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
+			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
+
 
 			const double mem_p = (double)detailed.mem_bytes.back() * 100 / Shared::totalMem;
 			string mem_str = to_string(mem_p);
