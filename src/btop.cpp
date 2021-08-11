@@ -20,6 +20,7 @@ tab-size = 4
 #include <pthread.h>
 #include <thread>
 #include <future>
+#include <bitset>
 #include <numeric>
 #include <ranges>
 #include <unistd.h>
@@ -53,7 +54,7 @@ tab-size = 4
 #endif
 
 using std::string, std::string_view, std::vector, std::array, std::atomic, std::endl, std::cout, std::min;
-using std::flush, std::endl, std::string_literals::operator""s, std::to_string;
+using std::flush, std::endl, std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -276,6 +277,20 @@ namespace Runner {
 	string clock;
 	sigset_t mask;
 	pthread_mutex_t mtx;
+	const auto zero_sec = std::chrono::seconds(0);
+
+	const unordered_flat_map<string, uint_fast8_t> box_bits = {
+		{"proc",	0b0000'0001},
+		{"mem",		0b0000'0100},
+		{"net",		0b0001'0000},
+		{"cpu",		0b0100'0000},
+	};
+
+	const uint_fast8_t proc_done 	= 0b0000'0011;
+	const uint_fast8_t mem_done 	= 0b0000'1100;
+	const uint_fast8_t net_done 	= 0b0011'0000;
+	const uint_fast8_t cpu_done 	= 0b1100'0000;
+
 
 	struct runner_conf {
 		vector<string> boxes;
@@ -285,43 +300,130 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
-	//? -------------------------------------- Single instance secondary thread ---------------------------------------
+	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
 	void * _runner(void * _) {
 		(void) _;
+
+		//? Block all signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
-		int ret = pthread_mutex_lock(&mtx);
-		if (active or stopping or ret != 0 or Global::resized) {
-			if (ret == 0) pthread_mutex_unlock(&mtx);
+
+		//? pthread_mutex_lock to make sure this thread is a single instance thread
+		thread_lock pt_lck(mtx);
+		if (pt_lck.status != 0) {
+			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
+			Global::thread_exception = true;
+			Input::interrupt = true;
+			stopping = true;
+		}
+
+		if (active or stopping or Global::resized) {
 			pthread_exit(NULL);
 		}
-		atomic_lock lck(active);
-		auto timestamp = time_micros();
-		string output;
-		output.reserve(Term::height * Term::width);
-		const auto conf = current_conf;
 
+		//? Secondary atomic lock used for signaling status to main thread
+		atomic_lock lck(active);
+
+		//! DEBUG stats
+		auto timestamp = time_micros();
+
+		output.clear();
+		const auto& conf = current_conf;
+
+		//? Setup bitmask for selected boxes instead of parsing strings in the loop
+		bitset<8> box_mask;
 		for (const auto& box : conf.boxes) {
+			box_mask |= box_bits.at(box);
+		}
+
+		future<Cpu::cpu_info> cpu;
+		future<Mem::mem_info> mem;
+		future<Net::net_info> net;
+		future<vector<Proc::proc_info>> proc;
+
+		//* Start collection functions for all boxes in async threads and draw in this thread when finished
+		//? Starting order below based on mean time to finish
+		while (box_mask.count() > 0) {
 			if (stopping) break;
 			try {
-				if (box == "cpu") {
-					output += Cpu::draw(Cpu::collect(conf.no_update), conf.force_redraw, conf.no_update);
+				//* PROC
+				if (box_mask.test(0)) {
+					if (not box_mask.test(1)) {
+						proc = async(Proc::collect, conf.no_update);
+						box_mask.set(1);
+					}
+					else if (not proc.valid())
+						throw std::runtime_error("Proc::collect() future not valid.");
+
+					else if (proc.wait_for(zero_sec) == future_status::ready) {
+						try {
+							output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
+						}
+						catch (const std::exception& e) {
+							throw std::runtime_error("Proc:: -> " + (string)e.what());
+						}
+						box_mask ^= proc_done;
+					}
 				}
-				else if (box == "mem") {
-					output += Mem::draw(Mem::collect(conf.no_update), conf.force_redraw, conf.no_update);
+				//* MEM
+				if (box_mask.test(2)) {
+					if (not box_mask.test(3)) {
+						mem = async(Mem::collect, conf.no_update);
+						box_mask.set(3);
+					}
+					else if (not mem.valid())
+						throw std::runtime_error("Mem::collect() future not valid.");
+
+					else if (mem.wait_for(zero_sec) == future_status::ready) {
+						try {
+							output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
+						}
+						catch (const std::exception& e) {
+							throw std::runtime_error("Mem:: -> " + (string)e.what());
+						}
+						box_mask ^= mem_done;
+					}
 				}
-				else if (box == "net") {
-					output += Net::draw(Net::collect(conf.no_update), conf.force_redraw, conf.no_update);
+				//* NET
+				if (box_mask.test(4)) {
+					if (not box_mask.test(5)) {
+						net = async(Net::collect, conf.no_update);
+						box_mask.set(5);
+					}
+					else if (not net.valid())
+						throw std::runtime_error("Net::collect() future not valid.");
+
+					else if (net.wait_for(zero_sec) == future_status::ready) {
+						try {
+							output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
+						}
+						catch (const std::exception& e) {
+							throw std::runtime_error("Net:: -> " + (string)e.what());
+						}
+						box_mask ^= net_done;
+					}
 				}
-				else if (box == "proc") {
-					output += Proc::draw(Proc::collect(conf.no_update), conf.force_redraw, conf.no_update);
+				//* CPU
+				if (box_mask.test(6)) {
+					if (not box_mask.test(7)) {
+						cpu = async(Cpu::collect, conf.no_update);
+						box_mask.set(7);
+					}
+					else if (not cpu.valid())
+						throw std::runtime_error("Cpu::collect() future not valid.");
+
+					else if (cpu.wait_for(zero_sec) == future_status::ready) {
+						try {
+							output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
+						}
+						catch (const std::exception& e) {
+							throw std::runtime_error("Cpu:: -> " + (string)e.what());
+						}
+						box_mask ^= cpu_done;
+					}
 				}
 			}
 			catch (const std::exception& e) {
-				string fname = box;
-				fname[0] = toupper(fname[0]);
-				Global::exit_error_msg = "Exception in runner thread -> "
-					+ fname + "::draw(" + fname + "::collect(no_update=" + (conf.no_update ? "true" : "false")
-					+ "), force_redraw=" + (conf.force_redraw ? "true" : "false") + ") : " + (string)e.what();
+				Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -330,12 +432,7 @@ namespace Runner {
 		}
 
 		if (stopping) {
-			pthread_mutex_unlock(&mtx);
 			pthread_exit(NULL);
-		}
-
-		if (conf.boxes.empty()) {
-			output = Term::clear + Mv::to(10, 10) + "No boxes shown!";
 		}
 
 		//? If overlay isn't empty, print output without color or effects and then print overlay on top
@@ -344,7 +441,6 @@ namespace Runner {
 		//! DEBUG stats -->
 		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
 
-		pthread_mutex_unlock(&mtx);
 		pthread_exit(NULL);
 	}
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
@@ -361,6 +457,9 @@ namespace Runner {
 		else if (box == "clock") {
 			if (not Global::clock.empty())
 				cout << Term::sync_start << Global::clock << Term::sync_end;
+		}
+		else if (box.empty() and Config::current_boxes.empty()) {
+			cout << Term::sync_start << Term::clear + Mv::to(10, 10) << "No boxes shown!" << Term::sync_end;
 		}
 		else {
 			Config::unlock();

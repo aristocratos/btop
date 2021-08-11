@@ -294,6 +294,16 @@ namespace Tools {
 		atomic_notify(this->atom);
 	}
 
+	thread_lock::thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
+		status = pthread_mutex_lock(&pt_mutex);
+	}
+
+	thread_lock::~thread_lock() {
+		if (status == 0) {
+			pthread_mutex_unlock(&pt_mutex);
+		}
+	}
+
 	string readfile(const std::filesystem::path& path, const string& fallback) {
 		if (not fs::exists(path)) return fallback;
 		string out;

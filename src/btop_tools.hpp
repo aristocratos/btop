@@ -27,7 +27,7 @@ tab-size = 4
 #include <chrono>
 #include <thread>
 #include <tuple>
-
+#include <pthread.h>
 
 using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple;
 
@@ -270,6 +270,15 @@ namespace Tools {
 	public:
 		atomic_lock(atomic<bool>& atom);
 		~atomic_lock();
+	};
+
+	//* RAII wrapper for pthread_mutex_lock & unlock
+	class thread_lock {
+		pthread_mutex_t& pt_mutex;
+	public:
+		int status;
+		thread_lock(pthread_mutex_t& mtx);
+		~thread_lock();
 	};
 
 	//* Read a complete file and return as a string
