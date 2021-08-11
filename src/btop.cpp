@@ -273,11 +273,8 @@ namespace Runner {
 	atomic<bool> waiting (false);
 
 	string output;
-	string overlay;
-	string clock;
 	sigset_t mask;
 	pthread_mutex_t mtx;
-	const auto zero_sec = std::chrono::seconds(0);
 
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
@@ -286,23 +283,32 @@ namespace Runner {
 		{"cpu",		0b0100'0000},
 	};
 
+	enum bit_pos {
+		proc_present, proc_running,
+		mem_present, mem_running,
+		net_present, net_running,
+		cpu_present, cpu_running
+	};
+
 	const uint_fast8_t proc_done 	= 0b0000'0011;
 	const uint_fast8_t mem_done 	= 0b0000'1100;
 	const uint_fast8_t net_done 	= 0b0011'0000;
 	const uint_fast8_t cpu_done 	= 0b1100'0000;
 
-
 	struct runner_conf {
 		vector<string> boxes;
 		bool no_update = false;
 		bool force_redraw = false;
+		string overlay = "";
+		string clock = "";
 	};
 
 	struct runner_conf current_conf;
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-	void * _runner(void * _) {
-		(void) _;
+	void * _runner(void * confptr) {
+		struct runner_conf *conf;
+		conf = (struct runner_conf *) confptr;
 
 		//? Block all signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
@@ -327,11 +333,10 @@ namespace Runner {
 		auto timestamp = time_micros();
 
 		output.clear();
-		const auto& conf = current_conf;
 
 		//? Setup bitmask for selected boxes instead of parsing strings in the loop
 		bitset<8> box_mask;
-		for (const auto& box : conf.boxes) {
+		for (const auto& box : conf->boxes) {
 			box_mask |= box_bits.at(box);
 		}
 
@@ -346,17 +351,17 @@ namespace Runner {
 			if (stopping) break;
 			try {
 				//* PROC
-				if (box_mask.test(0)) {
-					if (not box_mask.test(1)) {
-						proc = async(Proc::collect, conf.no_update);
-						box_mask.set(1);
+				if (box_mask.test(proc_present)) {
+					if (not box_mask.test(proc_running)) {
+						proc = async(Proc::collect, conf->no_update);
+						box_mask.set(proc_running);
 					}
 					else if (not proc.valid())
 						throw std::runtime_error("Proc::collect() future not valid.");
 
-					else if (proc.wait_for(zero_sec) == future_status::ready) {
+					else if (proc.wait_for(ZeroSec) == future_status::ready) {
 						try {
-							output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
+							output += Proc::draw(proc.get(), conf->force_redraw, conf->no_update);
 						}
 						catch (const std::exception& e) {
 							throw std::runtime_error("Proc:: -> " + (string)e.what());
@@ -365,17 +370,17 @@ namespace Runner {
 					}
 				}
 				//* MEM
-				if (box_mask.test(2)) {
-					if (not box_mask.test(3)) {
-						mem = async(Mem::collect, conf.no_update);
-						box_mask.set(3);
+				if (box_mask.test(mem_present)) {
+					if (not box_mask.test(mem_running)) {
+						mem = async(Mem::collect, conf->no_update);
+						box_mask.set(mem_running);
 					}
 					else if (not mem.valid())
 						throw std::runtime_error("Mem::collect() future not valid.");
 
-					else if (mem.wait_for(zero_sec) == future_status::ready) {
+					else if (mem.wait_for(ZeroSec) == future_status::ready) {
 						try {
-							output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
+							output += Mem::draw(mem.get(), conf->force_redraw, conf->no_update);
 						}
 						catch (const std::exception& e) {
 							throw std::runtime_error("Mem:: -> " + (string)e.what());
@@ -384,17 +389,17 @@ namespace Runner {
 					}
 				}
 				//* NET
-				if (box_mask.test(4)) {
-					if (not box_mask.test(5)) {
-						net = async(Net::collect, conf.no_update);
-						box_mask.set(5);
+				if (box_mask.test(net_present)) {
+					if (not box_mask.test(net_running)) {
+						net = async(Net::collect, conf->no_update);
+						box_mask.set(net_running);
 					}
 					else if (not net.valid())
 						throw std::runtime_error("Net::collect() future not valid.");
 
-					else if (net.wait_for(zero_sec) == future_status::ready) {
+					else if (net.wait_for(ZeroSec) == future_status::ready) {
 						try {
-							output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
+							output += Net::draw(net.get(), conf->force_redraw, conf->no_update);
 						}
 						catch (const std::exception& e) {
 							throw std::runtime_error("Net:: -> " + (string)e.what());
@@ -403,17 +408,17 @@ namespace Runner {
 					}
 				}
 				//* CPU
-				if (box_mask.test(6)) {
-					if (not box_mask.test(7)) {
-						cpu = async(Cpu::collect, conf.no_update);
-						box_mask.set(7);
+				if (box_mask.test(cpu_present)) {
+					if (not box_mask.test(cpu_running)) {
+						cpu = async(Cpu::collect, conf->no_update);
+						box_mask.set(cpu_running);
 					}
 					else if (not cpu.valid())
 						throw std::runtime_error("Cpu::collect() future not valid.");
 
-					else if (cpu.wait_for(zero_sec) == future_status::ready) {
+					else if (cpu.wait_for(ZeroSec) == future_status::ready) {
 						try {
-							output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
+							output += Cpu::draw(cpu.get(), conf->force_redraw, conf->no_update);
 						}
 						catch (const std::exception& e) {
 							throw std::runtime_error("Cpu:: -> " + (string)e.what());
@@ -435,8 +440,11 @@ namespace Runner {
 			pthread_exit(NULL);
 		}
 
-		//? If overlay isn't empty, print output without color or effects and then print overlay on top
-		cout << Term::sync_start << (overlay.empty() ? output + clock : Theme::c("inactive_fg") + Fx::uncolor(output + clock) + overlay) << Term::sync_end << flush;
+		//? If overlay isn't empty, print output without color and then print overlay on top
+		cout << Term::sync_start << (conf->overlay.empty()
+				? output + conf->clock
+				: Theme::c("inactive_fg") + Fx::uncolor(output + conf->clock) + conf->overlay)
+			 << Term::sync_end << flush;
 
 		//! DEBUG stats -->
 		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
@@ -465,20 +473,10 @@ namespace Runner {
 			Config::unlock();
 			Config::lock();
 
-			if (not Global::overlay.empty())
-				overlay = Global::overlay;
-			else if (not overlay.empty())
-				overlay.clear();
-
-			if (not Global::clock.empty())
-				clock = Global::clock;
-			else if (not clock.empty())
-				clock.clear();
-
-			current_conf = {(box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw};
+			current_conf = { (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw, Global::overlay, Global::clock};
 
 			pthread_t runner_id;
-			if (pthread_create(&runner_id, NULL, &_runner, NULL) != 0)
+			if (pthread_create(&runner_id, NULL, &_runner, (void *) &current_conf) != 0)
 				throw std::runtime_error("Failed to create _runner thread!");
 
 			if (pthread_detach(runner_id) != 0)

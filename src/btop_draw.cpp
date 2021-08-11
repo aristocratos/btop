@@ -30,7 +30,7 @@ tab-size = 4
 
 
 using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
-		std::to_string;
+		std::to_string, std::cmp_equal, std::cmp_less, std::cmp_greater, std::cmp_less_equal;
 
 using namespace Tools;
 namespace rng = std::ranges;
@@ -629,7 +629,7 @@ namespace Mem {
 					for (int i = 0; const auto& name : mem.disks_order) {
 						if (i * 2 > height - 2) break;
 						disk_meters_used[name] = Draw::Meter{disk_meter, "used"};
-						if ((int)mem.disks_order.size() * 3 <= height - 1)
+						if (cmp_less_equal(mem.disks_order.size() * 3, height - 1))
 							disk_meters_free[name] = Draw::Meter{disk_meter, "free"};
 					}
 				}
@@ -749,11 +749,11 @@ namespace Mem {
 						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 7));
 					if (++cy > height - 3) break;
 
-					if ((int)disks.size() * 3 + (show_io_stat ? disk_ios : 0) <= height - 1) {
+					if (cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
 						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 7));
 						cy++;
-						if ((int)disks.size() * 4 + (show_io_stat ? disk_ios : 0) <= height - 1) cy++;
+						if (cmp_less_equal(disks.size() * 4 + (show_io_stat ? disk_ios : 0), height - 1)) cy++;
 					}
 
 				}
@@ -872,7 +872,7 @@ namespace Proc {
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		auto& proc_tree = Config::getB("proc_tree");
-		const bool show_detailed = (Config::getB("show_detailed") and Proc::detailed.last_pid == (size_t)Config::getI("detailed_pid"));
+		const bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
 		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
 		auto& proc_colors = Config::getB("proc_colors");
 		auto& tty_mode = Config::getB("tty_mode");
@@ -1199,7 +1199,7 @@ namespace Proc {
 				mem_str += '%';
 			}
 			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, 9999ul)), thread_size) + ' ' + end : "" )
-				+ g_color + ljust(((int)p.user.size() > user_size ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
+				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '

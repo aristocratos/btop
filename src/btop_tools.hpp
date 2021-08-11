@@ -56,7 +56,7 @@ namespace Fx {
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
 
-	//* Regex for matching color, style and curse move escape sequences
+	//* Regex for matching color, style and cursor move escape sequences
 	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
 
 	//* Regex for matching only color and style escape sequences
@@ -125,6 +125,7 @@ namespace Term {
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
+	constexpr auto ZeroSec = std::chrono::seconds(0);
 	extern atomic<int> active_locks;
 
 	//* Return number of UTF8 characters in a string (counts UTF-8 characters with a width > 1 as 2 characters)

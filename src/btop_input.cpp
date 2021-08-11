@@ -225,7 +225,7 @@ namespace Input {
 				}
 				else if (key == "right") {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
-					if (++cur_i > (int)Proc::sort_vector.size() - 1)
+					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}

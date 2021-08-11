@@ -30,8 +30,8 @@ tab-size = 4
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
-using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize,
-		std::round, std::max, std::min, std::clamp, std::string_literals::operator""s;
+using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::round, std::max, std::min,
+		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -325,7 +325,7 @@ namespace Cpu {
 				done.push_back(sensor);
 			}
 			for (const auto& [core, temp] : core_mapping) {
-				if ((size_t)core + 1 < current_cpu.temp.size() and (size_t)temp < core_sensors.size()) {
+				if (cmp_less(core + 1, current_cpu.temp.size()) and cmp_less(temp, core_sensors.size())) {
 					current_cpu.temp.at(core + 1).push_back(found_sensors.at(core_sensors.at(temp)).temp);
 					if (current_cpu.temp.at(core + 1).size() > 20) current_cpu.temp.at(core + 1).pop_front();
 				}
@@ -407,7 +407,7 @@ namespace Cpu {
 		}
 
 		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely map 0-0 1-1 2-2 etc.
-		if (core_map.size() < (size_t)Shared::coreCount) {
+		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
 				for (int i = 0; i < Shared::coreCount / 2; i++)
 					core_map[Shared::coreCount / 2 + i] = i;
@@ -484,7 +484,7 @@ namespace Cpu {
 					cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 					//? Reduce size if there are more values than needed for graph
-					if (cpu.cpu_percent.at("total").size() > (size_t)Term::width * 2) cpu.cpu_percent.at("total").pop_front();
+					if (cmp_greater(cpu.cpu_percent.at("total").size(), Term::width * 2)) cpu.cpu_percent.at("total").pop_front();
 
 					//? Populate cpu.cpu_percent with all fields from stat
 					for (int ii = 0; const auto& val : times) {
@@ -492,7 +492,7 @@ namespace Cpu {
 						cpu_old.at(time_names.at(ii)) = val;
 
 						//? Reduce size if there are more values than needed for graph
-						if (cpu.cpu_percent.at(time_names.at(ii)).size() > (size_t)Term::width * 2) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+						if (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), Term::width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 						if (++ii == 10) break;
 					}
@@ -603,7 +603,7 @@ namespace Mem {
 
 		//? Remove values beyond whats needed for graph creation
 		for (auto& [ignored, deq] : mem.percent) {
-			if (deq.size() > (size_t)Term::width * 2) deq.pop_front();
+			if (cmp_greater(deq.size(), Term::width * 2)) deq.pop_front();
 		}
 
 		//? Get disks stats
@@ -758,7 +758,7 @@ namespace Mem {
 						else
 							disk.io_read.push_back(max(0l, (sectors_read - disk.old_io.at(0)) * 512));
 						disk.old_io.at(0) = sectors_read;
-						if (disk.io_read.size() > (size_t)Term::width * 2) disk.io_read.pop_front();
+						if (cmp_greater(disk.io_read.size(), Term::width * 2)) disk.io_read.pop_front();
 
 						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 						diskread >> sectors_write;
@@ -767,7 +767,7 @@ namespace Mem {
 						else
 							disk.io_write.push_back(max(0l, (sectors_write - disk.old_io.at(1)) * 512));
 						disk.old_io.at(1) = sectors_write;
-						if (disk.io_write.size() > (size_t)Term::width * 2) disk.io_write.pop_front();
+						if (cmp_greater(disk.io_write.size(), Term::width * 2)) disk.io_write.pop_front();
 					}
 					diskread.close();
 				}
@@ -906,7 +906,7 @@ namespace Proc {
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
-		if (detailed.cpu_percent.size() > (size_t)Term::width) detailed.cpu_percent.pop_front();
+		if (cmp_greater(detailed.cpu_percent.size(), Term::width.load())) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
 		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clkTck));
@@ -955,7 +955,7 @@ namespace Proc {
 			redraw = true;
 		}
 
-		if (detailed.mem_bytes.size() > (size_t)Term::width) detailed.mem_bytes.pop_front();
+		if (cmp_greater(detailed.mem_bytes.size(), Term::width.load())) detailed.mem_bytes.pop_front();
 
 		//? Get bytes read and written from proc/[pid]/io
 		if (fs::exists(pid_path / "io")) {
