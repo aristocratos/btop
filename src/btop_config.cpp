@@ -199,7 +199,7 @@ namespace Config {
 		{"proc_tree", false},
 		{"proc_colors", true},
 		{"proc_gradient", true},
-		{"proc_per_core", false},
+		{"proc_per_core", true},
 		{"proc_mem_bytes", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
@@ -299,7 +299,7 @@ namespace Config {
 		}
 		catch (const std::exception& e) {
 			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
-			clean_quit(1);
+			exit(1);
 		}
 
 		locked = false;

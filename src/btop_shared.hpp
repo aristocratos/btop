@@ -28,7 +28,6 @@ tab-size = 4
 
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
 
-void clean_quit(int sig=-1);
 void term_resize(bool force=false);
 void banner_gen();
 
@@ -169,10 +168,31 @@ namespace Proc {
 	extern int selected_pid, start, selected, collapse, expand;
 
 	//? Contains the valid sorting options for processes
-	extern vector<string> sort_vector;
+	const vector<string> sort_vector = {
+		"pid",
+		"name",
+		"command",
+		"threads",
+		"user",
+		"memory",
+		"cpu direct",
+		"cpu lazy",
+	};
 
 	//? Translation from process state char to explanative string
-	extern unordered_flat_map<char, string> proc_states;
+	const unordered_flat_map<char, string> proc_states = {
+		{'R', "Running"},
+		{'S', "Sleeping"},
+		{'D', "Waiting"},
+		{'Z', "Zombie"},
+		{'T', "Stopped"},
+		{'t', "Tracing"},
+		{'X', "Dead"},
+		{'x', "Dead"},
+		{'K', "Wakekill"},
+		{'W', "Unknown"},
+		{'P', "Parked"}
+	};
 
 	//* Container for process information
 	struct proc_info {

@@ -99,8 +99,8 @@ namespace Global {
 //* A simple argument parser
 void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
-		string argument = argv[i];
-		if (argument == "-h" or argument == "--help") {
+		const string argument = argv[i];
+		if (is_in(argument, "-h", "--help")) {
 			cout 	<< "usage: btop [-h] [-v] [-/+t] [--debug]\n\n"
 					<< "optional arguments:\n"
 					<< "  -h, --help            show this help message and exit\n"
@@ -113,18 +113,18 @@ void argumentParser(const int& argc, char **argv) {
 					<< endl;
 			exit(0);
 		}
-		if (argument == "-v" or argument == "--version") {
+		if (is_in(argument, "-v", "--version")) {
 			cout << "btop version: " << Global::Version << endl;
 			exit(0);
 		}
-		else if (argument == "-lc" or argument == "--low-color") {
+		else if (is_in(argument, "-lc", "--low-color")) {
 			Global::arg_low_color = true;
 		}
-		else if (argument == "-t" or argument == "--tty_on") {
+		else if (is_in(argument, "-t", "--tty_on")) {
 			Config::set("tty_mode", true);
 			Global::arg_tty = true;
 		}
-		else if (argument == "+t" or argument == "--tty_off") {
+		else if (is_in(argument, "+t", "--tty_off")) {
 			Config::set("tty_mode", false);
 			Global::arg_tty = true;
 		}
@@ -296,11 +296,11 @@ namespace Runner {
 	const uint_fast8_t cpu_done 	= 0b1100'0000;
 
 	struct runner_conf {
-		vector<string> boxes;
-		bool no_update = false;
-		bool force_redraw = false;
-		string overlay = "";
-		string clock = "";
+		bitset<8> box_mask;
+		bool no_update;
+		bool force_redraw;
+		string overlay;
+		string clock;
 	};
 
 	struct runner_conf current_conf;
@@ -334,12 +334,6 @@ namespace Runner {
 
 		output.clear();
 
-		//? Setup bitmask for selected boxes instead of parsing strings in the loop
-		bitset<8> box_mask;
-		for (const auto& box : conf->boxes) {
-			box_mask |= box_bits.at(box);
-		}
-
 		future<Cpu::cpu_info> cpu;
 		future<Mem::mem_info> mem;
 		future<Net::net_info> net;
@@ -348,33 +342,32 @@ namespace Runner {
 		//* Start collection functions for all boxes in async threads and draw in this thread when finished
 		//? Starting order below based on mean time to finish
 		try {
-			while (box_mask.count() > 0) {
+			while (conf->box_mask.count() > 0) {
 				if (stopping) break;
 				//? PROC
-				if (box_mask.test(proc_present)) {
-					if (not box_mask.test(proc_running)) {
+				if (conf->box_mask.test(proc_present)) {
+					if (not conf->box_mask.test(proc_running)) {
 						proc = async(Proc::collect, conf->no_update);
-						box_mask.set(proc_running);
+						conf->box_mask.set(proc_running);
 					}
 					else if (not proc.valid())
 						throw std::runtime_error("Proc::collect() future not valid.");
 
-					else if (proc.wait_for(ZeroSec) == future_status::ready) {
+					else if (proc.wait_for(std::chrono::microseconds(100)) == future_status::ready) {
 						try {
 							output += Proc::draw(proc.get(), conf->force_redraw, conf->no_update);
 						}
 						catch (const std::exception& e) {
 							throw std::runtime_error("Proc:: -> " + (string)e.what());
 						}
-						box_mask ^= proc_done;
-						continue;
+						conf->box_mask ^= proc_done;
 					}
 				}
 				//? MEM
-				if (box_mask.test(mem_present)) {
-					if (not box_mask.test(mem_running)) {
+				if (conf->box_mask.test(mem_present)) {
+					if (not conf->box_mask.test(mem_running)) {
 						mem = async(Mem::collect, conf->no_update);
-						box_mask.set(mem_running);
+						conf->box_mask.set(mem_running);
 					}
 					else if (not mem.valid())
 						throw std::runtime_error("Mem::collect() future not valid.");
@@ -386,15 +379,14 @@ namespace Runner {
 						catch (const std::exception& e) {
 							throw std::runtime_error("Mem:: -> " + (string)e.what());
 						}
-						box_mask ^= mem_done;
-						continue;
+						conf->box_mask ^= mem_done;
 					}
 				}
 				//? NET
-				if (box_mask.test(net_present)) {
-					if (not box_mask.test(net_running)) {
+				if (conf->box_mask.test(net_present)) {
+					if (not conf->box_mask.test(net_running)) {
 						net = async(Net::collect, conf->no_update);
-						box_mask.set(net_running);
+						conf->box_mask.set(net_running);
 					}
 					else if (not net.valid())
 						throw std::runtime_error("Net::collect() future not valid.");
@@ -406,15 +398,14 @@ namespace Runner {
 						catch (const std::exception& e) {
 							throw std::runtime_error("Net:: -> " + (string)e.what());
 						}
-						box_mask ^= net_done;
-						continue;
+						conf->box_mask ^= net_done;
 					}
 				}
 				//? CPU
-				if (box_mask.test(cpu_present)) {
-					if (not box_mask.test(cpu_running)) {
+				if (conf->box_mask.test(cpu_present)) {
+					if (not conf->box_mask.test(cpu_running)) {
 						cpu = async(Cpu::collect, conf->no_update);
-						box_mask.set(cpu_running);
+						conf->box_mask.set(cpu_running);
 					}
 					else if (not cpu.valid())
 						throw std::runtime_error("Cpu::collect() future not valid.");
@@ -426,11 +417,9 @@ namespace Runner {
 						catch (const std::exception& e) {
 							throw std::runtime_error("Cpu:: -> " + (string)e.what());
 						}
-						box_mask ^= cpu_done;
-						continue;
+						conf->box_mask ^= cpu_done;
 					}
 				}
-				sleep_micros(100);
 			}
 		}
 		catch (const std::exception& e) {
@@ -457,7 +446,7 @@ namespace Runner {
 	}
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
-	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values, box="all": all boxes
+	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, const bool no_update, const bool force_redraw) {
 		atomic_lock lck(waiting);
 		atomic_wait(active);
@@ -477,7 +466,13 @@ namespace Runner {
 			Config::unlock();
 			Config::lock();
 
-			current_conf = { (box == "all" ? Config::current_boxes : vector{box}), no_update, force_redraw, Global::overlay, Global::clock};
+			//? Setup bitmask for selected boxes instead of parsing strings
+			bitset<8> box_mask;
+			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
+				box_mask |= box_bits.at(box);
+			}
+
+			current_conf = {box_mask, no_update, force_redraw, Global::overlay, Global::clock};
 
 			pthread_t runner_id;
 			if (pthread_create(&runner_id, NULL, &_runner, (void *) &current_conf) != 0)
@@ -609,7 +604,7 @@ int main(int argc, char **argv) {
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
 		else if (not found) {
 			Global::exit_error_msg = "No UTF-8 locale detected! Use --utf-force argument to start anyway.";
-			clean_quit(1);
+			exit(1);
 		}
 		else
 			Logger::debug("Setting LC_ALL=" + (string)std::setlocale(LC_ALL, NULL));
@@ -618,7 +613,7 @@ int main(int argc, char **argv) {
 	//? Initialize terminal and set options
 	if (not Term::init()) {
 		Global::exit_error_msg = "No tty detected!\nbtop++ needs an interactive shell to run.";
-		clean_quit(1);
+		exit(1);
 	}
 
 	Logger::info("Running on " + Term::current_tty);
@@ -637,7 +632,7 @@ int main(int argc, char **argv) {
 	}
 	catch (const std::exception& e) {
 		Global::exit_error_msg = "Exception in Shared::init() -> " + (string)e.what();
-		clean_quit(1);
+		exit(1);
 	}
 
 	//? Update list of available themes and generate the selected theme
@@ -709,7 +704,7 @@ int main(int argc, char **argv) {
 	}
 	catch (std::exception& e) {
 		Global::exit_error_msg = "Exception in main loop -> " + (string)e.what();
-		clean_quit(1);
+		exit(1);
 	}
 
 }

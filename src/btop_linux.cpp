@@ -814,29 +814,6 @@ namespace Proc {
 	int collapse = -1, expand = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
-	vector<string> sort_vector = {
-		"pid",
-		"name",
-		"command",
-		"threads",
-		"user",
-		"memory",
-		"cpu direct",
-		"cpu lazy",
-	};
-	unordered_flat_map<char, string> proc_states = {
-		{'R', "Running"},
-		{'S', "Sleeping"},
-		{'D', "Waiting"},
-		{'Z', "Zombie"},
-		{'T', "Stopped"},
-		{'t', "Tracing"},
-		{'X', "Dead"},
-		{'x', "Dead"},
-		{'K', "Wakekill"},
-		{'W', "Unknown"},
-		{'P', "Parked"}
-	};
 
 	detail_container detailed;
 
@@ -859,11 +836,13 @@ namespace Proc {
 			}
 		}
 
+		//? Add process to vector if not filtered out or currently in a collapsed sub-tree
 		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
-			if (std::string_view cmd_view = cur_proc.cmd; not cmd_view.empty()) {
-				cmd_view = cmd_view.substr(0, std::min(cmd_view.find(' '), cmd_view.size()));
-				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
+			//? Try to find name of the binary file and append to program name if not the same (replacing cmd string)
+			if (std::string_view cmd_view = cur_proc.cmd; not cmd_view.empty() and not cmd_view.starts_with('(')) {
+				cmd_view = cmd_view.substr(0, min(cmd_view.find(' '), cmd_view.size()));
+				cmd_view = cmd_view.substr(min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
 				if (cmd_view == cur_proc.name)
 					out_procs.back().cmd.clear();
 				else
@@ -871,6 +850,7 @@ namespace Proc {
 			}
 		}
 
+		//? Recursive iteration over all children
 		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
 			if (collapsed and not filtering) {
@@ -883,9 +863,11 @@ namespace Proc {
 		}
 		if (collapsed or filtering) return;
 
+		//? Add tree terminator symbol if it's the last child in a sub-tree
 		if (out_procs.size() > cur_pos + 1 and not out_procs.back().prefix.ends_with("]─"))
 			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
 
+		//? Add collapse/expand symbols if process have any children
 		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+]─" : "[-]─") : " ├─ ");
 	}
 
@@ -1035,9 +1017,9 @@ namespace Proc {
 			if (pread.good()) {
 				pread.ignore(SSmax, ' ');
 				for (uint64_t times; pread >> times; cputimes += times);
-				pread.close();
 			}
 			else throw std::runtime_error("Failure to read /proc/stat");
+			pread.close();
 
 			//? Iterate over all pids in /proc
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
@@ -1095,16 +1077,16 @@ namespace Proc {
 				if (not pread.good()) continue;
 
 				//? Check cached value for whitespace characters in name and set offset to get correct fields from stat file
-				size_t& offset = cache.at(new_proc.pid).name_offset;
+				const auto& offset = cache.at(new_proc.pid).name_offset;
 				short_str.clear();
 				size_t x = 0, next_x = 3;
 				uint64_t cpu_t = 0;
 				try {
 					for (;;) {
-						while (pread.good() and ++x - offset < next_x) {
+						while (pread.good() and ++x < next_x + offset) {
 							pread.ignore(SSmax, ' ');
 						}
-						if (pread.bad()) goto stat_loop_done;
+						if (pread.bad()) break;
 
 						getline(pread, short_str, ' ');
 

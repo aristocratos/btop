@@ -453,11 +453,23 @@ namespace Cpu {
 
 		}
 		try {
-		//? Cpu graphs, cpu clock and cpu meter
+		//? Cpu graphs
 		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(cpu.cpu_percent.at(graph_up_field), (data_same or redraw));
 		if (not single_graph)
 			out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
 
+		//? Uptime
+		if (Config::getB("show_uptime")) {
+			string upstr = sec_to_dhms(system_uptime());
+			if (upstr.size() > 8) {
+				upstr.resize(upstr.size() - 3);
+				upstr = trans(upstr);
+			}
+			out += Mv::to(y + (single_graph or not Config::getB("cpu_invert_lower") ? 1 : height - 2), x + 2)
+				+ Theme::c("graph_text") + "up" + Mv::r(1) + upstr;
+		}
+
+		//? Cpu clock and cpu meter
 		if (Config::getB("show_cpu_freq") and not cpuHz.empty())
 			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * (7 - cpuHz.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
@@ -519,16 +531,7 @@ namespace Cpu {
 			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_pre + lavg;
 		}
 
-		//? Uptime
-		if (Config::getB("show_uptime")) {
-			string upstr = sec_to_dhms(system_uptime());
-			if (upstr.size() > 8) {
-				upstr.resize(upstr.size() - 3);
-				upstr = trans(upstr);
-			}
-			out += Mv::to(y + (single_graph or not Config::getB("cpu_invert_lower") ? 1 : height - 2), x + 2)
-				+ Theme::c("graph_text") + "up" + Mv::r(1) + upstr;
-		}
+
 
 		redraw = false;
 		return out + Fx::reset;

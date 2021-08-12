@@ -178,7 +178,7 @@ namespace Input {
 		if (key.empty()) return;
 		try {
 			auto& filtering = Config::getB("proc_filtering");
-			if (not filtering and key == "q") clean_quit(0);
+			if (not filtering and key == "q") exit(0);
 
 			//? Global input actions
 			if (not filtering) {
