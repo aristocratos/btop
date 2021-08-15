@@ -39,6 +39,7 @@ namespace Config {
 	extern unordered_flat_map<string, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
+	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
 
 	extern vector<string> current_boxes;
 

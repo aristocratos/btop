@@ -32,7 +32,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::string_view, std::array, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
+using std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -80,6 +80,24 @@ namespace Term {
 			return true;
 		}
 		return false;
+	}
+
+	auto get_min_size(const string& boxes) -> array<int, 2> {
+		const bool cpu = boxes.find("cpu") != string::npos;
+		const bool mem = boxes.find("mem") != string::npos;
+		const bool net = boxes.find("net") != string::npos;
+		const bool proc = boxes.find("proc") != string::npos;
+		int width = 0;
+		if (mem) width = Mem::min_width;
+		else if (net) width = Mem::min_width;
+		width += (proc ? Proc::min_width : 0);
+		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
+
+		int height = (cpu ? Cpu::min_height : 0);
+		if (proc) height += Proc::min_height;
+		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
+
+		return { width, height };
 	}
 
 	bool init() {

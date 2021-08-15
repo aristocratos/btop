@@ -68,7 +68,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "0.0.30";
+	const string Version = "0.5.0";
 
 	int coreCount;
 	string banner;
@@ -151,10 +151,12 @@ void term_resize(bool force) {
 	if (rez_state > 1) return;
 	Global::resized = true;
 	Runner::stop();
+	auto min_size = Term::get_min_size(Config::getS("shown_boxes"));
+
 	while (not force) {
 		sleep_ms(100);
 		if (rez_state != Global::resizing) rez_state = --Global::resizing;
-		else if (not Term::refresh()) break;
+		else if (not Term::refresh() and Term::width >= min_size[0] and Term::height >= min_size[1]) break;
 	}
 
 	Input::interrupt = true;
@@ -334,9 +336,9 @@ namespace Runner {
 
 		output.clear();
 
-		future<Cpu::cpu_info> cpu;
-		future<Mem::mem_info> mem;
-		future<Net::net_info> net;
+		future<Cpu::cpu_info&> cpu;
+		future<Mem::mem_info&> mem;
+		future<Net::net_info&> net;
 		future<vector<Proc::proc_info>> proc;
 
 		//* Start collection functions for all boxes in async threads and draw in this thread when finished

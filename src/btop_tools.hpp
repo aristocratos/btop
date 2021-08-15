@@ -20,6 +20,7 @@ tab-size = 4
 
 #include <string>
 #include <vector>
+#include <array>
 #include <regex>
 #include <atomic>
 #include <filesystem>
@@ -29,7 +30,7 @@ tab-size = 4
 #include <tuple>
 #include <pthread.h>
 
-using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple;
+using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple, std::array;
 
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -113,6 +114,9 @@ namespace Term {
 
 	//* Returns true if terminal has been resized and updates width and height
 	bool refresh();
+
+	//* Returns an array with the lowest possible width, height with current box config
+	auto get_min_size(const string& boxes) -> array<int, 2>;
 
 	//* Check for a valid tty, save terminal options and set new options
 	bool init();

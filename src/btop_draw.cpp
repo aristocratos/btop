@@ -376,7 +376,7 @@ namespace Draw {
 
 namespace Cpu {
 	int width_p = 100, height_p = 32;
-	int min_w = 60, min_h = 8;
+	int min_width = 60, min_height = 8;
 	int x = 1, y = 1, width, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
@@ -541,7 +541,7 @@ namespace Cpu {
 
 namespace Mem {
 	int width_p = 45, height_p = 38;
-	int min_w = 36, min_h = 10;
+	int min_width = 36, min_height = 10;
 	int x = 1, y, width, height;
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
 	int disks_io_h = 0;
@@ -695,6 +695,7 @@ namespace Mem {
 			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Symbols::div_right + Mv::l(disks_width - 1);
 			if (io_mode) {
 				for (const auto& mount : mem.disks_order) {
+					if (not disks.contains(mount)) continue;
 					if (cy > height - 3) break;
 					const auto& disk = disks.at(mount);
 					if (disk.io_read.empty()) continue;
@@ -728,6 +729,7 @@ namespace Mem {
 			}
 			else {
 				for (const auto& mount : mem.disks_order) {
+					if (not disks.contains(mount)) continue;
 					if (cy > height - 3) break;
 					const auto& disk = disks.at(mount);
 					auto comb_val = (not disk.io_read.empty() ? disk.io_read.back() + disk.io_write.back() : 0ll);
@@ -749,7 +751,7 @@ namespace Mem {
 					}
 
 					out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Used:" + rjust(to_string(disk.used_percent) + '%', 4) : "U") + ' '
-						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 7));
+						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 5));
 					if (++cy > height - 3) break;
 
 					if (cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
@@ -774,22 +776,92 @@ namespace Mem {
 
 namespace Net {
 	int width_p = 45, height_p = 30;
-	int min_w = 3, min_h = 6;
+	int min_width = 36, min_height = 6;
 	int x = 1, y, width, height;
 	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
-	int graph_height;
 	bool shown = true, redraw = true;
+	string old_ip;
+	unordered_flat_map<string, Draw::Graph> graphs;
 	string box;
 
 	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
-		(void)net;
-		(void)data_same;
-		string out = Mv::to(0, 0);
-		if (redraw or force_redraw) {
-			redraw = false;
-			out += box;
+		if (force_redraw) redraw = true;
+		auto& net_sync = Config::getB("net_sync");
+		auto& net_auto = Config::getB("net_auto");
+		auto& tty_mode = Config::getB("tty_mode");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
+		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
+		// if (ip_addr.ends_with(selected_iface)) ip_addr.resize(ip_addr.size() - selected_iface.size());
+		if (old_ip != ip_addr) {
+			old_ip = ip_addr;
+			redraw = true;
 		}
+		string out;
+		out.reserve(width * height);
+		const string title_left = Theme::c("net_box") + Fx::ub + Symbols::title_left;
+		const string title_right = Theme::c("net_box") + Fx::ub + Symbols::title_right;
+		const int i_size = min((int)selected_iface.size(), 10);
+		const long long down_max = (net_auto ? graph_max.at("download") : (long long)(Config::getI("net_download") << 20) / 8);
+		const long long up_max = (net_auto ? graph_max.at("upload") : (long long)(Config::getI("net_upload") << 20) / 8);
+
+		//* Redraw elements not needed to be updated every cycle
+		if (redraw) {
+			out = box;
+			//? Graphs
+			graphs["download"] = Draw::Graph{width - b_width - 2, u_graph_height, "download", net.bandwidth.at("download"), graph_symbol, false, true, down_max};
+			graphs["upload"] = Draw::Graph{width - b_width - 2, d_graph_height, "upload", net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
+
+			//? Interface selector and buttons
+
+			out += Mv::to(y, x+width - i_size - 10) + title_left + Fx::b + Theme::c("hi_fg") + "<b " + Theme::c("title")
+				+ uresize(selected_iface, 10) + Theme::c("hi_fg") + " n>" + title_right
+				+ Mv::to(y, x+width - i_size - 16) + title_left + Theme::c("hi_fg") + (net.stat.at("download").offset + net.stat.at("upload").offset > 0 ? Fx::b : "") + 'z'
+				+ Theme::c("title") + "ero" + title_right;
+			Input::mouse_mappings["b"] = {y, x+width - i_size - 9, 1, 3};
+			Input::mouse_mappings["n"] = {y, x+width - 6, 1, 3};
+			Input::mouse_mappings["z"] = {y, x+width - i_size - 15, 1, 4};
+			if (width - i_size - 20 > 6) {
+				out += Mv::to(y, x+width - i_size - 21) + title_left + Theme::c("hi_fg") + (net_auto ? Fx::b : "") + 'a' + Theme::c("title") + "uto" + title_right;
+				Input::mouse_mappings["a"] = {y, x+width - i_size - 20, 1, 4};
+			}
+			if (width - i_size - 20 > 13) {
+				out += Mv::to(y, x+width - i_size - 27) + title_left + Theme::c("title") + (net_sync ? Fx::b : "") + 's' + Theme::c("hi_fg")
+					+ 'y' + Theme::c("title") + "nc" + title_right;
+				Input::mouse_mappings["y"] = {y, x+width - i_size - 26, 1, 4};
+			}
+		}
+
+		//? IP or device address
+		if (not ip_addr.empty() and width - i_size - 35 - ip_addr.size() > 0) {
+			out += Mv::to(y, x + 8) + title_left + Theme::c("title") + Fx::b + ip_addr + title_right;
+		}
+
+		//? Graphs and stats
+		int cy = 0;
+		for (const string dir : {"download", "upload"}) {
+			out += Mv::to(y+1 + (dir == "upload" ? u_graph_height : 0), x + 1) + graphs.at(dir)(net.bandwidth.at(dir), redraw or data_same or not net.connected)
+				+ Mv::to(y+1 + (dir == "upload" ? height - 3: 0), x + 1) + Fx::ub + Theme::c("graph_text")
+				+ floating_humanizer((dir == "upload" ? up_max : down_max), true);
+			const string speed = floating_humanizer(net.stat.at(dir).speed, false, 0, false, true);
+			const string speed_bits = (b_width >= 20 ? floating_humanizer(net.stat.at(dir).speed, false, 0, true, true) : "");
+			const string top = floating_humanizer(net.stat.at(dir).top, false, 0, true, true);
+			const string total = floating_humanizer(net.stat.at(dir).total);
+			const string symbol = (dir == "upload" ? "▲" : "▼");
+			out += Mv::to(b_y+1+cy, b_x+1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
+			cy += (b_height == 3 ? 2 : 1);
+			if (b_height >= 6) {
+				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
+				cy++;
+			}
+			if (b_height >= 4) {
+				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Total: " + rjust(total, (b_width >= 20 ? 16 : 8));
+				cy += (b_height > 2 and b_height % 2 ? 2 : 1);
+			}
+		}
+
+
+		redraw = false;
 		return out + Fx::reset;
 	}
 
@@ -797,7 +869,7 @@ namespace Net {
 
 namespace Proc {
 	int width_p = 55, height_p = 68;
-	int min_w = 44, min_h = 16;
+	int min_width = 44, min_height = 16;
 	int x, y, width, height;
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
@@ -1357,8 +1429,8 @@ namespace Draw {
 				graph_height = 0;
 
 			if (show_disks) {
-				disk_meter = max(0, width - mem_width - 23);
-				if (disks_width < 25) disk_meter += 10;
+				disk_meter = max(-14, width - mem_width - 23);
+				if (disks_width < 25) disk_meter += 14;
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);

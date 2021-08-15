@@ -25,6 +25,7 @@ tab-size = 4
 #include <deque>
 #include <robin_hood.h>
 #include <array>
+#include <ifaddrs.h>
 
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
 
@@ -69,7 +70,7 @@ namespace Shared {
 
 namespace Cpu {
 	extern string box;
-	extern int x, y, width, height;
+	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw, got_sensors, cpu_temp_only;
 	extern string cpuName, cpuHz;
 
@@ -94,7 +95,7 @@ namespace Cpu {
 	};
 
 	//* Collect cpu stats and temperatures
-	auto collect(const bool no_update=false) -> cpu_info;
+	auto collect(const bool no_update=false) -> cpu_info&;
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
@@ -102,7 +103,7 @@ namespace Cpu {
 
 namespace Mem {
 	extern string box;
-	extern int x, y, width, height;
+	extern int x, y, width, height, min_width, min_height;
 	extern bool has_swap, shown, redraw;
 	const array<string, 4> mem_names = {"used", "available", "cached", "free"};
 	const array<string, 2> swap_names = {"swap_used", "swap_free"};
@@ -129,7 +130,7 @@ namespace Mem {
 	};
 
 	//* Collect mem & disks stats
-	auto collect(const bool no_update=false) -> mem_info;
+	auto collect(const bool no_update=false) -> mem_info&;
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
@@ -137,21 +138,28 @@ namespace Mem {
 
 namespace Net {
 	extern string box;
-	extern int x, y, width, height;
+	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
+	extern string selected_iface;
+	extern vector<string> interfaces;
+	extern bool rescale;
+	extern unordered_flat_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed = 0, top = 0, total = 0;
+		uint64_t speed = 0, top = 0, total = 0, last = 0, offset = 0;
 	};
 
 	struct net_info {
-		unordered_flat_map<string, deque<long long>> bandwidth;
-		unordered_flat_map<string, net_stat> stat;
-		string ip_addr;
+		unordered_flat_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
+		unordered_flat_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
+		string ipv4 = "", ipv6 = "";
+		bool connected = false;
 	};
 
+	extern unordered_flat_map<string, net_info> current_net;
+
 	//* Collect net upload/download stats
-	auto collect(const bool no_update=false) -> net_info;
+	auto collect(const bool no_update=false) -> net_info&;
 
 	//* Draw contents of net box using <net> as source
 	string draw(const net_info& net, const bool force_redraw=false, const bool data_same=false);
@@ -161,7 +169,7 @@ namespace Proc {
 	extern atomic<int> numpids;
 
 	extern string box;
-	extern int x, y, width, height;
+	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;

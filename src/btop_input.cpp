@@ -383,9 +383,59 @@ namespace Input {
 				if (key == "i") {
 					Config::flip("io_mode");
 				}
+				else keep_going = true;
 
 				if (not keep_going) {
 					Runner::run("mem", no_update, redraw);
+					return;
+				}
+			}
+
+			//? Input actions for net box
+			if (Net::shown) {
+				bool keep_going = false;
+				bool no_update = true;
+				bool redraw = true;
+
+				if (is_in(key, "b", "n")) {
+					atomic_wait(Runner::active);
+					int c_index = v_index(Net::interfaces, Net::selected_iface);
+					if (c_index != (int)Net::interfaces.size()) {
+						if (key == "b") {
+							if (--c_index < 0) c_index = Net::interfaces.size() - 1;
+						}
+						else if (key == "n") {
+							if (++c_index == (int)Net::interfaces.size()) c_index = 0;
+						}
+						Net::selected_iface = Net::interfaces.at(c_index);
+						Net::rescale = true;
+					}
+				}
+				else if (key == "y") {
+					Config::flip("net_sync");
+					Net::rescale = true;
+				}
+				else if (key == "a") {
+					Config::flip("net_auto");
+					Net::rescale = true;
+				}
+				else if (key == "z") {
+					atomic_wait(Runner::active);
+					auto& ndev = Net::current_net.at(Net::selected_iface);
+					if (ndev.stat.at("download").offset + ndev.stat.at("upload").offset > 0) {
+						ndev.stat.at("download").offset = 0;
+						ndev.stat.at("upload").offset = 0;
+					}
+					else {
+						ndev.stat.at("download").offset = ndev.stat.at("download").last;
+						ndev.stat.at("upload").offset = ndev.stat.at("upload").last;
+					}
+					no_update = false;
+				}
+				else keep_going = true;
+
+				if (not keep_going) {
+					Runner::run("net", no_update, redraw);
 					return;
 				}
 			}

@@ -65,11 +65,8 @@ namespace Config {
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
-		{"proc_update_mult", 	"#* Processes update multiplier, sets how often the process list is updated as a multiplier of \"update_ms\".\n"
-								"#* Set to 2 or higher to greatly decrease bpytop cpu usage. (Only integers)."},
-
 		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu responsive\",\n"
-								"#* \"cpu lazy\" updates top process over time, \"cpu responsive\" updates top process directly."},
+								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu responsive\" updates top process directly."},
 
 		{"proc_reversed",		"#* Reverse sorting order, True or False."},
 
@@ -147,15 +144,13 @@ namespace Config {
 		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"mountpoint:speed\" separate disks with whitespace \" \".\n"
 								"#* Example: \"/mnt/media:100 /:20 /boot:1\"."},
 
-		{"net_download", 		"#* Set fixed values for network graphs, default \"10M\" = 10 Mibibytes, possible units \"K\", \"M\", \"G\", append with \"bit\" for bits instead of bytes, i.e \"100mbit\"."},
+		{"net_download", 		"#* Set fixed values for network graphs in Mebibits. Is only used if net_auto is also set to False."},
 
 		{"net_upload", ""},
 
-		{"net_auto", 			"#* Start in network graphs auto rescaling mode, ignores any values set above and rescales down to 10 Kibibytes at the lowest."},
+		{"net_auto", 			"#* Use network graphs auto rescaling mode, ignores any values set above and rescales down to 10 Kibibytes at the lowest."},
 
-		{"net_sync", 			"#* Sync the scaling for download and upload to whichever currently has the highest scale."},
-
-		{"net_color_fixed", 	"#* If the network graphs color gradient should scale to bandwidth usage or auto scale, bandwidth usage is based on \"net_download\" and \"net_upload\" values."},
+		{"net_sync", 			"#* Sync the auto scaling for download and upload to whichever currently has the highest scale."},
 
 		{"net_iface", 			"#* Starts with the Network Interface specified here."},
 
@@ -183,8 +178,6 @@ namespace Config {
 		{"custom_cpu_name", ""},
 		{"disks_filter", ""},
 		{"io_graph_speeds", ""},
-		{"net_download", "10M"},
-		{"net_upload", "10M"},
 		{"net_iface", ""},
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
@@ -221,7 +214,6 @@ namespace Config {
 		{"show_io_stat", true},
 		{"io_mode", false},
 		{"io_graph_combined", false},
-		{"net_color_fixed", false},
 		{"net_auto", true},
 		{"net_sync", false},
 		{"show_battery", true},
@@ -235,7 +227,8 @@ namespace Config {
 
 	unordered_flat_map<string, int> ints = {
 		{"update_ms", 2000},
-		{"proc_update_mult", 2},
+		{"net_download", 100},
+		{"net_upload", 100},
 		{"detailed_pid", 0},
 		{"selected_pid", 0},
 		{"proc_start", 0},
@@ -243,8 +236,6 @@ namespace Config {
 		{"proc_last_selected", 0},
 	};
 	unordered_flat_map<string, int> intsTmp;
-
-	vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
 
 	bool _locked(const string& name) {
 		atomic_wait(writelock);

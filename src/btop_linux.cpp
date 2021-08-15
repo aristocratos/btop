@@ -18,20 +18,29 @@ tab-size = 4
 
 #if defined(__linux__)
 
+// #define _GNU_SOURCE
 #include <fstream>
 #include <ranges>
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
+#include <tuple>
 #include <regex>
 #include <sys/statvfs.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <linux/if_link.h>
+#include <net/if.h>
+#include <linux/rtnetlink.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::round, std::max, std::min,
-		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
+		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater, std::tuple, std::make_tuple;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -132,6 +141,9 @@ namespace Shared {
 
 		//? Init for namespace Mem
 		Mem::collect();
+
+		//? Init for namespace Net
+		Net::collect();
 
 	}
 
@@ -438,7 +450,7 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto collect(const bool no_update) -> cpu_info {
+	auto collect(const bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
 
@@ -539,7 +551,7 @@ namespace Mem {
 
 	mem_info current_mem {};
 
-	auto collect(const bool no_update) -> mem_info {
+	auto collect(const bool no_update) -> mem_info& {
 		if (Runner::stopping or no_update) return current_mem;
 		auto& show_swap = Config::getB("show_swap");
 		auto& swap_disk = Config::getB("swap_disk");
@@ -702,11 +714,11 @@ namespace Mem {
 					}
 					//? Remove disks no longer mounted or filtered out
 					if (swap_disk and has_swap) found.push_back("swap");
-					for (auto i = disks.begin(); i != disks.end();) {
-						if (not v_contains(found, i->first))
-							i = disks.erase(i);
+					for (auto it = disks.begin(); it != disks.end();) {
+						if (not v_contains(found, it->first))
+							it = disks.erase(it);
 						else
-							i++;
+							it++;
 					}
 				}
 				else
@@ -784,11 +796,173 @@ namespace Mem {
 }
 
 namespace Net {
-	net_info current_net;
+	unordered_flat_map<string, net_info> current_net;
+	net_info empty_net = {};
+	vector<string> interfaces;
+	string selected_iface;
+	int errors = 0;
+	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
+	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
+	bool rescale = true;
 
-	auto collect(const bool no_update) -> net_info {
-		(void)no_update;
-		return current_net;
+	//* RAII wrapper for getifaddrs
+	class getifaddr_wrapper {
+		struct ifaddrs* ifaddr;
+	public:
+		int status;
+		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
+		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
+		auto operator()() -> struct ifaddrs* { return ifaddr; }
+	};
+
+	auto collect(const bool no_update) -> net_info& {
+		auto& net = current_net;
+		auto& config_iface = Config::getS("net_iface");
+		auto& net_sync = Config::getB("net_sync");
+		auto& net_auto = Config::getB("net_auto");
+
+		if (not no_update and errors < 3) {
+			//? Get interface list using getifaddrs() wrapper
+			getifaddr_wrapper if_wrap = {};
+			if (if_wrap.status != 0) {
+				errors++;
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				return empty_net;
+			}
+			int family = 0;
+			char ip[NI_MAXHOST];
+			interfaces.clear();
+			string ipv4, ipv6;
+
+			//? Iteration over all items in getifaddrs() list
+			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
+				if (ifa->ifa_addr == NULL) continue;
+				family = ifa->ifa_addr->sa_family;
+				const auto& iface = ifa->ifa_name;
+
+				//? Get IPv4 address
+				if (family == AF_INET) {
+					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv4 = ip;
+				}
+				//? Get IPv6 address
+				else if (family == AF_INET6) {
+					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv6 = ip;
+				}
+
+				//? Update available interfaces vector and get status of interface
+				if (not v_contains(interfaces, iface)) {
+					interfaces.push_back(iface);
+					net[iface].connected = (ifa->ifa_flags & IFF_RUNNING);
+				}
+			}
+
+			//? Get total recieved and transmitted bytes + device address if no ip was found
+			for (const auto& iface : interfaces) {
+				if (net.at(iface).ipv4.empty() and net.at(iface).ipv6.empty())
+					net.at(iface).ipv4 = readfile("/sys/class/net/" + iface + "/address");
+
+				for (const string dir : {"download", "upload"}) {
+					const fs::path sys_file = "/sys/class/net/" + iface + "/statistics/" + (dir == "download" ? "rx_bytes" : "tx_bytes");
+					auto& saved_stat = net.at(iface).stat.at(dir);
+					auto& bandwidth = net.at(iface).bandwidth.at(dir);
+
+					const uint64_t val = max(stoul(readfile(sys_file, "0")), saved_stat.last);
+
+					//? Update speed, total and top values
+					saved_stat.speed = val - (saved_stat.last == 0 ? val : saved_stat.last);
+					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
+					if (saved_stat.offset > val) saved_stat.offset = 0;
+					saved_stat.total = val - saved_stat.offset;
+					saved_stat.last = val;
+
+					//? Add values to graph
+					bandwidth.push_back(saved_stat.speed);
+					if (cmp_greater(bandwidth.size(), Term::width.load() * 2)) bandwidth.pop_front();
+
+					//? Set counters for auto scaling
+					if (net_auto and selected_iface == iface) {
+						if (saved_stat.speed > graph_max[dir]) {
+							++max_count[dir][0];
+							if (max_count[dir][1] > 0) --max_count[dir][1];
+						}
+						else if (graph_max[dir] > 10 << 10 and saved_stat.speed < graph_max[dir] / 10) {
+							++max_count[dir][1];
+							if (max_count[dir][0] > 0) --max_count[dir][0];
+						}
+
+					}
+				}
+			}
+
+			//? Clean up net map if needed
+			if (net.size() > interfaces.size()) {
+				for (auto it = net.begin(); it != net.end();) {
+					if (not v_contains(interfaces, it->first))
+						it = net.erase(it);
+					else
+						it++;
+				}
+			}
+		}
+
+		//? Return empty net_info struct if no interfaces was found
+		if (net.empty())
+			return empty_net;
+
+		//? Find an interface to display if selected isn't set or valid
+		if (selected_iface.empty() or not v_contains(interfaces, selected_iface)) {
+			max_count["download"][0] = max_count["download"][1] = max_count["upload"][0] = max_count["upload"][1] = 0;
+			redraw = true;
+			if (net_auto) rescale = true;
+			if (not config_iface.empty() and v_contains(interfaces, config_iface)) selected_iface = config_iface;
+			else {
+				//? Sort interfaces by total upload + download bytes
+				auto sorted_interfaces = interfaces;
+				rng::sort(sorted_interfaces, [&](const auto& a, const auto& b){
+					return 	cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
+										net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
+				});
+				selected_iface.clear();
+				//? Try to set to a connected interface
+				for (const auto& iface : sorted_interfaces) {
+					if (net.at(iface).connected) selected_iface = iface;
+					break;
+				}
+				//? If no interface is connected set to first available
+				if (selected_iface.empty()) selected_iface = sorted_interfaces.at(0);
+			}
+		}
+
+		//? Calculate max scale for graphs if needed
+		if (net_auto) {
+			bool sync = false;
+			for (const auto& dir: {"download", "upload"}) {
+				for (const auto& sel : {0, 1}) {
+					if (rescale or max_count[dir][sel] >= 5) {
+						const uint64_t avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
+							? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0) / 5
+							: net[selected_iface].stat[dir].speed);
+						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), 10ul << 10);
+						max_count[dir][0] = max_count[dir][1] = 0;
+						redraw = true;
+						if (net_sync) sync = true;
+						break;
+					}
+				}
+				//? Sync download/upload graphs if enabled
+				if (sync) {
+					const auto other = (string(dir) == "upload" ? "download" : "upload");
+					graph_max[other] = graph_max[dir];
+					max_count[other][0] = max_count[other][1] = 0;
+					break;
+				}
+			}
+		}
+
+		rescale = false;
+		return net.at(selected_iface);
 	}
 }
 
@@ -1091,29 +1265,24 @@ namespace Proc {
 						getline(pread, short_str, ' ');
 
 						switch (x-offset) {
-							case 3: { //? Process state
+							case 3: //? Process state
 								new_proc.state = short_str.at(0);
 								continue;
-							}
-							case 4: { //? Parent pid
+							case 4: //? Parent pid
 								new_proc.ppid = stoull(short_str);
 								next_x = 14;
 								continue;
-							}
-							case 14: { //? Process utime
+							case 14: //? Process utime
 								cpu_t = stoull(short_str);
 								continue;
-							}
-							case 15: { //? Process stime
+							case 15: //? Process stime
 								cpu_t += stoull(short_str);
 								next_x = 19;
 								continue;
-							}
-							case 19: { //? Nice value
+							case 19: //? Nice value
 								new_proc.p_nice = stoull(short_str);
 								continue;
-							}
-							case 20: { //? Number of threads
+							case 20: //? Number of threads
 								new_proc.threads = stoull(short_str);
 								if (cache.at(new_proc.pid).cpu_s == 0) {
 									next_x = 22;
@@ -1122,21 +1291,17 @@ namespace Proc {
 								else
 									next_x = 24;
 								continue;
-							}
-							case 22: { //? Save cpu seconds to cache if missing
+							case 22: //? Save cpu seconds to cache if missing
 								cache.at(new_proc.pid).cpu_s = stoull(short_str);
 								next_x = 24;
 								continue;
-							}
-							case 24: { //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
+							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
 								new_proc.mem = stoull(short_str) * Shared::pageSize;
 								next_x = 39;
 								continue;
-							}
-							case 39: { //? CPU number last executed on
+							case 39: //? CPU number last executed on
 								new_proc.cpu_n = stoull(short_str);
 								goto stat_loop_done;
-							}
 						}
 					}
 
@@ -1170,13 +1335,12 @@ namespace Proc {
 			//? Clear dead processes from cache at a regular interval
 			if (++counter >= 1000 or (cache.size() > procs.size() + 100)) {
 				counter = 0;
-				unordered_flat_map<size_t, p_cache> r_cache;
-				r_cache.reserve(procs.size());
-				rng::for_each(procs, [&r_cache](const auto &p) {
-					if (cache.contains(p.pid))
-						r_cache[p.pid] = cache.at(p.pid);
-				});
-				cache = std::move(r_cache);
+				for (auto it = cache.begin(); it != cache.end();) {
+					if (rng::find(procs, it->first, &proc_info::pid) == procs.end())
+						it = cache.erase(it);
+					else
+						it++;
+				}
 			}
 
 			//? Update the details info box for process if active
@@ -1207,14 +1371,14 @@ namespace Proc {
 		//* Sort processes
 		const auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
 		switch (v_index(sort_vector, sorting)) {
-				case 0: { rng::sort(procs, cmp, &proc_info::pid); 	  break; }
-				case 1: { rng::sort(procs, cmp, &proc_info::name);	  break; }
-				case 2: { rng::sort(procs, cmp, &proc_info::cmd); 	  break; }
-				case 3: { rng::sort(procs, cmp, &proc_info::threads); break; }
-				case 4: { rng::sort(procs, cmp, &proc_info::user); 	  break; }
-				case 5: { rng::sort(procs, cmp, &proc_info::mem); 	  break; }
-				case 6: { rng::sort(procs, cmp, &proc_info::cpu_p);   break; }
-				case 7: { rng::sort(procs, cmp, &proc_info::cpu_c);   break; }
+				case 0: rng::sort(procs, cmp, &proc_info::pid); 	break;
+				case 1: rng::sort(procs, cmp, &proc_info::name);	break;
+				case 2: rng::sort(procs, cmp, &proc_info::cmd); 	break;
+				case 3: rng::sort(procs, cmp, &proc_info::threads); break;
+				case 4: rng::sort(procs, cmp, &proc_info::user); 	break;
+				case 5: rng::sort(procs, cmp, &proc_info::mem); 	break;
+				case 6: rng::sort(procs, cmp, &proc_info::cpu_p);   break;
+				case 7: rng::sort(procs, cmp, &proc_info::cpu_c);   break;
 		}
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage

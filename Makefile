@@ -2,14 +2,22 @@ PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/btop/doc
 
 #Compiler and Linker
-CXX := g++
+CXX ?= g++
 
-#Try to make sure we are using GCC/G++ version 11 or later
-CXX_VERSION = $(shell $(CXX) -dumpversion)
-ifneq ($(shell test $(CXX_VERSION) -ge 11; echo $$?),0)
-	ifneq ($(shell command -v g++-11),)
-		CXX := g++-11
+#Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
+ifneq ($(CXX),g++-10)
+	CXX_VERSION = $(shell $(CXX) -dumpfullversion -dumpversion | cut -f1 -d"." || echo 0)
+	ifneq ($(shell test $(CXX_VERSION) -ge 11; echo $$?),0)
+		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+			override CXX = g++-11
+		endif
 	endif
+endif
+
+#Only enable fcf-protection if on x86
+ARCH = $(shell uname -p)
+ifeq ($(ARCH),x86_64)
+	ADDFLAGS = -fcf-protection
 endif
 
 #The Target Binary Program
@@ -28,7 +36,7 @@ OBJEXT		:= o
 REQFLAGS			:= -std=c++20
 WARNFLAGS			:= -Wall -Wextra -Wno-stringop-overread -pedantic -pedantic-errors -Wfatal-errors
 OPTFLAGS			:= -O2 -ftree-loop-vectorize
-override LDCXXFLAGS	+= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector -fstack-clash-protection -fcf-protection -flto
+override LDCXXFLAGS	+= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector -fstack-clash-protection -flto $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
