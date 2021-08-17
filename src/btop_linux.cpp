@@ -18,29 +18,23 @@ tab-size = 4
 
 #if defined(__linux__)
 
-// #define _GNU_SOURCE
 #include <fstream>
 #include <ranges>
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <tuple>
 #include <regex>
 #include <sys/statvfs.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <netdb.h>
 #include <ifaddrs.h>
-#include <linux/if_link.h>
 #include <net/if.h>
-#include <linux/rtnetlink.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
 using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::round, std::max, std::min,
-		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater, std::tuple, std::make_tuple;
+		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -496,7 +490,7 @@ namespace Cpu {
 					cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 					//? Reduce size if there are more values than needed for graph
-					if (cmp_greater(cpu.cpu_percent.at("total").size(), Term::width * 2)) cpu.cpu_percent.at("total").pop_front();
+					while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
 					//? Populate cpu.cpu_percent with all fields from stat
 					for (int ii = 0; const auto& val : times) {
@@ -504,7 +498,7 @@ namespace Cpu {
 						cpu_old.at(time_names.at(ii)) = val;
 
 						//? Reduce size if there are more values than needed for graph
-						if (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), Term::width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+						while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 						if (++ii == 10) break;
 					}
@@ -543,10 +537,10 @@ namespace Cpu {
 
 namespace Mem {
 	bool has_swap = false;
-	bool disks_fail = false;
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
+	vector<string> last_found;
 
 
 	mem_info current_mem {};
@@ -602,24 +596,21 @@ namespace Mem {
 		//? Calculate percentages
 		for (const auto& name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
+			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
 			for (const auto& name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+				while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 			}
 			has_swap = true;
 		}
 		else
 			has_swap = false;
 
-		//? Remove values beyond whats needed for graph creation
-		for (auto& [ignored, deq] : mem.percent) {
-			if (cmp_greater(deq.size(), Term::width * 2)) deq.pop_front();
-		}
-
 		//? Get disks stats
-		if (show_disks and not disks_fail) {
+		if (show_disks) {
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
@@ -674,9 +665,10 @@ namespace Mem {
 				}
 
 				//? Get mounts from /etc/mtab or /proc/self/mounts
-				vector<string> found;
 				diskread.open((fs::exists("/etc/mtab") ? fs::path("/etc/mtab") : Shared::procPath / "self/mounts"));
 				if (diskread.good()) {
+					vector<string> found;
+					found.reserve(last_found.size());
 					string dev, mountpoint, fstype;
 					while (not diskread.eof()) {
 						std::error_code ec;
@@ -693,6 +685,7 @@ namespace Mem {
 						or (use_fstab and v_contains(fstab, mountpoint))
 						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
 							found.push_back(mountpoint);
+							if (not v_contains(last_found, mountpoint)) redraw = true;
 
 							//? Save mountpoint, name, dev path and path to /sys/block stat file
 							if (not disks.contains(mountpoint)) {
@@ -701,7 +694,7 @@ namespace Mem {
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 								string devname = disks.at(mountpoint).dev.filename();
 								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat")) {
+									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
 										disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
 										break;
 									}
@@ -720,6 +713,7 @@ namespace Mem {
 						else
 							it++;
 					}
+					last_found = std::move(found);
 				}
 				else
 					throw std::runtime_error("Failed to get mounts from /etc/mtab and /proc/self/mounts");
@@ -727,7 +721,7 @@ namespace Mem {
 
 				//? Get disk/partition stats
 				for (auto& [mountpoint, disk] : disks) {
-					if (not fs::exists(mountpoint)) continue;
+					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
 					struct statvfs vfs;
 					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
@@ -752,14 +746,14 @@ namespace Mem {
 					disks.at("swap").used_percent = mem.percent.at("swap_used").back();
 					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 				}
-				for (const auto& name : found)
+				for (const auto& name : last_found)
 					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
 
 				//? Get disks IO
 				int64_t sectors_read, sectors_write;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
-					if (disk.stat.empty()) continue;
+					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
 					diskread.open(disk.stat);
 					if (diskread.good()) {
 						disk_ios++;
@@ -770,7 +764,7 @@ namespace Mem {
 						else
 							disk.io_read.push_back(max(0l, (sectors_read - disk.old_io.at(0)) * 512));
 						disk.old_io.at(0) = sectors_read;
-						if (cmp_greater(disk.io_read.size(), Term::width * 2)) disk.io_read.pop_front();
+						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
 						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 						diskread >> sectors_write;
@@ -779,14 +773,13 @@ namespace Mem {
 						else
 							disk.io_write.push_back(max(0l, (sectors_write - disk.old_io.at(1)) * 512));
 						disk.old_io.at(1) = sectors_write;
-						if (cmp_greater(disk.io_write.size(), Term::width * 2)) disk.io_write.pop_front();
+						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 					}
 					diskread.close();
 				}
 			}
 			catch (const std::exception& e) {
 				Logger::warning("Error in Mem::collect() : " + (string)e.what());
-				disks_fail = true;
 			}
 		}
 
@@ -823,7 +816,7 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap = {};
+			getifaddr_wrapper if_wrap {};
 			if (if_wrap.status != 0) {
 				errors++;
 				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
@@ -879,7 +872,7 @@ namespace Net {
 
 					//? Add values to graph
 					bandwidth.push_back(saved_stat.speed);
-					if (cmp_greater(bandwidth.size(), Term::width.load() * 2)) bandwidth.pop_front();
+					while (cmp_greater(bandwidth.size(), width * 2)) bandwidth.pop_front();
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
@@ -904,6 +897,7 @@ namespace Net {
 					else
 						it++;
 				}
+				net.compact();
 			}
 		}
 
@@ -967,27 +961,17 @@ namespace Net {
 }
 
 namespace Proc {
-	namespace {
-		struct p_cache {
-			string name, cmd, user;
-			size_t name_offset;
-			uint64_t cpu_t = 0, cpu_s = 0;
-			string prefix = "";
-			size_t depth = 0;
-			bool collapsed = false;
-		};
 
-		vector<proc_info> current_procs;
-		unordered_flat_map<size_t, p_cache> cache;
-		unordered_flat_map<string, string> uid_user;
-		fs::file_time_type passwd_time;
-		uint64_t cputimes;
+	vector<proc_info> current_procs;
+	unordered_flat_map<string, string> uid_user;
 
-		int counter = 0;
-	}
+	fs::file_time_type passwd_time;
+
+	uint64_t cputimes;
 	int collapse = -1, expand = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
+	int filter_found = 0;
 
 	detail_container detailed;
 
@@ -1013,14 +997,12 @@ namespace Proc {
 		//? Add process to vector if not filtered out or currently in a collapsed sub-tree
 		if (not collapsed and not filtering) {
 			out_procs.push_back(cur_proc);
-			//? Try to find name of the binary file and append to program name if not the same (replacing cmd string)
-			if (std::string_view cmd_view = cur_proc.cmd; not cmd_view.empty() and not cmd_view.starts_with('(')) {
+			//? Try to find name of the binary file and append to program name if not the same
+			if (cur_proc.short_cmd.empty() and not cur_proc.cmd.empty()) {
+				std::string_view cmd_view = cur_proc.cmd;
 				cmd_view = cmd_view.substr(0, min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
-				if (cmd_view == cur_proc.name)
-					out_procs.back().cmd.clear();
-				else
-					out_procs.back().cmd = '(' + (string)cmd_view + ')';
+				out_procs.back().short_cmd = (string)cmd_view;
 			}
 		}
 
@@ -1033,7 +1015,7 @@ namespace Proc {
 				out_procs.back().threads += p.threads;
 			}
 			else children++;
-			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cache.at(cur_proc.pid).collapsed), filter, found);
+			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cur_proc.collapsed), filter, found);
 		}
 		if (collapsed or filtering) return;
 
@@ -1042,7 +1024,7 @@ namespace Proc {
 			out_procs.back().prefix.replace(out_procs.back().prefix.size() - 8, 8, " └─ ");
 
 		//? Add collapse/expand symbols if process have any children
-		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cache.at(cur_proc.pid).collapsed ? "[+]─" : "[-]─") : " ├─ ");
+		out_procs.at(cur_pos).prefix = " │ "s * cur_depth + (children > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
 	}
 
 	//* Get detailed info for selected process
@@ -1062,14 +1044,17 @@ namespace Proc {
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
-		if (cmp_greater(detailed.cpu_percent.size(), Term::width.load())) detailed.cpu_percent.pop_front();
+		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
-		detailed.elapsed = sec_to_dhms(uptime - (cache.at(pid).cpu_s / Shared::clkTck));
+		detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
-		if (detailed.parent.empty() and cache.contains(detailed.entry.ppid)) detailed.parent = cache.at(detailed.entry.ppid).name;
+		if (detailed.parent.empty()) {
+			auto p_entry = rng::find(procs, detailed.entry.ppid, &proc_info::pid);
+			if (p_entry != procs.end()) detailed.parent = p_entry->name;
+		}
 
 		//? Expand process status from single char to explanative string
 		detailed.status = (proc_states.contains(detailed.entry.state)) ? proc_states.at(detailed.entry.state) : "Unknown";
@@ -1111,7 +1096,7 @@ namespace Proc {
 			redraw = true;
 		}
 
-		if (cmp_greater(detailed.mem_bytes.size(), Term::width.load())) detailed.mem_bytes.pop_front();
+		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
 
 		//? Get bytes read and written from proc/[pid]/io
 		if (fs::exists(pid_path / "io")) {
@@ -1140,7 +1125,7 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	auto collect(const bool no_update) -> vector<proc_info> {
+	auto collect(const bool no_update) -> vector<proc_info>& {
 		const auto& sorting = Config::getS("proc_sorting");
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
@@ -1151,16 +1136,16 @@ namespace Proc {
 		ifstream pread;
 		string long_string;
 		string short_str;
+		filter_found = 0;
 		const double uptime = system_uptime();
-		vector<proc_info> procs;
-		procs.reserve(current_procs.size() + 10);
+
+
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
 		//* Use pids from last update if only changing filter, sorting or tree options
-		if (no_update and not cache.empty()) {
-			procs = current_procs;
-			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), procs);
+		if (no_update and not current_procs.empty()) {
+			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), current_procs);
 		}
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
@@ -1196,31 +1181,43 @@ namespace Proc {
 			pread.close();
 
 			//? Iterate over all pids in /proc
+			vector<size_t> found;
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 				if (Runner::stopping)
-					return procs;
+					return current_procs;
 				if (pread.is_open()) pread.close();
 
 				const string pid_str = d.path().filename();
 				if (not isdigit(pid_str[0])) continue;
 
-				proc_info new_proc (stoul(pid_str));
+				const size_t pid = stoul(pid_str);
+				found.push_back(pid);
 
-				//? Cache program name, command and username
-				if (not cache.contains(new_proc.pid)) {
-					string name, cmd, user;
+				//? Check if pid already exists
+				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
+				bool no_cache = false;
+				if (find_old == current_procs.end()) {
+					current_procs.push_back({pid});
+					find_old = current_procs.end() - 1;
+					no_cache = true;
+				}
+
+				auto& new_proc = *find_old;
+
+				//? Get program name, command and username
+				if (no_cache) {
 					pread.open(d.path() / "comm");
 					if (not pread.good()) continue;
-					getline(pread, name);
+					getline(pread, new_proc.name);
 					pread.close();
-					size_t name_offset = rng::count(name, ' ');
+					new_proc.name_offset = rng::count(new_proc.name, ' ');
 
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
-					while(getline(pread, long_string, '\0')) cmd += long_string + ' ';
+					while(getline(pread, long_string, '\0')) new_proc.cmd += long_string + ' ';
 					pread.close();
-					if (not cmd.empty()) cmd.pop_back();
+					if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 
 					pread.open(d.path() / "status");
 					if (not pread.good()) continue;
@@ -1237,26 +1234,20 @@ namespace Proc {
 						}
 					}
 					pread.close();
-					user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
-
-					cache[new_proc.pid] = {name, cmd, user, name_offset};
+					new_proc.user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
 				}
-
-				new_proc.name = cache.at(new_proc.pid).name;
-				new_proc.cmd = cache.at(new_proc.pid).cmd;
-				new_proc.user = cache.at(new_proc.pid).user;
 
 				//? Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (not pread.good()) continue;
 
 				//? Check cached value for whitespace characters in name and set offset to get correct fields from stat file
-				const auto& offset = cache.at(new_proc.pid).name_offset;
+				const auto& offset = new_proc.name_offset;
 				short_str.clear();
 				size_t x = 0, next_x = 3;
 				uint64_t cpu_t = 0;
 				try {
-					for (;;) {
+					while (x < 40) {
 						while (pread.good() and ++x < next_x + offset) {
 							pread.ignore(SSmax, ' ');
 						}
@@ -1284,15 +1275,15 @@ namespace Proc {
 								continue;
 							case 20: //? Number of threads
 								new_proc.threads = stoull(short_str);
-								if (cache.at(new_proc.pid).cpu_s == 0) {
+								if (new_proc.cpu_s == 0) {
 									next_x = 22;
-									cache.at(new_proc.pid).cpu_t = cpu_t;
+									new_proc.cpu_t = cpu_t;
 								}
 								else
 									next_x = 24;
 								continue;
-							case 22: //? Save cpu seconds to cache if missing
-								cache.at(new_proc.pid).cpu_s = stoull(short_str);
+							case 22: //? Get cpu seconds if missing
+								new_proc.cpu_s = stoull(short_str);
 								next_x = 24;
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
@@ -1301,135 +1292,150 @@ namespace Proc {
 								continue;
 							case 39: //? CPU number last executed on
 								new_proc.cpu_n = stoull(short_str);
-								goto stat_loop_done;
+								x++;
+								break;
 						}
 					}
 
 				}
 				catch (const std::invalid_argument&) { continue; }
 				catch (const std::out_of_range&) { continue; }
-
-				stat_loop_done:
 				pread.close();
 
 				if (x-offset < 24) continue;
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - cache.at(new_proc.pid).cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
+				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - cache.at(new_proc.pid).cpu_s);
+				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 
 				//? Update cache with latest cpu times
-				cache.at(new_proc.pid).cpu_t = cpu_t;
+				new_proc.cpu_t = cpu_t;
 
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 					got_detailed = true;
 				}
-
-				//? Push process to vector
-				procs.push_back(new_proc);
-
 			}
 
-			//? Clear dead processes from cache at a regular interval
-			if (++counter >= 1000 or (cache.size() > procs.size() + 100)) {
-				counter = 0;
-				for (auto it = cache.begin(); it != cache.end();) {
-					if (rng::find(procs, it->first, &proc_info::pid) == procs.end())
-						it = cache.erase(it);
-					else
-						it++;
-				}
-			}
+			// //? Clear dead processes from cache at a regular interval
+			// if (++counter >= 1000 or (cache.size() > found.size() + 100)) {
+			// 	counter = 0;
+			// 	for (auto it = cache.begin(); it != cache.end();) {
+			// 		if (not v_contains(found, it->first))
+			// 			it = cache.erase(it);
+			// 		else
+			// 			it++;
+			// 	}
+			// 	cache.compact();
+			// }
+
+			//? Clear dead processes from list
+			auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
+			current_procs.erase(eraser.begin(), eraser.end());
 
 			//? Update the details info box for process if active
 			if (show_detailed and got_detailed) {
-				_collect_details(detailed_pid, round(uptime), procs);
+				_collect_details(detailed_pid, round(uptime), current_procs);
 			}
 			else if (show_detailed and not got_detailed and detailed.status != "Dead") {
 				detailed.status = "Dead";
 				redraw = true;
 			}
 
+
 			old_cputimes = cputimes;
-			current_procs = procs;
+			// current_procs.clear();
+			// current_procs = procs;
 		}
 		//* ---------------------------------------------Collection done-----------------------------------------------
 
-		//* Match filter if defined
-		if (not tree and not filter.empty()) {
-			const auto filtered = rng::remove_if(procs, [&filter](const auto& p) {
-					return (not s_contains(to_string(p.pid), filter)
-						and not s_contains(p.name, filter)
-						and not s_contains(p.cmd, filter)
-						and not s_contains(p.user, filter));
-			});
-			procs.erase(filtered.begin(), filtered.end());
-		}
-
 		//* Sort processes
-		const auto cmp = [&reverse](const auto &a, const auto &b) { return (reverse ? a < b : a > b); };
 		switch (v_index(sort_vector, sorting)) {
-				case 0: rng::sort(procs, cmp, &proc_info::pid); 	break;
-				case 1: rng::sort(procs, cmp, &proc_info::name);	break;
-				case 2: rng::sort(procs, cmp, &proc_info::cmd); 	break;
-				case 3: rng::sort(procs, cmp, &proc_info::threads); break;
-				case 4: rng::sort(procs, cmp, &proc_info::user); 	break;
-				case 5: rng::sort(procs, cmp, &proc_info::mem); 	break;
-				case 6: rng::sort(procs, cmp, &proc_info::cpu_p);   break;
-				case 7: rng::sort(procs, cmp, &proc_info::cpu_c);   break;
+				case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 	break;
+				case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);	break;
+				case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 	break;
+				case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); break;
+				case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
+				case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 	break;
+				case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   break;
+				case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   break;
 		}
+		if (reverse) rng::reverse(current_procs);
 
 		//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
 		if (not tree and not reverse and sorting == "cpu lazy") {
 			double max = 10.0, target = 30.0;
-			for (size_t i = 0, x = 0, offset = 0; i < procs.size(); i++) {
-				if (i <= 5 and procs.at(i).cpu_p > max)
-					max = procs.at(i).cpu_p;
+			for (size_t i = 0, x = 0, offset = 0; i < current_procs.size(); i++) {
+				if (i <= 5 and current_procs.at(i).cpu_p > max)
+					max = current_procs.at(i).cpu_p;
 				else if (i == 6)
 					target = (max > 30.0) ? max : 10.0;
-				if (i == offset and procs.at(i).cpu_p > 30.0)
+				if (i == offset and current_procs.at(i).cpu_p > 30.0)
 					offset++;
-				else if (procs.at(i).cpu_p > target) {
-					rotate(procs.begin() + offset, procs.begin() + i, procs.begin() + i + 1);
+				else if (current_procs.at(i).cpu_p > target) {
+					rotate(current_procs.begin() + offset, current_procs.begin() + i, current_procs.begin() + i + 1);
 					if (++x > 10) break;
 				}
 			}
 		}
 
+		//* Match filter if defined
+		for (auto& p : current_procs) {
+			if (not tree and not filter.empty()) {
+					if (not s_contains(to_string(p.pid), filter)
+						and not s_contains(p.name, filter)
+						and not s_contains(p.cmd, filter)
+						and not s_contains(p.user, filter)) {
+							p.filtered = true;
+							filter_found++;
+						}
+				}
+			else if (not tree) {
+				p.filtered = false;
+			}
+		}
+
+
+
 		//* Generate tree view if enabled
 		if (tree) {
-			if (collapse > -1 and collapse == expand) {
-				if (cache.contains(collapse)) cache.at(collapse).collapsed = not cache.at(collapse).collapsed;
-				collapse = expand = -1;
-			}
-			else if (collapse > -1) {
-				if (cache.contains(collapse)) cache.at(collapse).collapsed = true;
-				collapse = -1;
-			}
-			else if (expand > -1) {
-				if (cache.contains(expand)) cache.at(expand).collapsed = false;
-				expand = -1;
+			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
+				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
+				if (collapser != current_procs.end()) {
+					if (collapse == expand) {
+						collapser->collapsed = not collapser->collapsed;
+						collapse = expand = -1;
+					}
+					else if (collapse > -1) {
+						collapser->collapsed = true;
+						collapse = -1;
+					}
+					else if (expand > -1) {
+						collapser->collapsed = false;
+						expand = -1;
+					}
+				}
 			}
 
 			vector<proc_info> tree_procs;
-			tree_procs.reserve(procs.size());
+			tree_procs.reserve(current_procs.size());
 
 			//? Stable sort to retain selected sorting among processes with the same parent
-			rng::stable_sort(procs, rng::less{}, &proc_info::ppid);
+			rng::stable_sort(current_procs, rng::less{}, &proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
-			for (const auto& p : rng::equal_range(procs, procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
-				_tree_gen(p, procs, tree_procs, 0, false, filter);
+			for (const auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+				_tree_gen(p, current_procs, tree_procs, 0, false, filter);
 			}
 
-			procs = std::move(tree_procs);
+			//procs.clear();
+			current_procs = std::move(tree_procs);
 		}
 
-		numpids = (int)procs.size();
+		numpids = (not filter.empty() ? filter_found : (int)current_procs.size());
 
-		return procs;
+		return current_procs;
 	}
 }
 

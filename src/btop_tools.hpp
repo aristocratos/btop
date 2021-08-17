@@ -132,10 +132,10 @@ namespace Tools {
 	constexpr auto ZeroSec = std::chrono::seconds(0);
 	extern atomic<int> active_locks;
 
-	//* Return number of UTF8 characters in a string (counts UTF-8 characters with a width > 1 as 2 characters)
+	//* Return number of UTF8 characters in a string (wide=true counts UTF-8 characters with a width > 1 as 2 characters)
 	inline size_t ulen(const string& str, const bool wide=false) {
 		return 	std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; })
-			+	(wide ? std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) > 0xef); }) : 0);
+				+ (wide ? std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) > 0xef); }) : 0);
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
@@ -183,7 +183,7 @@ namespace Tools {
 	//* Compare <first> with all following values
 	template<typename First, typename ... T>
 	inline bool is_in(const First& first, const T& ... t) {
-		return ((first == t) || ...);
+		return ((first == t) or ...);
 	}
 
 	//* Return current time since epoch in seconds
@@ -203,12 +203,12 @@ namespace Tools {
 
 	//* Check if a string is a valid bool value
 	inline bool isbool(const string& str) {
-		return (str == "true") or (str == "false") or (str == "True") or (str == "False");
+		return is_in(str, "true", "false", "True", "False");
 	}
 
 	//* Convert string to bool, returning any value not equal to "true" or "True" as false
 	inline bool stobool(const string& str) {
-		return (str == "true" or str == "True");
+		return is_in(str, "true", "True");
 	}
 
 	//* Check if a string is a valid integer value

@@ -98,7 +98,7 @@ namespace Theme {
 		{ "selected_bg", "\x1b[41m" },
 		{ "selected_fg", "\x1b[97m" },
 		{ "inactive_fg", "\x1b[90m" },
-		{ "graph_text", "\x1b[37m" },
+		{ "graph_text", "\x1b[90m" },
 		{ "meter_bg", "\x1b[90m" },
 		{ "proc_misc", "\x1b[92m" },
 		{ "cpu_box", "\x1b[32m" },

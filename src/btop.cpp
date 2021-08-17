@@ -109,7 +109,7 @@ void argumentParser(const int& argc, char **argv) {
 					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					<< "  +t, --tty_off         force (OFF) tty mode\n"
 					<< "  --utf-foce			force start even if no UTF-8 locale was detected"
-					<< "  --debug               start with loglevel set to DEBUG, overriding value set in config\n"
+					<< "  --debug               start in debug mode with loglevel set to DEBUG\n"
 					<< endl;
 			exit(0);
 		}
@@ -168,6 +168,8 @@ void clean_quit(int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
+	if (pthread_join(Runner::runner_id, NULL) != 0)
+		Logger::error("Failed to join _runner thread!");
 
 	if (not Global::exit_error_msg.empty()) {
 		sig = 1;
@@ -273,29 +275,34 @@ namespace Runner {
 	atomic<bool> active (false);
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
+	atomic<bool> do_work (false);
 
 	string output;
 	sigset_t mask;
+	pthread_t runner_id;
 	pthread_mutex_t mtx;
 
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
-		{"mem",		0b0000'0100},
-		{"net",		0b0001'0000},
+		{"net",		0b0000'0100},
+		{"mem",		0b0001'0000},
 		{"cpu",		0b0100'0000},
 	};
 
 	enum bit_pos {
 		proc_present, proc_running,
-		mem_present, mem_running,
 		net_present, net_running,
+		mem_present, mem_running,
 		cpu_present, cpu_running
 	};
 
 	const uint_fast8_t proc_done 	= 0b0000'0011;
-	const uint_fast8_t mem_done 	= 0b0000'1100;
-	const uint_fast8_t net_done 	= 0b0011'0000;
+	const uint_fast8_t net_done 	= 0b0000'1100;
+	const uint_fast8_t mem_done 	= 0b0011'0000;
 	const uint_fast8_t cpu_done 	= 0b1100'0000;
+
+	string debug_bg;
+	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
 
 	struct runner_conf {
 		bitset<8> box_mask;
@@ -308,10 +315,8 @@ namespace Runner {
 	struct runner_conf current_conf;
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-	void * _runner(void * confptr) {
-		struct runner_conf *conf;
-		conf = (struct runner_conf *) confptr;
-
+	void * _runner(void * _) {
+		(void)_;
 		//? Block all signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
@@ -324,125 +329,181 @@ namespace Runner {
 			stopping = true;
 		}
 
-		if (active or stopping or Global::resized) {
-			pthread_exit(NULL);
-		}
+		while (not Global::quitting) {
+			atomic_wait(do_work, false);
+			do_work = false;
+			if (stopping or Global::resized) {
+				continue;
+			}
 
-		//? Secondary atomic lock used for signaling status to main thread
-		atomic_lock lck(active);
+			auto& conf = current_conf;
 
-		//! DEBUG stats
-		auto timestamp = time_micros();
+			//? Secondary atomic lock used for signaling status to main thread
+			atomic_lock lck(active);
 
-		output.clear();
+			//! DEBUG stats
+			if (Global::debug) {
+				debug_times.clear();
+				debug_times["total"] = {0, 0};
+			}
 
-		future<Cpu::cpu_info&> cpu;
-		future<Mem::mem_info&> mem;
-		future<Net::net_info&> net;
-		future<vector<Proc::proc_info>> proc;
+			output.clear();
 
-		//* Start collection functions for all boxes in async threads and draw in this thread when finished
-		//? Starting order below based on mean time to finish
-		try {
-			while (conf->box_mask.count() > 0) {
-				if (stopping) break;
-				//? PROC
-				if (conf->box_mask.test(proc_present)) {
-					if (not conf->box_mask.test(proc_running)) {
-						proc = async(Proc::collect, conf->no_update);
-						conf->box_mask.set(proc_running);
+			//* Start collection functions for all boxes in async threads and draw in this thread when finished
+			//? Starting order below based on mean time to finish
+			try {
+				future<Cpu::cpu_info&> cpu;
+				future<Mem::mem_info&> mem;
+				future<Net::net_info&> net;
+				future<vector<Proc::proc_info>&> proc;
+				while (conf.box_mask.count() > 0) {
+					if (stopping) break;
+					//? PROC
+					if (conf.box_mask.test(proc_present)) {
+						if (not conf.box_mask.test(proc_running)) {
+							if (Global::debug) debug_times["proc"].at(0) = time_micros();
+							proc = async(Proc::collect, conf.no_update);
+							conf.box_mask.set(proc_running);
+						}
+						else if (not proc.valid())
+							throw std::runtime_error("Proc::collect() future not valid.");
+
+						else if (proc.wait_for(std::chrono::microseconds(10)) == future_status::ready) {
+							try {
+								if (Global::debug) {
+									debug_times["proc"].at(1) = time_micros();
+									debug_times["proc"].at(0) = debug_times["proc"].at(1) - debug_times["proc"].at(0);
+									debug_times["total"].at(0) += debug_times["proc"].at(0);
+								}
+								output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
+								if (Global::debug) {
+									debug_times["proc"].at(1) = time_micros() - debug_times["proc"].at(1);
+									debug_times["total"].at(1) += debug_times["proc"].at(1);
+								}
+							}
+							catch (const std::exception& e) {
+								throw std::runtime_error("Proc:: -> " + (string)e.what());
+							}
+							conf.box_mask ^= proc_done;
+						}
 					}
-					else if (not proc.valid())
-						throw std::runtime_error("Proc::collect() future not valid.");
+					//? NET
+					if (conf.box_mask.test(net_present)) {
+						if (not conf.box_mask.test(net_running)) {
+							if (Global::debug) debug_times["net"].at(0) = time_micros();
+							net = async(Net::collect, conf.no_update);
+							conf.box_mask.set(net_running);
+						}
+						else if (not net.valid())
+							throw std::runtime_error("Net::collect() future not valid.");
 
-					else if (proc.wait_for(std::chrono::microseconds(100)) == future_status::ready) {
-						try {
-							output += Proc::draw(proc.get(), conf->force_redraw, conf->no_update);
+						else if (net.wait_for(ZeroSec) == future_status::ready) {
+							try {
+								if (Global::debug) {
+									debug_times["net"].at(1) = time_micros();
+									debug_times["net"].at(0) = debug_times["net"].at(1) - debug_times["net"].at(0);
+									debug_times["total"].at(0) += debug_times["net"].at(0);
+								}
+								output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
+								if (Global::debug) {
+									debug_times["net"].at(1) = time_micros() - debug_times["net"].at(1);
+									debug_times["total"].at(1) += debug_times["net"].at(1);
+								}
+							}
+							catch (const std::exception& e) {
+								throw std::runtime_error("Net:: -> " + (string)e.what());
+							}
+							conf.box_mask ^= net_done;
 						}
-						catch (const std::exception& e) {
-							throw std::runtime_error("Proc:: -> " + (string)e.what());
+					}
+					//? MEM
+					if (conf.box_mask.test(mem_present)) {
+						if (not conf.box_mask.test(mem_running)) {
+							if (Global::debug) debug_times["mem"].at(0) = time_micros();
+							mem = async(Mem::collect, conf.no_update);
+							conf.box_mask.set(mem_running);
 						}
-						conf->box_mask ^= proc_done;
-					}
-				}
-				//? MEM
-				if (conf->box_mask.test(mem_present)) {
-					if (not conf->box_mask.test(mem_running)) {
-						mem = async(Mem::collect, conf->no_update);
-						conf->box_mask.set(mem_running);
-					}
-					else if (not mem.valid())
-						throw std::runtime_error("Mem::collect() future not valid.");
+						else if (not mem.valid())
+							throw std::runtime_error("Mem::collect() future not valid.");
 
-					else if (mem.wait_for(ZeroSec) == future_status::ready) {
-						try {
-							output += Mem::draw(mem.get(), conf->force_redraw, conf->no_update);
+						else if (mem.wait_for(ZeroSec) == future_status::ready) {
+							try {
+								if (Global::debug) {
+									debug_times["mem"].at(1) = time_micros();
+									debug_times["mem"].at(0) = debug_times["mem"].at(1) - debug_times["mem"].at(0);
+									debug_times["total"].at(0) += debug_times["mem"].at(0);
+								}
+								output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
+								if (Global::debug) {
+									debug_times["mem"].at(1) = time_micros() - debug_times["mem"].at(1);
+									debug_times["total"].at(1) += debug_times["mem"].at(1);
+								}
+							}
+							catch (const std::exception& e) {
+								throw std::runtime_error("Mem:: -> " + (string)e.what());
+							}
+							conf.box_mask ^= mem_done;
 						}
-						catch (const std::exception& e) {
-							throw std::runtime_error("Mem:: -> " + (string)e.what());
+					}
+					//? CPU
+					if (conf.box_mask.test(cpu_present)) {
+						if (not conf.box_mask.test(cpu_running)) {
+							if (Global::debug) debug_times["cpu"].at(0) = time_micros();
+							cpu = async(Cpu::collect, conf.no_update);
+							conf.box_mask.set(cpu_running);
 						}
-						conf->box_mask ^= mem_done;
-					}
-				}
-				//? NET
-				if (conf->box_mask.test(net_present)) {
-					if (not conf->box_mask.test(net_running)) {
-						net = async(Net::collect, conf->no_update);
-						conf->box_mask.set(net_running);
-					}
-					else if (not net.valid())
-						throw std::runtime_error("Net::collect() future not valid.");
+						else if (not cpu.valid())
+							throw std::runtime_error("Cpu::collect() future not valid.");
 
-					else if (net.wait_for(ZeroSec) == future_status::ready) {
-						try {
-							output += Net::draw(net.get(), conf->force_redraw, conf->no_update);
+						else if (cpu.wait_for(ZeroSec) == future_status::ready) {
+							try {
+								if (Global::debug) {
+									debug_times["cpu"].at(1) = time_micros();
+									debug_times["cpu"].at(0) = debug_times["cpu"].at(1) - debug_times["cpu"].at(0);
+									debug_times["total"].at(0) += debug_times["cpu"].at(0);
+								}
+								output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
+								if (Global::debug) {
+									debug_times["cpu"].at(1) = time_micros() - debug_times["cpu"].at(1);
+									debug_times["total"].at(1) += debug_times["cpu"].at(1);
+								}
+							}
+							catch (const std::exception& e) {
+								throw std::runtime_error("Cpu:: -> " + (string)e.what());
+							}
+							conf.box_mask ^= cpu_done;
 						}
-						catch (const std::exception& e) {
-							throw std::runtime_error("Net:: -> " + (string)e.what());
-						}
-						conf->box_mask ^= net_done;
-					}
-				}
-				//? CPU
-				if (conf->box_mask.test(cpu_present)) {
-					if (not conf->box_mask.test(cpu_running)) {
-						cpu = async(Cpu::collect, conf->no_update);
-						conf->box_mask.set(cpu_running);
-					}
-					else if (not cpu.valid())
-						throw std::runtime_error("Cpu::collect() future not valid.");
-
-					else if (cpu.wait_for(ZeroSec) == future_status::ready) {
-						try {
-							output += Cpu::draw(cpu.get(), conf->force_redraw, conf->no_update);
-						}
-						catch (const std::exception& e) {
-							throw std::runtime_error("Cpu:: -> " + (string)e.what());
-						}
-						conf->box_mask ^= cpu_done;
 					}
 				}
 			}
-		}
-		catch (const std::exception& e) {
-			Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
-			Global::thread_exception = true;
-			Input::interrupt = true;
-			stopping = true;
-		}
+			catch (const std::exception& e) {
+				Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
+				Global::thread_exception = true;
+				Input::interrupt = true;
+				stopping = true;
+			}
 
-		if (stopping) {
-			pthread_exit(NULL);
+			if (stopping) {
+				continue;
+			}
+
+			//! DEBUG stats -->
+			if (Global::debug) {
+				output += debug_bg + Theme::c("title") + Fx::b + ljust(" Box", 9) + ljust("Collect μs", 12, true) + ljust("Draw μs", 9, true) + Theme::c("main_fg") + Fx::ub;
+				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
+					if (not debug_times.contains(name)) debug_times[name] = {0,0};
+					const auto& [time_collect, time_draw] = debug_times.at(name);
+					if (name == "total") output += Fx::b;
+					output += Mv::l(29) + Mv::d(1) + ljust(name, 8) + ljust(to_string(time_collect), 12) + ljust(to_string(time_draw), 9);
+				}
+			}
+
+			//? If overlay isn't empty, print output without color and then print overlay on top
+			cout << Term::sync_start << (conf.overlay.empty()
+					? output + conf.clock
+					: Theme::c("inactive_fg") + Fx::ub + Fx::uncolor(output + conf.clock) + conf.overlay)
+				<< Term::sync_end << flush;
 		}
-
-		//? If overlay isn't empty, print output without color and then print overlay on top
-		cout << Term::sync_start << (conf->overlay.empty()
-				? output + conf->clock
-				: Theme::c("inactive_fg") + Fx::uncolor(output + conf->clock) + conf->overlay)
-			 << Term::sync_end << flush;
-
-		//! DEBUG stats -->
-		cout << Fx::reset << Mv::to(1, 20) << "Runner took: " << rjust(to_string(time_micros() - timestamp), 5) << " μs.  " << flush;
 
 		pthread_exit(NULL);
 	}
@@ -476,31 +537,32 @@ namespace Runner {
 
 			current_conf = {box_mask, no_update, force_redraw, Global::overlay, Global::clock};
 
-			pthread_t runner_id;
-			if (pthread_create(&runner_id, NULL, &_runner, (void *) &current_conf) != 0)
-				throw std::runtime_error("Failed to create _runner thread!");
-
-			if (pthread_detach(runner_id) != 0)
-				throw std::runtime_error("Failed to detach _runner thread!");
+			do_work = true;
+			atomic_notify(do_work);
 
 			for (int i = 0; not active and i < 10; i++) sleep_ms(1);
 		}
 	}
 
-	//* Stops any secondary thread running
+	//* Stops any work being done in runner thread and checks for thread errors
 	void stop() {
 		stopping = true;
 		int ret = pthread_mutex_trylock(&mtx);
-		if (ret == EOWNERDEAD or ret == ENOTRECOVERABLE) {
+		if (ret != EBUSY and not Global::quitting) {
 			if (active) active = false;
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
-			if (not Global::quitting) exit(1);
+			exit(1);
 		}
-		else if (ret == EBUSY)
-			atomic_wait(active);
-		else if (ret == 0)
-			pthread_mutex_unlock(&mtx);
-		sleep_ms(1);
+		else if (ret == EBUSY) {
+			if (not active) {
+				do_work = true;
+				atomic_notify(do_work);
+				sleep_ms(1);
+			}
+			else {
+				atomic_wait(active);
+			}
+		}
 		stopping = false;
 	}
 
@@ -575,7 +637,10 @@ int main(int argc, char **argv) {
 		if (Config::current_boxes.empty()) Config::check_boxes(Config::getS("shown_boxes"));
 		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
 
-		if (Global::debug) Logger::set("DEBUG");
+		if (Global::debug) {
+			Logger::set("DEBUG");
+			Logger::debug("Starting in DEBUG mode!");
+		}
 		else Logger::set(Config::getS("log_level"));
 
 		Logger::info("Logger set to " + Config::getS("log_level"));
@@ -640,6 +705,16 @@ int main(int argc, char **argv) {
 	//? Update list of available themes and generate the selected theme
 	Theme::updateThemes();
 	Theme::setTheme();
+
+	//? Start runner thread
+	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+		Global::exit_error_msg = "Failed to create _runner thread!";
+		exit(1);
+	}
+
+	if (Global::debug) {
+		Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
+	}
 
 	//? Create the btop++ banner
 	banner_gen();

@@ -279,8 +279,8 @@ namespace Draw {
 
 		//? Horizontal iteration over values in <data>
 		for (const int& i : iota(data_offset, (int)data.size())) {
-			if (tty_mode and mult and i % 2 != 0) continue;
-			else if (not tty_mode and mult) current = not current;
+			// if (tty_mode and mult and i % 2 != 0) continue;
+			if (not tty_mode and mult) current = not current;
 			if (i < 0) {
 				data_value = 0;
 				last = 0;
@@ -332,16 +332,17 @@ namespace Draw {
 
 	Graph::Graph(int width, int height, const string& color_gradient, const deque<long long>& data, const string& symbol, bool invert, bool no_zero, long long max_value, long long offset)
 	: width(width), height(height), color_gradient(color_gradient), invert(invert), no_zero(no_zero), offset(offset) {
-		if (Config::getB("tty_mode") or symbol == "tty") { tty_mode = true; this->symbol = "tty"; }
+		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
 		else this->symbol = Config::getS("graph_symbol");
+		if (this->symbol == "tty") tty_mode = true;
 
 		if (max_value == 0 and offset > 0) max_value = 100;
 		this->max_value = max_value;
-		const int value_width = ceil((double)data.size() / 2);
-		int data_offset = (value_width > width) ? data.size() - width * 2 : 0;
+		const int value_width = (tty_mode ? data.size() : ceil((double)data.size() / 2));
+		int data_offset = (value_width > width) ? data.size() - width * (tty_mode ? 1 : 2) : 0;
 
-		if ((data.size() - data_offset) % 2 != 0) {
+		if (not tty_mode and (data.size() - data_offset) % 2 != 0) {
 			data_offset--;
 		}
 
@@ -377,7 +378,7 @@ namespace Draw {
 namespace Cpu {
 	int width_p = 100, height_p = 32;
 	int min_width = 60, min_height = 8;
-	int x = 1, y = 1, width, height;
+	int x = 1, y = 1, width = 20, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
 	int graph_up_height;
@@ -542,7 +543,7 @@ namespace Cpu {
 namespace Mem {
 	int width_p = 45, height_p = 38;
 	int min_width = 36, min_height = 10;
-	int x = 1, y, width, height;
+	int x = 1, y, width = 20, height;
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
 	int disks_io_h = 0;
 	bool shown = true, redraw = true;
@@ -580,6 +581,7 @@ namespace Mem {
 
 			//? Mem graphs and meters
 			for (const auto& name : mem_names) {
+
 				if (use_graphs)
 					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, mem.percent.at(name)};
 				else
@@ -777,7 +779,7 @@ namespace Mem {
 namespace Net {
 	int width_p = 45, height_p = 30;
 	int min_width = 36, min_height = 6;
-	int x = 1, y, width, height;
+	int x = 1, y, width = 20, height;
 	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
 	bool shown = true, redraw = true;
 	string old_ip;
@@ -792,7 +794,6 @@ namespace Net {
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
 		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
-		// if (ip_addr.ends_with(selected_iface)) ip_addr.resize(ip_addr.size() - selected_iface.size());
 		if (old_ip != ip_addr) {
 			old_ip = ip_addr;
 			redraw = true;
@@ -809,6 +810,7 @@ namespace Net {
 		if (redraw) {
 			out = box;
 			//? Graphs
+			graphs.clear();
 			graphs["download"] = Draw::Graph{width - b_width - 2, u_graph_height, "download", net.bandwidth.at("download"), graph_symbol, false, true, down_max};
 			graphs["upload"] = Draw::Graph{width - b_width - 2, d_graph_height, "upload", net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
 
@@ -870,7 +872,7 @@ namespace Net {
 namespace Proc {
 	int width_p = 55, height_p = 68;
 	int min_width = 44, min_height = 16;
-	int x, y, width, height;
+	int x, y, width = 20, height;
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
 	int selected_pid = 0;
@@ -992,8 +994,8 @@ namespace Proc {
 
 				//? Create cpu and mem graphs if process is alive
 				if (alive) {
-					detailed_cpu_graph = {dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
-					detailed_mem_graph = {d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
+					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
+					detailed_mem_graph = Draw::Graph{d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
 
 				//? Draw structure of details box
@@ -1189,7 +1191,7 @@ namespace Proc {
 		//* Iteration over processes
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
-			if (n++ < start) continue;
+			if (p.filtered or n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) selected_pid = (int)p.pid;
 
@@ -1197,7 +1199,7 @@ namespace Proc {
 			const bool has_graph = p_counters.contains(p.pid);
 			if ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph)) {
 				if (not has_graph) {
-					p_graphs[p.pid] = {5, 1, "", {}, graph_symbol};
+					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
 					p_counters[p.pid] = 0;
 				}
 				else if (p.cpu_p < 0.1 and ++p_counters[p.pid] >= 10) {
@@ -1251,7 +1253,7 @@ namespace Proc {
 			}
 			//? Tree view line
 			else {
-				string prefix_pid = p.prefix + to_string(p.pid);
+				const string prefix_pid = p.prefix + to_string(p.pid);
 				int width_left = tree_size;
 				out += Mv::to(y+2+lc, x+1) + g_color + uresize(prefix_pid, width_left) + ' ';
 				width_left -= ulen(prefix_pid);
@@ -1259,9 +1261,9 @@ namespace Proc {
 					out += c_color + uresize(p.name, width_left - 1) + end + ' ';
 					width_left -= (ulen(p.name) + 1);
 				}
-				if (width_left > 7 and not p.cmd.empty()) {
-					out += g_color + uresize(p.cmd, width_left - 1, true) + ' ';
-					width_left -= (ulen(p.cmd, true) + 1);
+				if (width_left > 7 and (not p.short_cmd.empty() or p.short_cmd == p.name)) {
+					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ") ";
+					width_left -= (ulen(p.short_cmd, true) + 3);
 				}
 				out += string(max(0, width_left), ' ');
 			}
@@ -1312,6 +1314,8 @@ namespace Proc {
 				else
 					++element;
 			}
+			p_graphs.compact();
+			p_counters.compact();
 		}
 
 		if (selected == 0 and selected_pid != 0) selected_pid = 0;
@@ -1323,6 +1327,7 @@ namespace Proc {
 
 namespace Draw {
 	void calcSizes() {
+		atomic_wait(Runner::active);
 		auto& boxes = Config::getS("shown_boxes");
 		auto& cpu_bottom = Config::getB("cpu_bottom");
 		auto& mem_below_net = Config::getB("mem_below_net");

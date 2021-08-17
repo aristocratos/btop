@@ -306,10 +306,11 @@ namespace Config {
 	}
 
 	void toggle_box(const string& box) {
-		if (not v_contains(current_boxes, box))
+		auto box_pos = rng::find(current_boxes, box);
+		if (box_pos == current_boxes.end())
 			current_boxes.push_back(box);
 		else
-			current_boxes.erase(rng::find(current_boxes, box));
+			current_boxes.erase(box_pos);
 
 		string new_boxes;
 		if (not current_boxes.empty()) {

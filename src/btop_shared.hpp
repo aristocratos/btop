@@ -48,6 +48,7 @@ namespace Runner {
 	extern atomic<bool> active;
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
+	extern pthread_t runner_id;
 
 	void run(const string& box="", const bool no_update=false, const bool force_redraw=false);
 	void stop();
@@ -206,13 +207,16 @@ namespace Proc {
 	struct proc_info {
 		size_t pid = 0;
 		string name = "", cmd = "";
-		size_t threads = 0;
+		string short_cmd = "";
+		size_t threads = 0, name_offset = 0;
 		string user = "";
 		uint64_t mem = 0;
 		double cpu_p = 0.0, cpu_c = 0.0;
 		char state = '0';
-		uint64_t cpu_n = 0, p_nice = 0, ppid = 0;
+		uint64_t cpu_n = 0, p_nice = 0, ppid = 0, cpu_s = 0, cpu_t = 0;
 		string prefix = "";
+		size_t depth = 0;
+		bool collapsed = false, filtered = false;
 	};
 
 	//* Container for process info box
@@ -230,7 +234,7 @@ namespace Proc {
 	extern detail_container detailed;
 
 	//* Collect and sort process information from /proc
-	auto collect(const bool no_update=false) -> vector<proc_info>;
+	auto collect(const bool no_update=false) -> vector<proc_info>&;
 
 	//* Update current selection and view, returns -1 if no change otherwise the current selection
 	int selection(const string& cmd_key);

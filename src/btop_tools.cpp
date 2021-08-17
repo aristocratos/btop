@@ -120,8 +120,6 @@ namespace Term {
 
 	void restore() {
 		if (initialized) {
-			echo(true);
-			linebuffered(true);
 			tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
 			cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
 			initialized = false;
@@ -274,9 +272,9 @@ namespace Tools {
 			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}
 		if (shorten) {
-				if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
-				if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
-				out.push_back(units[start][0]);
+			if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
+			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
+			out.push_back(units[start][0]);
 		}
 		else out += " " + units[start];
 
@@ -383,6 +381,7 @@ namespace Logger {
 			else logfile.clear();
 		}
 		catch (const std::exception& e) {
+			logfile.clear();
 			throw std::runtime_error("Exception in Logger::log_write() : " + (string)e.what());
 		}
 	}

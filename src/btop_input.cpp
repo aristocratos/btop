@@ -32,44 +32,43 @@ using namespace Tools;
 namespace rng = std::ranges;
 
 namespace Input {
-	namespace {
-		//* Map for translating key codes to readable values
-		const unordered_flat_map<string, string> Key_escapes = {
-			{"\033",	"escape"},
-			{"\n",		"enter"},
-			{" ",		"space"},
-			{"\x7f",	"backspace"},
-			{"\x08",	"backspace"},
-			{"[A", 		"up"},
-			{"OA",		"up"},
-			{"[B", 		"down"},
-			{"OB",		"down"},
-			{"[D", 		"left"},
-			{"OD",		"left"},
-			{"[C", 		"right"},
-			{"OC",		"right"},
-			{"[2~",		"insert"},
-			{"[3~",		"delete"},
-			{"[H",		"home"},
-			{"[F",		"end"},
-			{"[5~",		"page_up"},
-			{"[6~",		"page_down"},
-			{"\t",		"tab"},
-			{"[Z",		"shift_tab"},
-			{"OP",		"f1"},
-			{"OQ",		"f2"},
-			{"OR",		"f3"},
-			{"OS",		"f4"},
-			{"[15~",	"f5"},
-			{"[17~",	"f6"},
-			{"[18~",	"f7"},
-			{"[19~",	"f8"},
-			{"[20~",	"f9"},
-			{"[21~",	"f10"},
-			{"[23~",	"f11"},
-			{"[24~",	"f12"}
-		};
-	}
+
+	//* Map for translating key codes to readable values
+	const unordered_flat_map<string, string> Key_escapes = {
+		{"\033",	"escape"},
+		{"\n",		"enter"},
+		{" ",		"space"},
+		{"\x7f",	"backspace"},
+		{"\x08",	"backspace"},
+		{"[A", 		"up"},
+		{"OA",		"up"},
+		{"[B", 		"down"},
+		{"OB",		"down"},
+		{"[D", 		"left"},
+		{"OD",		"left"},
+		{"[C", 		"right"},
+		{"OC",		"right"},
+		{"[2~",		"insert"},
+		{"[3~",		"delete"},
+		{"[H",		"home"},
+		{"[F",		"end"},
+		{"[5~",		"page_up"},
+		{"[6~",		"page_down"},
+		{"\t",		"tab"},
+		{"[Z",		"shift_tab"},
+		{"OP",		"f1"},
+		{"OQ",		"f2"},
+		{"OR",		"f3"},
+		{"OS",		"f4"},
+		{"[15~",	"f5"},
+		{"[17~",	"f6"},
+		{"[18~",	"f7"},
+		{"[19~",	"f8"},
+		{"[20~",	"f9"},
+		{"[21~",	"f10"},
+		{"[23~",	"f11"},
+		{"[24~",	"f12"}
+	};
 
 	std::atomic<bool> interrupt (false);
 	array<int, 2> mouse_pos;
@@ -156,8 +155,10 @@ namespace Input {
 			else if (ulen(key) > 1)
 				key.clear();
 
-			history.push_back(key);
-			history.pop_front();
+			if (not key.empty()) {
+				history.push_back(key);
+				history.pop_front();
+			}
 		}
 		return key;
 	}
@@ -171,7 +172,6 @@ namespace Input {
 
 	void clear() {
 		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
-		history.clear();
 	}
 
 	void process(const string& key) {
@@ -184,6 +184,7 @@ namespace Input {
 			if (not filtering) {
 				bool keep_going = false;
 				if (is_in(key, "1", "2", "3", "4")) {
+					atomic_wait(Runner::active);
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
 					term_resize(true);
