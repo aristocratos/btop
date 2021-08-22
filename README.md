@@ -84,8 +84,8 @@ Any support is greatly appreciated!
 For best experience, a terminal with support for:
 
 * 24-bit truecolor ([See list of terminals with truecolor support](https://gist.github.com/XVilka/8346728))
-* 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" argument.
- (16 color TTY mode now available as well.)
+* 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" arguments.
+* 16 color TTY mode will be activated if a real tty device is detected. Can be forced with "-t/--tty_on" arguments.
 * Wide characters (Are sometimes problematic in web-based terminals)
 
 Also needs a UTF8 locale and a font that covers:
@@ -105,7 +105,8 @@ See comments by @sgleizes [link](https://github.com/aristocratos/bpytop/issues/1
 
 If text are misaligned and you are using Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
 
-Characters clipping in to each other or text/border misalignments is not bugs caused by bpytop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
+Characters clipping in to each other or text/border misalignments is not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
+
 Look to the creators of the terminal emulator you use to fix these issues if the previous mentioned fixes don't work for you.
 
 ## Screenshots
@@ -152,11 +153,12 @@ sudo make install
 # only use "sudo" when installing to a NON user owned directory
 ```
 
->to make btop always run as root (no need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems)
+>to make btop always run as root (or other user), (no need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems)
 
 ``` bash
 # run after make install and use same PREFIX if any was used at install
-make su-setuid
+sudo make setuid
+# set SU_USER and SU_GROUP to select user and group, default is root:root
 ```
 
 
@@ -166,13 +168,13 @@ make su-setuid
 sudo make uninstall
 ```
 
->to remove any object files
+>to remove any object files from source dir
 
 ```bash
 make clean
 ```
 
->to remove all object files, binaries and created directories
+>to remove all object files, binaries and created directories in source dir
 
 ```bash
 make distclean

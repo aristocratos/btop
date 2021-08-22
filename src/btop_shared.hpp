@@ -215,7 +215,7 @@ namespace Proc {
 		char state = '0';
 		uint64_t cpu_n = 0, p_nice = 0, ppid = 0, cpu_s = 0, cpu_t = 0;
 		string prefix = "";
-		size_t depth = 0;
+		size_t depth = 0, tree_index = 0;
 		bool collapsed = false, filtered = false;
 	};
 

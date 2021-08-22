@@ -47,6 +47,8 @@ namespace Config {
 		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
+		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
+
 		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
 								"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"
 								"#* \"block\" has half the resolution of braille but uses more common characters.\n"
@@ -112,7 +114,7 @@ namespace Config {
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
 
-		{"draw_clock", 			"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable."},
+		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable."},
 
 		{"background_update", 	"#* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort."},
 
@@ -174,7 +176,7 @@ namespace Config {
 		{"cpu_sensor", "Auto"},
 		{"cpu_core_map", ""},
 		{"temp_scale", "celsius"},
-		{"draw_clock", "%X"},
+		{"clock_format", "%X"},
 		{"custom_cpu_name", ""},
 		{"disks_filter", ""},
 		{"io_graph_speeds", ""},
@@ -188,6 +190,7 @@ namespace Config {
 	unordered_flat_map<string, bool> bools = {
 		{"theme_background", true},
 		{"truecolor", true},
+		{"rounded_corners", true},
 		{"proc_reversed", false},
 		{"proc_tree", false},
 		{"proc_colors", true},
@@ -362,6 +365,10 @@ namespace Config {
 					cread >> value;
 					if (not isint(value))
 						load_warnings.push_back("Got an invalid integer value for config name: " + name);
+					else if (name == "update_ms" and stoi(value) < 100) {
+						load_warnings.push_back("Config value update_ms set too low (<100), setting (100).");
+						ints.at(name) = 100;
+					}
 					else
 						ints.at(name) = stoi(value);
 				}
@@ -376,6 +383,8 @@ namespace Config {
 						load_warnings.push_back("Invalid log_level: " + value);
 					else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
 						load_warnings.push_back("Invalid graph symbol identifier: " + value);
+					else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
+						load_warnings.push_back("Invalid graph symbol identifier for" + name + ": " + value);
 					else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 						load_warnings.push_back("Invalid box name(s) in shown_boxes: " + value);
 					else

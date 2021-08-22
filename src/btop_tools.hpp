@@ -144,6 +144,9 @@ namespace Tools {
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
 	string luresize(const string str, const size_t len, const bool wide=false);
 
+	//* Replace <from> in <str> with <to> and return new string
+	string s_replace(const string& str, const string& from, const string& to);
+
 	//* Capatilize <str>
 	inline string capitalize(string str) {
 		str.at(0) = toupper(str.at(0));
@@ -263,8 +266,11 @@ namespace Tools {
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
 
+	string hostname();
+	string username();
+
 #if __GNUC__ < 11
-	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old); }
+	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old) sleep_ms(1); }
 	inline void atomic_notify(const atomic<bool>& atom) noexcept { (void)atom; }
 #else
 	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { atom.wait(old); }
@@ -278,15 +284,6 @@ namespace Tools {
 	public:
 		atomic_lock(atomic<bool>& atom);
 		~atomic_lock();
-	};
-
-	//* RAII wrapper for pthread_mutex_lock & unlock
-	class thread_lock {
-		pthread_mutex_t& pt_mutex;
-	public:
-		int status;
-		thread_lock(pthread_mutex_t& mtx);
-		~thread_lock();
 	};
 
 	//* Read a complete file and return as a string

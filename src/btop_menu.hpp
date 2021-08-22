@@ -21,6 +21,8 @@ tab-size = 4
 #include <string>
 #include <atomic>
 
+#include <btop_input.hpp>
+
 using std::string, std::atomic;
 
 namespace Menu {
@@ -28,5 +30,7 @@ namespace Menu {
 	extern atomic<bool> active;
 	extern string output;
 
+    //? line, col, height, width
+	extern unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
 
 }

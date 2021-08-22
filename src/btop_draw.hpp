@@ -25,6 +25,35 @@ tab-size = 4
 
 using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
 
+namespace Symbols {
+	const string h_line				= "─";
+	const string v_line				= "│";
+	const string dotted_v_line		= "╎";
+	const string left_up			= "┌";
+	const string right_up			= "┐";
+	const string left_down			= "└";
+	const string right_down			= "┘";
+	const string round_left_up		= "╭";
+	const string round_right_up		= "╮";
+	const string round_left_down	= "╰";
+	const string round_right_down	= "╯";
+	const string title_left_down	= "┘";
+	const string title_right_down	= "└";
+	const string title_left			= "┐";
+	const string title_right		= "┌";
+	const string div_right			= "┤";
+	const string div_left			= "├";
+	const string div_up				= "┬";
+	const string div_down			= "┴";
+
+
+	const string up = "↑";
+	const string down = "↓";
+	const string left = "←";
+	const string right = "→";
+	const string enter = "↲";
+}
+
 namespace Draw {
 
 	//* An editable text field

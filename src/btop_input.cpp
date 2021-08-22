@@ -137,10 +137,10 @@ namespace Input {
 
 					key = mouse_event;
 
-					if (not Menu::active and key == "mouse_click") {
+					if (key == "mouse_click") {
 						const auto& [col, line] = mouse_pos;
 
-						for (const auto& [mapped_key, pos] : mouse_mappings) {
+						for (const auto& [mapped_key, pos] : (Menu::active ? Menu::mouse_mappings : mouse_mappings)) {
 							if (col >= pos.col and col < pos.col + pos.width and line >= pos.line and line < pos.line + pos.height) {
 								key = mapped_key;
 								break;
@@ -235,8 +235,10 @@ namespace Input {
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;
 				}
-				else if (key == "e")
+				else if (key == "e") {
 					Config::flip("proc_tree");
+					no_update = false;
+				}
 
 				else if (key == "r")
 					Config::flip("proc_reversed");
@@ -313,6 +315,7 @@ namespace Input {
 					auto& pid = Config::getI("selected_pid");
 					if (key == "+" or key == "space") Proc::expand = pid;
 					if (key == "-" or key == "space") Proc::collapse = pid;
+					no_update = false;
 				}
 				else if (key == "t") {
 					Logger::debug(key);

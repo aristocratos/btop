@@ -34,6 +34,8 @@ namespace Menu {
    atomic<bool> active (false);
    string output;
 
+   unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+
    const unordered_flat_map<string, unordered_flat_map<string, vector<string>>> menus = {
 		{ "options", {
 			{ "normal", {

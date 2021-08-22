@@ -27,6 +27,8 @@ tab-size = 4
 #include <cmath>
 #include <iostream>
 #include <exception>
+#include <tuple>
+#include <regex>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -53,8 +55,8 @@ tab-size = 4
 	#error Platform not supported!
 #endif
 
-using std::string, std::string_view, std::vector, std::array, std::atomic, std::endl, std::cout, std::min;
-using std::flush, std::endl, std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
+using std::string, std::string_view, std::vector, std::atomic, std::endl, std::cout, std::min, std::flush, std::endl;
+using std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -108,8 +110,9 @@ void argumentParser(const int& argc, char **argv) {
 					<< "  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
 					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					<< "  +t, --tty_off         force (OFF) tty mode\n"
-					<< "  --utf-foce			force start even if no UTF-8 locale was detected"
-					<< "  --debug               start in debug mode with loglevel set to DEBUG\n"
+					<< "  --utf-foce			force start even if no UTF-8 locale was detected\n"
+					<< "  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
+					<< "                        and screen draw functions and sets loglevel to DEBUG\n"
 					<< endl;
 			exit(0);
 		}
@@ -270,12 +273,89 @@ void banner_gen() {
 			+ Fx::i + "v" + Global::Version + Fx::ui;
 }
 
+bool update_clock() {
+	const auto& clock_format = Config::getS("clock_format");
+	if (not Cpu::shown or clock_format.empty()) return false;
+
+	static const unordered_flat_map<string, string> clock_custom_format = {
+		{"/user", Tools::username()},
+		{"/host", Tools::hostname()},
+		{"/uptime", ""}
+	};
+	static time_t c_time = 0;
+	static size_t clock_len = 0;
+
+	if (auto n_time = time(NULL); n_time == c_time)
+		return false;
+	else
+		c_time = n_time;
+
+	auto& out = Global::clock;
+	const auto& cpu_bottom = Config::getB("cpu_bottom");
+	const auto& x = Cpu::x;
+	const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
+	const auto& width = Cpu::width;
+	const auto& title_left = (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
+	const auto& title_right = (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
+	string new_clock = clock_format;
+
+	for (const auto& [c_format, replacement] : clock_custom_format) {
+		if (s_contains(new_clock, c_format)) {
+			if (c_format == "/uptime") {
+				string upstr = sec_to_dhms(system_uptime());
+				if (upstr.size() > 8) upstr.resize(upstr.size() - 3);
+				new_clock = s_replace(new_clock, c_format, upstr);
+			}
+			else {
+				new_clock = s_replace(new_clock, c_format, replacement);
+			}
+		}
+
+	}
+
+	new_clock = uresize(Tools::strf_time(new_clock), std::max(0, width - 56));
+	out.clear();
+
+	if (new_clock.size() != clock_len) {
+		out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+		clock_len = new_clock.size();
+	}
+
+	out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + title_left
+		+ Theme::c("title") + Fx::b + new_clock + Theme::c("cpu_box") + Fx::ub + title_right;
+
+	return true;
+}
+
 //* Manages secondary thread for collection and drawing of boxes
 namespace Runner {
 	atomic<bool> active (false);
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
-	atomic<bool> do_work (false);
+
+	//* Setup semaphore for triggering thread to do work
+#if __GNUC__ < 11
+	#include <semaphore.h>
+	sem_t do_work;
+	inline void thread_sem_init() { sem_init(&do_work, 0, 0); }
+	inline void thread_wait() { sem_wait(&do_work); }
+	inline void thread_trigger() { sem_post(&do_work); }
+#else
+	#include <semaphore>
+	std::binary_semaphore do_work(0);
+	inline void thread_sem_init() { ; }
+	inline void thread_wait() { do_work.acquire(); }
+	inline void thread_trigger() { do_work.release(); }
+#endif
+
+	//* RAII wrapper for pthread_mutex locking
+	class thread_lock {
+		pthread_mutex_t& pt_mutex;
+	public:
+		int status;
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { status = pthread_mutex_lock(&pt_mutex); }
+		~thread_lock() { if (status == 0) pthread_mutex_unlock(&pt_mutex); }
+	};
 
 	string output;
 	sigset_t mask;
@@ -296,6 +376,17 @@ namespace Runner {
 		cpu_present, cpu_running
 	};
 
+	enum debug_actions {
+		collect_begin,
+		draw_begin,
+		draw_done
+	};
+
+	enum debug_array {
+		collect,
+		draw
+	};
+
 	const uint_fast8_t proc_done 	= 0b0000'0011;
 	const uint_fast8_t net_done 	= 0b0000'1100;
 	const uint_fast8_t mem_done 	= 0b0011'0000;
@@ -314,13 +405,35 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
+	void debug_timer(const char* name, const int action) {
+		switch (action) {
+			case collect_begin:
+				debug_times[name].at(collect) = time_micros();
+				return;
+			case draw_begin:
+				debug_times[name].at(draw) = time_micros();
+				debug_times[name].at(collect) = debug_times[name].at(draw) - debug_times[name].at(collect);
+				debug_times["total"].at(collect) += debug_times[name].at(collect);
+				return;
+			case draw_done:
+				debug_times[name].at(draw) = time_micros() - debug_times[name].at(draw);
+				debug_times["total"].at(draw) += debug_times[name].at(draw);
+				return;
+		}
+	}
+
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
 	void * _runner(void * _) {
 		(void)_;
 		//? Block all signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
+		sigemptyset(&mask);
+		sigaddset(&mask, SIGINT);
+		sigaddset(&mask, SIGTSTP);
+		sigaddset(&mask, SIGWINCH);
+		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
-		//? pthread_mutex_lock to make sure this thread is a single instance thread
+		//? pthread_mutex_lock to lock thread and monitor health from main thread
 		thread_lock pt_lck(mtx);
 		if (pt_lck.status != 0) {
 			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
@@ -329,17 +442,17 @@ namespace Runner {
 			stopping = true;
 		}
 
+		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
-			atomic_wait(do_work, false);
-			do_work = false;
+			thread_wait();
 			if (stopping or Global::resized) {
 				continue;
 			}
 
-			auto& conf = current_conf;
-
-			//? Secondary atomic lock used for signaling status to main thread
+			//? Atomic lock used for blocking non-thread safe actions in main thread
 			atomic_lock lck(active);
+
+			auto& conf = current_conf;
 
 			//! DEBUG stats
 			if (Global::debug) {
@@ -356,12 +469,17 @@ namespace Runner {
 				future<Mem::mem_info&> mem;
 				future<Net::net_info&> net;
 				future<vector<Proc::proc_info>&> proc;
+
+				//? Loop until all box flags present in bitmask have been zeroed
 				while (conf.box_mask.count() > 0) {
 					if (stopping) break;
+
 					//? PROC
 					if (conf.box_mask.test(proc_present)) {
 						if (not conf.box_mask.test(proc_running)) {
-							if (Global::debug) debug_times["proc"].at(0) = time_micros();
+							if (Global::debug) debug_timer("proc", collect_begin);
+
+							//? Start async collect
 							proc = async(Proc::collect, conf.no_update);
 							conf.box_mask.set(proc_running);
 						}
@@ -370,16 +488,12 @@ namespace Runner {
 
 						else if (proc.wait_for(std::chrono::microseconds(10)) == future_status::ready) {
 							try {
-								if (Global::debug) {
-									debug_times["proc"].at(1) = time_micros();
-									debug_times["proc"].at(0) = debug_times["proc"].at(1) - debug_times["proc"].at(0);
-									debug_times["total"].at(0) += debug_times["proc"].at(0);
-								}
+								if (Global::debug) debug_timer("proc", draw_begin);
+
+								//? Draw box
 								output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
-								if (Global::debug) {
-									debug_times["proc"].at(1) = time_micros() - debug_times["proc"].at(1);
-									debug_times["total"].at(1) += debug_times["proc"].at(1);
-								}
+
+								if (Global::debug) debug_timer("proc", draw_done);
 							}
 							catch (const std::exception& e) {
 								throw std::runtime_error("Proc:: -> " + (string)e.what());
@@ -387,10 +501,13 @@ namespace Runner {
 							conf.box_mask ^= proc_done;
 						}
 					}
+
 					//? NET
 					if (conf.box_mask.test(net_present)) {
 						if (not conf.box_mask.test(net_running)) {
-							if (Global::debug) debug_times["net"].at(0) = time_micros();
+							if (Global::debug) debug_timer("net", collect_begin);
+
+							//? Start async collect
 							net = async(Net::collect, conf.no_update);
 							conf.box_mask.set(net_running);
 						}
@@ -399,16 +516,12 @@ namespace Runner {
 
 						else if (net.wait_for(ZeroSec) == future_status::ready) {
 							try {
-								if (Global::debug) {
-									debug_times["net"].at(1) = time_micros();
-									debug_times["net"].at(0) = debug_times["net"].at(1) - debug_times["net"].at(0);
-									debug_times["total"].at(0) += debug_times["net"].at(0);
-								}
+								if (Global::debug) debug_timer("net", draw_begin);
+
+								//? Draw box
 								output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
-								if (Global::debug) {
-									debug_times["net"].at(1) = time_micros() - debug_times["net"].at(1);
-									debug_times["total"].at(1) += debug_times["net"].at(1);
-								}
+
+								if (Global::debug) debug_timer("net", draw_done);
 							}
 							catch (const std::exception& e) {
 								throw std::runtime_error("Net:: -> " + (string)e.what());
@@ -416,10 +529,13 @@ namespace Runner {
 							conf.box_mask ^= net_done;
 						}
 					}
+
 					//? MEM
 					if (conf.box_mask.test(mem_present)) {
 						if (not conf.box_mask.test(mem_running)) {
-							if (Global::debug) debug_times["mem"].at(0) = time_micros();
+							if (Global::debug) debug_timer("mem", collect_begin);
+
+							//? Start async collect
 							mem = async(Mem::collect, conf.no_update);
 							conf.box_mask.set(mem_running);
 						}
@@ -428,16 +544,12 @@ namespace Runner {
 
 						else if (mem.wait_for(ZeroSec) == future_status::ready) {
 							try {
-								if (Global::debug) {
-									debug_times["mem"].at(1) = time_micros();
-									debug_times["mem"].at(0) = debug_times["mem"].at(1) - debug_times["mem"].at(0);
-									debug_times["total"].at(0) += debug_times["mem"].at(0);
-								}
+								if (Global::debug) debug_timer("mem", draw_begin);
+
+								//? Draw box
 								output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
-								if (Global::debug) {
-									debug_times["mem"].at(1) = time_micros() - debug_times["mem"].at(1);
-									debug_times["total"].at(1) += debug_times["mem"].at(1);
-								}
+
+								if (Global::debug) debug_timer("mem", draw_done);
 							}
 							catch (const std::exception& e) {
 								throw std::runtime_error("Mem:: -> " + (string)e.what());
@@ -445,10 +557,13 @@ namespace Runner {
 							conf.box_mask ^= mem_done;
 						}
 					}
+
 					//? CPU
 					if (conf.box_mask.test(cpu_present)) {
 						if (not conf.box_mask.test(cpu_running)) {
-							if (Global::debug) debug_times["cpu"].at(0) = time_micros();
+							if (Global::debug) debug_timer("cpu", collect_begin);
+
+							//? Start async collect
 							cpu = async(Cpu::collect, conf.no_update);
 							conf.box_mask.set(cpu_running);
 						}
@@ -457,16 +572,12 @@ namespace Runner {
 
 						else if (cpu.wait_for(ZeroSec) == future_status::ready) {
 							try {
-								if (Global::debug) {
-									debug_times["cpu"].at(1) = time_micros();
-									debug_times["cpu"].at(0) = debug_times["cpu"].at(1) - debug_times["cpu"].at(0);
-									debug_times["total"].at(0) += debug_times["cpu"].at(0);
-								}
+								if (Global::debug) debug_timer("cpu", draw_begin);
+
+								//? Draw box
 								output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
-								if (Global::debug) {
-									debug_times["cpu"].at(1) = time_micros() - debug_times["cpu"].at(1);
-									debug_times["total"].at(1) += debug_times["cpu"].at(1);
-								}
+
+								if (Global::debug) debug_timer("cpu", draw_done);
 							}
 							catch (const std::exception& e) {
 								throw std::runtime_error("Cpu:: -> " + (string)e.what());
@@ -501,9 +612,10 @@ namespace Runner {
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			cout << Term::sync_start << (conf.overlay.empty()
 					? output + conf.clock
-					: Theme::c("inactive_fg") + Fx::ub + Fx::uncolor(output + conf.clock) + conf.overlay)
+					: Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output + conf.clock) + conf.overlay)
 				<< Term::sync_end << flush;
 		}
+		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 
 		pthread_exit(NULL);
 	}
@@ -516,20 +628,19 @@ namespace Runner {
 		if (stopping or Global::resized) return;
 
 		if (box == "overlay") {
-			cout << Term::sync_start << Global::overlay << Term::sync_end;
+			cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
 		}
 		else if (box == "clock") {
-			if (not Global::clock.empty())
-				cout << Term::sync_start << Global::clock << Term::sync_end;
+			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
 		}
 		else if (box.empty() and Config::current_boxes.empty()) {
-			cout << Term::sync_start << Term::clear + Mv::to(10, 10) << "No boxes shown!" << Term::sync_end;
+			cout << Term::sync_start << Term::clear + Mv::to(10, 10) << "No boxes shown!" << Term::sync_end << flush;
 		}
 		else {
 			Config::unlock();
 			Config::lock();
 
-			//? Setup bitmask for selected boxes instead of parsing strings
+			//? Setup bitmask for selected boxes instead of parsing strings in _runner thread loop
 			bitset<8> box_mask;
 			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
 				box_mask |= box_bits.at(box);
@@ -537,9 +648,9 @@ namespace Runner {
 
 			current_conf = {box_mask, no_update, force_redraw, Global::overlay, Global::clock};
 
-			do_work = true;
-			atomic_notify(do_work);
+			thread_trigger();
 
+			//? Wait for _runner thread to be active before returning
 			for (int i = 0; not active and i < 10; i++) sleep_ms(1);
 		}
 	}
@@ -554,14 +665,9 @@ namespace Runner {
 			exit(1);
 		}
 		else if (ret == EBUSY) {
-			if (not active) {
-				do_work = true;
-				atomic_notify(do_work);
-				sleep_ms(1);
-			}
-			else {
-				atomic_wait(active);
-			}
+			atomic_wait(active);
+			thread_trigger();
+			sleep_ms(1);
 		}
 		stopping = false;
 	}
@@ -585,11 +691,6 @@ int main(int argc, char **argv) {
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
-	sigemptyset(&Runner::mask);
-	sigaddset(&Runner::mask, SIGINT);
-	sigaddset(&Runner::mask, SIGTSTP);
-	sigaddset(&Runner::mask, SIGWINCH);
-	sigaddset(&Runner::mask, SIGTERM);
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
@@ -707,6 +808,7 @@ int main(int argc, char **argv) {
 	Theme::setTheme();
 
 	//? Start runner thread
+	Runner::thread_sem_init();
 	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		exit(1);
@@ -743,8 +845,14 @@ int main(int argc, char **argv) {
 			if (Global::resized) {
 				Global::resized = false;
 				Draw::calcSizes();
+				update_clock();
 				Runner::run("all", true);
 				atomic_wait(Runner::active);
+			}
+
+			//? Update clock if needed
+			if (update_clock()) {
+				Runner::run("clock");
 			}
 
 			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
@@ -767,14 +875,12 @@ int main(int argc, char **argv) {
 
 				//? Poll for input and process any input detected
 				else if (Input::poll(min(1000ul, future_time - current_time))) {
-					if (not Runner::active)
-						Config::unlock();
+					if (not Runner::active) Config::unlock();
 					Input::process(Input::get());
 				}
 
 				//? Break the loop at 1000ms intervals or if input polling was interrupted
-				else
-					break;
+				else break;
 			}
 
 		}

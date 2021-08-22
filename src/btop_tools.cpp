@@ -26,6 +26,7 @@ tab-size = 4
 #include <robin_hood.h>
 
 #include <unistd.h>
+#include <limits.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
@@ -121,7 +122,7 @@ namespace Term {
 	void restore() {
 		if (initialized) {
 			tcsetattr(STDIN_FILENO, TCSANOW, &initial_settings);
-			cout << Term::mouse_off << Term::normal_screen << Term::show_cursor << flush;
+			cout << mouse_off << clear << Fx::reset << normal_screen << show_cursor << flush;
 			initialized = false;
 		}
 	}
@@ -165,6 +166,15 @@ namespace Tools {
 			}
 		}
 		return str;
+	}
+
+	string s_replace(const string& str, const string& from, const string& to) {
+		size_t start_pos = str.find(from);
+		if(start_pos == std::string::npos)
+			return str;
+		string out = str;
+		out.replace(start_pos, from.length(), to);
+		return out;
 	}
 
 	string ltrim(const string& str, const string& t_str) {
@@ -310,16 +320,6 @@ namespace Tools {
 		atomic_notify(this->atom);
 	}
 
-	thread_lock::thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-		status = pthread_mutex_lock(&pt_mutex);
-	}
-
-	thread_lock::~thread_lock() {
-		if (status == 0) {
-			pthread_mutex_unlock(&pt_mutex);
-		}
-	}
-
 	string readfile(const std::filesystem::path& path, const string& fallback) {
 		if (not fs::exists(path)) return fallback;
 		string out;
@@ -343,6 +343,18 @@ namespace Tools {
 		else if (scale == "rankine")
 			return {(long long)round((double)celsius * 1.8 + 491.67), "°R"};
 		return {0, ""};
+	}
+
+	string hostname() {
+		char host[HOST_NAME_MAX];
+		gethostname(host, HOST_NAME_MAX);
+		return (string)host;
+	}
+
+	string username() {
+		auto user = getenv("LOGNAME");
+		if (user == NULL or strcmp(user, "")) user = getenv("USER");
+		return (user != NULL ? user : "");
 	}
 
 }

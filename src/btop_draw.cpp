@@ -36,33 +36,6 @@ using namespace Tools;
 namespace rng = std::ranges;
 
 namespace Symbols {
-	const string h_line				= "─";
-	const string v_line				= "│";
-	const string dotted_v_line		= "╎";
-	const string left_up			= "┌";
-	const string right_up			= "┐";
-	const string left_down			= "└";
-	const string right_down			= "┘";
-	const string round_left_up		= "╭";
-	const string round_right_up		= "╮";
-	const string round_left_down	= "╰";
-	const string round_right_down	= "╯";
-	const string title_left_down	= "┘";
-	const string title_right_down	= "└";
-	const string title_left			= "┐";
-	const string title_right		= "┌";
-	const string div_right			= "┤";
-	const string div_left			= "├";
-	const string div_up				= "┬";
-	const string div_down			= "┴";
-
-
-	const string up = "↑";
-	const string down = "↓";
-	const string left = "←";
-	const string right = "→";
-	const string enter = "↲";
-
 	const string meter = "■";
 
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
@@ -201,11 +174,12 @@ namespace Draw {
 		string out;
 		if (line_color.empty()) line_color = Theme::c("div_line");
 		const auto& tty_mode = Config::getB("tty_mode");
+		const auto& rounded = Config::getB("rounded_corners");
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
-		const auto& right_up = (tty_mode ? Symbols::right_up : Symbols::round_right_up);
-		const auto& left_up = (tty_mode ? Symbols::left_up : Symbols::round_left_up);
-		const auto& right_down = (tty_mode ? Symbols::right_down : Symbols::round_right_down);
-		const auto& left_down = (tty_mode ? Symbols::left_down : Symbols::round_left_down);
+		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
+		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
+		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
+		const auto& left_down = (tty_mode or not rounded ? Symbols::left_down : Symbols::round_left_down);
 
 		out = Fx::reset + line_color;
 
@@ -583,14 +557,14 @@ namespace Mem {
 			for (const auto& name : mem_names) {
 
 				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, mem.percent.at(name)};
+					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, mem.percent.at(name), graph_symbol};
 				else
 					mem_meters[name] = Draw::Meter{mem_meter, name};
 			}
 			if (show_swap and has_swap) {
 				for (const auto& name : swap_names) {
 					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), mem.percent.at(name)};
+						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), mem.percent.at(name), graph_symbol};
 					else
 						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
 				}
@@ -694,7 +668,7 @@ namespace Mem {
 			const auto& disks = mem.disks;
 			cx = x + mem_width - 1; cy = 0;
 			const bool big_disk = disks_width >= 25;
-			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Symbols::div_right + Mv::l(disks_width - 1);
+			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width - 1);
 			if (io_mode) {
 				for (const auto& mount : mem.disks_order) {
 					if (not disks.contains(mount)) continue;
@@ -758,7 +732,7 @@ namespace Mem {
 
 					if (cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
-						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 7));
+						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
 						cy++;
 						if (cmp_less_equal(disks.size() * 4 + (show_io_stat ? disk_ios : 0), height - 1)) cy++;
 					}
@@ -792,7 +766,7 @@ namespace Net {
 		auto& net_sync = Config::getB("net_sync");
 		auto& net_auto = Config::getB("net_auto");
 		auto& tty_mode = Config::getB("tty_mode");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
 		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
 		if (old_ip != ip_addr) {
 			old_ip = ip_addr;
@@ -1191,7 +1165,7 @@ namespace Proc {
 		//* Iteration over processes
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
-			if (p.filtered or n++ < start) continue;
+			if (n++ < start or p.filtered) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) selected_pid = (int)p.pid;
 
@@ -1261,7 +1235,7 @@ namespace Proc {
 					out += c_color + uresize(p.name, width_left - 1) + end + ' ';
 					width_left -= (ulen(p.name) + 1);
 				}
-				if (width_left > 7 and (not p.short_cmd.empty() or p.short_cmd == p.name)) {
+				if (width_left > 7 and p.short_cmd != p.name) {
 					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ") ";
 					width_left -= (ulen(p.short_cmd, true) + 3);
 				}
@@ -1287,7 +1261,7 @@ namespace Proc {
 		}
 
 		out += Fx::reset;
-		while (lc++ < height - 4) out += Mv::to(y+lc+2, x+1) + string(width - 2, ' ');
+		while (lc++ < height - 5) out += Mv::to(y+lc+1, x+1) + string(width - 2, ' ');
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
@@ -1337,6 +1311,8 @@ namespace Draw {
 		Mem::box.clear();
 		Net::box.clear();
 		Proc::box.clear();
+		Global::clock.clear();
+		Global::overlay.clear();
 
 		Input::mouse_mappings.clear();
 
