@@ -78,6 +78,12 @@ namespace Global {
 	string overlay;
 	string clock;
 
+	string bg_black = "\x1b[0;40m";
+	string fg_white = "\x1b[1;97m";
+	string fg_green = "\x1b[1;92m";
+	string fg_red = "\x1b[0;91m";
+
+
 	fs::path self_path;
 
 	string exit_error_msg;
@@ -90,7 +96,6 @@ namespace Global {
 	uint64_t start_time;
 
 	atomic<bool> resized (false);
-	atomic<int> resizing (0);
 	atomic<bool> quitting (false);
 
 	bool arg_tty = false;
@@ -150,20 +155,28 @@ void term_resize(bool force) {
 	}
 	else return;
 
-	auto rez_state = ++Global::resizing;
-	if (rez_state > 1) return;
 	Global::resized = true;
 	Runner::stop();
 	auto min_size = Term::get_min_size(Config::getS("shown_boxes"));
 
 	while (not force) {
 		sleep_ms(100);
-		if (rez_state != Global::resizing) rez_state = --Global::resizing;
-		else if (not Term::refresh() and Term::width >= min_size[0] and Term::height >= min_size[1]) break;
+		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
+			min_size = Term::get_min_size(Config::getS("shown_boxes"));
+			cout << Term::clear << Global::bg_black << Global::fg_white << Mv::to((Term::height / 2) - 2, (Term::width / 2) - 11)
+				 << "Terminal size too small:" << Mv::to((Term::height / 2) - 1, (Term::width / 2) - 10)
+				 << " Width = " << (Term::width < min_size.at(1) ? Global::fg_red : Global::fg_green) << Term::width
+				 << Global::fg_white << " Height = " << (Term::height < min_size.at(0) ? Global::fg_red : Global::fg_green) << Term::height
+				 << Mv::to((Term::height / 2) + 1, (Term::width / 2) - 12) << Global::fg_white
+				 << "Needed for current config:" << Mv::to((Term::height / 2) + 2, (Term::width / 2) - 10)
+				 << "Width = " << min_size.at(0) << " Height = " << min_size.at(1) << flush;
+			while (not Term::refresh() and not Input::poll()) sleep_ms(10);
+			if (Input::poll() and Input::get() == "q") exit(0);
+		}
+		else if (not Term::refresh()) break;
 	}
 
 	Input::interrupt = true;
-	Global::resizing = 0;
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
@@ -174,14 +187,8 @@ void clean_quit(int sig) {
 	if (pthread_join(Runner::runner_id, NULL) != 0)
 		Logger::error("Failed to join _runner thread!");
 
-	if (not Global::exit_error_msg.empty()) {
-		sig = 1;
-		Logger::error(Global::exit_error_msg);
-		std::cerr << "ERROR: " << Global::exit_error_msg << endl;
-	}
 	Config::write();
 	Input::clear();
-	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
 	//? Wait for any remaining Tools::atomic_lock destructors to finish for max 1000ms
 	for (int i = 0; Tools::active_locks > 0 and i < 100; i++) {
@@ -191,6 +198,13 @@ void clean_quit(int sig) {
 	if (Term::initialized) {
 		Term::restore();
 	}
+
+	if (not Global::exit_error_msg.empty()) {
+		sig = 1;
+		Logger::error(Global::exit_error_msg);
+		std::cerr << Global::fg_red << "ERROR: " << Global::fg_white << Global::exit_error_msg << Fx::reset << endl;
+	}
+	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
 	if (Tools::active_locks > 0) {
@@ -823,6 +837,17 @@ int main(int argc, char **argv) {
 
 	//? Calculate sizes of all boxes
 	Draw::calcSizes();
+
+	{
+		const auto [x, y] = Term::get_min_size(Config::getS("shown_boxes"));
+		if (Term::height < y or Term::width < x) {
+			Global::exit_error_msg = "Terminal size to small for current config.\n(WxH) Current: " + to_string(Term::width)
+								   + 'x' + to_string(Term::height) + " | Needed: " + to_string(x) + 'x' + to_string(y)
+								   + "\nResize terminal or disable some boxes in config file to fix this.";
+			exit(1);
+		}
+
+	}
 
 	//? Print out box outlines
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;

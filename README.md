@@ -127,13 +127,14 @@ Options menu.
 
 #### Manual compilation and installation
 
-Needs GCC 10 or higher, (GCC 11 preferably).
+Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in compiled binary).
+The makefile also needs GNU coreutils and sed installed.
 
->Install dependencies (Ubuntu 21.04 Hirsute)
+>Install dependencies (example for Ubuntu 21.04 Hirsute)
 
 ``` bash
-sudo apt install git build-essential gcc-11 g++-11
-#gcc-10 g++-10 if on older
+sudo apt install coreutils sed git build-essential gcc-11 g++-11
+#use gcc-10 g++-10 if gcc-11 isn't available
 ```
 
 >Clone and compile
@@ -141,24 +142,24 @@ sudo apt install git build-essential gcc-11 g++-11
 ``` bash
 git clone https://github.com/aristocratos/btop.git
 cd btop
+# use "make -j X" where X is threads, to manually set number of threads, the makefile will use all available cores by default
 make
-# use "make -jX" where X is your number of cores for multithreaded compilation
 ```
 
 >to install
 
 ``` bash
-sudo make install
 # use "make install PREFIX=/target/dir" to set target, default: /usr/local
 # only use "sudo" when installing to a NON user owned directory
+sudo make install
 ```
 
 >to make btop always run as root (or other user), (no need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems)
 
 ``` bash
 # run after make install and use same PREFIX if any was used at install
-sudo make setuid
 # set SU_USER and SU_GROUP to select user and group, default is root:root
+sudo make setuid
 ```
 
 

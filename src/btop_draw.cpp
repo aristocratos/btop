@@ -515,7 +515,7 @@ namespace Cpu {
 }
 
 namespace Mem {
-	int width_p = 45, height_p = 38;
+	int width_p = 45, height_p = 36;
 	int min_width = 36, min_height = 10;
 	int x = 1, y, width = 20, height;
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
@@ -668,7 +668,7 @@ namespace Mem {
 			const auto& disks = mem.disks;
 			cx = x + mem_width - 1; cy = 0;
 			const bool big_disk = disks_width >= 25;
-			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width - 1);
+			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
 			if (io_mode) {
 				for (const auto& mount : mem.disks_order) {
 					if (not disks.contains(mount)) continue;
@@ -676,7 +676,7 @@ namespace Mem {
 					const auto& disk = disks.at(mount);
 					if (disk.io_read.empty()) continue;
 					const string total = floating_humanizer(disk.total, not big_disk);
-					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 2) + Mv::to(y+1+cy, x+cx + disks_width - total.size() - 1)
+					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 2) + Mv::to(y+1+cy, x+cx + disks_width - total.size())
 						+ trans(total) + Fx::ub;
 					if (big_disk) {
 						const string used_percent = to_string(disk.used_percent);
@@ -715,7 +715,7 @@ namespace Mem {
 					const string human_used = floating_humanizer(disk.used, not big_disk);
 					const string human_free = floating_humanizer(disk.free, not big_disk);
 
-					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 2) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size() - 1)
+					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 2) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
 						+ trans(human_total) + Fx::ub + Theme::c("main_fg");
 					if (big_disk and not human_io.empty())
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2)) + Theme::c("main_fg") + human_io;
@@ -751,7 +751,7 @@ namespace Mem {
 }
 
 namespace Net {
-	int width_p = 45, height_p = 30;
+	int width_p = 45, height_p = 32;
 	int min_width = 36, min_height = 6;
 	int x = 1, y, width = 20, height;
 	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
@@ -825,14 +825,14 @@ namespace Net {
 			const string total = floating_humanizer(net.stat.at(dir).total);
 			const string symbol = (dir == "upload" ? "▲" : "▼");
 			out += Mv::to(b_y+1+cy, b_x+1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
-			cy += (b_height == 3 ? 2 : 1);
-			if (b_height >= 6) {
+			cy += (b_height == 5 ? 2 : 1);
+			if (b_height >= 8) {
 				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
 				cy++;
 			}
-			if (b_height >= 4) {
+			if (b_height >= 6) {
 				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Total: " + rjust(total, (b_width >= 20 ? 16 : 8));
-				cy += (b_height > 2 and b_height % 2 ? 2 : 1);
+				cy += (b_height > 6 and b_height % 2 ? 2 : 1);
 			}
 		}
 
@@ -1332,7 +1332,7 @@ namespace Draw {
 			using namespace Cpu;
 			const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
-			height = max(8, (int)round((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
@@ -1374,7 +1374,7 @@ namespace Draw {
 			auto& mem_graphs = Config::getB("mem_graphs");
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = round((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
 			if (height + Cpu::height > Term::height) height = Term::height - Cpu::height;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
