@@ -616,7 +616,7 @@ namespace Mem {
 				+ 'i' + Theme::c("title") + 'o' + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
 				Input::mouse_mappings["i"] = {y, x + width - 5, 1, 2};
 			}
-			
+
 		}
 
 		//? Mem and swap
@@ -810,7 +810,7 @@ namespace Net {
 		}
 
 		//? IP or device address
-		if (not ip_addr.empty() and width - i_size - 35 - ip_addr.size() > 0) {
+		if (not ip_addr.empty() and cmp_greater(width - i_size - 36, ip_addr.size())) {
 			out += Mv::to(y, x + 8) + title_left + Theme::c("title") + Fx::b + ip_addr + title_right;
 		}
 
@@ -1418,6 +1418,7 @@ namespace Draw {
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
 			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
 				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+			Input::mouse_mappings["d"] = {y, (show_disks ? divider + 3 : x + width - 8), 1, 5};
 			if (show_disks) {
 				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c("div_line");
 				for (auto i : iota(1, height - 1))

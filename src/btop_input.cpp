@@ -391,7 +391,7 @@ namespace Input {
 				if (key == "i") {
 					Config::flip("io_mode");
 				}
-				if (key == "d") {
+				else if (key == "d") {
 					Config::flip("show_disks");
 					no_update = false;
 					Draw::calcSizes();

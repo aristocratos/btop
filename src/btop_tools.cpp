@@ -353,7 +353,7 @@ namespace Tools {
 
 	string username() {
 		auto user = getenv("LOGNAME");
-		if (user == NULL or strcmp(user, "")) user = getenv("USER");
+		if (user == NULL or strlen(user) == 0) user = getenv("USER");
 		return (user != NULL ? user : "");
 	}
 

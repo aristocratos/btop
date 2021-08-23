@@ -1004,6 +1004,7 @@ namespace Proc {
 				cur_depth = 0;
 			}
 		}
+		else if (cur_proc.filtered) cur_proc.filtered = false;
 
 		//? Set tree index position for process if not filtered out or currently in a collapsed sub-tree
 		if (not collapsed and not filtering) {

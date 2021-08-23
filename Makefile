@@ -2,18 +2,18 @@
 
 BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.0\033[0m
 
-BTOP_VERSION = $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
-TIMESTAMP = $(shell date +%s 2>/dev/null || echo "0")
+BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
+TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
 
 PREFIX ?= /usr/local
 
 #? Compiler and Linker
 CXX ?= g++
-CXX_VERSION = $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
+CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
 ifneq ($(CXX),g++-10)
-	V_MAJOR = $(shell echo $(CXX_VERSION) | cut -f1 -d"." || echo 0)
+	V_MAJOR = $(shell echo $(CXX_VERSION) | cut -f1 -d".")
 	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
 		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
 			override CXX = g++-11
@@ -22,14 +22,16 @@ ifneq ($(CXX),g++-10)
 endif
 
 #? Only enable fcf-protection if on x86_64
-ARCH = $(shell uname -p || echo unknown)
+ARCH := $(shell uname -p || echo unknown)
+ifeq ($(ARCH),unknown)
+	ARCH := $(shell uname -m || echo unknown)
+endif
 ifeq ($(ARCH),x86_64)
 	ADDFLAGS = -fcf-protection
 endif
-ifeq ($(ARCH),unknown)
-	ARCH = $(shell uname -m || echo unknown)
-endif
-PLATFORM = $(shell uname -s || echo unknown)
+
+#? Manually set this to (Linux|FreeBSD|Darwin) if not building for host platform
+PLATFORM ?= $(shell uname -s || echo unknown)
 
 #? Use all CPU cores (will only be set if using Make 4.3+)
 MAKEFLAGS := --jobs=$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
@@ -54,8 +56,19 @@ INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
 SU_GROUP			:= root
 
-SOURCES		:= $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
-OBJECTS		:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
+SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
+
+ifeq ($(PLATFORM),Linux)
+	SOURCES += $(shell find $(SRCDIR)/linux -type f -name *.$(SRCEXT))
+endif
+ifeq ($(PLATFORM),FreeBSD)
+	SOURCES += $(shell find $(SRCDIR)/freebsd -type f -name *.$(SRCEXT))
+endif
+ifeq ($(PLATFORM),Darwin)
+	SOURCES += $(shell find $(SRCDIR)/osx -type f -name *.$(SRCEXT))
+endif
+
+OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
 #? Default Make
 all: msg directories btop
@@ -67,7 +80,7 @@ msg:
 	@printf "\033[1;97mWARNFLAGS  : \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;97mOPTFLAGS   : \033[0m$(OPTFLAGS)\n"
 	@printf "\033[1;97mLDCXXFLAGS : \033[0m$(LDCXXFLAGS)\n"
-	@printf "\n\033[1;92mBuilding btop++ v$(BTOP_VERSION) on $(PLATFORM) ($(ARCH))\033[0m\n"
+	@printf "\n\033[1;92mBuilding \033[1;91mbtop++ \033[1;93mv$(BTOP_VERSION) \033[0;37mfor \033[1;97m$(PLATFORM) \033[1;96m($(ARCH))\033[0m\n"
 
 help:
 	@printf "\033[1;97mbtop++ makefile\033[0m\n"
@@ -84,6 +97,9 @@ help:
 directories:
 	@mkdir -p $(TARGETDIR)
 	@mkdir -p $(BUILDDIR)
+	@mkdir -p $(BUILDDIR)/linux
+	@mkdir -p $(BUILDDIR)/freebsd
+	@mkdir -p $(BUILDDIR)/osx
 
 #? Clean only Objects
 clean:
