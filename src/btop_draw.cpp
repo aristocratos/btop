@@ -612,10 +612,11 @@ namespace Mem {
 							disk_meters_free[name] = Draw::Meter{disk_meter, "free"};
 					}
 				}
-			}
-			out += Mv::to(y, x + width - 6) + Fx::ub + Theme::c("mem_box") + Symbols::title_left + (io_mode ? Fx::b : "") + Theme::c("hi_fg")
+				out += Mv::to(y, x + width - 6) + Fx::ub + Theme::c("mem_box") + Symbols::title_left + (io_mode ? Fx::b : "") + Theme::c("hi_fg")
 				+ 'i' + Theme::c("title") + 'o' + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
-			Input::mouse_mappings["i"] = {y, x + width - 5, 1, 2};
+				Input::mouse_mappings["i"] = {y, x + width - 5, 1, 2};
+			}
+			
 		}
 
 		//? Mem and swap

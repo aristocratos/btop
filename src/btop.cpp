@@ -38,23 +38,6 @@ tab-size = 4
 #include <btop_draw.hpp>
 #include <btop_menu.hpp>
 
-#if defined(__linux__)
-	#define LINUX
-#elif defined(__unix__) or not defined(__APPLE__) and defined(__MACH__)
-	#include <sys/param.h>
-	#if defined(BSD)
-		#error BSD support not yet implemented!
-	#endif
-#elif defined(__APPLE__) and defined(__MACH__)
-	#include <TargetConditionals.h>
-	#if TARGET_OS_MAC == 1
-		#define OSX
-		#error OSX support not yet implemented!
-    #endif
-#else
-	#error Platform not supported!
-#endif
-
 using std::string, std::string_view, std::vector, std::atomic, std::endl, std::cout, std::min, std::flush, std::endl;
 using std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
 namespace fs = std::filesystem;
@@ -331,7 +314,7 @@ bool update_clock() {
 	out.clear();
 
 	if (new_clock.size() != clock_len) {
-		out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+		if (not Global::resized) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
 		clock_len = new_clock.size();
 	}
 
@@ -647,7 +630,7 @@ namespace Runner {
 		else if (box == "clock") {
 			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
 		}
-		else if (box.empty() and Config::current_boxes.empty()) {
+		else if (Config::current_boxes.empty()) {
 			cout << Term::sync_start << Term::clear + Mv::to(10, 10) << "No boxes shown!" << Term::sync_end << flush;
 		}
 		else {
@@ -726,15 +709,15 @@ int main(int argc, char **argv) {
 		}
 	}
 	//? Try to find global btop theme path relative to binary path
-	#if defined(LINUX)
+#if defined(__linux__)
 	{ 	std::error_code ec;
 		Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
 	}
-	#endif
+#endif
 	if (std::error_code ec; not Global::self_path.empty()) {
-			Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
-			if (ec or not fs::is_directory(Theme::theme_dir) or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
-		}
+		Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
+		if (ec or not fs::is_directory(Theme::theme_dir) or access(Theme::theme_dir.c_str(), R_OK) == -1) Theme::theme_dir.clear();
+	}
 	//? If relative path failed, check two most common absolute paths
 	if (Theme::theme_dir.empty()) {
 		for (auto theme_path : {"/usr/local/share/btop/themes", "/usr/share/btop/themes"}) {
@@ -785,7 +768,7 @@ int main(int argc, char **argv) {
 		if (not found and Global::utf_force)
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
 		else if (not found) {
-			Global::exit_error_msg = "No UTF-8 locale detected! Use --utf-force argument to start anyway.";
+			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
 			exit(1);
 		}
 		else
@@ -868,15 +851,15 @@ int main(int argc, char **argv) {
 
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
-				Global::resized = false;
 				Draw::calcSizes();
 				update_clock();
+				Global::resized = false;
 				Runner::run("all", true);
 				atomic_wait(Runner::active);
 			}
 
 			//? Update clock if needed
-			if (update_clock()) {
+			if (update_clock() and not Menu::active) {
 				Runner::run("clock");
 			}
 
@@ -891,7 +874,7 @@ int main(int argc, char **argv) {
 			for (auto current_time = time_ms(); current_time < future_time; current_time = time_ms()) {
 
 				//? Check for external clock changes and for changes to the update timer
-				if (update_ms != (uint64_t)Config::getI("update_ms")) {
+				if (std::cmp_not_equal(update_ms, Config::getI("update_ms"))) {
 					update_ms = Config::getI("update_ms");
 					future_time = time_ms() + update_ms;
 				}

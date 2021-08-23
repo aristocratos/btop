@@ -16,8 +16,6 @@ indent = tab
 tab-size = 4
 */
 
-#if defined(__linux__)
-
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -551,7 +549,7 @@ namespace Mem {
 	mem_info current_mem {};
 
 	auto collect(const bool no_update) -> mem_info& {
-		if (Runner::stopping or no_update) return current_mem;
+		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 		auto& show_swap = Config::getB("show_swap");
 		auto& swap_disk = Config::getB("swap_disk");
 		auto& show_disks = Config::getB("show_disks");
@@ -1467,5 +1465,3 @@ namespace Tools {
 		return stod(upstr);
 	}
 }
-
-#endif

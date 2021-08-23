@@ -127,8 +127,8 @@ Options menu.
 
 #### Manual compilation and installation
 
-Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in compiled binary).
-The makefile also needs GNU coreutils and sed installed.
+Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).
 
 >Install dependencies (example for Ubuntu 21.04 Hirsute)
 
@@ -142,7 +142,7 @@ sudo apt install coreutils sed git build-essential gcc-11 g++-11
 ``` bash
 git clone https://github.com/aristocratos/btop.git
 cd btop
-# use "make -j X" where X is threads, to manually set number of threads, the makefile will use all available cores by default
+# use "make -j X" where X is threads, to manually set number of threads, the makefile will use all available cores by default on Make 4.3+
 make
 ```
 

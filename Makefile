@@ -1,6 +1,6 @@
 #* Btop++ makefile v1.0
 
-BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝
+BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.0\033[0m
 
 BTOP_VERSION = $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 TIMESTAMP = $(shell date +%s 2>/dev/null || echo "0")
@@ -22,16 +22,16 @@ ifneq ($(CXX),g++-10)
 endif
 
 #? Only enable fcf-protection if on x86_64
-ARCH = $(shell uname -p ||true)
+ARCH = $(shell uname -p || echo unknown)
 ifeq ($(ARCH),x86_64)
 	ADDFLAGS = -fcf-protection
 endif
 ifeq ($(ARCH),unknown)
-	ARCH = $(shell uname -m ||true)
+	ARCH = $(shell uname -m || echo unknown)
 endif
-PLATFORM = $(shell uname -s ||true)
+PLATFORM = $(shell uname -s || echo unknown)
 
-#? Use all CPU cores (will only be set if using Make >=4.3)
+#? Use all CPU cores (will only be set if using Make 4.3+)
 MAKEFLAGS := --jobs=$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 
 #? The Directories, Source, Includes, Objects and Binary
@@ -62,13 +62,12 @@ all: msg directories btop
 
 msg:
 	@printf " $(BANNER)\n"
-	@printf "\033[1;97mCompiler   : \033[0m$(CXX) ($(CXX_VERSION))\n"
+	@printf "\033[1;97mCXX        : \033[0m$(CXX) ($(CXX_VERSION))\n"
 	@printf "\033[1;97mREQFLAGS   : \033[0m$(REQFLAGS)\n"
 	@printf "\033[1;97mWARNFLAGS  : \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;97mOPTFLAGS   : \033[0m$(OPTFLAGS)\n"
 	@printf "\033[1;97mLDCXXFLAGS : \033[0m$(LDCXXFLAGS)\n"
-
-	@printf "\n\033[1;92mBuilding btop++ v$(BTOP_VERSION) for $(PLATFORM) ($(ARCH))\033[0m\n"
+	@printf "\n\033[1;92mBuilding btop++ v$(BTOP_VERSION) on $(PLATFORM) ($(ARCH))\033[0m\n"
 
 help:
 	@printf "\033[1;97mbtop++ makefile\033[0m\n"
@@ -135,7 +134,7 @@ btop: $(OBJECTS)
 #? Compile
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
 	@sleep 0.1 2>/dev/null || true
-	@printf "\033[1;97mCompiling $< \n"
+	@printf "\033[1;97mCompiling $<\033[0m\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -c -o $@ $<
 	@$(CXX) $(CXXFLAGS) $(INC) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT) >/dev/null
 	@cp -f $(BUILDDIR)/$*.$(DEPEXT) $(BUILDDIR)/$*.$(DEPEXT).tmp

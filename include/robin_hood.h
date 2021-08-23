@@ -36,7 +36,7 @@
 // see https://semver.org/
 #define ROBIN_HOOD_VERSION_MAJOR 3  // for incompatible API changes
 #define ROBIN_HOOD_VERSION_MINOR 11 // for adding functionality in a backwards-compatible manner
-#define ROBIN_HOOD_VERSION_PATCH 2  // for backwards-compatible bug fixes
+#define ROBIN_HOOD_VERSION_PATCH 3  // for backwards-compatible bug fixes
 
 #include <algorithm>
 #include <cstdlib>
@@ -2427,15 +2427,14 @@ private:
                                        << (static_cast<double>(mNumElements) * 100.0 /
                                            (static_cast<double>(mMask) + 1)))
 
-        nextHashMultiplier();
         if (mNumElements * 2 < calcMaxNumElementsAllowed(mMask + 1)) {
             // we have to resize, even though there would still be plenty of space left!
             // Try to rehash instead. Delete freed memory so we don't steadyily increase mem in case
             // we have to rehash a few times
+            nextHashMultiplier();
             rehashPowerOfTwo(mMask + 1, true);
         } else {
-            // Each resize use a different hash so we don't so easily overflow.
-            // Make sure we only have odd numbers, so that the multiplication is reversible!
+            // we've reached the capacity of the map, so the hash seems to work nice. Keep using it.
             rehashPowerOfTwo((mMask + 1) * 2, false);
         }
         return true;

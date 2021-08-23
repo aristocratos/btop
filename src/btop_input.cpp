@@ -250,10 +250,14 @@ namespace Input {
 					Config::set("proc_filter", ""s);
 
 				else if (key == "ö") {
-					if (Global::overlay.empty())
+					if (Global::overlay.empty()) {
 						Global::overlay = Mv::to(Term::height / 2, Term::width / 2) + "\x1b[1;32mTESTING";
-					else
+						Menu::active = true;
+					}
+					else {
 						Global::overlay.clear();
+						Menu::active = false;
+					}
 					Runner::run("all", true, true);
 				}
 				else if (key.starts_with("mouse_")) {
@@ -386,6 +390,11 @@ namespace Input {
 
 				if (key == "i") {
 					Config::flip("io_mode");
+				}
+				if (key == "d") {
+					Config::flip("show_disks");
+					no_update = false;
+					Draw::calcSizes();
 				}
 				else keep_going = true;
 
