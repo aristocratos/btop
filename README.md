@@ -123,30 +123,30 @@ Main menu.
 Options menu.
 ![Screenshot 4]()
 
-## Installation
+## Manual compilation and installation
 
-#### Manual compilation and installation
+**Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).**
 
-Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
-The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).
+**The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).**
 
->Install dependencies (example for Ubuntu 21.04 Hirsute)
+> **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
 ``` bash
 sudo apt install coreutils sed git build-essential gcc-11 g++-11
-#use gcc-10 g++-10 if gcc-11 isn't available
+# use gcc-10 g++-10 if gcc-11 isn't available
 ```
 
->Clone and compile
+> **Clone and compile**
+
+**NOTICE! Manually set PLATFORM and ARCH if not compiling for host system**
 
 ``` bash
 git clone https://github.com/aristocratos/btop.git
 cd btop
-# use "make -j X" where X is threads, to manually set number of threads, the makefile will use all available cores by default on Make 4.3+
 make
 ```
 
->to install
+> **Install**
 
 ``` bash
 # use "make install PREFIX=/target/dir" to set target, default: /usr/local
@@ -154,7 +154,9 @@ make
 sudo make install
 ```
 
->to make btop always run as root (or other user), (no need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems)
+> **Set suid bit to make btop always run as root (or other user)**
+
+No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
 ``` bash
 # run after make install and use same PREFIX if any was used at install
@@ -163,19 +165,19 @@ sudo make setuid
 ```
 
 
->to uninstall
+> **Uninstall**
 
 ``` bash
 sudo make uninstall
 ```
 
->to remove any object files from source dir
+> **Remove any object files from source dir**
 
 ```bash
 make clean
 ```
 
->to remove all object files, binaries and created directories in source dir
+> **Remove all object files, binaries and created directories in source dir**
 
 ```bash
 make distclean
