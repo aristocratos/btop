@@ -18,6 +18,7 @@ tab-size = 4
 
 #include <iostream>
 #include <ranges>
+#include <vector>
 
 #include <btop_input.hpp>
 #include <btop_tools.hpp>
@@ -27,7 +28,7 @@ tab-size = 4
 #include <btop_draw.hpp>
 #include <signal.h>
 
-using std::cin, std::string_literals::operator""s;
+using std::cin, std::vector, std::string_literals::operator""s;
 using namespace Tools;
 namespace rng = std::ranges;
 
@@ -80,7 +81,10 @@ namespace Input {
 	bool poll(int timeout) {
 		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
 		while (timeout > 0) {
-			if (interrupt) return interrupt = false;
+			if (interrupt) {
+				interrupt = false;
+				return false;
+			}
 			if (cin.rdbuf()->in_avail() > 0) return true;
 			sleep_ms(timeout < 10 ? timeout : 10);
 			timeout -= 10;
@@ -178,12 +182,14 @@ namespace Input {
 		if (key.empty()) return;
 		try {
 			auto& filtering = Config::getB("proc_filtering");
-			if (not filtering and key == "q") exit(0);
 
 			//? Global input actions
 			if (not filtering) {
 				bool keep_going = false;
-				if (is_in(key, "1", "2", "3", "4")) {
+				if (str_to_lower(key) == "q") {
+					exit(0);
+				}
+				else if (is_in(key, "1", "2", "3", "4")) {
 					atomic_wait(Runner::active);
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
@@ -250,15 +256,9 @@ namespace Input {
 					Config::set("proc_filter", ""s);
 
 				else if (key == "ö") {
-					if (Global::overlay.empty()) {
-						Global::overlay = Mv::to(Term::height / 2, Term::width / 2) + "\x1b[1;32mTESTING";
-						Menu::active = true;
-					}
-					else {
-						Global::overlay.clear();
-						Menu::active = false;
-					}
-					Runner::run("all", true, true);
+					Menu::menuMask.set(Menu::Menus::SignalSend);
+					Menu::process();
+					return;
 				}
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
@@ -321,16 +321,20 @@ namespace Input {
 					if (key == "-" or key == "space") Proc::collapse = pid;
 					no_update = false;
 				}
-				else if (key == "t") {
-					Logger::debug(key);
+				else if (is_in(key, "t", "k") and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+					atomic_wait(Runner::active);
+					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
+					Menu::menuMask.set(Menu::SignalSend);
+					Menu::signalToSend = (key == "t" ? SIGTERM : SIGKILL);
+					Menu::process();
 					return;
 				}
-				else if (key == "k") {
-					Logger::debug(key);
-					return;
-				}
-				else if (key == "s") {
-					Logger::debug(key);
+				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+					atomic_wait(Runner::active);
+					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
+					Menu::menuMask.set(Menu::SignalChoose);
+					Menu::signalToSend = -1;
+					Menu::process();
 					return;
 				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {

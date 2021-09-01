@@ -29,6 +29,7 @@ tab-size = 4
 #include <exception>
 #include <tuple>
 #include <regex>
+#include <chrono>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -43,6 +44,7 @@ using std::string_literals::operator""s, std::to_string, std::future, std::async
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
+using namespace std::chrono_literals;
 
 namespace Global {
 	const vector<array<string, 2>> Banner_src = {
@@ -140,12 +142,13 @@ void term_resize(bool force) {
 
 	Global::resized = true;
 	Runner::stop();
-	auto min_size = Term::get_min_size(Config::getS("shown_boxes"));
 
-	while (not force) {
+	auto boxes = Config::getS("shown_boxes");
+	auto min_size = Term::get_min_size(boxes);
+
+	while (not force or (Term::width < min_size.at(0) or Term::height < min_size.at(1))) {
 		sleep_ms(100);
 		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
-			min_size = Term::get_min_size(Config::getS("shown_boxes"));
 			cout << Term::clear << Global::bg_black << Global::fg_white << Mv::to((Term::height / 2) - 2, (Term::width / 2) - 11)
 				 << "Terminal size too small:" << Mv::to((Term::height / 2) - 1, (Term::width / 2) - 10)
 				 << " Width = " << (Term::width < min_size.at(1) ? Global::fg_red : Global::fg_green) << Term::width
@@ -155,6 +158,7 @@ void term_resize(bool force) {
 				 << "Width = " << min_size.at(0) << " Height = " << min_size.at(1) << flush;
 			while (not Term::refresh() and not Input::poll()) sleep_ms(10);
 			if (Input::poll() and Input::get() == "q") exit(0);
+			min_size = Term::get_min_size(boxes);
 		}
 		else if (not Term::refresh()) break;
 	}
@@ -167,8 +171,9 @@ void clean_quit(int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
-	if (pthread_join(Runner::runner_id, NULL) != 0)
+	if (pthread_join(Runner::runner_id, NULL) != 0) {
 		Logger::error("Failed to join _runner thread!");
+	}
 
 	Config::write();
 	Input::clear();
@@ -257,7 +262,6 @@ void banner_gen() {
 			else
 				letter = line[1].substr(i, 3);
 
-			// if (tty_mode and letter != "█" and letter != " ") letter = "░";
 			b_color = (letter == "█") ? fg : bg;
 			if (b_color != oc) Global::banner += b_color;
 			Global::banner += letter;
@@ -266,8 +270,9 @@ void banner_gen() {
 		if (++z < Global::Banner_src.size()) Global::banner += Mv::l(ulen(line[1])) + Mv::d(1);
 	}
 	Global::banner += Mv::r(18 - Global::Version.size())
-			+ (tty_mode ? "\x1b[0;40;37m" : Theme::dec_to_color(0,0,0, lowcolor, "bg") + Theme::dec_to_color(150, 150, 150, lowcolor))
-			+ Fx::i + "v" + Global::Version + Fx::ui;
+					+ (tty_mode ? "\x1b[0;40;37m" : Theme::dec_to_color(0,0,0, lowcolor, "bg")
+					+ Theme::dec_to_color(150, 150, 150, lowcolor))
+					+ Fx::i + "v" + Global::Version + Fx::ui;
 }
 
 bool update_clock() {
@@ -281,11 +286,17 @@ bool update_clock() {
 	};
 	static time_t c_time = 0;
 	static size_t clock_len = 0;
+	static string old_clock;
+	string new_clock;
 
 	if (auto n_time = time(NULL); n_time == c_time)
 		return false;
-	else
+	else {
 		c_time = n_time;
+		new_clock = Tools::strf_time(clock_format);
+		if (new_clock == old_clock) return false;
+		old_clock = new_clock;
+	}
 
 	auto& out = Global::clock;
 	const auto& cpu_bottom = Config::getB("cpu_bottom");
@@ -294,7 +305,7 @@ bool update_clock() {
 	const auto& width = Cpu::width;
 	const auto& title_left = (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 	const auto& title_right = (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
-	string new_clock = clock_format;
+
 
 	for (const auto& [c_format, replacement] : clock_custom_format) {
 		if (s_contains(new_clock, c_format)) {
@@ -310,11 +321,11 @@ bool update_clock() {
 
 	}
 
-	new_clock = uresize(Tools::strf_time(new_clock), std::max(0, width - 56));
+	new_clock = uresize(new_clock, std::max(0, width - 56));
 	out.clear();
 
 	if (new_clock.size() != clock_len) {
-		if (not Global::resized) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+		if (not Global::resized and clock_len > 0) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
 		clock_len = new_clock.size();
 	}
 
@@ -483,7 +494,7 @@ namespace Runner {
 						else if (not proc.valid())
 							throw std::runtime_error("Proc::collect() future not valid.");
 
-						else if (proc.wait_for(std::chrono::microseconds(10)) == future_status::ready) {
+						else if (proc.wait_for(10us) == future_status::ready) {
 							try {
 								if (Global::debug) debug_timer("proc", draw_begin);
 
@@ -511,7 +522,7 @@ namespace Runner {
 						else if (not net.valid())
 							throw std::runtime_error("Net::collect() future not valid.");
 
-						else if (net.wait_for(ZeroSec) == future_status::ready) {
+						else if (net.wait_for(10us) == future_status::ready) {
 							try {
 								if (Global::debug) debug_timer("net", draw_begin);
 
@@ -539,7 +550,7 @@ namespace Runner {
 						else if (not mem.valid())
 							throw std::runtime_error("Mem::collect() future not valid.");
 
-						else if (mem.wait_for(ZeroSec) == future_status::ready) {
+						else if (mem.wait_for(10us) == future_status::ready) {
 							try {
 								if (Global::debug) debug_timer("mem", draw_begin);
 
@@ -567,7 +578,7 @@ namespace Runner {
 						else if (not cpu.valid())
 							throw std::runtime_error("Cpu::collect() future not valid.");
 
-						else if (cpu.wait_for(ZeroSec) == future_status::ready) {
+						else if (cpu.wait_for(10us) == future_status::ready) {
 							try {
 								if (Global::debug) debug_timer("cpu", draw_begin);
 
@@ -696,7 +707,11 @@ int main(int argc, char **argv) {
 			break;
 		}
 	}
-	if (not Config::conf_dir.empty()) {
+	if (Config::conf_dir.empty()) {
+		cout 	<< "WARNING: Could not get path user HOME folder.\n"
+				<< "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
+	}
+	else {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
 			cout 	<< "WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
 					<< "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
@@ -741,7 +756,7 @@ int main(int argc, char **argv) {
 		}
 		else Logger::set(Config::getS("log_level"));
 
-		Logger::info("Logger set to " + Config::getS("log_level"));
+		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : Config::getS("log_level")));
 
 		for (const auto& err_str : load_warnings) Logger::warning(err_str);
 	}
@@ -788,7 +803,7 @@ int main(int argc, char **argv) {
 	}
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
-		Logger::info("Real tty detected, setting 16 color mode and using tty friendly graph symbols");
+		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
 
 	//? Platform dependent init and error check
@@ -854,7 +869,8 @@ int main(int argc, char **argv) {
 				Draw::calcSizes();
 				update_clock();
 				Global::resized = false;
-				Runner::run("all", true);
+				if (Menu::active) Menu::process();
+				else Runner::run("all", true, true);
 				atomic_wait(Runner::active);
 			}
 
@@ -864,7 +880,7 @@ int main(int argc, char **argv) {
 			}
 
 			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
-			if (time_ms() >= future_time) {
+			if (time_ms() >= future_time and not Global::resized) {
 				Runner::run("all");
 				update_ms = Config::getI("update_ms");
 				future_time = time_ms() + update_ms;
@@ -884,11 +900,14 @@ int main(int argc, char **argv) {
 				//? Poll for input and process any input detected
 				else if (Input::poll(min(1000ul, future_time - current_time))) {
 					if (not Runner::active) Config::unlock();
-					Input::process(Input::get());
+
+					if (Menu::active) Menu::process(Input::get());
+					else Input::process(Input::get());
 				}
 
 				//? Break the loop at 1000ms intervals or if input polling was interrupted
 				else break;
+
 			}
 
 		}

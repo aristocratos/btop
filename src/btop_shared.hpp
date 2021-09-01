@@ -116,9 +116,10 @@ namespace Mem {
 		std::filesystem::path stat = "";
 		int64_t total = 0, used = 0, free = 0;
 		int used_percent = 0, free_percent = 0;
-		array<int64_t, 2> old_io = {0, 0};
+		array<int64_t, 3> old_io = {0, 0, 0};
 		deque<long long> io_read = {};
 		deque<long long> io_write = {};
+		deque<long long> io_activity = {};
 	};
 
 	struct mem_info {
@@ -175,6 +176,7 @@ namespace Proc {
 	extern int select_max;
 	extern atomic<int> detailed_pid;
 	extern int selected_pid, start, selected, collapse, expand;
+	extern string selected_name;
 
 	//? Contains the valid sorting options for processes
 	const vector<string> sort_vector = {
@@ -208,12 +210,13 @@ namespace Proc {
 		size_t pid = 0;
 		string name = "", cmd = "";
 		string short_cmd = "";
-		size_t threads = 0, name_offset = 0;
+		size_t threads = 0;
+		int name_offset = 0;
 		string user = "";
 		uint64_t mem = 0;
 		double cpu_p = 0.0, cpu_c = 0.0;
 		char state = '0';
-		uint64_t cpu_n = 0, p_nice = 0, ppid = 0, cpu_s = 0, cpu_t = 0;
+		uint64_t p_nice = 0, ppid = 0, cpu_s = 0, cpu_t = 0;
 		string prefix = "";
 		size_t depth = 0, tree_index = 0;
 		bool collapsed = false, filtered = false;

@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,17 +20,63 @@ tab-size = 4
 
 #include <string>
 #include <atomic>
+#include <vector>
+#include <bitset>
 
 #include <btop_input.hpp>
 
-using std::string, std::atomic;
+using std::string, std::atomic, std::vector, std::bitset;
 
 namespace Menu {
 
 	extern atomic<bool> active;
 	extern string output;
+	extern int signalToSend;
+	extern bool redraw;
 
-    //? line, col, height, width
+	//? line, col, height, width
 	extern unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+
+	//* Creates a message box centered on screen
+	//? Height of box is determined by size of content vector
+	//? Boxtypes: 0 = OK button | 1 = YES and NO with YES selected | 2 = Same as 1 but with NO selected
+	//? Strings in content vector is not checked for box width overflow
+	class msgBox {
+		string box_contents, button_left, button_right;
+		int height = 0, width = 0, boxtype = 0, selected = 0, x = 0, y = 0;
+	public:
+		enum msgReturn {
+			Invalid,
+			Ok_Yes,
+			No_Esc,
+			Select
+		};
+		msgBox();
+		msgBox(int width, int boxtype, vector<string>& content, string title);
+
+		//? Draw and return box as a string
+		string operator()();
+
+		//? Process input and returns value from enum Ret
+		int input(string key);
+
+		//? Clears content vector and private strings
+		void clear();
+	};
+
+	extern bitset<8> menuMask;
+	
+	//* Enum for functions in vector menuFuncs
+	enum Menus {
+		SignalChoose,
+		SignalSend,
+		SignalReturn,
+		Options,
+		Help,
+		Main
+	};
+
+	//* Handles redirection of input for menu functions and handles return codes
+	void process(string key="");
 
 }

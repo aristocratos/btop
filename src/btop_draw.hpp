@@ -20,10 +20,11 @@ tab-size = 4
 
 #include <string>
 #include <vector>
+#include <array>
 #include <robin_hood.h>
 #include <deque>
 
-using std::string, std::vector, robin_hood::unordered_flat_map, std::deque;
+using std::string, std::array, std::vector, robin_hood::unordered_flat_map, std::deque;
 
 namespace Symbols {
 	const string h_line				= "─";
@@ -76,7 +77,7 @@ namespace Draw {
 		int width;
 		string color_gradient;
 		bool invert;
-		vector<string> cache;
+		array<string, 101> cache;
 	public:
 		Meter();
 		Meter(const int width, const string& color_gradient, const bool invert = false);

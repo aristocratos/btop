@@ -65,6 +65,7 @@ namespace Fx {
 
 	//* Return a string with all colors and text styling removed
 	inline string uncolor(const string& s) { return regex_replace(s, color_regex, ""); }
+
 }
 
 //* Collection of escape codes and functions for cursor manipulation
@@ -129,7 +130,6 @@ namespace Term {
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
-	constexpr auto ZeroSec = std::chrono::seconds(0);
 	extern atomic<int> active_locks;
 
 	//* Return number of UTF8 characters in a string (wide=true counts UTF-8 characters with a width > 1 as 2 characters)

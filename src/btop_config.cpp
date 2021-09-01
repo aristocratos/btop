@@ -20,12 +20,13 @@ tab-size = 4
 #include <ranges>
 #include <atomic>
 #include <fstream>
+#include <string_view>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::array, std::atomic;
+using std::array, std::atomic, std::string_view;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -114,7 +115,8 @@ namespace Config {
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
 
-		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable."},
+		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable.\n"
+								"#* Special formatting: /host = hostname | /user = username | /uptime = system uptime"},
 
 		{"background_update", 	"#* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort."},
 
@@ -184,6 +186,7 @@ namespace Config {
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
 		{"proc_command", ""},
+		{"selected_name", ""},
 	};
 	unordered_flat_map<string, string> stringsTmp;
 
@@ -272,6 +275,7 @@ namespace Config {
 		try {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;
+				strings.at("selected_name") = Proc::selected_name;
 				ints.at("proc_start") = Proc::start;
 				ints.at("proc_selected") = Proc::selected;
 			}
@@ -337,7 +341,7 @@ namespace Config {
 				valid_names.push_back(n[0]);
 			string v_string;
 			getline(cread, v_string, '\n');
-			if (not v_string.ends_with(Global::Version))
+			if (not s_contains(v_string, Global::Version))
 				write_new = true;
 			while (not cread.eof()) {
 				cread >> std::ws;

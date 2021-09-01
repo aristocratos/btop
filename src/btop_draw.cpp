@@ -27,6 +27,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 #include <btop_input.hpp>
+#include <btop_menu.hpp>
 
 
 using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
@@ -217,15 +218,13 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-	Meter::Meter(const int width, const string& color_gradient, const bool invert) : width(width), color_gradient(color_gradient), invert(invert) {
-		cache.insert(cache.begin(), 101, "");
-	}
+	Meter::Meter(const int width, const string& color_gradient, const bool invert) : width(width), color_gradient(color_gradient), invert(invert) {}
 
 	string Meter::operator()(int value) {
 		if (width < 1) return "";
 		value = clamp(value, 0, 100);
 		if (not cache.at(value).empty()) return cache.at(value);
-		string& out = cache.at(value);
+		auto& out = cache.at(value);
 		for (const int& i : iota(1, width + 1)) {
 			int y = round((double)i * 100.0 / width);
 			if (value >= y)
@@ -292,11 +291,11 @@ namespace Draw {
 			out += graphs.at(current).at(0);
 		}
 		else {
-			for (const int& i : iota(0, height)) {
-				if (i > 0) out += Mv::d(1) + Mv::l(width);
+			for (const int& i : iota(1, height + 1)) {
+				if (i > 1) out += Mv::d(1) + Mv::l(width);
 				if (not color_gradient.empty())
-					out += (invert) ? Theme::g(color_gradient).at(i * 100 / (height - 1)) : Theme::g(color_gradient).at(100 - (i * 100 / (height - 1)));
-				out += (invert) ? graphs.at(current).at((height - 1) - i) : graphs.at(current).at(i);
+					out += (invert) ? Theme::g(color_gradient).at((i - 1) * 100 / (height - 1)) : Theme::g(color_gradient).at(100 - (i * 100 / height));
+				out += (invert) ? graphs.at(current).at(height - i) : graphs.at(current).at(i-1);
 			}
 		}
 		if (not color_gradient.empty()) out += Fx::reset;
@@ -520,6 +519,7 @@ namespace Mem {
 	int x = 1, y, width = 20, height;
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
 	int disks_io_h = 0;
+	int disks_io_half = 0;
 	bool shown = true, redraw = true;
 	string box;
 	unordered_flat_map<string, Draw::Meter> mem_meters;
@@ -573,45 +573,50 @@ namespace Mem {
 			//? Disk meters and io graphs
 			if (show_disks) {
 				if (show_io_stat or io_mode) {
-					if (io_mode)
-						disks_io_h = max((int)floor((double)(height - 2 - disk_ios) / max(1, disk_ios)), (io_graph_combined ? 1 : 2));
-					else
-						disks_io_h = 1;
-					int half_height = ceil((double)disks_io_h / 2);
-
 					unordered_flat_map<string, int> custom_speeds;
-					if (not Config::getS("io_graph_speeds").empty()) {
-						auto split = ssplit(Config::getS("io_graph_speeds"));
-						for (const auto& entry : split) {
-							auto vals = ssplit(entry);
-							if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
-								custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
+					int half_height = 0;
+					if (io_mode) {
+						disks_io_h = max((int)floor((double)(height - 2 - (disk_ios * 2)) / max(1, disk_ios)), (io_graph_combined ? 1 : 2));
+						half_height = ceil((double)disks_io_h / 2);
+
+						if (not Config::getS("io_graph_speeds").empty()) {
+							auto split = ssplit(Config::getS("io_graph_speeds"));
+							for (const auto& entry : split) {
+								auto vals = ssplit(entry);
+								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
+									custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
+							}
 						}
 					}
+
 					for (const auto& [name, disk] : mem.disks) {
 						if (disk.io_read.empty()) continue;
-						long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 10) << 20;
 
-						//? Create one combined graph for IO read/write if enabled
-						if (not io_mode or (io_mode and io_graph_combined)) {
-							deque<long long> combined(disk.io_read.size(), 0);
-							rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
-							io_graphs[name] = Draw::Graph{disks_width - (io_mode ? 0 : 6), disks_io_h, "available", combined, graph_symbol, false, true, speed};
-						}
-						else {
-							io_graphs[name + "_read"] = Draw::Graph{disks_width, half_height, "free", disk.io_read, graph_symbol, false, true, speed};
-							io_graphs[name + "_write"] = Draw::Graph{disks_width, disks_io_h - half_height, "used", disk.io_write, graph_symbol, true, true, speed};
+						io_graphs[name + "_activity"] = Draw::Graph{disks_width - 6, 1, "available", disk.io_activity, graph_symbol, false, true};
+
+						if (io_mode) {
+							//? Create one combined graph for IO read/write if enabled
+							long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 10) << 20;
+							if (io_graph_combined) {
+								deque<long long> combined(disk.io_read.size(), 0);
+								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
+								io_graphs[name] = Draw::Graph{disks_width - (io_mode ? 0 : 6), disks_io_h, "available", combined, graph_symbol, false, true, speed};
+							}
+							else {
+								io_graphs[name + "_read"] = Draw::Graph{disks_width, half_height, "free", disk.io_read, graph_symbol, false, true, speed};
+								io_graphs[name + "_write"] = Draw::Graph{disks_width, disks_io_h - half_height, "used", disk.io_write, graph_symbol, true, true, speed};
+							}
 						}
 					}
 				}
-				if (disk_meter > 0) {
-					for (int i = 0; const auto& name : mem.disks_order) {
-						if (i * 2 > height - 2) break;
-						disk_meters_used[name] = Draw::Meter{disk_meter, "used"};
-						if (cmp_less_equal(mem.disks_order.size() * 3, height - 1))
-							disk_meters_free[name] = Draw::Meter{disk_meter, "free"};
-					}
+
+				for (int i = 0; const auto& [name, ignored] : mem.disks) {
+					if (i * 2 > height - 2) break;
+					disk_meters_used[name] = Draw::Meter{disk_meter, "used"};
+					if (cmp_less_equal(mem.disks.size() * 3, height - 1))
+						disk_meters_free[name] = Draw::Meter{disk_meter, "free"};
 				}
+
 				out += Mv::to(y, x + width - 6) + Fx::ub + Theme::c("mem_box") + Symbols::title_left + (io_mode ? Fx::b : "") + Theme::c("hi_fg")
 				+ 'i' + Theme::c("title") + 'o' + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
 				Input::mouse_mappings["i"] = {y, x + width - 5, 1, 2};
@@ -683,6 +688,7 @@ namespace Mem {
 						const string used_percent = to_string(disk.used_percent);
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2)) + Theme::c("main_fg") + used_percent + '%';
 					}
+					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same);
 					if (++cy > height - 3) break;
 					if (io_graph_combined) {
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
@@ -721,8 +727,8 @@ namespace Mem {
 					if (big_disk and not human_io.empty())
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2)) + Theme::c("main_fg") + human_io;
 					if (++cy > height - 3) break;
-					if (show_io_stat and io_graphs.contains(mount)) {
-						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO: " : " IO   " + Mv::l(2)) + io_graphs.at(mount)({comb_val}, redraw or data_same);
+					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
+						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same);
 						if (not big_disk) out += Mv::to(y+1+cy, x+cx) + Theme::c("main_fg") + human_io;
 						if (++cy > height - 3) break;
 					}
@@ -786,6 +792,8 @@ namespace Net {
 			out = box;
 			//? Graphs
 			graphs.clear();
+			if (net.bandwidth.at("download").empty() or net.bandwidth.at("upload").empty())
+				return out + Fx::reset;
 			graphs["download"] = Draw::Graph{width - b_width - 2, u_graph_height, "download", net.bandwidth.at("download"), graph_symbol, false, true, down_max};
 			graphs["upload"] = Draw::Graph{width - b_width - 2, d_graph_height, "upload", net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
 
@@ -851,6 +859,7 @@ namespace Proc {
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
 	int selected_pid = 0;
+	string selected_name;
 	unordered_flat_map<size_t, Draw::Graph> p_graphs;
 	unordered_flat_map<size_t, int> p_counters;
 	int counter = 0;
@@ -990,7 +999,7 @@ namespace Proc {
 				int mouse_x = d_x + 2;
 				out += Mv::to(d_y, d_x + 1);
 				if (width > 55) {
-					out += title_left + hi_color + Fx::b + 't' + t_color + "erminate" + Fx::ub + title_right;
+					out += Fx::ub + title_left + hi_color + Fx::b + 't' + t_color + "erminate" + Fx::ub + title_right;
 					if (alive and selected == 0) Input::mouse_mappings["t"] = {d_y, mouse_x, 1, 9};
 					mouse_x += 11;
 				}
@@ -1121,7 +1130,7 @@ namespace Proc {
 			string cpu_str = (alive ? to_string(detailed.entry.cpu_p) : "");
 			if (alive) {
 				cpu_str.resize((detailed.entry.cpu_p < 10 or detailed.entry.cpu_p >= 100 ? 3 : 4));
-				cpu_str += '%' + Mv::r(1) + (dgraph_width < 20 ? "C" : "Core") + to_string(detailed.entry.cpu_n);
+				cpu_str += '%';
 			}
 			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
 				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + cpu_str;
@@ -1168,7 +1177,10 @@ namespace Proc {
 		for (int n=0; auto& p : plist) {
 			if (n++ < start or p.filtered) continue;
 			bool is_selected = (lc + 1 == selected);
-			if (is_selected) selected_pid = (int)p.pid;
+			if (is_selected) {
+				selected_pid = (int)p.pid;
+				selected_name = p.name;
+			}
 
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
 			const bool has_graph = p_counters.contains(p.pid);
@@ -1275,7 +1287,7 @@ namespace Proc {
 		//? Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
 		string loc_clear = Symbols::h_line * max(0ul, 9 - location.size());
-		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Theme::c("proc_box") + loc_clear
+		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
 
 		//? Clear out left over graphs from dead processes at a regular interval
@@ -1293,7 +1305,10 @@ namespace Proc {
 			p_counters.compact();
 		}
 
-		if (selected == 0 and selected_pid != 0) selected_pid = 0;
+		if (selected == 0 and selected_pid != 0) {
+			selected_pid = 0;
+			selected_name.clear();
+		}
 		redraw = false;
 		return out + Fx::reset;
 	}
@@ -1303,6 +1318,7 @@ namespace Proc {
 namespace Draw {
 	void calcSizes() {
 		atomic_wait(Runner::active);
+		Config::unlock();
 		auto& boxes = Config::getS("shown_boxes");
 		auto& cpu_bottom = Config::getB("cpu_bottom");
 		auto& mem_below_net = Config::getB("mem_below_net");
@@ -1314,8 +1330,10 @@ namespace Draw {
 		Proc::box.clear();
 		Global::clock.clear();
 		Global::overlay.clear();
+		if (Menu::active) Menu::redraw = true;
 
 		Input::mouse_mappings.clear();
+		Menu::mouse_mappings.clear();
 
 		Cpu::x = Mem::x = Net::x = Proc::x = 1;
 		Cpu::y = Mem::y = Net::y = Proc::y = 1;

@@ -31,8 +31,8 @@ tab-size = 4
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
-using 	std::string, std::vector, std::ifstream, std::atomic, std::numeric_limits, std::streamsize, std::round, std::max, std::min,
-		std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
+using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
+using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -73,8 +73,8 @@ namespace Cpu {
 	unordered_flat_map<int, int> core_mapping;
 }
 
-namespace Net {
-	uint64_t timestamp = 0;
+namespace Mem {
+	double old_uptime;
 }
 
 namespace Shared {
@@ -136,11 +136,8 @@ namespace Shared {
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
+		Mem::old_uptime = system_uptime();
 		Mem::collect();
-
-		//? Init for namespace Net
-		Net::timestamp = time_ms();
-		Net::collect();
 
 	}
 
@@ -545,7 +542,6 @@ namespace Mem {
 	int disk_ios = 0;
 	vector<string> last_found;
 
-
 	mem_info current_mem {};
 
 	auto collect(const bool no_update) -> mem_info& {
@@ -614,6 +610,7 @@ namespace Mem {
 
 		//? Get disks stats
 		if (show_disks) {
+			double uptime = system_uptime();
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
@@ -753,7 +750,7 @@ namespace Mem {
 					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
 
 				//? Get disks IO
-				int64_t sectors_read, sectors_write;
+				int64_t sectors_read, sectors_write, io_ticks;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
@@ -777,9 +774,19 @@ namespace Mem {
 							disk.io_write.push_back(max(0l, (sectors_write - disk.old_io.at(1)) * 512));
 						disk.old_io.at(1) = sectors_write;
 						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> io_ticks;
+						if (disk.io_activity.empty())
+							disk.io_activity.push_back(0);
+						else
+							disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+						disk.old_io.at(2) = io_ticks;
+						while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 					}
 					diskread.close();
 				}
+				old_uptime = uptime;
 			}
 			catch (const std::exception& e) {
 				Logger::warning("Error in Mem::collect() : " + (string)e.what());
@@ -800,6 +807,7 @@ namespace Net {
 	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
 	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
 	bool rescale = true;
+	uint64_t timestamp = 0;
 
 	//* RAII wrapper for getifaddrs
 	class getifaddr_wrapper {
@@ -824,6 +832,7 @@ namespace Net {
 			if (if_wrap.status != 0) {
 				errors++;
 				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				redraw = true;
 				return empty_net;
 			}
 			int family = 0;
@@ -931,7 +940,9 @@ namespace Net {
 					break;
 				}
 				//? If no interface is connected set to first available
-				if (selected_iface.empty()) selected_iface = sorted_interfaces.at(0);
+				if (selected_iface.empty() and not sorted_interfaces.empty()) selected_iface = sorted_interfaces.at(0);
+				else if (sorted_interfaces.empty()) return empty_net;
+
 			}
 		}
 
@@ -1152,7 +1163,7 @@ namespace Proc {
 		const auto& tree = Config::getB("proc_tree");
 		const auto& show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
-		const bool should_filter = current_filter != filter;
+		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		const bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		if (sorted_change) {
@@ -1174,6 +1185,8 @@ namespace Proc {
 		}
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
+			should_filter = true;
+
 			//? Update uid_user map if /etc/passwd changed since last run
 			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
 				string r_uid, r_user;
@@ -1269,20 +1282,18 @@ namespace Proc {
 
 				const auto& offset = new_proc.name_offset;
 				short_str.clear();
-				size_t x = 0, next_x = 3;
+				int x = 0, next_x = 3;
 				uint64_t cpu_t = 0;
 				try {
-					while (x < 40) {
-						while (pread.good() and ++x < next_x + offset) {
-							pread.ignore(SSmax, ' ');
-						}
-						if (pread.bad()) break;
-
+					for (;;) {
+						while (++x < next_x + offset) pread.ignore(SSmax, ' ');
 						getline(pread, short_str, ' ');
+						if (not pread.good()) break;
 
 						switch (x-offset) {
 							case 3: //? Process state
 								new_proc.state = short_str.at(0);
+								if (new_proc.ppid != 0) next_x = 14;
 								continue;
 							case 4: //? Parent pid
 								new_proc.ppid = stoull(short_str);
@@ -1313,18 +1324,14 @@ namespace Proc {
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
 								new_proc.mem = stoull(short_str) * Shared::pageSize;
-								next_x = 39;
-								continue;
-							case 39: //? CPU number last executed on
-								new_proc.cpu_n = stoull(short_str);
-								x++;
-								break;
 						}
+						break;
 					}
 
 				}
 				catch (const std::invalid_argument&) { continue; }
 				catch (const std::out_of_range&) { continue; }
+
 				pread.close();
 
 				if (x-offset < 24) continue;
