@@ -55,11 +55,9 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "0.5.0";
+	const string Version = "0.9.0";
 
 	int coreCount;
-	string banner;
-	size_t banner_width = 0;
 	string overlay;
 	string clock;
 
@@ -106,7 +104,7 @@ void argumentParser(const int& argc, char **argv) {
 					<< endl;
 			exit(0);
 		}
-		if (is_in(argument, "-v", "--version")) {
+		else if (is_in(argument, "-v", "--version")) {
 			cout << "btop version: " << Global::Version << endl;
 			exit(0);
 		}
@@ -236,105 +234,6 @@ void _signal_handler(const int sig) {
 	}
 }
 
-//* Generate the btop++ banner
-void banner_gen() {
-	Global::banner.clear();
-	Global::banner_width = 0;
-	string b_color, bg, fg, oc, letter;
-	auto& lowcolor = Config::getB("lowcolor");
-	auto& tty_mode = Config::getB("tty_mode");
-	for (size_t z = 0; const auto& line : Global::Banner_src) {
-		if (const auto w = ulen(line[1]); w > Global::banner_width) Global::banner_width = w;
-		if (tty_mode) {
-			fg = (z > 2) ? "\x1b[31m" : "\x1b[91m";
-			bg = (z > 2) ? "\x1b[90m" : "\x1b[37m";
-		}
-		else {
-			fg = Theme::hex_to_color(line[0], lowcolor);
-			int bg_i = 120 - z * 12;
-			bg = Theme::dec_to_color(bg_i, bg_i, bg_i, lowcolor);
-		}
-		for (size_t i = 0; i < line[1].size(); i += 3) {
-			if (line[1][i] == ' ') {
-				letter = ' ';
-				i -= 2;
-			}
-			else
-				letter = line[1].substr(i, 3);
-
-			b_color = (letter == "█") ? fg : bg;
-			if (b_color != oc) Global::banner += b_color;
-			Global::banner += letter;
-			oc = b_color;
-		}
-		if (++z < Global::Banner_src.size()) Global::banner += Mv::l(ulen(line[1])) + Mv::d(1);
-	}
-	Global::banner += Mv::r(18 - Global::Version.size())
-					+ (tty_mode ? "\x1b[0;40;37m" : Theme::dec_to_color(0,0,0, lowcolor, "bg")
-					+ Theme::dec_to_color(150, 150, 150, lowcolor))
-					+ Fx::i + "v" + Global::Version + Fx::ui;
-}
-
-bool update_clock() {
-	const auto& clock_format = Config::getS("clock_format");
-	if (not Cpu::shown or clock_format.empty()) return false;
-
-	static const unordered_flat_map<string, string> clock_custom_format = {
-		{"/user", Tools::username()},
-		{"/host", Tools::hostname()},
-		{"/uptime", ""}
-	};
-	static time_t c_time = 0;
-	static size_t clock_len = 0;
-	static string old_clock;
-	string new_clock;
-
-	if (auto n_time = time(NULL); n_time == c_time)
-		return false;
-	else {
-		c_time = n_time;
-		new_clock = Tools::strf_time(clock_format);
-		if (new_clock == old_clock) return false;
-		old_clock = new_clock;
-	}
-
-	auto& out = Global::clock;
-	const auto& cpu_bottom = Config::getB("cpu_bottom");
-	const auto& x = Cpu::x;
-	const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
-	const auto& width = Cpu::width;
-	const auto& title_left = (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
-	const auto& title_right = (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
-
-
-	for (const auto& [c_format, replacement] : clock_custom_format) {
-		if (s_contains(new_clock, c_format)) {
-			if (c_format == "/uptime") {
-				string upstr = sec_to_dhms(system_uptime());
-				if (upstr.size() > 8) upstr.resize(upstr.size() - 3);
-				new_clock = s_replace(new_clock, c_format, upstr);
-			}
-			else {
-				new_clock = s_replace(new_clock, c_format, replacement);
-			}
-		}
-
-	}
-
-	new_clock = uresize(new_clock, std::max(0, width - 56));
-	out.clear();
-
-	if (new_clock.size() != clock_len) {
-		if (not Global::resized and clock_len > 0) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
-		clock_len = new_clock.size();
-	}
-
-	out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + title_left
-		+ Theme::c("title") + Fx::b + new_clock + Theme::c("cpu_box") + Fx::ub + title_right;
-
-	return true;
-}
-
 //* Manages secondary thread for collection and drawing of boxes
 namespace Runner {
 	atomic<bool> active (false);
@@ -366,6 +265,7 @@ namespace Runner {
 	};
 
 	string output;
+	bool pause_output = false;
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
@@ -407,6 +307,7 @@ namespace Runner {
 		bitset<8> box_mask;
 		bool no_update;
 		bool force_redraw;
+		bool background_update;
 		string overlay;
 		string clock;
 	};
@@ -464,6 +365,7 @@ namespace Runner {
 
 			//! DEBUG stats
 			if (Global::debug) {
+				if (debug_bg.empty()) Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
 			}
@@ -499,7 +401,7 @@ namespace Runner {
 								if (Global::debug) debug_timer("proc", draw_begin);
 
 								//? Draw box
-								output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
+								if (not pause_output) output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
 
 								if (Global::debug) debug_timer("proc", draw_done);
 							}
@@ -527,7 +429,7 @@ namespace Runner {
 								if (Global::debug) debug_timer("net", draw_begin);
 
 								//? Draw box
-								output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
+								if (not pause_output) output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
 
 								if (Global::debug) debug_timer("net", draw_done);
 							}
@@ -555,7 +457,7 @@ namespace Runner {
 								if (Global::debug) debug_timer("mem", draw_begin);
 
 								//? Draw box
-								output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
+								if (not pause_output) output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
 
 								if (Global::debug) debug_timer("mem", draw_done);
 							}
@@ -583,7 +485,7 @@ namespace Runner {
 								if (Global::debug) debug_timer("cpu", draw_begin);
 
 								//? Draw box
-								output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
+								if (not pause_output) output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
 
 								if (Global::debug) debug_timer("cpu", draw_done);
 							}
@@ -606,8 +508,11 @@ namespace Runner {
 				continue;
 			}
 
+			if (not pause_output) output += conf.clock;
+			if (not conf.overlay.empty() and not conf.background_update) pause_output = true;
+
 			//! DEBUG stats -->
-			if (Global::debug) {
+			if (Global::debug and not Menu::active) {
 				output += debug_bg + Theme::c("title") + Fx::b + ljust(" Box", 9) + ljust("Collect μs", 12, true) + ljust("Draw μs", 9, true) + Theme::c("main_fg") + Fx::ub;
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
@@ -619,8 +524,8 @@ namespace Runner {
 
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			cout << Term::sync_start << (conf.overlay.empty()
-					? output + conf.clock
-					: Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output + conf.clock) + conf.overlay)
+					? output
+					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
 				<< Term::sync_end << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
@@ -654,7 +559,9 @@ namespace Runner {
 				box_mask |= box_bits.at(box);
 			}
 
-			current_conf = {box_mask, no_update, force_redraw, Global::overlay, Global::clock};
+			current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
+
+			if (Menu::active and not current_conf.background_update) Global::overlay.clear();
 
 			thread_trigger();
 
@@ -826,13 +733,6 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	if (Global::debug) {
-		Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
-	}
-
-	//? Create the btop++ banner
-	banner_gen();
-
 	//? Calculate sizes of all boxes
 	Draw::calcSizes();
 
@@ -867,7 +767,7 @@ int main(int argc, char **argv) {
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
 				Draw::calcSizes();
-				update_clock();
+				Draw::update_clock();
 				Global::resized = false;
 				if (Menu::active) Menu::process();
 				else Runner::run("all", true, true);
@@ -875,7 +775,7 @@ int main(int argc, char **argv) {
 			}
 
 			//? Update clock if needed
-			if (update_clock() and not Menu::active) {
+			if (Draw::update_clock() and not Menu::active) {
 				Runner::run("clock");
 			}
 
@@ -912,7 +812,7 @@ int main(int argc, char **argv) {
 
 		}
 	}
-	catch (std::exception& e) {
+	catch (const std::exception& e) {
 		Global::exit_error_msg = "Exception in main loop -> " + (string)e.what();
 		exit(1);
 	}

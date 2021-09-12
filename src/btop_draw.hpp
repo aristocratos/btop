@@ -57,20 +57,27 @@ namespace Symbols {
 
 namespace Draw {
 
+	//* Generate if needed and return the btop++ banner
+	string banner_gen(int y=0, int x=0, bool centered=false, bool redraw=false);
+
 	//* An editable text field
 	class TextEdit {
 		size_t pos = 0;
 		size_t upos = 0;
+		bool numeric;
 	public:
 		string text;
 		TextEdit();
-		TextEdit(string text);
+		TextEdit(string text, bool numeric=false);
 		bool command(const string& key);
 		string operator()(const size_t limit=0);
+		void clear();
 	};
 
 	//* Create a box and return as a string
 	string createBox(const int x, const int y, const int width, const int height, string line_color="", const bool fill=false, const string title="", const string title2="", const int num=0);
+
+	bool update_clock();
 
 	//* Class holding a percentage meter
 	class Meter {
@@ -121,9 +128,10 @@ namespace Draw {
 
 	//* Calculate sizes of boxes, draw outlines and save to enabled boxes namespaces
 	void calcSizes();
-
 }
 
 namespace Proc {
 	extern Draw::TextEdit filter;
+	extern unordered_flat_map<size_t, Draw::Graph> p_graphs;
+	extern unordered_flat_map<size_t, int> p_counters;
 }

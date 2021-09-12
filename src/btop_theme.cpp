@@ -345,6 +345,8 @@ namespace Theme {
 			rgbs.clear();
 			gradients.clear();
 			colors = TTY_theme;
+			if (not Config::getB("theme_background"))
+				colors["main_bg"] = "\x1b[49m";
 
 			for (const auto& c : colors) {
 				if (not c.first.ends_with("_start")) continue;
@@ -401,10 +403,10 @@ namespace Theme {
 		themes.push_back("Default");
 		themes.push_back("TTY");
 
-		for (const auto& path : { theme_dir, user_theme_dir } ) {
+		for (const auto& path : { user_theme_dir, theme_dir } ) {
 			if (path.empty()) continue;
 			for (auto& file : fs::directory_iterator(path)) {
-				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1) {
+				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1 and not v_contains(themes, file.path().c_str())) {
 					themes.push_back(file.path().c_str());
 				}
 			}
@@ -413,11 +415,18 @@ namespace Theme {
 	}
 
 	void setTheme() {
-		string theme = Config::getS("color_theme");
+		const auto& theme = Config::getS("color_theme");
+		fs::path theme_path;
+		for (const fs::path p : themes) {
+			if (p == theme or p.stem() == theme or p.filename() == theme) {
+				theme_path = p;
+				break;
+			}
+		}
 		if (theme == "TTY" or Config::getB("tty_mode"))
 			generateTTYColors();
 		else {
-			generateColors((theme == "Default" ? Default_theme : loadFile(theme)));
+			generateColors((theme == "Default" or theme_path.empty() ? Default_theme : loadFile(theme_path)));
 			generateGradients();
 		}
 		Term::fg = colors.at("main_fg");

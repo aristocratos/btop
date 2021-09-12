@@ -189,6 +189,21 @@ namespace Input {
 				if (str_to_lower(key) == "q") {
 					exit(0);
 				}
+				else if (is_in(key, "escape", "m")) {
+					Menu::menuMask.set(Menu::Main);
+					Menu::process();
+					return;
+				}
+				else if (is_in(key, "F1", "h")) {
+					Menu::menuMask.set(Menu::Help);
+					Menu::process();
+					return;
+				}
+				else if (is_in(key, "F2", "o")) {
+					Menu::menuMask.set(Menu::Options);
+					Menu::process();
+					return;
+				}
 				else if (is_in(key, "1", "2", "3", "4")) {
 					atomic_wait(Runner::active);
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
@@ -330,6 +345,7 @@ namespace Input {
 					return;
 				}
 				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+					if (Term::width < 80 or Term::height < 20) return;
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 					Menu::menuMask.set(Menu::SignalChoose);

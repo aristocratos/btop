@@ -46,6 +46,7 @@ namespace Term {
 	atomic<int> width = 0;
 	atomic<int> height = 0;
 	string current_tty;
+	char* custombuf;
 
 	namespace {
 		struct termios initial_settings;
@@ -107,11 +108,21 @@ namespace Term {
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
 				current_tty = (string)ttyname(STDIN_FILENO);
+
+				//? Disable stream sync
 				cin.sync_with_stdio(false);
+				cout.sync_with_stdio(false);
+
+				//? Disable stream ties
 				cin.tie(NULL);
+				cout.tie(NULL);
 				echo(false);
 				linebuffered(false);
 				refresh();
+
+				//? Set 1MB buffer for cout
+				std::cout.rdbuf()->pubsetbuf(custombuf, 1048576);
+
 				cout << alt_screen << hide_cursor << mouse_on << flush;
 				Global::resized = false;
 			}
@@ -169,11 +180,10 @@ namespace Tools {
 	}
 
 	string s_replace(const string& str, const string& from, const string& to) {
-		size_t start_pos = str.find(from);
-		if(start_pos == std::string::npos)
-			return str;
 		string out = str;
-		out.replace(start_pos, from.length(), to);
+		for (size_t start_pos = out.find(from); start_pos != std::string::npos; start_pos = out.find(from)) {
+			out.replace(start_pos, from.length(), to);
+		}
 		return out;
 	}
 

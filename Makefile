@@ -16,13 +16,13 @@ ifeq ($(ARCH),unknown)
 	ARCH := $(shell uname -m || echo unknown)
 endif
 ifeq ($(ARCH),x86_64)
-	ADDFLAGS = -fcf-protection
+	ADDFLAGS := -fcf-protection
 endif
 
 #? Make sure PLATFORM Darwin is OSX and not Darwin
 ifeq ($(PLATFORM),Darwin)
 	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
-		PLATFORM = OSX
+		PLATFORM := OSX
 	endif
 endif
 
@@ -32,17 +32,30 @@ override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
 ifneq ($(CXX),g++-10)
-	V_MAJOR = $(shell echo $(CXX_VERSION) | cut -f1 -d".")
+	V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
 	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
 		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-			override CXX = g++-11
+			override CXX := g++-11
 			override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 		endif
 	endif
 endif
 
+#? Pull in platform specific source files and get thread count
+ifeq ($(PLATFORM),Linux)
+	PLATFORM_DIR := linux
+	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+else ifeq ($(PLATFORM),FreeBSD)
+	PLATFORM_DIR := freebsd
+	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
+else ifeq ($(PLATFORM),OSX)
+	PLATFORM_DIR := osx
+	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+else
+$(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
+endif
+
 #? Use all CPU cores (will only be set if using Make 4.3+)
-THREADS		:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 MAKEFLAGS	:= --jobs=$(THREADS)
 ifeq ($(THREADS),1)
 	override THREADS := auto
@@ -69,17 +82,6 @@ SU_USER				:= root
 SU_GROUP			:= root
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
-
-#? Pull in platform specific source files
-ifeq ($(PLATFORM),Linux)
-	PLATFORM_DIR = linux
-else ifeq ($(PLATFORM),FreeBSD)
-	PLATFORM_DIR = freebsd
-else ifeq ($(PLATFORM),OSX)
-	PLATFORM_DIR = osx
-else
-$(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
-endif
 
 SOURCES += $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT))
 

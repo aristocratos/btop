@@ -43,6 +43,7 @@ namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
 	vector<string> available_fields;
+	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors = false, cpu_temp_only = false;
@@ -133,6 +134,9 @@ namespace Shared {
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
+		for (const auto& [sensor, ignored] : Cpu::found_sensors) {
+			Cpu::available_sensors.push_back(sensor);
+		}
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem

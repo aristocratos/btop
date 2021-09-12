@@ -39,7 +39,9 @@ namespace Config {
 	extern unordered_flat_map<string, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
+	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
 	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
 
 	extern vector<string> current_boxes;
 
@@ -59,6 +61,13 @@ namespace Config {
 
 	//* Return string for config key <name>
 	inline const string& getS(const string& name) { return strings.at(name); }
+
+	string getAsString(const string& name);
+
+	extern string validError;
+
+	bool intValid(const string& name, const string& value);
+	bool stringValid(const string& name, const string& value);
 
 	//* Set config key <name> to bool <value>
 	inline void set(const string& name, const bool& value) {

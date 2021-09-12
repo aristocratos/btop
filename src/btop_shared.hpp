@@ -33,6 +33,7 @@ void term_resize(bool force=false);
 void banner_gen();
 
 namespace Global {
+	extern const vector<array<string, 2>> Banner_src;
 	extern const string Version;
 	extern atomic<bool> quitting;
 	extern string exit_error_msg;
@@ -49,6 +50,8 @@ namespace Runner {
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
 	extern pthread_t runner_id;
+	extern bool pause_output;
+	extern string debug_bg;
 
 	void run(const string& box="", const bool no_update=false, const bool force_redraw=false);
 	void stop();
@@ -74,6 +77,8 @@ namespace Cpu {
 	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw, got_sensors, cpu_temp_only;
 	extern string cpuName, cpuHz;
+	extern vector<string> available_fields;
+	extern vector<string> available_sensors;
 
 	struct cpu_info {
 		unordered_flat_map<string, deque<long long>> cpu_percent = {

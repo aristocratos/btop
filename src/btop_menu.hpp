@@ -45,6 +45,7 @@ namespace Menu {
 		string box_contents, button_left, button_right;
 		int height = 0, width = 0, boxtype = 0, selected = 0, x = 0, y = 0;
 	public:
+		enum BoxTypes { OK, YES_NO, NO_YES };
 		enum msgReturn {
 			Invalid,
 			Ok_Yes,
@@ -52,7 +53,7 @@ namespace Menu {
 			Select
 		};
 		msgBox();
-		msgBox(int width, int boxtype, vector<string>& content, string title);
+		msgBox(int width, int boxtype, vector<string> content, string title);
 
 		//? Draw and return box as a string
 		string operator()();
@@ -65,7 +66,7 @@ namespace Menu {
 	};
 
 	extern bitset<8> menuMask;
-	
+
 	//* Enum for functions in vector menuFuncs
 	enum Menus {
 		SignalChoose,

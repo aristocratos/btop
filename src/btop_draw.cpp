@@ -90,8 +90,49 @@ namespace Symbols {
 
 namespace Draw {
 
+	string banner_gen(int y, int x, bool centered, bool redraw) {
+		static string banner;
+		static size_t width = 0;
+		if (redraw) banner.clear();
+		if (banner.empty()) {
+			string b_color, bg, fg, oc, letter;
+			auto& lowcolor = Config::getB("lowcolor");
+			auto& tty_mode = Config::getB("tty_mode");
+			for (size_t z = 0; const auto& line : Global::Banner_src) {
+				if (const auto w = ulen(line[1]); w > width) width = w;
+				if (tty_mode) {
+					fg = (z > 2) ? "\x1b[31m" : "\x1b[91m";
+					bg = (z > 2) ? "\x1b[90m" : "\x1b[37m";
+				}
+				else {
+					fg = Theme::hex_to_color(line[0], lowcolor);
+					int bg_i = 120 - z * 12;
+					bg = Theme::dec_to_color(bg_i, bg_i, bg_i, lowcolor);
+				}
+				for (size_t i = 0; i < line[1].size(); i += 3) {
+					if (line[1][i] == ' ') {
+						letter = ' ';
+						i -= 2;
+					}
+					else
+						letter = line[1].substr(i, 3);
+
+					b_color = (letter == "█") ? fg : bg;
+					if (b_color != oc) banner += b_color;
+					banner += letter;
+					oc = b_color;
+				}
+				if (++z < Global::Banner_src.size()) banner += Mv::l(ulen(line[1])) + Mv::d(1);
+			}
+			banner += Mv::r(18 - Global::Version.size())
+					+ Theme::c("main_fg") + Fx::b + Fx::i + "v" + Global::Version + Fx::reset;
+		}
+		if (redraw) return "";
+		return (centered ? Mv::to(y, Term::width / 2 - width / 2) : Mv::to(y, x)) + banner;
+	}
+
 	TextEdit::TextEdit() {}
-	TextEdit::TextEdit(string text) : text(text) {
+	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(text) {
 		pos = this->text.size();
 		upos = ulen(this->text);
 	}
@@ -127,11 +168,12 @@ namespace Draw {
 			const string first = uresize(text, upos + 1);
 			text = uresize(first, ulen(first) - 1) + text.substr(first.size());
 		}
-		else if (key == "space") {
+		else if (key == "space" and not numeric) {
 			text.insert(pos++, 1, ' ');
 			upos++;
 		}
-		else if (ulen(key) == 1) {
+		else if (ulen(key) == 1 and text.size() < text.max_size() - 20) {
+			if (numeric and not isint(key)) return false;
 			if (key.size() == 1) {
 				text.insert(pos++, 1, key.at(0));
 				upos++;
@@ -169,6 +211,10 @@ namespace Draw {
 			}
 		}
 		return text.substr(0, pos) + Fx::bl + "█" + Fx::ubl + text.substr(pos);
+	}
+
+	void TextEdit::clear() {
+		this->text.clear();
 	}
 
 	string createBox(const int x, const int y, const int width, const int height, string line_color, const bool fill, const string title, const string title2, const int num) {
@@ -213,6 +259,69 @@ namespace Draw {
 		}
 
 		return out + Fx::reset + Mv::to(y + 1, x + 1);
+	}
+
+	bool update_clock() {
+		const auto& clock_format = Config::getS("clock_format");
+		if (not Cpu::shown or clock_format.empty()) {
+			if (clock_format.empty() and not Global::clock.empty()) Global::clock.clear();
+			return false;
+		}
+
+		static const unordered_flat_map<string, string> clock_custom_format = {
+			{"/user", Tools::username()},
+			{"/host", Tools::hostname()},
+			{"/uptime", ""}
+		};
+		static time_t c_time = 0;
+		static size_t clock_len = 0;
+		static string old_clock;
+		string new_clock;
+
+		if (auto n_time = time(NULL); n_time == c_time)
+			return false;
+		else {
+			c_time = n_time;
+			new_clock = Tools::strf_time(clock_format);
+			if (new_clock == old_clock) return false;
+			old_clock = new_clock;
+		}
+
+		auto& out = Global::clock;
+		const auto& cpu_bottom = Config::getB("cpu_bottom");
+		const auto& x = Cpu::x;
+		const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
+		const auto& width = Cpu::width;
+		const auto& title_left = (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
+		const auto& title_right = (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
+
+
+		for (const auto& [c_format, replacement] : clock_custom_format) {
+			if (s_contains(new_clock, c_format)) {
+				if (c_format == "/uptime") {
+					string upstr = sec_to_dhms(system_uptime());
+					if (upstr.size() > 8) upstr.resize(upstr.size() - 3);
+					new_clock = s_replace(new_clock, c_format, upstr);
+				}
+				else {
+					new_clock = s_replace(new_clock, c_format, replacement);
+				}
+			}
+
+		}
+
+		new_clock = uresize(new_clock, std::max(0, width - 56));
+		out.clear();
+
+		if (new_clock.size() != clock_len) {
+			if (not Global::resized and clock_len > 0) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+			clock_len = new_clock.size();
+		}
+
+		out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + title_left
+			+ Theme::c("title") + Fx::b + new_clock + Theme::c("cpu_box") + Fx::ub + title_right;
+
+		return true;
 	}
 
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
@@ -294,7 +403,7 @@ namespace Draw {
 			for (const int& i : iota(1, height + 1)) {
 				if (i > 1) out += Mv::d(1) + Mv::l(width);
 				if (not color_gradient.empty())
-					out += (invert) ? Theme::g(color_gradient).at((i - 1) * 100 / (height - 1)) : Theme::g(color_gradient).at(100 - (i * 100 / height));
+					out += (invert) ? Theme::g(color_gradient).at(i * 100 / height) : Theme::g(color_gradient).at(100 - ((i - 1) * 100 / height));
 				out += (invert) ? graphs.at(current).at(height - i) : graphs.at(current).at(i-1);
 			}
 		}
@@ -374,7 +483,7 @@ namespace Cpu {
 		auto& graph_lo_field = Config::getS("cpu_graph_lower");
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
-		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(1);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& temp_scale = Config::getS("temp_scale");
 		string out;
 		out.reserve(width * height);
@@ -540,7 +649,7 @@ namespace Mem {
 		auto& use_graphs = Config::getB("mem_graphs");
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
-		// auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(1);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		string out;
 		out.reserve(height * width);
 
@@ -592,7 +701,7 @@ namespace Mem {
 					for (const auto& [name, disk] : mem.disks) {
 						if (disk.io_read.empty()) continue;
 
-						io_graphs[name + "_activity"] = Draw::Graph{disks_width - 6, 1, "available", disk.io_activity, graph_symbol, false, true};
+						io_graphs[name + "_activity"] = Draw::Graph{disks_width - 6, 1, "", disk.io_activity, graph_symbol};
 
 						if (io_mode) {
 							//? Create one combined graph for IO read/write if enabled
@@ -672,7 +781,7 @@ namespace Mem {
 		//? Disks
 		if (show_disks) {
 			const auto& disks = mem.disks;
-			cx = x + mem_width - 1; cy = 0;
+			cx = mem_width; cy = 0;
 			const bool big_disk = disks_width >= 25;
 			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
 			if (io_mode) {
@@ -688,7 +797,8 @@ namespace Mem {
 						const string used_percent = to_string(disk.used_percent);
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2)) + Theme::c("main_fg") + used_percent + '%';
 					}
-					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same);
+					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(max(50ll, disk.io_activity.back()))
+						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 					if (++cy > height - 3) break;
 					if (io_graph_combined) {
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
@@ -728,7 +838,8 @@ namespace Mem {
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2)) + Theme::c("main_fg") + human_io;
 					if (++cy > height - 3) break;
 					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
-						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same);
+						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(max(50ll, disk.io_activity.back()))
+							+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 						if (not big_disk) out += Mv::to(y+1+cy, x+cx) + Theme::c("main_fg") + human_io;
 						if (++cy > height - 3) break;
 					}
@@ -938,7 +1049,7 @@ namespace Proc {
 		auto& proc_colors = Config::getB("proc_colors");
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
-		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(1);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& mem_bytes = Config::getB("proc_mem_bytes");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
@@ -1330,10 +1441,13 @@ namespace Draw {
 		Proc::box.clear();
 		Global::clock.clear();
 		Global::overlay.clear();
+		Runner::pause_output = false;
+		Runner::debug_bg.clear();
+		Proc::p_counters.clear();
+		Proc::p_graphs.clear();
 		if (Menu::active) Menu::redraw = true;
 
 		Input::mouse_mappings.clear();
-		Menu::mouse_mappings.clear();
 
 		Cpu::x = Mem::x = Net::x = Proc::x = 1;
 		Cpu::y = Mem::y = Net::y = Proc::y = 1;

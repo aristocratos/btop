@@ -214,9 +214,9 @@ namespace Tools {
 		return is_in(str, "true", "True");
 	}
 
-	//* Check if a string is a valid integer value
+	//* Check if a string is a valid integer value (only postive)
 	inline bool isint(const string& str) {
-		return all_of(str.begin() + (str[0] == '-' ? 1 : 0), str.end(), ::isdigit);
+		return all_of(str.begin(), str.end(), ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return new string

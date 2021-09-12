@@ -39,7 +39,8 @@ namespace Config {
 	bool write_new;
 
 	const vector<array<string, 2>> descriptions = {
-		{"color_theme", 		"#* Full path to a bashtop/bpytop/btop++ formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes."},
+		{"color_theme", 		"#* Name of a btop++/bpytop/bashtop formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes.\n"
+								"#* Themes should be placed in \"../share/btop/themes\" relative to binary or \"$HOME/.config/btop/themes\""},
 
 		{"theme_background", 	"#* If the theme set background should be shown, set to False if you want terminal background transparency."},
 
@@ -139,9 +140,9 @@ namespace Config {
 
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
-		{"show_io_stat", 		"#* Toggles if io stats should be shown in regular disk usage view."},
+		{"show_io_stat", 		"#* Toggles if io activity % (disk busy time) should be shown in regular disk usage view."},
 
-		{"io_mode", 			"#* Toggles io mode for disks, showing only big graphs for disk read/write speeds."},
+		{"io_mode", 			"#* Toggles io mode for disks, showing big graphs for disk read/write speeds."},
 
 		{"io_graph_combined", 	"#* Set to True to show combined read/write io graphs in io mode."},
 
@@ -160,7 +161,7 @@ namespace Config {
 
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
-		{"log_level", 			"#* Set loglevel for \"~/.config/bpytop/error.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
+		{"log_level", 			"#* Set loglevel for \"~/.config/btop/error.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
 	};
 
@@ -258,6 +259,98 @@ namespace Config {
 	void lock() {
 		atomic_wait(writelock);
 		locked = true;
+	}
+
+	string validError;
+
+	bool intValid(const string& name, const string& value) {
+		int i_value;
+		try {
+			i_value = stoi(value);
+		}
+		catch (const std::invalid_argument&) {
+			validError = "Invalid numerical value!";
+			return false;
+		}
+		catch (const std::out_of_range&) {
+			validError = "Value out of range!";
+			return false;
+		}
+
+		if (name == "update_ms" and i_value < 100)
+			validError = "Config value update_ms set too low (<100).";
+
+		else if (name == "update_ms" and i_value > 86400000)
+			validError = "Config value update_ms set too high (>86400000).";
+
+		else
+			return true;
+
+		return false;
+	}
+
+	bool stringValid(const string& name, const string& value) {
+		if (name == "log_level" and not v_contains(Logger::log_levels, value))
+			validError = "Invalid log_level: " + value;
+
+		else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
+			validError = "Invalid graph symbol identifier: " + value;
+
+		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
+			validError = "Invalid graph symbol identifier for" + name + ": " + value;
+
+		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
+			validError = "Invalid box name(s) in shown_boxes!";
+
+		else if (name == "cpu_core_map") {
+			const auto maps = ssplit(value);
+			bool all_good = true;
+			for (const auto& map : maps) {
+				const auto map_split = ssplit(map, ':');
+				if (map_split.size() != 2)
+					all_good = false;
+				else if (not isint(map_split.at(0)) or not isint(map_split.at(1)))
+					all_good = false;
+
+				if (not all_good) {
+					validError = "Invalid formatting of cpu_core_map!";
+					return false;
+				}
+			}
+			return true;
+		}
+		else if (name == "io_graph_speeds") {
+			const auto maps = ssplit(value);
+			bool all_good = true;
+			for (const auto& map : maps) {
+				const auto map_split = ssplit(map, ':');
+				if (map_split.size() != 2)
+					all_good = false;
+				else if (map_split.at(0).empty() or not isint(map_split.at(1)))
+					all_good = false;
+
+				if (not all_good) {
+					validError = "Invalid formatting of io_graph_speeds!";
+					return false;
+				}
+			}
+			return true;
+		}
+
+		else
+			return true;
+
+		return false;
+	}
+
+	string getAsString(const string& name) {
+		if (bools.contains(name))
+			return (bools.at(name) ? "True" : "False");
+		else if (ints.contains(name))
+			return to_string(ints.at(name));
+		else if (strings.contains(name))
+			return strings.at(name);
+		return "";
 	}
 
 	void flip(const string& name) {
@@ -369,9 +462,8 @@ namespace Config {
 					cread >> value;
 					if (not isint(value))
 						load_warnings.push_back("Got an invalid integer value for config name: " + name);
-					else if (name == "update_ms" and stoi(value) < 100) {
-						load_warnings.push_back("Config value update_ms set too low (<100), setting (100).");
-						ints.at(name) = 100;
+					else if (not intValid(name, value)) {
+						load_warnings.push_back(validError);
 					}
 					else
 						ints.at(name) = stoi(value);
@@ -383,14 +475,8 @@ namespace Config {
 					}
 					else cread >> value;
 
-					if (name == "log_level" and not v_contains(Logger::log_levels, value))
-						load_warnings.push_back("Invalid log_level: " + value);
-					else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
-						load_warnings.push_back("Invalid graph symbol identifier: " + value);
-					else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
-						load_warnings.push_back("Invalid graph symbol identifier for" + name + ": " + value);
-					else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
-						load_warnings.push_back("Invalid box name(s) in shown_boxes: " + value);
+					if (not stringValid(name, value))
+						load_warnings.push_back(validError);
 					else
 						strings.at(name) = value;
 				}
