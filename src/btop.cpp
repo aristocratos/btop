@@ -239,6 +239,7 @@ namespace Runner {
 	atomic<bool> active (false);
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
+	atomic<bool> redraw (false);
 
 	//* Setup semaphore for triggering thread to do work
 #if __GNUC__ < 11
@@ -265,6 +266,7 @@ namespace Runner {
 	};
 
 	string output;
+	string empty_bg;
 	bool pause_output = false;
 	sigset_t mask;
 	pthread_t runner_id;
@@ -358,14 +360,14 @@ namespace Runner {
 				continue;
 			}
 
-			//? Atomic lock used for blocking non-thread safe actions in main thread
+			//? Atomic lock used for blocking non thread-safe actions in main thread
 			atomic_lock lck(active);
 
 			auto& conf = current_conf;
 
 			//! DEBUG stats
 			if (Global::debug) {
-				if (debug_bg.empty()) Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
+				if (debug_bg.empty() or redraw) Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
 			}
@@ -508,8 +510,28 @@ namespace Runner {
 				continue;
 			}
 
+			if (redraw or conf.force_redraw) {
+				empty_bg.clear();
+				redraw = false;
+			}
+
 			if (not pause_output) output += conf.clock;
 			if (not conf.overlay.empty() and not conf.background_update) pause_output = true;
+			if (output.empty() and not pause_output) {
+				if (empty_bg.empty()) {
+					const int x = Term::width / 2 - 10, y = Term::height / 2 - 10;
+					output += Term::clear;
+					empty_bg += Draw::banner_gen(y, 0, true)
+						+ Mv::to(y+6, x) + Theme::c("title") + Fx::b + "No boxes shown!"
+						+ Mv::to(y+8, x) + Theme::c("hi_fg") + "1" + Theme::c("main_fg") + " | Show CPU box"
+						+ Mv::to(y+9, x) + Theme::c("hi_fg") + "2" + Theme::c("main_fg") + " | Show MEM box"
+						+ Mv::to(y+10, x) + Theme::c("hi_fg") + "3" + Theme::c("main_fg") + " | Show NET box"
+						+ Mv::to(y+11, x) + Theme::c("hi_fg") + "4" + Theme::c("main_fg") + " | Show PROC box"
+						+ Mv::to(y+12, x-2) + Theme::c("hi_fg") + "esc" + Theme::c("main_fg") + " | Show menu"
+						+ Mv::to(y+13, x) + Theme::c("hi_fg") + "q" + Theme::c("main_fg") + " | Quit";
+				}
+				output += empty_bg;
+			}
 
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
@@ -546,14 +568,11 @@ namespace Runner {
 		else if (box == "clock") {
 			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
 		}
-		else if (Config::current_boxes.empty()) {
-			cout << Term::sync_start << Term::clear + Mv::to(10, 10) << "No boxes shown!" << Term::sync_end << flush;
-		}
 		else {
 			Config::unlock();
 			Config::lock();
 
-			//? Setup bitmask for selected boxes instead of parsing strings in _runner thread loop
+			//? Setup bitmask for selected boxes and pass to _runner thread
 			bitset<8> box_mask;
 			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
 				box_mask |= box_bits.at(box);
@@ -767,7 +786,7 @@ int main(int argc, char **argv) {
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
 				Draw::calcSizes();
-				Draw::update_clock();
+				Draw::update_clock(true);
 				Global::resized = false;
 				if (Menu::active) Menu::process();
 				else Runner::run("all", true, true);

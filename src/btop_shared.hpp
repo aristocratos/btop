@@ -26,8 +26,9 @@ tab-size = 4
 #include <robin_hood.h>
 #include <array>
 #include <ifaddrs.h>
+#include <tuple>
 
-using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array;
+using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array, std::tuple;
 
 void term_resize(bool force=false);
 void banner_gen();
@@ -49,6 +50,7 @@ namespace Runner {
 	extern atomic<bool> active;
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
+	extern atomic<bool> redraw;
 	extern pthread_t runner_id;
 	extern bool pause_output;
 	extern string debug_bg;
@@ -75,10 +77,11 @@ namespace Shared {
 namespace Cpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
-	extern bool shown, redraw, got_sensors, cpu_temp_only;
+	extern bool shown, redraw, got_sensors, cpu_temp_only, has_battery;
 	extern string cpuName, cpuHz;
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
+	extern tuple<int, long, string> current_bat;
 
 	struct cpu_info {
 		unordered_flat_map<string, deque<long long>> cpu_percent = {
@@ -105,6 +108,13 @@ namespace Cpu {
 
 	//* Draw contents of cpu box using <cpu> as source
 	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
+
+	//* Parse /proc/cpu info for mapping of core ids
+	auto get_core_mapping() -> unordered_flat_map<int, int>;
+	extern unordered_flat_map<int, int> core_mapping;
+
+	//* Get battery info from /sys
+	auto get_battery() -> tuple<int, long, string>;
 }
 
 namespace Mem {
@@ -128,10 +138,12 @@ namespace Mem {
 	};
 
 	struct mem_info {
-		unordered_flat_map<string, uint64_t> stats = 	{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
-														{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
-		unordered_flat_map<string, deque<long long>> percent =	{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
-																{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
+		unordered_flat_map<string, uint64_t> stats =
+			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
+			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
+		unordered_flat_map<string, deque<long long>> percent =
+			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
+			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
 		unordered_flat_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};

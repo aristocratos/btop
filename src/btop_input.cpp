@@ -190,25 +190,24 @@ namespace Input {
 					exit(0);
 				}
 				else if (is_in(key, "escape", "m")) {
-					Menu::menuMask.set(Menu::Main);
-					Menu::process();
+					Menu::show(Menu::Menus::Main);
 					return;
 				}
 				else if (is_in(key, "F1", "h")) {
-					Menu::menuMask.set(Menu::Help);
-					Menu::process();
+					Menu::show(Menu::Menus::Help);
 					return;
 				}
 				else if (is_in(key, "F2", "o")) {
-					Menu::menuMask.set(Menu::Options);
-					Menu::process();
+					Menu::show(Menu::Menus::Options);
 					return;
 				}
 				else if (is_in(key, "1", "2", "3", "4")) {
 					atomic_wait(Runner::active);
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
-					term_resize(true);
+					Draw::calcSizes();
+					Runner::run("all", false, true);
+					return;
 				}
 				else
 					keep_going = true;
@@ -270,11 +269,6 @@ namespace Input {
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
 
-				else if (key == "ö") {
-					Menu::menuMask.set(Menu::Menus::SignalSend);
-					Menu::process();
-					return;
-				}
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
 					const auto& [col, line] = mouse_pos;
@@ -339,18 +333,14 @@ namespace Input {
 				else if (is_in(key, "t", "k") and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
-					Menu::menuMask.set(Menu::SignalSend);
-					Menu::signalToSend = (key == "t" ? SIGTERM : SIGKILL);
-					Menu::process();
+					Menu::show(Menu::Menus::SignalSend, (key == "t" ? SIGTERM : SIGKILL));
 					return;
 				}
 				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					if (Term::width < 80 or Term::height < 20) return;
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
-					Menu::menuMask.set(Menu::SignalChoose);
-					Menu::signalToSend = -1;
-					Menu::process();
+					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {

@@ -80,4 +80,7 @@ namespace Menu {
 	//* Handles redirection of input for menu functions and handles return codes
 	void process(string key="");
 
+	//* Show a menu from enum Menu::Menus
+	void show(int menu, int signal=-1);
+
 }

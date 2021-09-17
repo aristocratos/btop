@@ -57,9 +57,6 @@ namespace Cpu {
 	//* Search /proc/cpuinfo for a cpu name
 	string get_cpuName();
 
-	//* Parse /proc/cpu info for mapping of core ids
-	auto get_core_mapping() -> unordered_flat_map<int, int>;
-
 	struct Sensor {
 		fs::path path;
 		string label;
@@ -150,6 +147,8 @@ namespace Shared {
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
+	bool has_battery = true;
+	tuple<int, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
 
@@ -175,8 +174,25 @@ namespace Cpu {
 			for (string instr; getline(cpuinfo, instr, ':') and not instr.starts_with("model name");)
 				cpuinfo.ignore(SSmax, '\n');
 			if (cpuinfo.bad()) return name;
-			cpuinfo.ignore(1);
-			getline(cpuinfo, name);
+			else if (not cpuinfo.eof()) {
+				cpuinfo.ignore(1);
+				getline(cpuinfo, name);
+			}
+			else if (fs::exists("/sys/devices")) {
+				for (const auto& d : fs::directory_iterator("/sys/devices")) {
+					if (string(d.path().filename()).starts_with("arm")) {
+						name = d.path().filename();
+						break;
+					}
+				}
+				if (not name.empty()) {
+					auto name_vec = ssplit(name, '_');
+					if (name_vec.size() < 2) return capitalize(name);
+					else return capitalize(name_vec.at(1)) + (name_vec.size() > 2 ? ' ' + capitalize(name_vec.at(2)) : "");
+				}
+
+			}
+
 			auto name_vec = ssplit(name);
 
 			if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
@@ -300,7 +316,7 @@ namespace Cpu {
 		}
 		catch (...) {}
 
-		if (not got_coretemp) cpu_temp_only = true;
+		if (not got_coretemp or core_sensors.empty()) cpu_temp_only = true;
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
 				if (s_contains(str_to_lower(name), "cpu")) {
@@ -397,11 +413,12 @@ namespace Cpu {
 
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
+		if (cpu_temp_only) return core_map;
 
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
-			int cpu, core;
+			int cpu, core, n = 0;
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -410,22 +427,31 @@ namespace Cpu {
 				else if (instr.starts_with("core")) {
 					cpuinfo.ignore(SSmax, ':');
 					cpuinfo >> core;
-					core_map[cpu] = core;
+					if (std::cmp_greater_equal(core, core_sensors.size())) {
+						if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
+						core_map[cpu] = n++;
+					}
+					else
+						core_map[cpu] = core;
 				}
 				cpuinfo.ignore(SSmax, '\n');
 			}
 		}
 
-		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely map 0-0 1-1 2-2 etc.
+		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
-				for (int i = 0; i < Shared::coreCount / 2; i++)
-					core_map[Shared::coreCount / 2 + i] = i;
+				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
+					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
+					core_map[Shared::coreCount / 2 + i] = n++;
+				}
 			}
 			else {
 				core_map.clear();
-				for (int i = 0; i < Shared::coreCount; i++)
-					core_map[i] = i;
+				for (int i = 0, n = 0; i < Shared::coreCount; i++) {
+					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
+					core_map[i] = n++;
+				}
 			}
 		}
 
@@ -438,7 +464,7 @@ namespace Cpu {
 					if (vals.size() != 2) continue;
 					int change_id = std::stoi(vals.at(0));
 					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or new_id >= Shared::coreCount) continue;
+					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
 					core_map.at(change_id) = new_id;
 				}
 			}
@@ -446,6 +472,100 @@ namespace Cpu {
 		}
 
 		return core_map;
+	}
+
+	auto get_battery() -> tuple<int, long, string> {
+		if (not has_battery) return {0, 0, ""};
+		static fs::path bat_dir, energy_now_path, energy_full_path, power_now_path, status_path, online_path;
+		static bool use_energy = true;
+
+		//? Get paths to needed files and check for valid values on first run
+		if (bat_dir.empty() and has_battery) {
+			if (fs::exists("/sys/class/power_supply")) {
+				for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
+					if (const string dir_name = d.path().filename(); d.is_directory() and (dir_name.starts_with("BAT") or s_contains(str_to_lower(dir_name), "battery"))) {
+						bat_dir = d.path();
+						break;
+					}
+				}
+			}
+			if (bat_dir.empty()) {
+				has_battery = false;
+				return {0, 0, ""};
+			}
+			else {
+				if (fs::exists(bat_dir / "energy_now")) energy_now_path = bat_dir / "energy_now";
+				else if (fs::exists(bat_dir / "charge_now")) energy_now_path = bat_dir / "charge_now";
+				else use_energy = false;
+
+				if (fs::exists(bat_dir / "energy_full")) energy_full_path = bat_dir / "energy_full";
+				else if (fs::exists(bat_dir / "charge_full")) energy_full_path = bat_dir / "charge_full";
+				else use_energy = false;
+
+				if (not use_energy and not fs::exists(bat_dir / "capacity")) {
+					has_battery = false;
+					return {0, 0, ""};
+				}
+
+				if (fs::exists(bat_dir / "power_now")) power_now_path = bat_dir / "power_now";
+				else if (fs::exists(bat_dir / "current_now")) power_now_path = bat_dir / "current_now";
+
+				if (fs::exists(bat_dir / "AC0/online")) online_path = bat_dir / "AC0/online";
+				else if (fs::exists(bat_dir / "AC/online")) online_path = bat_dir / "AC/online";
+			}
+		}
+
+		int percent = -1;
+		long seconds = -1;
+
+		//? Try to get battery percentage
+		if (use_energy) {
+			try {
+				percent = round(100.0 * stoll(readfile(energy_now_path, "-1")) / stoll(readfile(energy_full_path, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
+		if (percent < 0) {
+			try {
+				percent = stoll(readfile(bat_dir / "capacity", "-1"));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
+		if (percent < 0) {
+			has_battery = false;
+			return {0, 0, ""};
+		}
+
+		//? Get charging/discharging status
+		string status = str_to_lower(readfile(bat_dir / "status", "unknown"));
+		if (status == "unknown" and not online_path.empty()) {
+			const auto online = readfile(online_path, "0");
+			if (online == "1" and percent < 100) status = "charging";
+			else if (online == "1") status = "full";
+			else status = "discharging";
+		}
+
+		//? Get seconds to empty
+		if (not is_in(status, "charging", "full")) {
+			if (use_energy and not power_now_path.empty()) {
+				try {
+					seconds = round((double)stoll(readfile(energy_now_path, "0")) / stoll(readfile(power_now_path, "1")) * 3600);
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+			if (seconds < 0 and fs::exists(bat_dir / "time_to_empty")) {
+				try {
+					seconds = stoll(readfile(bat_dir / "time_to_empty", "0")) * 60;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+		}
+
+		return {percent, seconds, status};
 	}
 
 	auto collect(const bool no_update) -> cpu_info& {
@@ -534,6 +654,9 @@ namespace Cpu {
 
 		if (Config::getB("check_temp") and got_sensors)
 			update_sensors();
+
+		if (Config::getB("show_battery") and has_battery)
+			current_bat = get_battery();
 
 		return cpu;
 	}
@@ -717,6 +840,7 @@ namespace Mem {
 						else
 							it++;
 					}
+					if (found.size() != last_found.size()) redraw = true;
 					last_found = std::move(found);
 				}
 				else
@@ -1346,7 +1470,7 @@ namespace Proc {
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 
-				//? Update cache with latest cpu times
+				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
 
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
@@ -1374,14 +1498,14 @@ namespace Proc {
 		//* Sort processes
 		if (sorted_change or not no_update) {
 			switch (v_index(sort_vector, sorting)) {
-					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 	break;
-					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);	break;
-					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 	break;
-					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); break;
+					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
+					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
+					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
+					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
 					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
-					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 	break;
-					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   break;
-					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   break;
+					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
+					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
+					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
 			}
 			if (reverse) rng::reverse(current_procs);
 
@@ -1402,7 +1526,6 @@ namespace Proc {
 				}
 			}
 		}
-
 
 		//* Match filter if defined
 		if (should_filter) {

@@ -317,6 +317,9 @@ namespace Menu {
 				"Can be needed on certain cpus to get correct",
 				"temperature for correct core.",
 				"",
+				"Use lm-sensors or similar to see which cores",
+				"are reporting temperatures on your machine.",
+				"",
 				"Format: \"X:Y\"",
 				"X=core with wrong temp.",
 				"Y=core with correct temp.",
@@ -376,7 +379,7 @@ namespace Menu {
 				"Toggle IO activity graphs.",
 				"",
 				"Show small IO graphs that for disk activity",
-				"percentage when not in IO mode.",
+				"(disk busy time) when not in IO mode.",
 				"",
 				"True or False."},
 			{"io_mode",
@@ -397,10 +400,10 @@ namespace Menu {
 				"",
 				"Manually set which speed in MiB/s that",
 				"equals 100 percent in the io graphs.",
-				"(10 MiB/s by default).",
+				"(100 MiB/s by default).",
 				"",
-				"Format: \"device:speed\" seperate disks with a",
-				"comma \",\".",
+				"Format: \"device:speed\" seperate disks with",
+				"whitespace \" \".",
 				"",
 				"Example: \"/dev/sda:100, /dev/sdb:20\"."},
 			{"show_swap",
@@ -477,6 +480,7 @@ namespace Menu {
 				"Network Interface.",
 				"",
 				"Manually set the starting Network Interface.",
+				"",
 				"Will otherwise automatically choose the NIC",
 				"with the highest total download since boot."},
 		},
@@ -928,6 +932,7 @@ namespace Menu {
 		bool screen_redraw = false;
 		bool theme_refresh = false;
 
+		//? Draw background if needed else process input
 		if (redraw) {
 			mouse_mappings.clear();
 			selPred.reset();
@@ -960,7 +965,15 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (option == "shown_boxes") screen_redraw = true;
+					if (is_in(option, "shown_boxes", "custom_cpu_name")) screen_redraw = true;
+					else if (option == "clock_format") {
+						Draw::update_clock(true);
+						screen_redraw = true;
+					}
+					else if (option == "cpu_core_map") {
+						atomic_wait(Runner::active);
+						Cpu::core_mapping = Cpu::get_core_mapping();
+					}
 				}
 				else if (selPred.test(isInt) and Config::intValid(option, editor.text)) {
 					Config::set(option, stoi(editor.text));
@@ -1060,6 +1073,9 @@ namespace Menu {
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;
+				else if (option == "background_update") {
+					Runner::pause_output = false;
+				}
 			}
 			else if (selPred.test(isBrowseable)) {
 				auto& optList = optionsList.at(option).get();
@@ -1071,6 +1087,10 @@ namespace Menu {
 
 				if (option == "color_theme")
 					theme_refresh = true;
+				else if (option == "log_level") {
+					Logger::set(optList.at(i));
+					Logger::info("Logger set to " + optList.at(i));
+				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
 			}
@@ -1081,6 +1101,7 @@ namespace Menu {
 			retval = NoChange;
 		}
 
+		//? Draw the menu
 		if (retval == Changed) {
 			Config::unlock();
 			auto& out = Global::overlay;
@@ -1093,6 +1114,7 @@ namespace Menu {
 				selected = select_max;
 			}
 
+			//? Get variable properties for currently selected option
 			if (selPred.none() or last_sel != (selected_cat << 8) + selected) {
 				selPred.reset();
 				last_sel = (selected_cat << 8) + selected;
@@ -1113,6 +1135,7 @@ namespace Menu {
 					selPred.set(isEditable);
 			}
 
+			//? Category buttons
 			out += Mv::to(y+7, x+4);
 			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
 				out += Fx::b + (i == selected_cat
@@ -1127,6 +1150,7 @@ namespace Menu {
 				out += Mv::to(y+6 + height, x+2) + Theme::c("hi_fg") + Symbols::title_left_down + Fx::b + Symbols::up + Theme::c("title") + " page "
 					+ to_string(page+1) + '/' + to_string(pages) + ' ' + Theme::c("hi_fg") + Symbols::down + Fx::ub + Symbols::title_right_down;
 			}
+			//? Option name and value
 			auto cy = y+9;
 			for (int c = 0, i = max(0, item_height * page); c++ < item_height and i < (int)categories[selected_cat].size(); i++) {
 				const auto& option = categories[selected_cat][i][0];
@@ -1149,6 +1173,7 @@ namespace Menu {
 					if (selPred.test(isEditable)) {
 						out += Fx::b + Mv::to(cy-1, x+28 - (not editing and selPred.test(isInt) ? 2 : 0)) + (tty_mode ? "E" : Symbols::enter);
 					}
+					//? Description of selected option
 					out += Fx::reset + Theme::c("title") + Fx::b;
 					for (int cyy = y+7; const auto& desc : categories[selected_cat][i]) {
 						if (cyy++ == y+7) continue;
@@ -1175,9 +1200,11 @@ namespace Menu {
 			optionsMenu("");
 		}
 		if (screen_redraw) {
-			auto overlay_bkp = Global::overlay;
+			auto overlay_bkp = move(Global::overlay);
+			auto clock_bkp = move(Global::clock);
 			Draw::calcSizes();
-			Global::overlay = overlay_bkp;
+			Global::overlay = move(overlay_bkp);
+			Global::clock = move(clock_bkp);
 			recollect = true;
 		}
 		if (recollect) {
@@ -1290,5 +1317,11 @@ namespace Menu {
 			mouse_mappings.clear();
 			process();
 		}
+	}
+
+	void show(int menu, int signal) {
+		menuMask.set(menu);
+		signalToSend = signal;
+		process();
 	}
 }

@@ -77,7 +77,7 @@ namespace Draw {
 	//* Create a box and return as a string
 	string createBox(const int x, const int y, const int width, const int height, string line_color="", const bool fill=false, const string title="", const string title2="", const int num=0);
 
-	bool update_clock();
+	bool update_clock(bool force=false);
 
 	//* Class holding a percentage meter
 	class Meter {

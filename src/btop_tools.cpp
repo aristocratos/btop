@@ -338,7 +338,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			throw std::runtime_error("Exception when reading " + (string)path + " : " + e.what());
+			throw std::runtime_error("readfile() : Exception when reading " + (string)path + " : " + e.what());
 		}
 		return (out.empty() ? fallback : out);
 	}

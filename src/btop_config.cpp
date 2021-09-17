@@ -109,6 +109,7 @@ namespace Config {
 		{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
 
 		{"cpu_core_map",		"#* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.\n"
+								"#* Use lm-sensors or similar to see which cores are reporting temperatures on your machine.\n"
 								"#* Format \"x:y\" x=core with wrong temp, y=core with correct temp, use space as separator between multiple entries.\n"
 								"#* Example: \"4:0 5:1 6:3\""},
 
@@ -146,7 +147,7 @@ namespace Config {
 
 		{"io_graph_combined", 	"#* Set to True to show combined read/write io graphs in io mode."},
 
-		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (10 by default), use format \"mountpoint:speed\" separate disks with whitespace \" \".\n"
+		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (100 by default), use format \"mountpoint:speed\" separate disks with whitespace \" \".\n"
 								"#* Example: \"/mnt/media:100 /:20 /boot:1\"."},
 
 		{"net_download", 		"#* Set fixed values for network graphs in Mebibits. Is only used if net_auto is also set to False."},
@@ -274,6 +275,10 @@ namespace Config {
 		}
 		catch (const std::out_of_range&) {
 			validError = "Value out of range!";
+			return false;
+		}
+		catch (const std::exception& e) {
+			validError = (string)e.what();
 			return false;
 		}
 

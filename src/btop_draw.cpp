@@ -261,7 +261,7 @@ namespace Draw {
 		return out + Fx::reset + Mv::to(y + 1, x + 1);
 	}
 
-	bool update_clock() {
+	bool update_clock(bool force) {
 		const auto& clock_format = Config::getS("clock_format");
 		if (not Cpu::shown or clock_format.empty()) {
 			if (clock_format.empty() and not Global::clock.empty()) Global::clock.clear();
@@ -275,16 +275,15 @@ namespace Draw {
 		};
 		static time_t c_time = 0;
 		static size_t clock_len = 0;
-		static string old_clock;
-		string new_clock;
+		static string clock_str;
 
-		if (auto n_time = time(NULL); n_time == c_time)
+		if (auto n_time = time(NULL); not force and n_time == c_time)
 			return false;
 		else {
 			c_time = n_time;
-			new_clock = Tools::strf_time(clock_format);
-			if (new_clock == old_clock) return false;
-			old_clock = new_clock;
+			const auto new_clock = Tools::strf_time(clock_format);
+			if (not force and new_clock == clock_str) return false;
+			clock_str = new_clock;
 		}
 
 		auto& out = Global::clock;
@@ -297,29 +296,30 @@ namespace Draw {
 
 
 		for (const auto& [c_format, replacement] : clock_custom_format) {
-			if (s_contains(new_clock, c_format)) {
+			if (s_contains(clock_str, c_format)) {
 				if (c_format == "/uptime") {
 					string upstr = sec_to_dhms(system_uptime());
 					if (upstr.size() > 8) upstr.resize(upstr.size() - 3);
-					new_clock = s_replace(new_clock, c_format, upstr);
+					clock_str = s_replace(clock_str, c_format, upstr);
 				}
 				else {
-					new_clock = s_replace(new_clock, c_format, replacement);
+					clock_str = s_replace(clock_str, c_format, replacement);
 				}
 			}
 
 		}
 
-		new_clock = uresize(new_clock, std::max(0, width - 56));
+		clock_str = uresize(clock_str, std::max(0, width - 56));
 		out.clear();
 
-		if (new_clock.size() != clock_len) {
-			if (not Global::resized and clock_len > 0) out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
-			clock_len = new_clock.size();
+		if (clock_str.size() != clock_len) {
+			if (not Global::resized and clock_len > 0)
+				out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+			clock_len = clock_str.size();
 		}
 
 		out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + title_left
-			+ Theme::c("title") + Fx::b + new_clock + Theme::c("cpu_box") + Fx::ub + title_right;
+			+ Theme::c("title") + Fx::b + clock_str + Theme::c("cpu_box") + Fx::ub + title_right;
 
 		return true;
 	}
@@ -488,7 +488,7 @@ namespace Cpu {
 		string out;
 		out.reserve(width * height);
 		//* Redraw elements not needed to be updated every cycle
-		if (redraw or force_redraw) {
+		if (redraw) {
 			auto& cpu_bottom = Config::getB("cpu_bottom");
 			mid_line = (not single_graph and graph_up_field != graph_lo_field);
 			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0 ? 1 : 0));
@@ -533,8 +533,31 @@ namespace Cpu {
 					}
 				}
 			}
-
 		}
+
+		//? Draw battery if enabled and present
+		if (Config::getB("show_battery") and has_battery) {
+			static int old_percent = 0;
+			static long old_seconds = 0;
+			static string old_status;
+			static Draw::Meter bat_meter {10, "cpu", true};
+			static const unordered_flat_map<string, string> bat_symbols = {
+				{"charging", "▲"},
+				{"discharging", "▼"},
+				{"full", "■"},
+				{"unknown", "○"}
+			};
+
+			const auto& [percent, seconds, status] = current_bat;
+			if (redraw or percent != old_percent or seconds != old_seconds or status != old_status) {
+				old_percent = percent;
+				old_seconds = seconds;
+				old_status = status;
+				const string bat_time = (seconds > 0 ? to_string(seconds / 3600) + ':' + to_string((seconds % 3600) / 60) : "");
+				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
+			}
+		}
+
 		try {
 		//? Cpu graphs
 		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(cpu.cpu_percent.at(graph_up_field), (data_same or redraw));
@@ -693,7 +716,10 @@ namespace Mem {
 							for (const auto& entry : split) {
 								auto vals = ssplit(entry);
 								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
-									custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
+									try {
+										custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
+									}
+									catch (const std::out_of_range&) { continue; }
 							}
 						}
 					}
@@ -705,7 +731,7 @@ namespace Mem {
 
 						if (io_mode) {
 							//? Create one combined graph for IO read/write if enabled
-							long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 10) << 20;
+							long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 100) << 20;
 							if (io_graph_combined) {
 								deque<long long> combined(disk.io_read.size(), 0);
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
@@ -1442,7 +1468,7 @@ namespace Draw {
 		Global::clock.clear();
 		Global::overlay.clear();
 		Runner::pause_output = false;
-		Runner::debug_bg.clear();
+		Runner::redraw = true;
 		Proc::p_counters.clear();
 		Proc::p_graphs.clear();
 		if (Menu::active) Menu::redraw = true;
