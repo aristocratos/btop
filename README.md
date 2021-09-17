@@ -10,7 +10,7 @@
 
 ## Index
 
-----
+
 
 * [News](#news)
 * [Documents](#documents)
@@ -28,9 +28,8 @@
 
 ## News
 
-----
-
 ### Under development
+
 ##### 5 May 2021
 
 This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will have to be written from scratch without any external libraries.
@@ -40,25 +39,19 @@ If you got suggestions of C++ libraries that are multi-platform and are as exten
 
 ## Documents
 
-----
+**[CHANGELOG.md](CHANGELOG.md)**
 
-#### [CHANGELOG.md](CHANGELOG.md)
+**[CONTRIBUTING.md](CONTRIBUTING.md)**
 
-#### [CONTRIBUTING.md](CONTRIBUTING.md)
-
-#### [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+**[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**
 
 ## Description
-
-----
 
 Resource monitor that shows usage and stats for processor, memory, disks, network and processes.
 
 C++ version and continuation of [bashtop](https://github.com/aristocratos/bashtop) and [bpytop](https://github.com/aristocratos/bpytop).
 
 ## Features
-
-----
 
 * Easy to use, with a game inspired menu system.
 * Full mouse support, all buttons with a highlighted key is clickable and mouse scroll works in process list and menu boxes.
@@ -74,8 +67,6 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 
 ## Themes
 
-----
-
 Btop++ uses the same theme files as bpytop and bashtop (some color values missing in bashtop themes) .
 
 See [themes](https://github.com/aristocratos/btop/tree/master/themes) folder for available themes.
@@ -87,8 +78,6 @@ Let me know if you want to contribute with new themes.
 
 ## Support and funding
 
-----
-
 You can sponsor this project through github, see [my sponsors page](https://github.com/sponsors/aristocratos) for options.
 
 Or donate through [paypal](https://paypal.me/aristocratos) or [ko-fi](https://ko-fi.com/aristocratos).
@@ -96,8 +85,6 @@ Or donate through [paypal](https://paypal.me/aristocratos) or [ko-fi](https://ko
 Any support is greatly appreciated!
 
 ## Prerequisites
-
-----
 
 For best experience, a terminal with support for:
 
@@ -128,35 +115,31 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Screenshots
 
-----
-
-### Main UI showing details for a selected process
+#### Main UI showing details for a selected process
 
 ![Screenshot 1](Img/normal.png)
 
-### Main UI in TTY mode
+#### Main UI in TTY mode
 
 ![Screenshot 2](Img/tty.png)
 
-### Main UI with custom options
+#### Main UI with custom options
 
 ![Screenshot 3](Img/alt.png)
 
-### Main-menu
+#### Main-menu
 
 ![Screenshot 3](Img/main-menu.png)
 
-### Options-menu
+#### Options-menu
 
 ![Screenshot 4](Img/options-menu.png)
 
-### Help-menu
+#### Help-menu
 
 ![Screenshot 5](Img/help-menu.png)
 
 ## Installation
-
-----
 
 **Binary release (statically compiled)**
 
@@ -184,9 +167,9 @@ Also needs a UTF8 locale and a font that covers:
    sudo make setuid
    ```
 
-4. **Uninstall**
+* **Uninstall**
 
-   * **Run uninstall.sh or:**
+  * **Run uninstall.sh or:**
 
    ``` bash
    sudo make uninstall
@@ -194,11 +177,9 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Compilation
 
-----
+   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
 
-**Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).**
-
-**The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).**
+   The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).
 
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
@@ -216,7 +197,7 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   **Notice! Manually set $ARCH if cross-compiling**
+   Notice! Manually set $ARCH if cross-compiling
 
    ``` bash
    make
@@ -240,7 +221,6 @@ Also needs a UTF8 locale and a font that covers:
    sudo make setuid
    ```
 
-
 * **Uninstall**
 
    ``` bash
@@ -261,12 +241,10 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Configurability
 
-----
-
 All options changeable from within UI.
 Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
 
-### btop.cfg: (auto generated if not found)
+#### btop.cfg: (auto generated if not found)
 
 ```bash
 #? Config file for btop v. 0.9.0
@@ -452,7 +430,7 @@ show_battery = True
 log_level = "DEBUG"
 ```
 
-### Command line options
+#### Command line options
 
 ```text
 usage: btop [-h] [-v] [-/+t] [--utf-foce] [--debug]
@@ -470,7 +448,5 @@ optional arguments:
 ```
 
 ## LICENSE
-
-----
 
 [Apache License 2.0](LICENSE)
