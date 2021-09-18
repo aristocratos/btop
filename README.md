@@ -476,7 +476,7 @@ log_level = "DEBUG"
 #### Command line options
 
 ```text
-usage: btop [-h] [-v] [-/+t] [--utf-foce] [--debug]
+usage: btop [-h] [-v] [-/+t] [--utf-force] [--debug]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -485,7 +485,7 @@ optional arguments:
   -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
   +t, --tty_off         force (OFF) tty mode
   -p --preset <id>      start with preset, integer value between 0-9
-  --utf-foce            force start even if no UTF-8 locale was detected
+  --utf-force           force start even if no UTF-8 locale was detected
   --debug               start in DEBUG mode: shows microsecond timer for information collect
                         and screen draw functions and sets loglevel to DEBUG
 ```
