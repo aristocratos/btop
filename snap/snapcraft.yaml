@@ -28,7 +28,7 @@ package-repositories:
    
 apps:
   btop:
-    command: usr/local/btop
+    command: usr/local/bin/btop
     command-chain: 
       - bin/homeishome-launch     
     plugs: 
@@ -45,6 +45,11 @@ parts:
     source: https://github.com/aristocratos/btop
     source-type: git
     plugin: make
+    make-parameters:  
+      - PREFIX=/usr/local/bin
+    build-environment:
+      - LC_ALL: C.UTF-8
+      - LANG: C.UTF-8    
     
     build-packages:
       - coreutils 
