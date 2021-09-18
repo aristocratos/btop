@@ -164,7 +164,7 @@ namespace Tools {
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
 			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
 				x += 2;
-				last_pos = max(0ul, i - 1);
+				last_pos = max((size_t)0, i - 1);
 			}
 			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) {
 				x++;
@@ -264,7 +264,7 @@ namespace Tools {
 		string out 	= (not no_days and days > 0 ? to_string(days) + "d " : "")
 					+ (hours < 10 ? "0" : "") + to_string(hours) + ':'
 					+ (minutes < 10 ? "0" : "") + to_string(minutes)
-					+ (not no_seconds ? ':' + (seconds < 10 ? "0" : "") + to_string(seconds) : "");
+					+ (not no_seconds ? ":" + string(std::cmp_less(seconds, 10) ? "0" : "") + to_string(seconds) : "");
 		return out;
 	}
 

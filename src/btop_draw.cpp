@@ -518,6 +518,9 @@ namespace Cpu {
 			//? Buttons on title
 			out += Mv::to(button_y, x + 10) + title_left + Theme::c("hi_fg") + Fx::b + 'm' + Theme::c("title") + "enu" + Fx::ub + title_right;
 			Input::mouse_mappings["m"] = {button_y, x + 11, 1, 4};
+			out += Mv::to(button_y, x + 16) + title_left + Theme::c("hi_fg") + Fx::b + 'p' + Theme::c("title") + "reset "
+				+ (Config::current_preset < 0 ? "*" : to_string(Config::current_preset)) + Fx::ub + title_right;
+			Input::mouse_mappings["p"] = {button_y, x + 17, 1, 8};
 			const string update = to_string(Config::getI("update_ms")) + "ms";
 			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
 				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
@@ -1435,7 +1438,7 @@ namespace Proc {
 				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 				mem_str += '%';
 			}
-			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, 9999ul)), thread_size) + ' ' + end : "" )
+			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5
@@ -1457,7 +1460,7 @@ namespace Proc {
 
 		//? Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
-		string loc_clear = Symbols::h_line * max(0ul, 9 - location.size());
+		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
 		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
 

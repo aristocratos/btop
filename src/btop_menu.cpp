@@ -103,7 +103,8 @@ namespace Menu {
 		{"Mouse 1", "Clicks buttons and selects in process list."},
 		{"Mouse scroll", "Scrolls any scrollable list/text under cursor."},
 		{"Esc, m", "Toggles main menu."},
-		{"p", "Cycle view presets"},
+		{"p", "Cycle view presets forwards."},
+		{"shift + p", "Cycle view presets backwards."},
 		{"1", "Toggle CPU box."},
 		{"2", "Toggle MEM box."},
 		{"3", "Toggle NET box."},
@@ -176,6 +177,22 @@ namespace Menu {
 				"Will force 16-color mode and TTY theme,",
 				"set all graph symbols to \"tty\" and swap",
 				"out other non tty friendly symbols."},
+			{"presets",
+				"Define presets for the layout of the boxes.",
+				"",
+				"Preset 0 is always all boxes shown with",
+				"default settings.",
+				"Max 9 presets.",
+				"",
+				"Format: \"box_name:P:G,box_name:P:G\"",
+				"P=(0 or 1) for alternate positons.",
+				"G=graph symbol to use for box.",
+				"",
+				"Use withespace \" \" as seprator between",
+				"different presets.",
+				"",
+				"Example:",
+				"\"mem:0:tty,proc:1:default cpu:0:braille\""},
 			{"shown_boxes",
 				"Manually set which boxes to show.",
 				"",
@@ -965,7 +982,11 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (is_in(option, "shown_boxes", "custom_cpu_name")) screen_redraw = true;
+					if (option == "custom_cpu_name") screen_redraw = true;
+					else if (is_in(option, "shown_boxes", "presets")) {
+						screen_redraw = true;
+						Config::current_preset = -1;
+					}
 					else if (option == "clock_format") {
 						Draw::update_clock(true);
 						screen_redraw = true;

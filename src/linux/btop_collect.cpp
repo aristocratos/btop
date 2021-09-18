@@ -890,7 +890,7 @@ namespace Mem {
 						if (disk.io_read.empty())
 							disk.io_read.push_back(0);
 						else
-							disk.io_read.push_back(max(0l, (sectors_read - disk.old_io.at(0)) * 512));
+							disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
 						disk.old_io.at(0) = sectors_read;
 						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
@@ -899,7 +899,7 @@ namespace Mem {
 						if (disk.io_write.empty())
 							disk.io_write.push_back(0);
 						else
-							disk.io_write.push_back(max(0l, (sectors_write - disk.old_io.at(1)) * 512));
+							disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
 						disk.old_io.at(1) = sectors_write;
 						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
@@ -1002,7 +1002,7 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					const uint64_t val = max(stoul(readfile(sys_file, "0")), saved_stat.last);
+					const uint64_t val = max((uint64_t)stoul(readfile(sys_file, "0")), saved_stat.last);
 
 					//? Update speed, total and top values
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
@@ -1083,7 +1083,7 @@ namespace Net {
 						const uint64_t avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
 							? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0) / 5
 							: net[selected_iface].stat[dir].speed);
-						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), 10ul << 10);
+						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
 						redraw = true;
 						if (net_sync) sync = true;
@@ -1152,7 +1152,7 @@ namespace Proc {
 			//? Try to find name of the binary file and append to program name if not the same
 			if (cur_proc.short_cmd.empty() and not cur_proc.cmd.empty()) {
 				std::string_view cmd_view = cur_proc.cmd;
-				cmd_view = cmd_view.substr(0, min(cmd_view.find(' '), cmd_view.size()));
+				cmd_view = cmd_view.substr((size_t)0, min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
 				cur_proc.short_cmd = (string)cmd_view;
 			}
@@ -1465,7 +1465,7 @@ namespace Proc {
 				if (x-offset < 24) continue;
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max(1ul, cputimes - old_cputimes)) / 10.0;
+				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0;
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);

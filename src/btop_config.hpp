@@ -44,12 +44,20 @@ namespace Config {
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
 
 	extern vector<string> current_boxes;
+	extern vector<string> preset_list;
+	extern int current_preset;
 
 	//* Check if string only contains space seperated valid names for boxes
 	bool check_boxes(const string& boxes);
 
 	//* Toggle box and update config string shown_boxes
 	void toggle_box(const string& box);
+
+	//* Parse and setup config value presets
+	bool presetsValid(const string& presets);
+
+	//* Apply selected preset
+	void apply_preset(const string& preset);
 
 	bool _locked(const string& name);
 

@@ -753,6 +753,7 @@ int main(int argc, char **argv) {
 	}
 
 	//? Calculate sizes of all boxes
+	Config::presetsValid(Config::getS("presets"));
 	Draw::calcSizes();
 
 	{
@@ -817,7 +818,7 @@ int main(int argc, char **argv) {
 					future_time = current_time;
 
 				//? Poll for input and process any input detected
-				else if (Input::poll(min(1000ul, future_time - current_time))) {
+				else if (Input::poll(min((uint64_t)1000, future_time - current_time))) {
 					if (not Runner::active) Config::unlock();
 
 					if (Menu::active) Menu::process(Input::get());

@@ -26,7 +26,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::array, std::atomic, std::string_view;
+using std::array, std::atomic, std::string_view, std::string_literals::operator""s;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -48,6 +48,11 @@ namespace Config {
 
 		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
+
+		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
+								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positons, G=graph symbol to use for box.\n"
+								"#* Use withespace \" \" as seprator between different presets.\n"
+								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
 
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
@@ -170,6 +175,7 @@ namespace Config {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
+		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
 		{"graph_symbol_mem", "default"},
 		{"graph_symbol_net", "default"},
@@ -256,6 +262,61 @@ namespace Config {
 	fs::path conf_file;
 
 	vector<string> current_boxes;
+	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
+	int current_preset = -1;
+
+	bool presetsValid(const string& presets) {
+		vector<string> new_presets = {preset_list.at(0)};
+
+		for (int x = 0; const auto& preset : ssplit(presets)) {
+			if (++x > 9) {
+				validError = "Too many presets entered!";
+				return false;
+			}
+			for (int y = 0; const auto& box : ssplit(preset, ',')) {
+				if (++y > 4) {
+					validError = "Too many boxes entered for preset!";
+					return false;
+				}
+				const auto& vals = ssplit(box, ':');
+				if (vals.size() != 3) {
+					validError = "Malformatted preset in config value presets!";
+					return false;
+				}
+				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc")) {
+					validError = "Invalid box name in config value presets!";
+					return false;
+				}
+				if (not is_in(vals.at(1), "0", "1")) {
+					validError = "Invalid position value in config value presets!";
+					return false;
+				}
+				if (not v_contains(valid_graph_symbols_def, vals.at(2))) {
+					validError = "Invalid graph name in config value presets!";
+					return false;
+				}
+			}
+			new_presets.push_back(preset);
+		}
+
+		preset_list = move(new_presets);
+		return true;
+	}
+
+	//* Apply selected preset
+	void apply_preset(const string& preset) {
+		string boxes;
+		for (const auto& box : ssplit(preset, ',')) {
+			const auto& vals = ssplit(box, ':');
+			boxes += vals.at(0) + ' ';
+			if (vals.at(0) == "cpu") set("cpu_bottom", (vals.at(1) == "0" ? false : true));
+			else if (vals.at(0) == "mem") set("mem_below_net", (vals.at(1) == "0" ? false : true));
+			else if (vals.at(0) == "proc") set("proc_left", (vals.at(1) == "0" ? false : true));
+			set("graph_symbol_" + vals.at(0), vals.at(2));
+		}
+		if (not boxes.empty()) boxes.pop_back();
+		if (check_boxes(boxes)) set("shown_boxes", boxes);
+	}
 
 	void lock() {
 		atomic_wait(writelock);
@@ -306,6 +367,9 @@ namespace Config {
 
 		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
+
+		else if (name == "presets" and not presetsValid(value))
+			return false;
 
 		else if (name == "cpu_core_map") {
 			const auto maps = ssplit(value);

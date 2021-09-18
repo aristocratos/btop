@@ -203,8 +203,22 @@ namespace Input {
 				}
 				else if (is_in(key, "1", "2", "3", "4")) {
 					atomic_wait(Runner::active);
+					Config::current_preset = -1;
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
+					Draw::calcSizes();
+					Runner::run("all", false, true);
+					return;
+				}
+				else if (is_in(key, "p", "P") and Config::preset_list.size() > 1) {
+					if (key == "p") {
+						if (++Config::current_preset >= (int)Config::preset_list.size()) Config::current_preset = 0;
+					}
+					else {
+						if (--Config::current_preset < 0) Config::current_preset = Config::preset_list.size() - 1;
+					}
+					atomic_wait(Runner::active);
+					Config::apply_preset(Config::preset_list.at(Config::current_preset));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
