@@ -80,6 +80,7 @@ namespace Global {
 
 	atomic<bool> resized (false);
 	atomic<bool> quitting (false);
+	atomic<bool> _runner_started (false);
 
 	bool arg_tty = false;
 	bool arg_low_color = false;
@@ -184,7 +185,7 @@ void clean_quit(int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
-	if (pthread_join(Runner::runner_id, NULL) != 0) {
+	if (Global::_runner_started and pthread_join(Runner::runner_id, NULL) != 0) {
 		Logger::error("Failed to join _runner thread!");
 	}
 
@@ -703,15 +704,15 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (bool found = false; not str_to_upper((string)std::setlocale(LC_ALL, NULL)).ends_with("UTF-8")) {
-		if (const string lang = (string)getenv("LANG"); str_to_upper(lang).ends_with("UTF-8")) {
+	if (bool found = false; not str_to_upper(s_replace(string(std::setlocale(LC_ALL, NULL)), "-", "")).ends_with("UTF8")) {
+		if (const string lang = (string)getenv("LANG"); str_to_upper(s_replace(lang, "-", "")).ends_with("UTF8")) {
 			found = true;
 			std::setlocale(LC_ALL, lang.c_str());
 		}
 		else if (const string loc = std::locale("").name(); not loc.empty()) {
 			try {
 				for (auto& l : ssplit(loc, ';')) {
-					if (str_to_upper(l).ends_with("UTF-8")) {
+					if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
 						found = true;
 						std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str());
 						break;
@@ -765,6 +766,9 @@ int main(int argc, char **argv) {
 	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		exit(1);
+	}
+	else {
+		Global::_runner_started = true;
 	}
 
 	//? Calculate sizes of all boxes
