@@ -1,0 +1,67 @@
+name: btop
+adopt-info: btop
+summary: Resource monitor that shows usage and stats
+description: |
+  Resource monitor that shows usage and stats for processor, memory, disks, network and processes.
+  C++ version and continuation of bashtop and bpytop.
+
+license: Apache-2.0
+
+assumes:
+  - command-chain
+
+base: core20
+grade: stable
+confinement: strict
+compression: lzo
+
+architectures:
+  - build-on: amd64
+  - build-on: arm64
+  - build-on: armhf
+  - build-on: ppc64el
+  - build-on: s390x
+  
+apps:
+  btop:
+    command: usr/bin/btop
+    command-chain: 
+      - bin/homeishome-launch     
+    plugs: 
+      - mount-observe
+      - process-control
+      - system-observe
+      - hardware-observe
+      - network
+      - physical-memory-observe
+      - home
+      
+parts:
+  btop: 
+    source: https://github.com/aristocratos/btop
+    plugin: make
+    build-packages:
+      - coreutils 
+      - sed 
+      - git 
+      - build-essential 
+      - gcc-11 
+      - g++-11
+    
+    stage-packages:
+      - coreutils 
+      - sed 
+      - git 
+      - build-essential 
+      - gcc-11 
+      - g++-11    
+
+    override-pull: |
+      snapcraftctl pull
+      snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
+      
+  homeishome-launch:
+    plugin: nil
+    stage-snaps:
+      - homeishome-launch          
+    
