@@ -39,6 +39,7 @@ apps:
 parts:
   btop: 
     source: https://github.com/aristocratos/btop
+    source-type: git
     plugin: make
     build-packages:
       - coreutils 
