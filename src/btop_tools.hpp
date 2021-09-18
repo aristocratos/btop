@@ -252,7 +252,7 @@ namespace Tools {
 	string trans(const string& str);
 
 	//* Convert seconds to format "<days>d <hours>:<minutes>:<seconds>" and return string
-	string sec_to_dhms(size_t seconds);
+	string sec_to_dhms(size_t seconds, bool no_days=false, bool no_seconds=false);
 
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes

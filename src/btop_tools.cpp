@@ -257,14 +257,14 @@ namespace Tools {
 		return (newstr.empty()) ? str : newstr + (string)oldstr;
 	}
 
-	string sec_to_dhms(size_t seconds) {
+	string sec_to_dhms(size_t seconds, bool no_days, bool no_seconds) {
 		size_t days = seconds / 86400; seconds %= 86400;
 		size_t hours = seconds / 3600; seconds %= 3600;
 		size_t minutes = seconds / 60; seconds %= 60;
-		string out 	= (days > 0 ? to_string(days) + "d " : "")
-					+ (hours < 10 ? "0" : "") + to_string(hours) + ":"
-					+ (minutes < 10 ? "0" : "") + to_string(minutes) + ":"
-					+ (seconds < 10 ? "0" : "") + to_string(seconds);
+		string out 	= (not no_days and days > 0 ? to_string(days) + "d " : "")
+					+ (hours < 10 ? "0" : "") + to_string(hours) + ':'
+					+ (minutes < 10 ? "0" : "") + to_string(minutes)
+					+ (not no_seconds ? ':' + (seconds < 10 ? "0" : "") + to_string(seconds) : "");
 		return out;
 	}
 

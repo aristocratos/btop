@@ -1,9 +1,3 @@
-## v0.9.0
+## v1.0.0
 
-* Test release
-* Testing...
-
-## v0.8.0
-
-* Filler
-* Testing...
+* First release for Linux

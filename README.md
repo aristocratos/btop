@@ -157,7 +157,7 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **(Optional) Set suid bit to make btop always run as root (or other user)**
 
-   No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
+   Enables signal sending to any process without starting with `sudo` and can prevent /proc read permissions problems on some systems.
 
    * **Run setuid.sh or:**
 
@@ -175,11 +175,19 @@ Also needs a UTF8 locale and a font that covers:
    sudo make uninstall
    ```
 
+* **Show help**
+
+   ```bash
+   make help
+   ```
+
 ## Compilation
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
 
-   The makefile also needs GNU coreutils and sed (should already be installed on any modern distribution).
+   Only 64-bit for now.
+
+   The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
@@ -197,7 +205,11 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Notice! Manually set $ARCH if cross-compiling
+   Append `STATIC=true` to `make` command for static compilation.
+
+   Notice! Manually set `$ARCH` variable if cross-compiling
+
+   Use `$ADDFLAGS` variable for appending flags to both compiler and linker.
 
    ``` bash
    make
@@ -237,6 +249,12 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    make distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   make help
    ```
 
 ## Configurability
@@ -442,7 +460,7 @@ optional arguments:
   -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
   -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
   +t, --tty_off         force (OFF) tty mode
-  --utf-foce			force start even if no UTF-8 locale was detected
+  --utf-foce            force start even if no UTF-8 locale was detected
   --debug               start in DEBUG mode: shows microsecond timer for information collect
                         and screen draw functions and sets loglevel to DEBUG
 ```

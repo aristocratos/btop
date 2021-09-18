@@ -19,6 +19,10 @@ ifeq ($(ARCH),x86_64)
 	override ADDFLAGS += -fcf-protection
 endif
 
+ifeq ($(STATIC),true)
+	override ADDFLAGS += -static -static-libgcc -static-libstdc++
+endif
+
 #? Make sure PLATFORM Darwin is OSX and not Darwin
 ifeq ($(PLATFORM),Darwin)
 	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
@@ -74,7 +78,7 @@ OBJEXT		:= o
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			?= -O2 -ftree-loop-vectorize -flto=$(THREADS)
-LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector -fstack-clash-protection -static $(ADDFLAGS)
+LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector -fstack-clash-protection $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
@@ -106,14 +110,15 @@ pre:
 	@printf "\n\033[1;92mBuilding btop++ \033[93m(\033[97mv$(BTOP_VERSION)\033[93m)\033[0m\n"
 
 help:
+	@printf " $(BANNER)\n"
 	@printf "\033[1;97mbtop++ makefile\033[0m\n"
 	@printf "usage: make [argument]\n\n"
 	@printf "arguments:\n"
 	@printf "  all          Compile btop (default argument)\n"
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
-	@printf "  install      Install btop++ to \$$PREFIX\n"
-	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_OWNER and set SUID bit\n"
+	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
+	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
 
 #? Make the Directories

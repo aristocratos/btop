@@ -91,14 +91,14 @@ void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-			cout 	<< "usage: btop [-h] [-v] [-/+t] [--debug]\n\n"
+			cout 	<< "usage: btop [-h] [-v] [-/+t] [--utf-foce] [--debug]\n\n"
 					<< "optional arguments:\n"
 					<< "  -h, --help            show this help message and exit\n"
 					<< "  -v, --version         show version info and exit\n"
 					<< "  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
 					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					<< "  +t, --tty_off         force (OFF) tty mode\n"
-					<< "  --utf-foce			force start even if no UTF-8 locale was detected\n"
+					<< "  --utf-foce            force start even if no UTF-8 locale was detected\n"
 					<< "  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
 					<< "                        and screen draw functions and sets loglevel to DEBUG\n"
 					<< endl;

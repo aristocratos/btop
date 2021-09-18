@@ -309,7 +309,7 @@ namespace Draw {
 
 		}
 
-		clock_str = uresize(clock_str, std::max(0, width - 56));
+		clock_str = uresize(clock_str, std::max(10, width - 66 - (Term::width >= 100 and Config::getB("show_battery") and Cpu::has_battery ? 22 : 0)));
 		out.clear();
 
 		if (clock_str.size() != clock_len) {
@@ -472,6 +472,21 @@ namespace Cpu {
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 
+	unsigned long fastrand(void) {
+		static unsigned long x=123456789, y=362436069, z=521288629;
+		unsigned long t;
+		x ^= x << 16;
+		x ^= x >> 5;
+		x ^= x << 1;
+
+		t = x;
+		x = y;
+		y = z;
+		z = t ^ x ^ y;
+
+		return z;
+	}
+
 	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
@@ -485,18 +500,20 @@ namespace Cpu {
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& temp_scale = Config::getS("temp_scale");
+		auto& cpu_bottom = Config::getB("cpu_bottom");
+		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
+		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
+		static int bat_pos = 0, bat_len = 0;
 		string out;
 		out.reserve(width * height);
+
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
-			auto& cpu_bottom = Config::getB("cpu_bottom");
 			mid_line = (not single_graph and graph_up_field != graph_lo_field);
 			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0 ? 1 : 0));
 			const int graph_low_height = height - 2 - graph_up_height - (mid_line ? 1 : 0);
 			const int button_y = cpu_bottom ? y + height - 1 : y;
 			out += box;
-			const string title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
-			const string title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 
 			//? Buttons on title
 			out += Mv::to(button_y, x + 10) + title_left + Theme::c("hi_fg") + Fx::b + 'm' + Theme::c("title") + "enu" + Fx::ub + title_right;
@@ -549,13 +566,30 @@ namespace Cpu {
 			};
 
 			const auto& [percent, seconds, status] = current_bat;
+
 			if (redraw or percent != old_percent or seconds != old_seconds or status != old_status) {
 				old_percent = percent;
 				old_seconds = seconds;
 				old_status = status;
-				const string bat_time = (seconds > 0 ? to_string(seconds / 3600) + ':' + to_string((seconds % 3600) / 60) : "");
+				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, true, true) : "");
+				const string str_percent = to_string(percent) + '%';
 				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
+				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + to_string(Config::getI("update_ms")).size();
+				const int current_pos = Term::width - current_len - 17;
+
+				if ((bat_pos != current_pos or bat_len != current_len) and bat_pos > 0 and not redraw)
+					out += Mv::to(y, bat_pos) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * (bat_len + 4);
+				bat_pos = current_pos;
+				bat_len = current_len;
+
+				out += Mv::to(y, bat_pos) + title_left + Theme::c("title") + Fx::b + "BAT" + bat_symbol + ' ' + str_percent
+					+ (Term::width >= 100 ? Fx::ub + ' ' + bat_meter(percent) + Fx::b : "")
+					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : "") + Fx::ub + title_right;
 			}
+		}
+		else if (bat_pos > 0) {
+			out += Mv::to(y, bat_pos) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * (bat_len + 4);
+			bat_pos = bat_len = 0;
 		}
 
 		try {
