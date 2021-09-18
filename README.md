@@ -484,7 +484,7 @@ optional arguments:
   -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
   -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
   +t, --tty_off         force (OFF) tty mode
-  -p --preset <id>      start with preset, integer value between 0-9
+  -p, --preset <id>     start with preset, integer value between 0-9
   --utf-force           force start even if no UTF-8 locale was detected
   --debug               start in DEBUG mode: shows microsecond timer for information collect
                         and screen draw functions and sets loglevel to DEBUG
