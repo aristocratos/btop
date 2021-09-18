@@ -476,7 +476,7 @@ log_level = "DEBUG"
 #### Command line options
 
 ```text
-usage: btop [-h] [-v] [-/+t] [--utf-force] [--debug]
+usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]
 
 optional arguments:
   -h, --help            show this help message and exit

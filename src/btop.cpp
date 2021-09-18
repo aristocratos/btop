@@ -92,7 +92,7 @@ void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-			cout 	<< "usage: btop [-h] [-v] [-/+t] [--utf-force] [--debug]\n\n"
+			cout 	<< "usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
 					<< "optional arguments:\n"
 					<< "  -h, --help            show this help message and exit\n"
 					<< "  -v, --version         show version info and exit\n"
