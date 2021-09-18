@@ -28,7 +28,7 @@ package-repositories:
    
 apps:
   btop:
-    command: bin/btop
+    command: btop
     command-chain: 
       - bin/homeishome-launch     
     plugs: 
