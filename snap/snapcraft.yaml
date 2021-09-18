@@ -21,7 +21,11 @@ architectures:
   - build-on: armhf
   - build-on: ppc64el
   - build-on: s390x
-  
+
+package-repositories:
+ - type: apt
+   ppa: ubuntu-toolchain-r/test
+   
 apps:
   btop:
     command: usr/bin/btop
@@ -41,6 +45,7 @@ parts:
     source: https://github.com/aristocratos/btop
     source-type: git
     plugin: make
+    
     build-packages:
       - coreutils 
       - sed 
