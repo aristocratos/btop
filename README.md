@@ -30,12 +30,29 @@
 
 ### Under development
 
+##### 18 September 2021
+
+The Linux version of btop++ is complete. Released as version 1.0.0
+
+I will be providing statically compiled binaries for a range of architectures in every release for those having problems compiling.
+
+For compilation GCC 10 is required, GCC 11 preferred.
+
+Please report any bugs to the [Issues](https://github.com/aristocratos/btop/issues/new?assignees=aristocratos&labels=bug&template=bug_report.md&title=%5BBUG%5D) page.
+
+The development plan right now:
+
+* 1.1.0 Mac OsX support
+* 1.2.0 FreeBSD support
+* 1.3.0 Support for GPU monitoring
+* 1.X.0 Other platforms and features...
+
+Windows support is not in the plans as of now, but if anyone else wants to take it on, I will try to help.
+
 ##### 5 May 2021
 
 This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will have to be written from scratch without any external libraries.
 And will need some help in the form of code contributions to get complete support for BSD and OSX.
-
-If you got suggestions of C++ libraries that are multi-platform and are as extensive as [psutil](https://github.com/giampaolo/psutil) are for python, feel free to open up a new thread in Discussions, it could help speed up the development a lot.
 
 ## Documents
 
@@ -57,13 +74,17 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 * Full mouse support, all buttons with a highlighted key is clickable and mouse scroll works in process list and menu boxes.
 * Fast and responsive UI with UP, DOWN keys process selection.
 * Function for showing detailed stats for selected process.
-* Ability to filter processes, multiple filters can be entered.
+* Ability to filter processes.
 * Easy switching between sorting options.
-* Send SIGTERM, SIGKILL, SIGINT to selected process.
+* Tree view of processes.
+* Send any signal to selected process.
 * UI menu for changing all config file options.
 * Auto scaling graph for network usage.
-* Shows message in menu if new version is available
-* Shows current read and write speeds for disks
+* Shows IO activity and speeds for disks
+* Battery meter
+* Selectable symbols for the graphs
+* Custom presets
+* And more...
 
 ## Themes
 
@@ -143,7 +164,7 @@ Also needs a UTF8 locale and a font that covers:
 
 **Binary release (statically compiled)**
 
-1. **Download btop-(VERSION)-(ARCH).tbz from latest release and unpack to a new folder**
+1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from latest release and unpack to a new folder**
 
 2. **Install (from created folder)**
 
@@ -184,8 +205,6 @@ Also needs a UTF8 locale and a font that covers:
 ## Compilation
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
-
-   Only 64-bit for now.
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
@@ -265,7 +284,7 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 #### btop.cfg: (auto generated if not found)
 
 ```bash
-#? Config file for btop v. 0.9.0
+#? Config file for btop v. 0.1.0
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
@@ -280,6 +299,12 @@ truecolor = True
 #* Set to true to force tty mode regardless if a real tty has been detected or not.
 #* Will force 16-color mode and TTY theme, set all graph symbols to "tty" and swap out other non tty friendly symbols.
 force_tty = False
+
+#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.
+#* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positons, G=graph symbol to use for box.
+#* Use withespace " " as seprator between different presets.
+#* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
+presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
 
 #* Rounded corners on boxes, is ignored if TTY mode is ON.
 rounded_corners = True
@@ -454,12 +479,12 @@ log_level = "DEBUG"
 usage: btop [-h] [-v] [-/+t] [--utf-foce] [--debug]
 
 optional arguments:
-
   -h, --help            show this help message and exit
   -v, --version         show version info and exit
   -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
   -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
   +t, --tty_off         force (OFF) tty mode
+  -p --preset <id>      start with preset, integer value between 0-9
   --utf-foce            force start even if no UTF-8 locale was detected
   --debug               start in DEBUG mode: shows microsecond timer for information collect
                         and screen draw functions and sets loglevel to DEBUG

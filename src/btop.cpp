@@ -83,6 +83,7 @@ namespace Global {
 
 	bool arg_tty = false;
 	bool arg_low_color = false;
+	int arg_preset = -1;
 }
 
 
@@ -98,6 +99,7 @@ void argumentParser(const int& argc, char **argv) {
 					<< "  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
 					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					<< "  +t, --tty_off         force (OFF) tty mode\n"
+					<< "  -p --preset <id>      start with preset, integer value between 0-9\n"
 					<< "  --utf-foce            force start even if no UTF-8 locale was detected\n"
 					<< "  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
 					<< "                        and screen draw functions and sets loglevel to DEBUG\n"
@@ -118,6 +120,19 @@ void argumentParser(const int& argc, char **argv) {
 		else if (is_in(argument, "+t", "--tty_off")) {
 			Config::set("tty_mode", false);
 			Global::arg_tty = true;
+		}
+		else if (is_in(argument, "-p", "--preset")) {
+			if (++i >= argc) {
+				cout << "ERROR: Preset option needs an argument." << endl;
+				exit(1);
+			}
+			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
+				Global::arg_preset = std::clamp(stoi(val), 0, 9);
+			}
+			else {
+				cout << "ERROR: Preset option only accepts an integer value between 0-9." << endl;
+				exit(1);
+			}
 		}
 		else if (argument == "--utf-force")
 			Global::utf_force = true;
@@ -754,6 +769,10 @@ int main(int argc, char **argv) {
 
 	//? Calculate sizes of all boxes
 	Config::presetsValid(Config::getS("presets"));
+	if (Global::arg_preset >= 0) {
+		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
+		Config::apply_preset(Config::preset_list.at(Config::current_preset));
+	}
 	Draw::calcSizes();
 
 	{
