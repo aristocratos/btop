@@ -9,12 +9,9 @@ PREFIX ?= /usr/local
 
 #? NOTICE! Manually set PLATFORM and ARCH if not compiling for host system
 PLATFORM ?= $(shell uname -s || echo unknown)
-ARCH ?= $(shell uname -p || echo unknown)
+ARCH ?= $(shell uname -m || echo unknown)
 
 #? Only enable fcf-protection if on x86_64
-ifeq ($(ARCH),unknown)
-	ARCH := $(shell uname -m || echo unknown)
-endif
 ifeq ($(ARCH),x86_64)
 	override ADDFLAGS += -fcf-protection
 endif
