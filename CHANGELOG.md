@@ -1,3 +1,7 @@
+## v1.0.2
+
+* Fixed: ARCH detection in Makefile
+
 ## v1.0.1
 
 * Fixed: UTF-8 check to include UTF8
