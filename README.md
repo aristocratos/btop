@@ -162,7 +162,7 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Installation
 
-**Binary release (statically compiled)**
+**Binary release (statically compiled, for kernel 3.2.0 and newer)**
 
 1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
