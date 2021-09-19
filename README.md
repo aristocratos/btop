@@ -164,7 +164,7 @@ Also needs a UTF8 locale and a font that covers:
 
 **Binary release (statically compiled)**
 
-1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from latest release and unpack to a new folder**
+1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
 2. **Install (from created folder)**
 
