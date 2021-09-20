@@ -34,6 +34,6 @@ assignees: aristocratos
 
 **Additional context**
 
-contents of `~/.config/btop/error.log`
+contents of `~/.config/btop/btop.log`
 
 (try running btop with `--debug` flag if error.log is empty)
