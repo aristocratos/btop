@@ -306,15 +306,26 @@ namespace Config {
 	//* Apply selected preset
 	void apply_preset(const string& preset) {
 		string boxes;
+
 		for (const auto& box : ssplit(preset, ',')) {
 			const auto& vals = ssplit(box, ':');
 			boxes += vals.at(0) + ' ';
+		}
+		if (not boxes.empty()) boxes.pop_back();
+
+		auto min_size = Term::get_min_size(boxes);
+		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
+			return;
+		}
+
+		for (const auto& box : ssplit(preset, ',')) {
+			const auto& vals = ssplit(box, ':');
 			if (vals.at(0) == "cpu") set("cpu_bottom", (vals.at(1) == "0" ? false : true));
 			else if (vals.at(0) == "mem") set("mem_below_net", (vals.at(1) == "0" ? false : true));
 			else if (vals.at(0) == "proc") set("proc_left", (vals.at(1) == "0" ? false : true));
 			set("graph_symbol_" + vals.at(0), vals.at(2));
 		}
-		if (not boxes.empty()) boxes.pop_back();
+
 		if (check_boxes(boxes)) set("shown_boxes", boxes);
 	}
 
@@ -475,6 +486,7 @@ namespace Config {
 	}
 
 	void toggle_box(const string& box) {
+		auto old_boxes = current_boxes;
 		auto box_pos = rng::find(current_boxes, box);
 		if (box_pos == current_boxes.end())
 			current_boxes.push_back(box);
@@ -486,6 +498,14 @@ namespace Config {
 			for (const auto& b : current_boxes) new_boxes += b + ' ';
 			new_boxes.pop_back();
 		}
+
+		auto min_size = Term::get_min_size(new_boxes);
+
+		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
+			current_boxes = old_boxes;
+			return;
+		}
+
 		Config::set("shown_boxes", new_boxes);
 	}
 

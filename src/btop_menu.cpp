@@ -757,6 +757,28 @@ namespace Menu {
 		return (redraw ? Changed : retval);
 	}
 
+	int sizeError(const string& key) {
+		if (redraw) {
+			vector<string> cont_vec;
+			cont_vec.push_back(Fx::b + Theme::g("used")[100] + "Error:" + Theme::c("main_fg") + Fx::ub);
+			cont_vec.push_back("Terminal size to small to" + Fx::reset);
+			cont_vec.push_back("display menu or box!" + Fx::reset);
+
+			messageBox = Menu::msgBox{45, 0, cont_vec, "error"};
+			Global::overlay = messageBox();
+		}
+
+		auto ret = messageBox.input(key);
+		if (ret == msgBox::Ok_Yes or ret == msgBox::No_Esc) {
+			messageBox.clear();
+			return Closed;
+		}
+		else if (redraw) {
+			return Changed;
+		}
+		return NoChange;
+	}
+
 	int signalSend(const string& key) {
 		auto& s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
 		if (s_pid == 0) return Closed;
@@ -1286,6 +1308,7 @@ namespace Menu {
 
 	//* Add menus here and update enum Menus in header
 	const auto menuFunc = vector{
+		ref(sizeError),
 		ref(signalChoose),
 		ref(signalSend),
 		ref(signalReturn),
@@ -1312,6 +1335,12 @@ namespace Menu {
 		if (currentMenu < 0 or not menuMask.test(currentMenu)) {
 			Menu::active = true;
 			redraw = true;
+			if (((menuMask.test(Main) or menuMask.test(Options) or menuMask.test(Help) or menuMask.test(SignalChoose))
+			and (Term::width < 80 or Term::height < 24))
+			or (Term::width < 50 or Term::height < 20)) {
+				menuMask.reset();
+				menuMask.set(SizeError);
+			}
 			for (const auto& i : iota(0, (int)menuMask.size())) {
 				if (menuMask.test(i)) currentMenu = i;
 			}

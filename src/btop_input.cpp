@@ -351,7 +351,6 @@ namespace Input {
 					return;
 				}
 				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
-					if (Term::width < 80 or Term::height < 20) return;
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 					Menu::show(Menu::Menus::SignalChoose);

@@ -2,6 +2,8 @@
 
 * Fixed: ARCH detection in Makefile
 
+* Fixed: Color gradient array out of bounds, added clamp 0-100 for cpu percent values
+
 ## v1.0.1
 
 * Fixed: UTF-8 check to include UTF8
