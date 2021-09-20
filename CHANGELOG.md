@@ -4,6 +4,10 @@
 
 * Fixed: Color gradient array out of bounds, added clamp 0-100 for cpu percent values
 
+* Fixed: Menu size and preset size issues and added warnings for small terminal size
+
+* Fixed: Options menu page selection alignment
+
 ## v1.0.1
 
 * Fixed: UTF-8 check to include UTF8
