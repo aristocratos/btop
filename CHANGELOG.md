@@ -1,3 +1,7 @@
+## v1.0.3
+
+* Fixed: stoi 0 literal pointer to nullptr and added more clamping for gradient array access
+
 ## v1.0.2
 
 * Fixed: ARCH detection in Makefile
