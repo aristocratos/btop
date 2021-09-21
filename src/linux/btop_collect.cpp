@@ -80,6 +80,7 @@ namespace Shared {
 	fs::path procPath, passwd_path;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
+	int totalMem_len;
 
 	void init() {
 
@@ -114,6 +115,7 @@ namespace Shared {
 		if (meminfo.good()) {
 			meminfo.ignore(SSmax, ':');
 			meminfo >> totalMem;
+			totalMem_len = to_string(totalMem).size();
 			totalMem <<= 10;
 		}
 		if (not meminfo.good() or totalMem == 0)
@@ -1451,7 +1453,10 @@ namespace Proc {
 								next_x = 24;
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-								new_proc.mem = stoull(short_str) * Shared::pageSize;
+								if (cmp_greater(short_str.size(), Shared::totalMem_len))
+									new_proc.mem = Shared::totalMem;
+								else
+									new_proc.mem = stoull(short_str) * Shared::pageSize;
 						}
 						break;
 					}
@@ -1463,6 +1468,16 @@ namespace Proc {
 				pread.close();
 
 				if (x-offset < 24) continue;
+
+				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
+				if (new_proc.mem >= Shared::totalMem) {
+					pread.open(d.path() / "statm");
+					if (not pread.good()) continue;
+					pread.ignore(SSmax, ' ');
+					pread >> new_proc.mem;
+					new_proc.mem *= Shared::pageSize;
+					pread.close();
+				}
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
