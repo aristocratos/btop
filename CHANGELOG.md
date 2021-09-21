@@ -1,3 +1,7 @@
+## v1.0.4
+
+* Fixed: Use /proc/pid/statm if RSS memory from /proc/pid/stat is faulty
+
 ## v1.0.3
 
 * Fixed: stoi 0 literal pointer to nullptr and added more clamping for gradient array access
