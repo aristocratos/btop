@@ -25,6 +25,8 @@ assignees: aristocratos
 
 **Info (please complete the following information):**
  - btop++ version: `bpytop -v`
+ - Binary: [self compiled or static binary from release]
+ - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
  - Platform: [Linux, FreeBSD, OsX]
  - (Linux) Kernel: `uname -r`
