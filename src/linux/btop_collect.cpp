@@ -1465,7 +1465,7 @@ namespace Proc {
 				if (x-offset < 24) continue;
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0;
+				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);

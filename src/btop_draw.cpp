@@ -1388,11 +1388,11 @@ namespace Proc {
 					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / Shared::totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
-							if (val < 100) colors[i++] = Theme::g("proc_color").at(val);
-							else colors[i++] = Theme::g("process").at(val - 100);
+							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
+							else colors[i++] = Theme::g("process").at(clamp(val - 100, 0, 100));
 						}
 						else
-							colors[i++] = Theme::g("process").at(min(v, 100));
+							colors[i++] = Theme::g("process").at(clamp(v, 0, 100));
 					}
 					c_color = colors.at(0); m_color = colors.at(1); t_color = colors.at(2);
 				}
@@ -1401,7 +1401,7 @@ namespace Proc {
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
-					g_color = Theme::g("proc").at(calc * 100 / select_max);
+					g_color = Theme::g("proc").at(clamp(calc * 100 / select_max, 0, 100));
 				}
 			}
 
@@ -1433,9 +1433,10 @@ namespace Proc {
 			if (p.cpu_p < 10 or p.cpu_p >= 100) cpu_str.resize(3);
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
-				double mem_p = (double)p.mem * 100 / Shared::totalMem;
+				double mem_p = clamp((double)p.mem * 100 / Shared::totalMem, 0.0, 100.0);
 				mem_str = to_string(mem_p);
-				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+				if (mem_str.size() < 4)	mem_str = "0";
+				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 				mem_str += '%';
 			}
 			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
