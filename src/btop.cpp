@@ -79,6 +79,7 @@ namespace Global {
 	uint64_t start_time;
 
 	atomic<bool> resized (false);
+	atomic<bool> resizing (false);
 	atomic<bool> quitting (false);
 	atomic<bool> _runner_started (false);
 
@@ -149,13 +150,17 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
+	if (Global::resizing) return;
+	atomic_lock lck(Global::resizing);
 	if (auto refreshed = Term::refresh(); refreshed or force) {
 		if (force and refreshed) force = false;
 	}
 	else return;
 
+	static const array<string, 4> all_boxes = {"cpu", "mem", "net", "proc"};
 	Global::resized = true;
-	Runner::stop();
+	if (Runner::active) Runner::stop();
+	Config::unlock();
 
 	auto boxes = Config::getS("shown_boxes");
 	auto min_size = Term::get_min_size(boxes);
@@ -171,7 +176,16 @@ void term_resize(bool force) {
 				 << "Needed for current config:" << Mv::to((Term::height / 2) + 2, (Term::width / 2) - 10)
 				 << "Width = " << min_size.at(0) << " Height = " << min_size.at(1) << flush;
 			while (not Term::refresh() and not Input::poll()) sleep_ms(10);
-			if (Input::poll() and Input::get() == "q") exit(0);
+			if (Input::poll()) {
+				auto key = Input::get();
+				if (key == "q")
+					exit(0);
+				else if (is_in(key, "1", "2", "3", "4")) {
+					Config::current_preset = -1;
+					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
+					boxes = Config::getS("shown_boxes");
+				}
+			} 
 			min_size = Term::get_min_size(boxes);
 		}
 		else if (not Term::refresh()) break;
@@ -777,20 +791,19 @@ int main(int argc, char **argv) {
 		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
 		Config::apply_preset(Config::preset_list.at(Config::current_preset));
 	}
-	Draw::calcSizes();
 
 	{
 		const auto [x, y] = Term::get_min_size(Config::getS("shown_boxes"));
 		if (Term::height < y or Term::width < x) {
-			Global::exit_error_msg = "Terminal size to small for current config.\n(WxH) Current: " + to_string(Term::width)
-								   + 'x' + to_string(Term::height) + " | Needed: " + to_string(x) + 'x' + to_string(y)
-								   + "\nResize terminal or disable some boxes in config file to fix this.";
-			exit(1);
+			term_resize(true);
+			Global::resized = false;
+			Input::interrupt = false;
 		}
 
 	}
 
 	//? Print out box outlines
+	Draw::calcSizes();
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 
 
