@@ -719,9 +719,9 @@ int main(int argc, char **argv) {
 
 	//? Try to find and set a UTF-8 locale
 	if (bool found = false; not str_to_upper(s_replace((string)std::setlocale(LC_ALL, NULL), "-", "")).ends_with("UTF8")) {
-		if (const string lang = (string)getenv("LANG"); str_to_upper(s_replace(lang, "-", "")).ends_with("UTF8")) {
+		if (getenv("LANG") != NULL and str_to_upper(s_replace((string)getenv("LANG"), "-", "")).ends_with("UTF8")) {
 			found = true;
-			std::setlocale(LC_ALL, lang.c_str());
+			std::setlocale(LC_ALL, getenv("LANG"));
 		}
 		else {
 			setenv("LANG", "", 1);
