@@ -152,7 +152,7 @@ install:
 	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\n"
+	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
