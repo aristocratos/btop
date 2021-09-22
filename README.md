@@ -226,6 +226,8 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STATIC=true` to `make` command for static compilation.
 
+   Append `QUIET=true` for less verbose output.
+
    Notice! Manually set `$ARCH` variable if cross-compiling
 
    Use `$ADDFLAGS` variable for appending flags to both compiler and linker.
@@ -468,7 +470,7 @@ net_iface = "br0"
 #* Show battery stats in top right if battery is present.
 show_battery = True
 
-#* Set loglevel for "~/.config/btop/error.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
+#* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
 log_level = "DEBUG"
 ```

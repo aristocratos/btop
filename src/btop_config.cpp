@@ -167,7 +167,7 @@ namespace Config {
 
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
-		{"log_level", 			"#* Set loglevel for \"~/.config/btop/error.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
+		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
 	};
 
