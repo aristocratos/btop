@@ -664,9 +664,9 @@ namespace Cpu {
 		if (cy < b_height - 1 and cc <= b_columns) {
 			string lavg_pre;
 			int sep = 1;
-			if (b_column_size == 2 and got_sensors) { lavg_pre = "Load AVG:"; sep = 3; }
-			else if (b_column_size == 2 or (b_column_size == 1 and got_sensors)) { lavg_pre = "LAV:"; }
-			else if (b_column_size == 1 or (b_column_size == 0 and got_sensors)) { lavg_pre = "L"; }
+			if (b_column_size == 2 and show_temps) { lavg_pre = "Load AVG:"; sep = 3; }
+			else if (b_column_size == 2 or (b_column_size == 1 and show_temps)) { lavg_pre = "LAV:"; }
+			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { lavg_pre = "L"; }
 			string lavg;
 			for (const auto& val : cpu.load_avg) {
 				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
