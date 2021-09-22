@@ -185,7 +185,7 @@ void term_resize(bool force) {
 					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
 					boxes = Config::getS("shown_boxes");
 				}
-			} 
+			}
 			min_size = Term::get_min_size(boxes);
 		}
 		else if (not Term::refresh()) break;
@@ -718,24 +718,26 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (bool found = false; not str_to_upper(s_replace(string(std::setlocale(LC_ALL, NULL)), "-", "")).ends_with("UTF8")) {
+	if (bool found = false; not str_to_upper(s_replace((string)std::setlocale(LC_ALL, NULL), "-", "")).ends_with("UTF8")) {
 		if (const string lang = (string)getenv("LANG"); str_to_upper(s_replace(lang, "-", "")).ends_with("UTF8")) {
 			found = true;
 			std::setlocale(LC_ALL, lang.c_str());
 		}
-		else if (const string loc = std::locale("").name(); not loc.empty()) {
+		else {
+			setenv("LANG", "", 1);
 			try {
-				for (auto& l : ssplit(loc, ';')) {
-					if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
-						found = true;
-						std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str());
-						break;
+				if (const auto loc = std::locale("").name(); not loc.empty()) {
+					for (auto& l : ssplit(loc, ';')) {
+						if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
+							found = true;
+							std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str());
+							break;
+						}
 					}
 				}
 			}
-			catch (const std::out_of_range&) { found = false; }
+			catch (...) { found = false; }
 		}
-
 		if (not found and Global::utf_force)
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
 		else if (not found) {
