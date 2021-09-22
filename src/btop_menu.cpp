@@ -1341,8 +1341,10 @@ namespace Menu {
 				menuMask.reset();
 				menuMask.set(SizeError);
 			}
-			for (const auto& i : iota(0, (int)menuMask.size())) {
-				if (menuMask.test(i)) currentMenu = i;
+			else {
+				for (const auto& i : iota(0, (int)menuMask.size())) {
+					if (menuMask.test(i)) currentMenu = i;
+				}
 			}
 		}
 

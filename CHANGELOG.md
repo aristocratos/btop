@@ -1,3 +1,11 @@
+## v1.0.5
+
+* Fixed: Load AVG sizing when hiding temperatures
+
+* Fixed: Sizing constraints bug on start and boxes can be toggled from size error screen
+
+* Fixed: UTF-8 check crashing if LANG was set to non existant locale
+
 ## v1.0.4
 
 * Fixed: Use /proc/pid/statm if RSS memory from /proc/pid/stat is faulty
