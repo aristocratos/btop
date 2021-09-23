@@ -68,7 +68,7 @@ parts:
     override-build: |
       mkdir -p $SNAPCRAFT_PART_INSTALL/btop
       cd $SNAPCRAFT_PART_INSTALL/btop
-      make install PREFIX=/usr/local
+      make install PREFIX=$SNAPCRAFT_PART_INSTALL/usr/local
       make setuid
       make clean
       
