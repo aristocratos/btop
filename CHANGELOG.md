@@ -1,3 +1,11 @@
+## v1.0.6
+
+* Fixed: Check that getenv("LANG") is not NULL in UTF-8 check
+
+* Fixed: Processes not completely hidden when collapsed in tree mode
+
+* Fixed: Changed wrong filename error.log to btop.log
+
 ## v1.0.5
 
 * Fixed: Load AVG sizing when hiding temperatures
