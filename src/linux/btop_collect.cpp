@@ -1170,6 +1170,7 @@ namespace Proc {
 				out_procs.back().get().cpu_p += p.cpu_p;
 				out_procs.back().get().mem += p.mem;
 				out_procs.back().get().threads += p.threads;
+				filter_found++;
 			}
 			if (collapsed and not filtering) {
 				cur_proc.filtered = true;

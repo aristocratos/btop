@@ -1331,10 +1331,7 @@ namespace Proc {
 				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
-
-
 		}
-
 
 		//? Check bounds of current selection and view
 		if (start > 0 and numpids <= select_max)
@@ -1349,7 +1346,7 @@ namespace Proc {
 		//* Iteration over processes
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
-			if (n++ < start or p.filtered) continue;
+			if (n++ < start or p.filtered or (proc_tree and p.tree_index == plist.size())) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) {
 				selected_pid = (int)p.pid;
