@@ -44,7 +44,9 @@ parts:
   btop: 
     source: https://github.com/aristocratos/btop
     source-type: git
-    plugin: nil   
+    plugin: make
+    make-parameters:
+      - PREFIX=/usr/local
     build-packages:
       - coreutils 
       - sed 
@@ -64,13 +66,6 @@ parts:
     override-pull: |
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
-      
-    override-build: |
-      mkdir -p $SNAPCRAFT_PART_INSTALL/btop
-      cd $SNAPCRAFT_PART_INSTALL/btop
-      make install PREFIX=$SNAPCRAFT_PART_INSTALL/usr/local
-      make setuid
-      make clean
       
   homeishome-launch:
     plugin: nil
