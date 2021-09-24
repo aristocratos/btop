@@ -30,7 +30,10 @@ apps:
   btop:
     command: usr/local/bin/btop
     command-chain: 
-      - bin/homeishome-launch     
+      - bin/homeishome-launch   
+    environment:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8      
     plugs: 
       - mount-observe
       - process-control
