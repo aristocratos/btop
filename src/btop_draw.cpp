@@ -1347,7 +1347,7 @@ namespace Proc {
 		//* Iteration over processes
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
-			if (n++ < start or p.filtered or (proc_tree and p.tree_index == plist.size())) continue;
+			if (p.filtered or (proc_tree and p.tree_index == plist.size()) or n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) {
 				selected_pid = (int)p.pid;
@@ -1451,7 +1451,7 @@ namespace Proc {
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
-			const int scroll_pos = clamp((int)round((double)start * (select_max - 2) / (numpids - (select_max - 2))), 0, height - 5);
+			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
 				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
 				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
