@@ -1,3 +1,11 @@
+## v1.0.7
+
+* Fixed: Crash when opening menu at too small size
+
+* Fixed: Cores not constrained to cpu box and core numbers above 100 cut off
+
+* Fixed: Scrollbar position incorrect in small lists and selection not working when filtering
+
 ## v1.0.6
 
 * Fixed: Check that getenv("LANG") is not NULL in UTF-8 check
