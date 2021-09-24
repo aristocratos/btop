@@ -1341,11 +1341,11 @@ namespace Menu {
 				menuMask.reset();
 				menuMask.set(SizeError);
 			}
-			else {
-				for (const auto& i : iota(0, (int)menuMask.size())) {
-					if (menuMask.test(i)) currentMenu = i;
-				}
+
+			for (const auto& i : iota(0, (int)menuMask.size())) {
+				if (menuMask.test(i)) currentMenu = i;
 			}
+
 		}
 
 		auto retCode = menuFunc.at(currentMenu)(key);
