@@ -230,7 +230,9 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Manually set `$ARCH` variable if cross-compiling
 
-   Use `$ADDFLAGS` variable for appending flags to both compiler and linker.
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
    ``` bash
    make
