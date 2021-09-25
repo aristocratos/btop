@@ -1611,8 +1611,15 @@ namespace Tools {
 	double system_uptime() {
 		string upstr;
 		ifstream pread(Shared::procPath / "uptime");
-		getline(pread, upstr, ' ');
-		pread.close();
-		return stod(upstr);
+		if (pread.good()) {
+			try {
+				getline(pread, upstr, ' ');
+				pread.close();
+				return stod(upstr);
+			}
+			catch (const std::invalid_argument&) {}
+			catch (const std::out_of_range&) {}
+		}
+		throw std::runtime_error("Failed get uptime from from " + (string)Shared::procPath + "/uptime");
 	}
 }
