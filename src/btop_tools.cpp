@@ -107,7 +107,7 @@ namespace Term {
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
-				current_tty = (string)ttyname(STDIN_FILENO);
+				current_tty = (ttyname(STDIN_FILENO) != NULL ? (string)ttyname(STDIN_FILENO) : "unknown");
 
 				//? Disable stream sync
 				cin.sync_with_stdio(false);
