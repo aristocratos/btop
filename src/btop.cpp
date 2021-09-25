@@ -658,8 +658,8 @@ int main(int argc, char **argv) {
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (getenv(env) != NULL and access(getenv(env), W_OK) != -1) {
-			Config::conf_dir = fs::path(getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
+		if (std::getenv(env) != NULL and access(std::getenv(env), W_OK) != -1) {
+			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
 			break;
 		}
 	}
@@ -719,8 +719,8 @@ int main(int argc, char **argv) {
 
 	//? Try to find and set a UTF-8 locale
 	if (bool found = false; std::setlocale(LC_ALL, NULL) == NULL or not str_to_upper(s_replace((string)std::setlocale(LC_ALL, NULL), "-", "")).ends_with("UTF8")) {
-		if (getenv("LANG") != NULL and str_to_upper(s_replace((string)getenv("LANG"), "-", "")).ends_with("UTF8")) {
-			if (std::setlocale(LC_ALL, getenv("LANG")) != NULL) {
+		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8")) {
+			if (std::setlocale(LC_ALL, std::getenv("LANG")) != NULL) {
 				found = true;
 			}
 		}
@@ -758,7 +758,7 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	Logger::info("Running on " + Term::current_tty);
+	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
 	if (not Global::arg_tty and Config::getB("force_tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
