@@ -1,3 +1,13 @@
+## v1.0.8
+
+* Fixed: Additional NULL checks in UTF-8 detection
+
+* Changed: Makefile: Only look for g++-11 if CXX=g++
+
+* Fixed: Missing NULL check for ttyname
+
+* Changed: Only log tty name if known
+
 ## v1.0.7
 
 * Fixed: Crash when opening menu at too small size
