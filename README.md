@@ -1,5 +1,9 @@
 # ![btop++](Img/logo.png)
 
+<a href="https://repology.org/project/btop/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/btop.svg" alt="Packaging status" align="right">
+</a>
+
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
@@ -280,7 +284,7 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    make help
    ```
-   
+
 ## Install the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
@@ -288,13 +292,13 @@ Also needs a UTF8 locale and a font that covers:
 
  * **Connect the interfaces**
     ```
-	sudo snap connect btop:system-observe 
+	sudo snap connect btop:system-observe
     sudo snap connect btop:physical-memory-observe
-    sudo snap connect btop:mount-observe 
+    sudo snap connect btop:mount-observe
     sudo snap connect btop:hardware-observe
 	sudo snap connect btop:network-observe
 	```
-	
+
 
 ## Configurability
 
