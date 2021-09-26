@@ -224,7 +224,7 @@ namespace Config {
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"only_physical", true},
-		{"use_fstab", false},
+		{"use_fstab", true},
 		{"show_io_stat", true},
 		{"io_mode", false},
 		{"io_graph_combined", false},
