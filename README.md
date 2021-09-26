@@ -288,15 +288,21 @@ Also needs a UTF8 locale and a font that covers:
 ## Install the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
-   `sudo snap install btop`
+ * **Install the snap**
+
+    ```bash
+    sudo snap install btop
+    ```
 
  * **Connect the interfaces**
-    ```
+
+    ```bash
 	sudo snap connect btop:system-observe
     sudo snap connect btop:physical-memory-observe
     sudo snap connect btop:mount-observe
     sudo snap connect btop:hardware-observe
 	sudo snap connect btop:network-observe
+	sudo snap connect btop:process-control
 	```
 
 
