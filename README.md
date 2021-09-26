@@ -7,7 +7,7 @@
 [![Donate](https://img.shields.io/badge/-Donate-yellow?logo=paypal)](https://paypal.me/aristocratos)
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
-
+[![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 ## Index
 
 
@@ -23,6 +23,7 @@
 * [Keybindings](#help-menu)
 * [Installation](#installation)
 * [Manual compilation](#compilation)
+* [Install the snap](#install-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
@@ -275,6 +276,20 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    make help
    ```
+   
+## Install the snap
+[![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
+
+   `sudo snap install btop`
+
+ * **Connect the interfaces**
+    ```
+	sudo snap connect btop:system-observe 
+    sudo snap connect btop:physical-memory-observe
+    sudo snap connect btop:mount-observe 
+    sudo snap connect btop:hardware-observe
+	```
+	
 
 ## Configurability
 
