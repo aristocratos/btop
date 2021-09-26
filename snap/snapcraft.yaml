@@ -42,7 +42,6 @@ apps:
       - network
       - network-observe
       - physical-memory-observe
-      - process-control
       - home
       
 parts:
