@@ -51,6 +51,7 @@ parts:
     plugin: make
     make-parameters:
       - PREFIX=/usr/local
+      - STATIC=true
     build-packages:
       - coreutils 
       - sed 
