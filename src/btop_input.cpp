@@ -95,7 +95,7 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
