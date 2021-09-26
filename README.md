@@ -289,6 +289,7 @@ Also needs a UTF8 locale and a font that covers:
     sudo snap connect btop:mount-observe 
     sudo snap connect btop:hardware-observe
 	sudo snap connect btop:network-observe
+	sudo snap connect btop:process-control
 	```
 	
 
