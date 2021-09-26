@@ -25,16 +25,16 @@ architectures:
 package-repositories:
  - type: apt
    ppa: ubuntu-toolchain-r/test
-   
+
 apps:
   btop:
     command: usr/local/bin/btop
-    command-chain: 
-      - bin/homeishome-launch   
+    command-chain:
+      - bin/homeishome-launch
     environment:
       LC_ALL: C.UTF-8
-      LANG: C.UTF-8      
-    plugs: 
+      LANG: C.UTF-8
+    plugs:
       - mount-observe
       - process-control
       - system-observe
@@ -43,36 +43,37 @@ apps:
       - network-observe
       - physical-memory-observe
       - home
-      
+
 parts:
-  btop: 
+  btop:
     source: https://github.com/aristocratos/btop
     source-type: git
     plugin: make
     make-parameters:
       - PREFIX=/usr/local
+      - STATIC=true
     build-packages:
-      - coreutils 
-      - sed 
-      - git 
-      - build-essential 
-      - gcc-11 
+      - coreutils
+      - sed
+      - git
+      - build-essential
+      - gcc-11
       - g++-11
-    
+
     stage-packages:
-      - coreutils 
-      - sed 
-      - git 
-      - build-essential 
-      - gcc-11 
-      - g++-11    
-    
+      - coreutils
+      - sed
+      - git
+      - build-essential
+      - gcc-11
+      - g++-11
+
     override-pull: |
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
-      
+
   homeishome-launch:
     plugin: nil
     stage-snaps:
-      - homeishome-launch          
-    
+      - homeishome-launch
+
