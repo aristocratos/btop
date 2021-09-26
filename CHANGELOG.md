@@ -1,3 +1,9 @@
+## v1.0.9
+
+* Added: ifstream check and try-catch for stod() in Tools::system_uptime()
+
+* Fixed: Freeze on cin.ignore()
+
 ## v1.0.8
 
 * Fixed: Additional NULL checks in UTF-8 detection

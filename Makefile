@@ -40,13 +40,11 @@ override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
 ifeq ($(CXX),g++)
-	ifneq ($(CXX),g++-10)
-		V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
-		ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
-			ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-				override CXX := g++-11
-				override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-			endif
+	V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
+	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
+		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+			override CXX := g++-11
+			override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 		endif
 	endif
 endif
