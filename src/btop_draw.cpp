@@ -472,21 +472,6 @@ namespace Cpu {
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 
-	unsigned long fastrand(void) {
-		static unsigned long x=123456789, y=362436069, z=521288629;
-		unsigned long t;
-		x ^= x << 16;
-		x ^= x >> 5;
-		x ^= x << 1;
-
-		t = x;
-		x = y;
-		y = z;
-		z = t ^ x ^ y;
-
-		return z;
-	}
-
 	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
@@ -504,6 +489,7 @@ namespace Cpu {
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
+		if (cpu.cpu_percent.at("total").empty() or cpu.core_percent.at(0).empty() or (show_temps and cpu.temp.empty())) return "";
 		string out;
 		out.reserve(width * height);
 
