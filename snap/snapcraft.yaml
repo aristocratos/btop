@@ -7,8 +7,8 @@ description: |
 
 license: Apache-2.0
 
-assumes:
-  - command-chain
+#assumes:
+#  - command-chain
 
 base: core20
 grade: stable
@@ -29,8 +29,8 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
-    command-chain:
-      - bin/homeishome-launch
+#    command-chain:
+#      - bin/homeishome-launch
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -63,8 +63,8 @@ parts:
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
 
-  homeishome-launch:
-    plugin: nil
-    stage-snaps:
-      - homeishome-launch
+#  homeishome-launch:
+#    plugin: nil
+#    stage-snaps:
+#      - homeishome-launch
 
