@@ -24,7 +24,7 @@ assignees: aristocratos
 [If applicable, add screenshots to help explain your problem.]
 
 **Info (please complete the following information):**
- - btop++ version: `bpytop -v`
+ - btop++ version: `btop -v`
  - Binary: [self compiled or static binary from release]
  - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
@@ -38,7 +38,7 @@ assignees: aristocratos
 
 contents of `~/.config/btop/btop.log`
 
-(try running btop with `--debug` flag if error.log is empty)
+(try running btop with `--debug` flag if btop.log is empty)
 
 **GDB Backtrace**
 
