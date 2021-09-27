@@ -69,6 +69,7 @@ namespace Menu {
 
 	//* Enum for functions in vector menuFuncs
 	enum Menus {
+		SizeError,
 		SignalChoose,
 		SignalSend,
 		SignalReturn,

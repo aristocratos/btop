@@ -5,16 +5,20 @@ BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m█
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
 
+ifneq ($(QUIET),true)
+	override PRE := info
+	override QUIET := false
+else
+	override PRE := info-quiet
+endif
+
 PREFIX ?= /usr/local
 
 #? NOTICE! Manually set PLATFORM and ARCH if not compiling for host system
 PLATFORM ?= $(shell uname -s || echo unknown)
-ARCH ?= $(shell uname -p || echo unknown)
+ARCH ?= $(shell uname -m || echo unknown)
 
 #? Only enable fcf-protection if on x86_64
-ifeq ($(ARCH),unknown)
-	ARCH := $(shell uname -m || echo unknown)
-endif
 ifeq ($(ARCH),x86_64)
 	override ADDFLAGS += -fcf-protection
 endif
@@ -35,7 +39,7 @@ CXX ?= g++
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
-ifneq ($(CXX),g++-10)
+ifeq ($(CXX),g++)
 	V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
 	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
 		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
@@ -92,9 +96,9 @@ SOURCES += $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT))
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
 #? Default Make
-all: pre directories btop
+all: $(PRE) directories btop
 
-pre:
+info:
 	@printf " $(BANNER)\n"
 	@printf "\033[1;92mPLATFORM   \033[1;93m?| \033[0m$(PLATFORM)\n"
 	@printf "\033[1;96mARCH       \033[1;93m?| \033[0m$(ARCH)\n"
@@ -108,6 +112,10 @@ pre:
 	@printf "\033[1;95mLDFLAGS    \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m)\n"
 
 	@printf "\n\033[1;92mBuilding btop++ \033[93m(\033[97mv$(BTOP_VERSION)\033[93m)\033[0m\n"
+
+info-quiet:
+
+	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
 
 help:
 	@printf " $(BANNER)\n"
@@ -144,7 +152,7 @@ install:
 	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\n"
+	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
@@ -169,17 +177,17 @@ uninstall:
 btop: $(OBJECTS)
 	@sleep 0.1 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
+	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
 	@printf "\033[1;92m-> \033[1;37m$(TARGETDIR)/btop \033[100D\033[35C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
-	@printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 
 #? Compile
 .ONESHELL:
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
 	@sleep 0.1 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@printf "\033[1;97mCompiling $<\033[0m\n"
+	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -c -o $@ $< || exit 1
 	@$(CXX) $(CXXFLAGS) $(INC) -MM $(SRCDIR)/$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT) >/dev/null || exit 1
 	@cp -f $(BUILDDIR)/$*.$(DEPEXT) $(BUILDDIR)/$*.$(DEPEXT).tmp

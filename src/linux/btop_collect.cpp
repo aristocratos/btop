@@ -80,6 +80,7 @@ namespace Shared {
 	fs::path procPath, passwd_path;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
+	int totalMem_len;
 
 	void init() {
 
@@ -114,6 +115,7 @@ namespace Shared {
 		if (meminfo.good()) {
 			meminfo.ignore(SSmax, ':');
 			meminfo >> totalMem;
+			totalMem_len = to_string(totalMem).size();
 			totalMem <<= 10;
 		}
 		if (not meminfo.good() or totalMem == 0)
@@ -1168,6 +1170,7 @@ namespace Proc {
 				out_procs.back().get().cpu_p += p.cpu_p;
 				out_procs.back().get().mem += p.mem;
 				out_procs.back().get().threads += p.threads;
+				filter_found++;
 			}
 			if (collapsed and not filtering) {
 				cur_proc.filtered = true;
@@ -1201,7 +1204,7 @@ namespace Proc {
 
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
-		detailed.cpu_percent.push_back(round(detailed.entry.cpu_p));
+		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
@@ -1451,7 +1454,10 @@ namespace Proc {
 								next_x = 24;
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-								new_proc.mem = stoull(short_str) * Shared::pageSize;
+								if (cmp_greater(short_str.size(), Shared::totalMem_len))
+									new_proc.mem = Shared::totalMem;
+								else
+									new_proc.mem = stoull(short_str) * Shared::pageSize;
 						}
 						break;
 					}
@@ -1464,8 +1470,18 @@ namespace Proc {
 
 				if (x-offset < 24) continue;
 
+				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
+				if (new_proc.mem >= Shared::totalMem) {
+					pread.open(d.path() / "statm");
+					if (not pread.good()) continue;
+					pread.ignore(SSmax, ' ');
+					pread >> new_proc.mem;
+					new_proc.mem *= Shared::pageSize;
+					pread.close();
+				}
+
 				//? Process cpu usage since last update
-				new_proc.cpu_p = round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0;
+				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
@@ -1595,8 +1611,15 @@ namespace Tools {
 	double system_uptime() {
 		string upstr;
 		ifstream pread(Shared::procPath / "uptime");
-		getline(pread, upstr, ' ');
-		pread.close();
-		return stod(upstr);
+		if (pread.good()) {
+			try {
+				getline(pread, upstr, ' ');
+				pread.close();
+				return stod(upstr);
+			}
+			catch (const std::invalid_argument&) {}
+			catch (const std::out_of_range&) {}
+		}
+		throw std::runtime_error("Failed get uptime from from " + (string)Shared::procPath + "/uptime");
 	}
 }

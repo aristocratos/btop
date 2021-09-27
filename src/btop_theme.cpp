@@ -159,7 +159,7 @@ namespace Theme {
 			string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 
 			if (hexa.size() == 2) {
-				int h_int = stoi(hexa, 0, 16);
+				int h_int = stoi(hexa, nullptr, 16);
 				if (t_to_256) {
 					return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 				} else {
@@ -170,14 +170,14 @@ namespace Theme {
 			else if (hexa.size() == 6) {
 				if (t_to_256) {
 					return pre + to_string(truecolor_to_256(
-						stoi(hexa.substr(0, 2), 0, 16),
-						stoi(hexa.substr(2, 2), 0, 16),
-						stoi(hexa.substr(4, 2), 0, 16))) + "m";
+						stoi(hexa.substr(0, 2), nullptr, 16),
+						stoi(hexa.substr(2, 2), nullptr, 16),
+						stoi(hexa.substr(4, 2), nullptr, 16))) + "m";
 				} else {
 					return pre +
-						to_string(stoi(hexa.substr(0, 2), 0, 16)) + ";" +
-						to_string(stoi(hexa.substr(2, 2), 0, 16)) + ";" +
-						to_string(stoi(hexa.substr(4, 2), 0, 16)) + "m";
+						to_string(stoi(hexa.substr(0, 2), nullptr, 16)) + ";" +
+						to_string(stoi(hexa.substr(2, 2), nullptr, 16)) + ";" +
+						to_string(stoi(hexa.substr(4, 2), nullptr, 16)) + "m";
 				}
 			}
 			else Logger::error("Invalid size of hex value: " + hexa);
@@ -203,14 +203,14 @@ namespace Theme {
 				for (auto& c : hexa) if (not isxdigit(c)) return array<int, 3>{-1, -1, -1};
 
 				if (hexa.size() == 2) {
-					int h_int = stoi(hexa, 0, 16);
+					int h_int = stoi(hexa, nullptr, 16);
 					return array<int, 3>{h_int, h_int, h_int};
 				}
 				else if (hexa.size() == 6) {
 						return array<int, 3>{
-							stoi(hexa.substr(0, 2), 0, 16),
-							stoi(hexa.substr(2, 2), 0, 16),
-							stoi(hexa.substr(4, 2), 0, 16)
+							stoi(hexa.substr(0, 2), nullptr, 16),
+							stoi(hexa.substr(2, 2), nullptr, 16),
+							stoi(hexa.substr(4, 2), nullptr, 16)
 						};
 				}
 			}

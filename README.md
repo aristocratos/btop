@@ -1,5 +1,9 @@
 # ![btop++](Img/logo.png)
 
+<a href="https://repology.org/project/btop/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/btop.svg" alt="Packaging status" align="right">
+</a>
+
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
@@ -163,9 +167,9 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Installation
 
-**Binary release (statically compiled)**
+**Binary release (statically compiled, for kernel 3.2.0 and newer)**
 
-1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from latest release and unpack to a new folder**
+1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
 2. **Install (from created folder)**
 
@@ -227,9 +231,13 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STATIC=true` to `make` command for static compilation.
 
+   Append `QUIET=true` for less verbose output.
+
    Notice! Manually set `$ARCH` variable if cross-compiling
 
-   Use `$ADDFLAGS` variable for appending flags to both compiler and linker.
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
    ``` bash
    make
@@ -276,22 +284,27 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    make help
    ```
-   
+
 ## Install the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
-   `sudo snap install btop`
+ * **Install the snap**
+
+    ```bash
+    sudo snap install btop
+    ```
 
  * **Connect the interfaces**
-    ```
-	sudo snap connect btop:system-observe 
+
+    ```bash
+	sudo snap connect btop:system-observe
     sudo snap connect btop:physical-memory-observe
-    sudo snap connect btop:mount-observe 
+    sudo snap connect btop:mount-observe
     sudo snap connect btop:hardware-observe
 	sudo snap connect btop:network-observe
 	sudo snap connect btop:process-control
 	```
-	
+
 
 ## Configurability
 
@@ -485,7 +498,7 @@ net_iface = "br0"
 #* Show battery stats in top right if battery is present.
 show_battery = True
 
-#* Set loglevel for "~/.config/btop/error.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
+#* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
 log_level = "DEBUG"
 ```
@@ -501,7 +514,7 @@ optional arguments:
   -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
   -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
   +t, --tty_off         force (OFF) tty mode
-  -p --preset <id>      start with preset, integer value between 0-9
+  -p, --preset <id>     start with preset, integer value between 0-9
   --utf-force           force start even if no UTF-8 locale was detected
   --debug               start in DEBUG mode: shows microsecond timer for information collect
                         and screen draw functions and sets loglevel to DEBUG

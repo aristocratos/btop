@@ -95,7 +95,7 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -351,7 +351,6 @@ namespace Input {
 					return;
 				}
 				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
-					if (Term::width < 80 or Term::height < 20) return;
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 					Menu::show(Menu::Menus::SignalChoose);

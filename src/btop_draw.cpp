@@ -396,7 +396,7 @@ namespace Draw {
 		out.clear();
 		if (height == 1) {
 			if (not color_gradient.empty())
-				out += (last < 1 and not color_gradient.empty() ? Theme::c("inactive_fg") : Theme::g(color_gradient).at(last));
+				out += (last < 1 and not color_gradient.empty() ? Theme::c("inactive_fg") : Theme::g(color_gradient).at(clamp(last, 0ll, 100ll)));
 			out += graphs.at(current).at(0);
 		}
 		else {
@@ -618,7 +618,7 @@ namespace Cpu {
 				+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
 		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
-			+ Theme::g("cpu").at(cpu.cpu_percent.at("total").back()) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
+			+ Theme::g("cpu").at(clamp(cpu.cpu_percent.at("total").back(), 0ll, 100ll)) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
 			const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
@@ -632,15 +632,16 @@ namespace Cpu {
 		} catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + (string)e.what()); }
 
 		//? Core text and graphs
-		int cx = 0, cy = 1, cc = 0;
+		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
+		if (Shared::coreCount >= 100) core_width++;
 		for (const auto& n : iota(0, Shared::coreCount)) {
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c("main_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
-				+ ljust(to_string(n), (b_column_size == 0 ? 2 : 3));
+				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
-					+ Theme::g("cpu").at(cpu.core_percent.at(n).back()) + core_graphs.at(n)(cpu.core_percent.at(n), data_same or redraw);
+					+ Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll)) + core_graphs.at(n)(cpu.core_percent.at(n), data_same or redraw);
 			else
-				out += Theme::g("cpu").at(cpu.core_percent.at(n).back());
+				out += Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll));
 			out += rjust(to_string(cpu.core_percent.at(n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
 
 			if (show_temps and not hide_cores) {
@@ -654,7 +655,7 @@ namespace Cpu {
 
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			if (++cy > ceil((double)Shared::coreCount / b_columns) and n != Shared::coreCount - 1) {
+			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == b_height - 2) and n != Shared::coreCount - 1) {
 				if (++cc >= b_columns) break;
 				cy = 1; cx = (b_width / b_columns) * cc;
 			}
@@ -664,9 +665,9 @@ namespace Cpu {
 		if (cy < b_height - 1 and cc <= b_columns) {
 			string lavg_pre;
 			int sep = 1;
-			if (b_column_size == 2 and got_sensors) { lavg_pre = "Load AVG:"; sep = 3; }
-			else if (b_column_size == 2 or (b_column_size == 1 and got_sensors)) { lavg_pre = "LAV:"; }
-			else if (b_column_size == 1 or (b_column_size == 0 and got_sensors)) { lavg_pre = "L"; }
+			if (b_column_size == 2 and show_temps) { lavg_pre = "Load AVG:"; sep = 3; }
+			else if (b_column_size == 2 or (b_column_size == 1 and show_temps)) { lavg_pre = "LAV:"; }
+			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { lavg_pre = "L"; }
 			string lavg;
 			for (const auto& val : cpu.load_avg) {
 				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
@@ -860,7 +861,7 @@ namespace Mem {
 						const string used_percent = to_string(disk.used_percent);
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2)) + Theme::c("main_fg") + used_percent + '%';
 					}
-					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(max(50ll, disk.io_activity.back()))
+					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(clamp(disk.io_activity.back(), 50ll, 100ll))
 						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 					if (++cy > height - 3) break;
 					if (io_graph_combined) {
@@ -901,7 +902,7 @@ namespace Mem {
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2)) + Theme::c("main_fg") + human_io;
 					if (++cy > height - 3) break;
 					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
-						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(max(50ll, disk.io_activity.back()))
+						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(clamp(disk.io_activity.back(), 50ll, 100ll))
 							+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 						if (not big_disk) out += Mv::to(y+1+cy, x+cx) + Theme::c("main_fg") + human_io;
 						if (++cy > height - 3) break;
@@ -1331,10 +1332,7 @@ namespace Proc {
 				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
-
-
 		}
-
 
 		//? Check bounds of current selection and view
 		if (start > 0 and numpids <= select_max)
@@ -1349,7 +1347,7 @@ namespace Proc {
 		//* Iteration over processes
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
-			if (n++ < start or p.filtered) continue;
+			if (p.filtered or (proc_tree and p.tree_index == plist.size()) or n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) {
 				selected_pid = (int)p.pid;
@@ -1388,11 +1386,11 @@ namespace Proc {
 					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / Shared::totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
-							if (val < 100) colors[i++] = Theme::g("proc_color").at(val);
-							else colors[i++] = Theme::g("process").at(val - 100);
+							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
+							else colors[i++] = Theme::g("process").at(clamp(val - 100, 0, 100));
 						}
 						else
-							colors[i++] = Theme::g("process").at(min(v, 100));
+							colors[i++] = Theme::g("process").at(clamp(v, 0, 100));
 					}
 					c_color = colors.at(0); m_color = colors.at(1); t_color = colors.at(2);
 				}
@@ -1401,7 +1399,7 @@ namespace Proc {
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
-					g_color = Theme::g("proc").at(calc * 100 / select_max);
+					g_color = Theme::g("proc").at(clamp(calc * 100 / select_max, 0, 100));
 				}
 			}
 
@@ -1433,9 +1431,10 @@ namespace Proc {
 			if (p.cpu_p < 10 or p.cpu_p >= 100) cpu_str.resize(3);
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
-				double mem_p = (double)p.mem * 100 / Shared::totalMem;
+				double mem_p = clamp((double)p.mem * 100 / Shared::totalMem, 0.0, 100.0);
 				mem_str = to_string(mem_p);
-				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+				if (mem_str.size() < 4)	mem_str = "0";
+				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 				mem_str += '%';
 			}
 			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
@@ -1452,7 +1451,7 @@ namespace Proc {
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
-			const int scroll_pos = clamp((int)round((double)start * (select_max - 2) / (numpids - (select_max - 2))), 0, height - 5);
+			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
 				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
 				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";

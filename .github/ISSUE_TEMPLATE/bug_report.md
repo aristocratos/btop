@@ -25,6 +25,8 @@ assignees: aristocratos
 
 **Info (please complete the following information):**
  - btop++ version: `bpytop -v`
+ - Binary: [self compiled or static binary from release]
+ - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
  - Platform: [Linux, FreeBSD, OsX]
  - (Linux) Kernel: `uname -r`
@@ -34,6 +36,18 @@ assignees: aristocratos
 
 **Additional context**
 
-contents of `~/.config/btop/error.log`
+contents of `~/.config/btop/btop.log`
 
 (try running btop with `--debug` flag if error.log is empty)
+
+**GDB Backtrace**
+
+If btop++ is crashing at start the following steps could be helpful:
+
+1. run `gdb btop`
+
+2. `r` to run, wait for crash and press enter
+
+3. `bt` to get backtrace
+
+4. Copy and paste the backtrace here:
