@@ -114,7 +114,7 @@ namespace Term {
 	const string sync_end = Fx::e + "?2026l"; //? End of terminal synchronized output
 
 	//* Returns true if terminal has been resized and updates width and height
-	bool refresh();
+	bool refresh(bool only_check=false);
 
 	//* Returns an array with the lowest possible width, height with current box config
 	auto get_min_size(const string& boxes) -> array<int, 2>;

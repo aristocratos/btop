@@ -152,7 +152,7 @@ void argumentParser(const int& argc, char **argv) {
 void term_resize(bool force) {
 	if (Global::resizing) return;
 	atomic_lock lck(Global::resizing);
-	if (auto refreshed = Term::refresh(); refreshed or force) {
+	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
 	}
 	else return;
@@ -160,6 +160,7 @@ void term_resize(bool force) {
 	static const array<string, 4> all_boxes = {"cpu", "mem", "net", "proc"};
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
+	Term::refresh();
 	Config::unlock();
 
 	auto boxes = Config::getS("shown_boxes");
