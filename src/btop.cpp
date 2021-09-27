@@ -769,6 +769,19 @@ int main(int argc, char **argv) {
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
 
+	//? Check for valid terminal dimensions
+	{
+		int t_count = 0;
+		while (Term::width <= 0 or Term::width > 10000 or Term::height <= 0 or Term::height > 10000) {
+			sleep_ms(10);
+			Term::refresh();
+			if (++t_count == 100) {
+				Global::exit_error_msg = "Failed to get size of terminal!";
+				exit(1);
+			}
+		}
+	}
+
 	//? Platform dependent init and error check
 	try {
 		Shared::init();
@@ -793,18 +806,6 @@ int main(int argc, char **argv) {
 	}
 
 	//? Calculate sizes of all boxes
-	{
-		int t_count = 0;
-		while (Term::width <= 0 or Term::width > 10000 or Term::height <= 0 or Term::height > 10000) {
-			sleep_ms(10);
-			Term::refresh();
-			if (++t_count == 100) {
-				Global::exit_error_msg = "Failed to get size of terminal!";
-				exit(1);
-			}
-		}
-	}
-
 	Config::presetsValid(Config::getS("presets"));
 	if (Global::arg_preset >= 0) {
 		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
