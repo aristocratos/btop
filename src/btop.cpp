@@ -792,6 +792,18 @@ int main(int argc, char **argv) {
 	}
 
 	//? Calculate sizes of all boxes
+	{
+		int t_count = 0;
+		while (Term::width <= 0 or Term::width > 10000 or Term::height <= 0 or Term::height > 10000) {
+			sleep_ms(10);
+			Term::refresh();
+			if (++t_count == 100) {
+				Global::exit_error_msg = "Failed to get size of terminal!";
+				exit(1);
+			}
+		}
+	}
+
 	Config::presetsValid(Config::getS("presets"));
 	if (Global::arg_preset >= 0) {
 		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
@@ -808,8 +820,9 @@ int main(int argc, char **argv) {
 
 	}
 
-	//? Print out box outlines
 	Draw::calcSizes();
+
+	//? Print out box outlines
 	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
 
 
