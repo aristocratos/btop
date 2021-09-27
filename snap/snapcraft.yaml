@@ -53,7 +53,7 @@ parts:
       - PREFIX=/usr/local
       - STATIC=true
     
-    stage-packages:
+    build-packages:
       - coreutils 
       - sed 
       - git 
