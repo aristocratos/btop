@@ -679,6 +679,7 @@ namespace Mem {
 		auto& swap_disk = Config::getB("swap_disk");
 		auto& show_disks = Config::getB("show_disks");
 		auto& mem = current_mem;
+		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
 		mem.stats.at("swap_total") = 0;
 
@@ -802,6 +803,14 @@ namespace Mem {
 					while (not diskread.eof()) {
 						std::error_code ec;
 						diskread >> dev >> mountpoint >> fstype;
+
+						//? If running snapped, remove internal / mountpoint and replace /mnt with / to get correct device
+						if (snapped) {
+							if (mountpoint == "/")
+								continue;
+							else if (mountpoint == "/mnt")
+								mountpoint = "/";
+						}
 
 						//? Match filter if not empty
 						if (not filter.empty()) {
