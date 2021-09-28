@@ -32,6 +32,13 @@ tab-size = 4
 
 using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple, std::array;
 
+#ifndef HOST_NAME_MAX
+#if defined(__APPLE__)
+#define HOST_NAME_MAX 255
+#else
+#define HOST_NAME_MAX 64
+#endif /* __APPLE__ */
+#endif /* HOST_NAME_MAX */
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
