@@ -713,10 +713,8 @@ int main(int argc, char **argv) {
 
 	//? Try to find and set a UTF-8 locale
 	if (bool found = false; std::setlocale(LC_ALL, NULL) == NULL or not str_to_upper(s_replace((string)std::setlocale(LC_ALL, NULL), "-", "")).ends_with("UTF8")) {
-		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8")) {
-			if (std::setlocale(LC_ALL, std::getenv("LANG")) != NULL) {
-				found = true;
-			}
+		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8") and std::setlocale(LC_ALL, std::getenv("LANG")) != NULL) {
+			found = true;
 		}
 		else {
 			if (setenv("LANG", "", 1) == 0) {
