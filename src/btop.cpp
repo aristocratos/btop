@@ -650,13 +650,6 @@ int main(int argc, char **argv) {
 	//? Call argument parser if launched with arguments
 	if (argc > 1) argumentParser(argc, argv);
 
-	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
-	std::atexit(_exit_handler);
-	std::signal(SIGINT, _signal_handler);
-	std::signal(SIGTSTP, _signal_handler);
-	std::signal(SIGCONT, _signal_handler);
-	std::signal(SIGWINCH, _signal_handler);
-
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
 		if (std::getenv(env) != NULL and access(std::getenv(env), W_OK) != -1) {
@@ -794,6 +787,13 @@ int main(int argc, char **argv) {
 	//? Update list of available themes and generate the selected theme
 	Theme::updateThemes();
 	Theme::setTheme();
+
+	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
+	std::atexit(_exit_handler);
+	std::signal(SIGINT, _signal_handler);
+	std::signal(SIGTSTP, _signal_handler);
+	std::signal(SIGCONT, _signal_handler);
+	std::signal(SIGWINCH, _signal_handler);
 
 	//? Start runner thread
 	Runner::thread_sem_init();
