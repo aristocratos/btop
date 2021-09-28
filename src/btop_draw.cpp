@@ -489,7 +489,7 @@ namespace Cpu {
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
-		if (cpu.cpu_percent.at("total").empty() or cpu.core_percent.at(0).empty() or (show_temps and cpu.temp.empty())) return "";
+		if (cpu.cpu_percent.at("total").empty() or cpu.core_percent.at(0).empty() or (show_temps and cpu.temp.at(0).empty())) return "";
 		string out;
 		out.reserve(width * height);
 
