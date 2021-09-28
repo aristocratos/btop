@@ -1,3 +1,19 @@
+## v1.0.10
+
+* Added: Wait for terminal size properties to be available at start
+
+* Changed: Stop second thread before updating terminal size variables
+
+* Changed: Moved check for valid terminal dimensions to before platform init
+
+* Added: Check for empty percentage deques
+
+* Changed: Cpu temp values check for existing values
+
+* Fixed: Cpu percent cutting off above 1000 percent and added scaling with "k" prefix above 10'000
+
+* Fixed: Crash when rapidly resizing terminal at start
+
 ## v1.0.9
 
 * Added: ifstream check and try-catch for stod() in Tools::system_uptime()
