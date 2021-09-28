@@ -1414,7 +1414,12 @@ namespace Proc {
 			}
 			//? Common end of line
 			string cpu_str = to_string(p.cpu_p);
-			if (p.cpu_p < 10 or p.cpu_p >= 100) cpu_str.resize(3);
+			if (p.cpu_p < 10 or (p.cpu_p >= 100 and p.cpu_p < 1000)) cpu_str.resize(3);
+			else if (p.cpu_p >= 10'000) {
+				cpu_str = to_string(p.cpu_p / 1000);
+				cpu_str.resize(3);
+				cpu_str += "k";
+			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / Shared::totalMem, 0.0, 100.0);
