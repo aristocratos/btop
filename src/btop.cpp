@@ -225,7 +225,11 @@ void clean_quit(int sig) {
 
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
 	if (Tools::active_locks > 0) {
+#ifdef __APPLE__
+		exit((sig != -1 ? sig : 0));
+#else
 		quick_exit((sig != -1 ? sig : 0));
+#endif
 	}
 
 	if (sig != -1) exit(sig);
