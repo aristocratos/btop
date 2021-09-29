@@ -276,15 +276,9 @@ namespace Tools {
 	string hostname();
 	string username();
 
-// #if __GNUC__ < 11
 	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old) sleep_ms(1); }
-	inline void atomic_notify(const atomic<bool>& atom) noexcept { (void)atom; }
-// #else
-// 	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { if (atom == old) atom.wait(old); }
-// 	inline void atomic_notify(const atomic<bool>& atom) noexcept { atom.notify_all(); }
-// #endif
 
-	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false and notifies on destruct
+	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
 		bool not_true = false;
