@@ -329,7 +329,6 @@ namespace Tools {
 	atomic_lock::~atomic_lock() {
 		active_locks--;
 		this->atom.store(false);
-		atomic_notify(this->atom);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {

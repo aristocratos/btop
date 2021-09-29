@@ -55,7 +55,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.0.10";
+	const string Version = "1.0.11";
 
 	int coreCount;
 	string overlay;
@@ -712,20 +712,21 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (std::setlocale(LC_ALL, "") != NULL and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
+	if (std::setlocale(LC_ALL, "") != NULL and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
+	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
 		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
 	}
 	else {
 		string found;
-		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8")) {
-			found = std::getenv("LANG");
-			if (std::setlocale(LC_ALL, std::getenv("LANG")) == NULL)
-				Logger::warning("Failed to set locale " + (string)std::getenv("LANG") + " continuing anyway.");
-		}
-		if (found.empty() and std::getenv("LC_ALL") != NULL and str_to_upper(s_replace((string)std::getenv("LC_ALL"), "-", "")).ends_with("UTF8")) {
-			found = std::getenv("LC_ALL");
-			if (std::setlocale(LC_ALL, std::getenv("LC_ALL")) == NULL)
-				Logger::warning("Failed to set locale " + (string)std::getenv("LC_ALL") + " continuing anyway.");
+		bool set_failure = false;
+		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
+			if (std::getenv(loc_env) != NULL and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
+				found = std::getenv(loc_env);
+				if (std::setlocale(LC_ALL, found.c_str()) == NULL) {
+					set_failure = true;
+					Logger::warning("Failed to set locale " + found + " continuing anyway.");
+				}
+			}
 		}
 		if (found.empty()) {
 			if (setenv("LC_ALL", "", 1) == 0 and setenv("LANG", "", 1) == 0) {
@@ -733,8 +734,8 @@ int main(int argc, char **argv) {
 					if (const auto loc = std::locale("").name(); not loc.empty() and loc != "*") {
 						for (auto& l : ssplit(loc, ';')) {
 							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
-								if (std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str()) != NULL) {
-									found = l;
+								found = l.substr(l.find('=') + 1);
+								if (std::setlocale(LC_ALL, found.c_str()) != NULL) {
 									break;
 								}
 							}
@@ -751,7 +752,7 @@ int main(int argc, char **argv) {
 			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
-		else
+		else if (not set_failure)
 			Logger::debug("Setting LC_ALL=" + found);
 	}
 

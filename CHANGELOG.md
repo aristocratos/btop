@@ -1,3 +1,13 @@
+## v1.0.11
+
+* Changed: atomic_wait to use while loop instead of wait() because of rare stall when a signal handler is triggered while waiting
+
+* Fixed: Get real / mountpoint when running inside snap
+
+* Fixed: UTF8 set LANG and LC_ALL to empty before UTF8 search and fixed empty error msg on exit before signal handler init
+
+* Changed: Init will continue with a warning if UTF-8 locale are detected and it fails to set the locale
+
 ## v1.0.10
 
 * Added: Wait for terminal size properties to be available at start
