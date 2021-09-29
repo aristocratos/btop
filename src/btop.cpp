@@ -712,36 +712,47 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (bool found = false; std::setlocale(LC_ALL, "") == NULL or not str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
-		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8") and std::setlocale(LC_ALL, std::getenv("LANG")) != NULL) {
-			found = true;
+	if (std::setlocale(LC_ALL, "") != NULL and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
+		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
+	}
+	else {
+		string found;
+		if (std::getenv("LANG") != NULL and str_to_upper(s_replace((string)std::getenv("LANG"), "-", "")).ends_with("UTF8")) {
+			found = std::getenv("LANG");
+			if (std::setlocale(LC_ALL, std::getenv("LANG")) == NULL)
+				Logger::warning("Failed to set locale " + (string)std::getenv("LANG") + " continuing anyway.");
 		}
-		else {
+		if (found.empty() and std::getenv("LC_ALL") != NULL and str_to_upper(s_replace((string)std::getenv("LC_ALL"), "-", "")).ends_with("UTF8")) {
+			found = std::getenv("LC_ALL");
+			if (std::setlocale(LC_ALL, std::getenv("LC_ALL")) == NULL)
+				Logger::warning("Failed to set locale " + (string)std::getenv("LC_ALL") + " continuing anyway.");
+		}
+		if (found.empty()) {
 			if (setenv("LC_ALL", "", 1) == 0 and setenv("LANG", "", 1) == 0) {
 				try {
 					if (const auto loc = std::locale("").name(); not loc.empty() and loc != "*") {
 						for (auto& l : ssplit(loc, ';')) {
 							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
 								if (std::setlocale(LC_ALL, l.substr(l.find('=') + 1).c_str()) != NULL) {
-									found = true;
+									found = l;
 									break;
 								}
 							}
 						}
 					}
 				}
-				catch (...) { found = false; }
+				catch (...) { found.clear(); }
 			}
 		}
 
-		if (not found and Global::utf_force)
+		if (found.empty() and Global::utf_force)
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
-		else if (not found) {
+		else if (found.empty()) {
 			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 		else
-			Logger::debug("Setting LC_ALL=" + (string)std::setlocale(LC_ALL, ""));
+			Logger::debug("Setting LC_ALL=" + found);
 	}
 
 	//? Initialize terminal and set options
