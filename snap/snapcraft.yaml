@@ -38,7 +38,6 @@ apps:
       - network-observe
       - physical-memory-observe
       - home
-      - block-devices
 
 parts:
   btop:
