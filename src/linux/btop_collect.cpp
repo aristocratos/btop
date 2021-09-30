@@ -1007,7 +1007,10 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					const uint64_t val = max((uint64_t)stoul(readfile(sys_file, "0")), saved_stat.last);
+					uint64_t val = saved_stat.last;
+					try { val = max((uint64_t)stoul(readfile(sys_file, "0")), val); }
+					catch (const std::invalid_argument&) {}
+					catch (const std::out_of_range&) {}
 
 					//? Update speed, total and top values
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
