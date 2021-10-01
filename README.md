@@ -208,6 +208,22 @@ Also needs a UTF8 locale and a font that covers:
    make help
    ```
 
+**Binary release (from native os repo)**
+
+* **openSUSE**
+  * **Add repo**
+  ```bash
+  sudo zypper ar --refresh obs://home:Werwolf2517 home:Werwolf2517 
+  ```
+  * **Refresh metadata**
+  ```bash
+  sudo zypper ref
+  ```
+  * **Install package**
+  ```bash
+  sudo zypper in btop
+  ```
+
 ## Compilation
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
