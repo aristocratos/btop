@@ -1418,6 +1418,7 @@ namespace Proc {
 			else if (p.cpu_p >= 10'000) {
 				cpu_str = to_string(p.cpu_p / 1000);
 				cpu_str.resize(3);
+				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
