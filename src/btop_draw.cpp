@@ -43,42 +43,42 @@ namespace Symbols {
 
 	const unordered_flat_map<string, vector<string>> graph_symbols = {
 		{ "braille_up", {
-			" ", "⢀", "⢠", "⢰", "⢸",
+			" ", "⢀", "⢠", "⢰", "⢸",
 			"⡀", "⣀", "⣠", "⣰", "⣸",
 			"⡄", "⣄", "⣤", "⣴", "⣼",
 			"⡆", "⣆", "⣦", "⣶", "⣾",
 			"⡇", "⣇", "⣧", "⣷", "⣿"
 		}},
 		{"braille_down", {
-			" ", "⠈", "⠘", "⠸", "⢸",
+			" ", "⠈", "⠘", "⠸", "⢸",
 			"⠁", "⠉", "⠙", "⠹", "⢹",
 			"⠃", "⠋", "⠛", "⠻", "⢻",
 			"⠇", "⠏", "⠟", "⠿", "⢿",
 			"⡇", "⡏", "⡟", "⡿", "⣿"
 		}},
 		{"block_up", {
-			" ", "▗", "▗", "▐", "▐",
+			" ", "▗", "▗", "▐", "▐",
 			"▖", "▄", "▄", "▟", "▟",
 			"▖", "▄", "▄", "▟", "▟",
 			"▌", "▙", "▙", "█", "█",
 			"▌", "▙", "▙", "█", "█"
 		}},
 		{"block_down", {
-			" ", "▝", "▝", "▐", "▐",
+			" ", "▝", "▝", "▐", "▐",
 			"▘", "▀", "▀", "▜", "▜",
 			"▘", "▀", "▀", "▜", "▜",
 			"▌", "▛", "▛", "█", "█",
 			"▌", "▛", "▛", "█", "█"
 		}},
 		{"tty_up", {
-			" ", "░", "░", "▒", "▒",
+			" ", "░", "░", "▒", "▒",
 			"░", "░", "▒", "▒", "█",
 			"░", "▒", "▒", "▒", "█",
 			"▒", "▒", "▒", "█", "█",
 			"▒", "█", "█", "█", "█"
 		}},
 		{"tty_down", {
-			" ", "░", "░", "▒", "▒",
+			" ", "░", "░", "▒", "▒",
 			"░", "░", "▒", "▒", "█",
 			"░", "▒", "▒", "▒", "█",
 			"▒", "▒", "▒", "█", "█",
@@ -431,7 +431,7 @@ namespace Draw {
 		//? Populate the two switching graph vectors and fill empty space if data size < width
 		for (const int& i : iota(0, height * 2)) {
 			if (tty_mode and i % 2 != current) continue;
-			graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : " "s) * (width - value_width) : "");
+			graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : " "s) * (width - value_width) : "");
 		}
 		if (data.size() == 0) return;
 		this->_create(data, data_offset);
@@ -444,6 +444,7 @@ namespace Draw {
 		if (not tty_mode) current = not current;
 		for (const int& i : iota(0, height)) {
 			if (graphs.at(current).at(i).at(1) == '[') graphs.at(current).at(i).erase(0, 4);
+			else if (graphs.at(current).at(i).at(0) == ' ') graphs.at(current).at(i).erase(0, 1);
 			else graphs.at(current).at(i).erase(0, 3);
 		}
 		this->_create(data, (int)data.size() - 1);
