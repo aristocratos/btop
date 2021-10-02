@@ -266,10 +266,11 @@ namespace Mem
 			char buf[512];
 			while (fgets(buf, sizeof(buf), fpIn) != NULL)
 			{
-				char *tokens = strtok(buf, ":\n.");
+				char *delim = ":\n.";
+				char *tokens = strtok(buf, delim);
 				while (tokens) {
 					char *label = tokens;
-					char *val = strtok(nullptr, ":\n.");
+					char *val = strtok(nullptr, delim);
 					if (strstr(label, "Pages free"))
 					{
 						uint64_t f = stoull(trim(val));
@@ -278,7 +279,7 @@ namespace Mem
 					// } else if (strstr(label, "Pages free")) {
 
 					}
-					tokens = strtok(nullptr, ":\n.");
+					tokens = strtok(nullptr, delim);
 				}
 			}
 			pclose(fpIn);
