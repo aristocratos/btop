@@ -81,13 +81,17 @@ OBJEXT		:= o
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			?= -O2 #-ftree-loop-vectorize -flto=$(THREADS)
+OPTFLAGS			?= -O2
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
 SU_GROUP			:= root
+
+ifeq ($(ARCH),x86_64)
+	override OPTFLAGS += -ftree-loop-vectorize -flto=$(THREADS)
+endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
 

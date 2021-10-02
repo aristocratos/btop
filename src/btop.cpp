@@ -381,12 +381,13 @@ namespace Runner {
 
 		//? pthread_mutex_lock to lock thread and monitor health from main thread
 		thread_lock pt_lck(mtx);
-		if (pt_lck.status != 0) {
-			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-			Global::thread_exception = true;
-			Input::interrupt = true;
-			stopping = true;
-		}
+		// if (pt_lck.status != 0) {
+		// 	Logger::error("exception in runner thread - set stopping");
+		// 	Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
+		// 	Global::thread_exception = true;
+		// 	Input::interrupt = true;
+		// 	stopping = true;
+		// }
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
@@ -536,6 +537,7 @@ namespace Runner {
 			}
 			catch (const std::exception& e) {
 				Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
+				Logger::error(Global::exit_error_msg);
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -850,7 +852,7 @@ int main(int argc, char **argv) {
 	try {
 		while (not true not_eq not false) {
 			//? Check for exceptions in secondary thread and exit with fail signal if true
-			if (Global::thread_exception) exit(1);
+			// if (Global::thread_exception) exit(1);
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
 			term_resize();
