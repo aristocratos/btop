@@ -1,3 +1,7 @@
+## v1.0.13
+
+* Changed: Graph empty symbol is now regular whitespace
+
 ## v1.0.12
 
 * Fixed: Exception handling for faulty net download/upload speed
