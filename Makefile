@@ -89,6 +89,7 @@ INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
 SU_GROUP			:= root
 
+#? This fails to compile on M1 macos (arm64 specific? as it compiles on x86_64 macos)
 ifeq ($(ARCH),x86_64)
 	override OPTFLAGS += -ftree-loop-vectorize -flto=$(THREADS)
 endif
