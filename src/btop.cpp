@@ -296,7 +296,7 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { status = pthread_mutex_lock(&pt_mutex); }
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { pthread_mutex_init(&mtx, NULL); status = pthread_mutex_lock(&pt_mutex); }
 		~thread_lock() { if (status == 0) pthread_mutex_unlock(&pt_mutex); }
 	};
 
@@ -306,7 +306,7 @@ namespace Runner {
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
-
+	
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
 		{"net",		0b0000'0100},
@@ -381,13 +381,13 @@ namespace Runner {
 
 		//? pthread_mutex_lock to lock thread and monitor health from main thread
 		thread_lock pt_lck(mtx);
-		// if (pt_lck.status != 0) {
-		// 	Logger::error("exception in runner thread - set stopping");
-		// 	Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-		// 	Global::thread_exception = true;
-		// 	Input::interrupt = true;
-		// 	stopping = true;
-		// }
+		if (pt_lck.status != 0) {
+			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
+			Logger::error(Global::exit_error_msg);
+			Global::thread_exception = true;
+			Input::interrupt = true;
+			stopping = true;
+		}
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
