@@ -30,6 +30,7 @@ tab-size = 4
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <libproc.h>
+#include <pwd.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
@@ -127,6 +128,8 @@ namespace Shared
 			Logger::warning("Could not get memory size");
 		}
 		totalMem = memsize;
+
+		Cpu::cpuName = Cpu::get_cpuName();
 	}
 
 }
@@ -156,9 +159,14 @@ namespace Cpu
 
 	string get_cpuName()
 	{
-		string name("11th Gen Intel(R) Core(TM) i5-11600 @ 2.80GHz");
-
-		return name;
+		char buffer[1024];
+		size_t size = sizeof(buffer);
+		if (sysctlbyname("machdep.cpu.brand_string", &buffer, &size, NULL, 0) < 0)
+		{
+			Logger::error("Failed to get CPU name");
+			return "";
+		}
+		return string(buffer);
 	}
 
 	bool get_sensors()
@@ -207,12 +215,11 @@ namespace Cpu
 		size_t size = sizeof(freq);
 
 		return "1.0";
-		// if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0)
-		// {
-		// 	perror("sysctl");
-		// }
-		// Logger::debug("cpufreq:" + freq);
-		// return "" + freq;
+		if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0)
+		{
+			Logger::error("Failed to get CPU frequency");
+		}
+		return "" + freq;
 	}
 
 	auto get_core_mapping() -> unordered_flat_map<int, int>
@@ -458,6 +465,8 @@ namespace Proc
 						p.cpu_p = 0;
 						p.cpu_s = pti.pti_total_system;
 					}
+					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
+					p.user = pwd->pw_name;
 					procs->push_back(p);
 				}
 			}
@@ -470,12 +479,13 @@ namespace Tools
 {
 	double system_uptime()
 	{
-		struct timeval ts;
+		struct timeval ts, currTime;
 		std::size_t len = sizeof(ts);
 		int mib[2] = {CTL_KERN, KERN_BOOTTIME};
 		if (sysctl(mib, 2, &ts, &len, NULL, 0) != -1)
 		{
-			return ts.tv_sec;
+			gettimeofday(&currTime, NULL);
+			return currTime.tv_sec - ts.tv_sec;
 		}
 		return 0.0;
 	}
