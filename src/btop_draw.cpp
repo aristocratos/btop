@@ -815,7 +815,7 @@ namespace Mem {
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(mem.stats.at(name));
 			const string graphics = (use_graphs ? mem_graphs.at(name)(mem.percent.at(name), redraw or data_same) : mem_meters.at(name)(mem.percent.at(name).back()));
-			if (mem_size > 2) {
+			if (mem_size > 2 && mem.percent.at(name).size() > 0) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + ljust(title, 4, false, false, not big_mem) + ljust(":", (big_mem ? 1 : 6))
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + trans(humanized)
 					+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(mem.percent.at(name).back()) + "%", 4);
