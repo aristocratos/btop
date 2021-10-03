@@ -29,6 +29,7 @@ tab-size = 4
 #include <net/if.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#include <libproc.h>
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
@@ -92,7 +93,6 @@ namespace Shared
 	void init()
 	{
 
-		Logger::debug("Shared init");
 		//? Shared global variables init
 
 		// passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
@@ -122,7 +122,6 @@ namespace Shared
 
 		int64_t memsize = 0;
 		size_t size = sizeof(memsize);
-		Logger::debug("getting memsize");
 		if (sysctlbyname("hw.memsize", &memsize, &size, NULL, 0) < 0)
 		{
 			Logger::warning("Could not get memory size");
@@ -207,7 +206,6 @@ namespace Cpu
 		uint64_t freq = 0;
 		size_t size = sizeof(freq);
 
-		Logger::debug("get_cpuHz");
 		return "1.0";
 		// if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0)
 		// {
@@ -231,9 +229,8 @@ namespace Cpu
 
 	auto collect(const bool no_update) -> cpu_info &
 	{
-		Logger::debug("CPU collect");
-		// if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
-		// 	return current_cpu;
+		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
+			return current_cpu;
 		auto &cpu = current_cpu;
 
 		if (Config::getB("show_cpu_freq"))
@@ -255,7 +252,6 @@ namespace Mem
 
 	auto collect(const bool no_update) -> mem_info &
 	{
-		Logger::debug("collect MEM");
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
@@ -268,7 +264,8 @@ namespace Mem
 			{
 				char *delim = ":\n.";
 				char *tokens = strtok(buf, delim);
-				while (tokens) {
+				while (tokens)
+				{
 					char *label = tokens;
 					char *val = strtok(nullptr, delim);
 					if (strstr(label, "Pages free"))
@@ -276,8 +273,7 @@ namespace Mem
 						uint64_t f = stoull(trim(val));
 						mem.stats.at("available") = f * 4096;
 						mem.stats.at("free") = f * 4096;
-					// } else if (strstr(label, "Pages free")) {
-
+						// } else if (strstr(label, "Pages free")) {
 					}
 					tokens = strtok(nullptr, delim);
 				}
@@ -320,8 +316,6 @@ namespace Net
 
 	auto collect(const bool no_update) -> net_info &
 	{
-		Logger::debug("Net collect");
-
 		return empty_net;
 	}
 }
@@ -426,9 +420,48 @@ namespace Proc
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> &
 	{
-		Logger::debug("PROC collect");
-		// proc_info init;
-		// current_procs.push_back(init);
+		int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+		struct kinfo_proc *processes = NULL;
+		const double uptime = system_uptime();
+		auto procs = &current_procs;
+
+		for (int retry = 3; retry > 0; retry--)
+		{
+			size_t size = 0;
+			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0)
+			{
+				Logger::error("Unable to get size of kproc_infos");
+			}
+
+			processes = (struct kinfo_proc *)malloc(size);
+
+			if (sysctl(mib, 4, processes, &size, NULL, 0) == 0)
+			{
+				size_t count = size / sizeof(struct kinfo_proc);
+				for (size_t i = 0; i < count; i++)
+				{
+					struct kinfo_proc kproc = processes[i];
+					Proc::proc_info p{kproc.kp_proc.p_pid};
+					char fullname[PROC_PIDPATHINFO_MAXSIZE];
+					proc_pidpath(p.pid, fullname, sizeof(fullname));
+					p.cmd = std::string(fullname);
+					size_t lastSlash = p.cmd.find_last_of('/');
+					p.name = p.cmd.substr(lastSlash + 1);
+					p.ppid = kproc.kp_eproc.e_ppid;
+					p.p_nice = kproc.kp_proc.p_nice;
+					struct proc_taskinfo pti;
+					if (sizeof(pti) == proc_pidinfo(p.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti)))
+					{
+						p.threads = pti.pti_threadnum;
+						p.cpu_t = pti.pti_total_user + pti.pti_total_system;
+						p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
+						p.cpu_p = 0;
+						p.cpu_s = pti.pti_total_system;
+					}
+					procs->push_back(p);
+				}
+			}
+		}
 		return current_procs;
 	}
 }
@@ -440,10 +473,9 @@ namespace Tools
 		struct timeval ts;
 		std::size_t len = sizeof(ts);
 		int mib[2] = {CTL_KERN, KERN_BOOTTIME};
-		if (sysctl(mib, 2, &ts, &len, NULL, 0) == 0)
+		if (sysctl(mib, 2, &ts, &len, NULL, 0) != -1)
 		{
-			string uptime = "" + static_cast<unsigned long long>(ts.tv_sec);
-			return stod(uptime);
+			return ts.tv_sec;
 		}
 		return 0.0;
 	}
