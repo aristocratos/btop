@@ -1,3 +1,13 @@
+## v1.0.13
+
+* Changed: Graph empty symbol is now regular whitespace
+
+## v1.0.12
+
+* Fixed: Exception handling for faulty net download/upload speed
+
+* Fixed: Cpu percent formatting if over 10'000
+
 ## v1.0.11
 
 * Changed: atomic_wait to use while loop instead of wait() because of rare stall when a signal handler is triggered while waiting

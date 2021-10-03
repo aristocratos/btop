@@ -124,7 +124,6 @@ Also needs a UTF8 locale and a font that covers:
 * Unicode Block “Braille Patterns” U+2800 - U+28FF (Not needed in TTY mode or with graphs set to type: block or tty.)
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
-* Unicode Block "General punctuation" U+2005
 
 ### **Notice (Text rendering issues)**
 
@@ -207,6 +206,22 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    make help
    ```
+
+**Binary release (from native os repo)**
+
+* **openSUSE**
+  * **Add repo**
+  ```bash
+  sudo zypper ar --refresh obs://home:Werwolf2517 home:Werwolf2517
+  ```
+  * **Refresh metadata**
+  ```bash
+  sudo zypper ref
+  ```
+  * **Install package**
+  ```bash
+  sudo zypper in btop
+  ```
 
 ## Compilation
 
