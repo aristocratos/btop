@@ -262,6 +262,7 @@ namespace Mem
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
+		auto &show_disks = Config::getB("show_disks");
 		auto &mem = current_mem;
 		FILE *fpIn = popen("/usr/bin/vm_stat", "r");
 		if (fpIn)
@@ -280,7 +281,8 @@ namespace Mem
 						uint64_t f = stoull(trim(val));
 						mem.stats.at("available") = f * 4096;
 						mem.stats.at("free") = f * 4096;
-						// } else if (strstr(label, "Pages free")) {
+						mem.stats.at("cached") = 1;
+						mem.stats.at("used") = Shared::totalMem - (f*4096);
 					}
 					tokens = strtok(nullptr, delim);
 				}
@@ -291,7 +293,30 @@ namespace Mem
 		{
 			Logger::error("failed to read vm_stat");
 		}
-		mem.stats.at("used") = Shared::totalMem - mem.stats.at("available");
+		//? Calculate percentages
+		for (const auto& name : mem_names) {
+			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
+			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+		}
+
+		if (show_disks)
+		{
+			auto& disks = mem.disks;
+			struct statfs *stfs;
+			int count = getmntinfo(&stfs, MNT_WAIT);
+			for (int i = 0; i < count; i++)
+			{
+				std::error_code ec;
+				string mountpoint = stfs[i].f_mntonname;
+				Logger::debug("found mountpoint " + mountpoint);
+				string dev = stfs[i].f_mntfromname;
+				disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+				if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
+				if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+				disks.at(mountpoint).free = stfs[i].f_bfree;
+				disks.at(mountpoint).total = stfs[i].f_iosize;
+			}
+		}
 		return mem;
 	}
 
