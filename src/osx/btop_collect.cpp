@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+       http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -207,9 +207,8 @@ namespace Cpu {
 	}
 
 	auto get_battery() -> tuple<int, long, string> {
-		//if (not has_battery)
+		// if (not has_battery)
 		return {0, 0, ""};
-
 	}
 
 	auto collect(const bool no_update) -> cpu_info & {
@@ -238,7 +237,10 @@ namespace Mem {
 			return current_mem;
 
 		auto &show_disks = Config::getB("show_disks");
+		auto &swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
+		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
+
 		FILE *fpIn = popen("/usr/bin/vm_stat", "r");
 		if (fpIn) {
 			char buf[512];
@@ -283,6 +285,39 @@ namespace Mem {
 				disks.at(mountpoint).free = stfs[i].f_bfree;
 				disks.at(mountpoint).total = stfs[i].f_iosize;
 			}
+
+			//? Get disk/partition stats
+			for (auto &[mountpoint, disk] : disks) {
+				if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
+				struct statvfs vfs;
+				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+					continue;
+				}
+				disk.total = vfs.f_blocks * vfs.f_frsize;
+				disk.free = vfs.f_bfree * vfs.f_frsize;
+				disk.used = disk.total - disk.free;
+				disk.used_percent = round((double)disk.used * 100 / disk.total);
+				disk.free_percent = 100 - disk.used_percent;
+			}
+
+			//? Setup disks order in UI and add swap if enabled
+			mem.disks_order.clear();
+			if (snapped and disks.contains("/mnt"))
+				mem.disks_order.push_back("/mnt");
+			else if (disks.contains("/"))
+				mem.disks_order.push_back("/");
+			if (swap_disk and has_swap) {
+				mem.disks_order.push_back("swap");
+				if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
+				disks.at("swap").total = mem.stats.at("swap_total");
+				disks.at("swap").used = mem.stats.at("swap_used");
+				disks.at("swap").free = mem.stats.at("swap_free");
+				disks.at("swap").used_percent = mem.percent.at("swap_used").back();
+				disks.at("swap").free_percent = mem.percent.at("swap_free").back();
+			}
+			for (const auto &name : last_found)
+				if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
 		}
 		return mem;
 	}
