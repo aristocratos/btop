@@ -271,15 +271,40 @@ namespace Mem {
 		}
 
 		if (show_disks) {
+			auto& disks_filter = Config::getS("disks_filter");
+			bool filter_exclude = false;
+			auto& only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
+			vector<string> filter;
+			if (not disks_filter.empty()) {
+				filter = ssplit(disks_filter);
+				if (filter.at(0).starts_with("exclude=")) {
+					filter_exclude = true;
+					filter.at(0) = filter.at(0).substr(8);
+				}
+			}
+
 			struct statfs *stfs;
 			int count = getmntinfo(&stfs, MNT_WAIT);
+			vector<string> found;
+			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
-				Logger::debug("found mountpoint " + mountpoint);
 				string dev = stfs[i].f_mntfromname;
 				disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+
+				//? Match filter if not empty
+				if (not filter.empty()) {
+					bool match = v_contains(filter, mountpoint);
+					if ((filter_exclude and match) or (not filter_exclude and not match))
+						continue;
+				}
+
+				found.push_back(mountpoint);
+				if (not v_contains(last_found, mountpoint)) redraw = true;
+				last_found = std::move(found);
+
 				if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
 				if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				disks.at(mountpoint).free = stfs[i].f_bfree;
