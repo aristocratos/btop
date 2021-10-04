@@ -271,9 +271,10 @@ namespace Mem {
 		}
 
 		if (show_disks) {
-			auto& disks_filter = Config::getS("disks_filter");
+			double uptime = system_uptime();
+			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-			auto& only_physical = Config::getB("only_physical");
+			auto &only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
