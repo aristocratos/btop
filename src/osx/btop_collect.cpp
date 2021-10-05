@@ -26,10 +26,14 @@ tab-size = 4
 #include <net/if.h>
 #include <netdb.h>
 #include <pwd.h>
+#include <sys/socket.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <netinet/tcp_fsm.h>
+#include <arpa/inet.h>
+#include <net/if_dl.h>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
@@ -241,7 +245,7 @@ namespace Mem {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
-		auto& show_swap = Config::getB("show_swap");
+		auto &show_swap = Config::getB("show_swap");
 		auto &show_disks = Config::getB("show_disks");
 		auto &swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
@@ -253,7 +257,7 @@ namespace Mem {
 			mem.stats.at("available") = p.free_count * Shared::pageSize;
 			mem.stats.at("free") = p.free_count * Shared::pageSize;
 			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = ((int64_t)p.active_count + (int64_t)p.inactive_count + (int64_t)p.wire_count) * (int64_t)Shared::pageSize;
+			mem.stats.at("used") = (p.active_count + p.inactive_count + p.wire_count) * Shared::pageSize;
 		}
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
@@ -267,18 +271,19 @@ namespace Mem {
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
-			for (const auto& name : swap_names) {
+			for (const auto &name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
-				while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+				while (cmp_greater(mem.percent.at(name).size(), width * 2))
+					mem.percent.at(name).pop_front();
 			}
 			has_swap = true;
-		}
-		else
+		} else
 			has_swap = false;
 		//? Calculate percentages
 		for (const auto &name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
-			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+			while (cmp_greater(mem.percent.at(name).size(), width * 2))
+				mem.percent.at(name).pop_front();
 		}
 
 		if (show_disks) {
@@ -314,18 +319,22 @@ namespace Mem {
 				}
 
 				found.push_back(mountpoint);
-				if (not v_contains(last_found, mountpoint)) redraw = true;
+				if (not v_contains(last_found, mountpoint))
+					redraw = true;
 				last_found = std::move(found);
 
-				if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
-				if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+				if (disks.at(mountpoint).dev.empty())
+					disks.at(mountpoint).dev = dev;
+				if (disks.at(mountpoint).name.empty())
+					disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				disks.at(mountpoint).free = stfs[i].f_bfree;
 				disks.at(mountpoint).total = stfs[i].f_iosize;
 			}
 
 			//? Get disk/partition stats
 			for (auto &[mountpoint, disk] : disks) {
-				if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
+				if (std::error_code ec; not fs::exists(mountpoint, ec))
+					continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
 					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
@@ -346,7 +355,8 @@ namespace Mem {
 				mem.disks_order.push_back("/");
 			if (swap_disk and has_swap) {
 				mem.disks_order.push_back("swap");
-				if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
+				if (not disks.contains("swap"))
+					disks["swap"] = {"", "swap"};
 				disks.at("swap").total = mem.stats.at("swap_total");
 				disks.at("swap").used = mem.stats.at("swap_used");
 				disks.at("swap").free = mem.stats.at("swap_free");
@@ -354,7 +364,8 @@ namespace Mem {
 				disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 			}
 			for (const auto &name : last_found)
-				if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+				if (not is_in(name, "/", "swap"))
+					mem.disks_order.push_back(name);
 		}
 		return mem;
 	}
@@ -384,7 +395,188 @@ namespace Net {
 	};
 
 	auto collect(const bool no_update) -> net_info & {
-		return empty_net;
+		auto &net = current_net;
+		auto &config_iface = Config::getS("net_iface");
+		auto &net_sync = Config::getB("net_sync");
+		auto &net_auto = Config::getB("net_auto");
+		auto new_timestamp = time_ms();
+
+		if (not no_update and errors < 3) {
+			//? Get interface list using getifaddrs() wrapper
+			getifaddr_wrapper if_wrap{};
+			if (if_wrap.status != 0) {
+				errors++;
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				redraw = true;
+				return empty_net;
+			}
+			int family = 0;
+			char ip[NI_MAXHOST];
+			interfaces.clear();
+			string ipv4, ipv6;
+
+			//? Iteration over all items in getifaddrs() list
+			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
+				if (ifa->ifa_addr == NULL) continue;
+				family = ifa->ifa_addr->sa_family;
+				const auto& iface = ifa->ifa_name;
+				//? Get IPv4 address
+				if (family == AF_INET) {
+					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv4 = ip;
+				}
+				//? Get IPv6 address
+				else if (family == AF_INET6) {
+					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv6 = ip;
+				}
+
+				//? Update available interfaces vector and get status of interface
+				if (not v_contains(interfaces, iface)) {
+					interfaces.push_back(iface);
+					net[iface].connected = (ifa->ifa_flags & IFF_RUNNING);
+				}
+			}
+
+			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats; 
+			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0};
+			size_t len;
+			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
+				Logger::error("failed getting network interfaces");
+			}
+			char *buf = (char *)malloc(len);
+			if (sysctl(mib, 6, buf, &len, NULL, 0) < 0) {
+				Logger::error("failed getting network interfaces");
+			}
+			char *lim = buf + len;
+			char *next = NULL;
+			for (next = buf; next < lim;) {
+				struct if_msghdr *ifm = (struct if_msghdr *)next;
+				next += ifm->ifm_msglen;
+				if (ifm->ifm_type == RTM_IFINFO2) {
+					struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
+					struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
+    		        char iface[32];
+					strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
+		            iface[sdl->sdl_nlen] = 0;
+					ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
+					Logger::debug(iface);
+					Logger::debug(std::to_string(if2m->ifm_data.ifi_ibytes));
+					Logger::debug(std::to_string(if2m->ifm_data.ifi_obytes));
+				}
+			}
+
+			//? Get total recieved and transmitted bytes + device address if no ip was found
+			for (const auto& iface : interfaces) {
+
+				for (const string dir : {"download", "upload"}) {
+					auto& saved_stat = net.at(iface).stat.at(dir);
+					auto& bandwidth = net.at(iface).bandwidth.at(dir);
+					auto dirval = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
+					uint64_t val = saved_stat.last;
+					try { val = max(dirval, val); }
+					catch (const std::invalid_argument&) {}
+					catch (const std::out_of_range&) {}
+
+					//? Update speed, total and top values
+					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
+					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
+					if (saved_stat.offset > val) saved_stat.offset = 0;
+					saved_stat.total = val - saved_stat.offset;
+					saved_stat.last = val;
+
+					//? Add values to graph
+					bandwidth.push_back(saved_stat.speed);
+					while (cmp_greater(bandwidth.size(), width * 2)) bandwidth.pop_front();
+
+					//? Set counters for auto scaling
+					if (net_auto and selected_iface == iface) {
+						if (saved_stat.speed > graph_max[dir]) {
+							++max_count[dir][0];
+							if (max_count[dir][1] > 0) --max_count[dir][1];
+						}
+						else if (graph_max[dir] > 10 << 10 and saved_stat.speed < graph_max[dir] / 10) {
+							++max_count[dir][1];
+							if (max_count[dir][0] > 0) --max_count[dir][0];
+						}
+
+					}
+				}
+			}
+
+			//? Clean up net map if needed
+			if (net.size() > interfaces.size()) {
+				for (auto it = net.begin(); it != net.end();) {
+					if (not v_contains(interfaces, it->first))
+						it = net.erase(it);
+					else
+						it++;
+				}
+				net.compact();
+			}
+
+			timestamp = new_timestamp;
+		}
+		//? Return empty net_info struct if no interfaces was found
+		if (net.empty())
+			return empty_net;
+
+		//? Find an interface to display if selected isn't set or valid
+		if (selected_iface.empty() or not v_contains(interfaces, selected_iface)) {
+			max_count["download"][0] = max_count["download"][1] = max_count["upload"][0] = max_count["upload"][1] = 0;
+			redraw = true;
+			if (net_auto) rescale = true;
+			if (not config_iface.empty() and v_contains(interfaces, config_iface))
+				selected_iface = config_iface;
+			else {
+				//? Sort interfaces by total upload + download bytes
+				auto sorted_interfaces = interfaces;
+				rng::sort(sorted_interfaces, [&](const auto &a, const auto &b) {
+					return cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
+					                   net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
+				});
+				selected_iface.clear();
+				//? Try to set to a connected interface
+				for (const auto &iface : sorted_interfaces) {
+					if (net.at(iface).connected) selected_iface = iface;
+					break;
+				}
+				//? If no interface is connected set to first available
+				if (selected_iface.empty() and not sorted_interfaces.empty())
+					selected_iface = sorted_interfaces.at(0);
+				else if (sorted_interfaces.empty())
+					return empty_net;
+			}
+		}
+
+		//? Calculate max scale for graphs if needed
+		if (net_auto) {
+			bool sync = false;
+			for (const auto &dir : {"download", "upload"}) {
+				for (const auto &sel : {0, 1}) {
+					if (rescale or max_count[dir][sel] >= 5) {
+						const uint64_t avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
+						                                ? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0) / 5
+						                                : net[selected_iface].stat[dir].speed);
+						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
+						max_count[dir][0] = max_count[dir][1] = 0;
+						redraw = true;
+						if (net_sync) sync = true;
+						break;
+					}
+				}
+				//? Sync download/upload graphs if enabled
+				if (sync) {
+					const auto other = (string(dir) == "upload" ? "download" : "upload");
+					graph_max[other] = graph_max[dir];
+					max_count[other][0] = max_count[other][1] = 0;
+					break;
+				}
+			}
+		}
+
+		rescale = false;
+		return net.at(selected_iface);
 	}
 }  // namespace Net
 
