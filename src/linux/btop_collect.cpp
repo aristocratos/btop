@@ -78,9 +78,7 @@ namespace Mem {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
-	int totalMem_len;
 
 	void init() {
 
@@ -110,17 +108,7 @@ namespace Shared {
 			clkTck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
-
-		ifstream meminfo(Shared::procPath / "meminfo");
-		if (meminfo.good()) {
-			meminfo.ignore(SSmax, ':');
-			meminfo >> totalMem;
-			totalMem_len = to_string(totalMem).size();
-			totalMem <<= 10;
-		}
-		if (not meminfo.good() or totalMem == 0)
-			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
-
+		
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
@@ -673,11 +661,26 @@ namespace Mem {
 
 	mem_info current_mem {};
 
+	uint64_t get_totalMem() {
+		ifstream meminfo(Shared::procPath / "meminfo");
+		int64_t totalMem;
+		if (meminfo.good()) {
+			meminfo.ignore(SSmax, ':');
+			meminfo >> totalMem;
+			totalMem <<= 10;
+		}
+		if (not meminfo.good() or totalMem == 0)
+			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
+		
+		return totalMem;
+	}
+
 	auto collect(const bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 		auto& show_swap = Config::getB("show_swap");
 		auto& swap_disk = Config::getB("swap_disk");
 		auto& show_disks = Config::getB("show_disks");
+		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
@@ -714,7 +717,7 @@ namespace Mem {
 				meminfo.ignore(SSmax, '\n');
 			}
 			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
-			mem.stats.at("used") = Shared::totalMem - mem.stats.at("available");
+			mem.stats.at("used") = totalMem - mem.stats.at("available");
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
 		}
 		else
@@ -724,7 +727,7 @@ namespace Mem {
 
 		//? Calculate percentages
 		for (const auto& name : mem_names) {
-			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
+			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 		}
 
@@ -1259,7 +1262,7 @@ namespace Proc {
 			detailed.memory = floating_humanizer(detailed.entry.mem);
 		}
 		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
-			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Shared::totalMem);
+			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
 			redraw = true;
 		}
 
@@ -1323,6 +1326,9 @@ namespace Proc {
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
 			should_filter = true;
+
+			auto totalMem = Mem::get_totalMem();
+			int totalMem_len = to_string(totalMem >> 10).size();
 
 			//? Update uid_user map if /etc/passwd changed since last run
 			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
@@ -1460,8 +1466,8 @@ namespace Proc {
 								next_x = 24;
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-								if (cmp_greater(short_str.size(), Shared::totalMem_len))
-									new_proc.mem = Shared::totalMem;
+								if (cmp_greater(short_str.size(), totalMem_len))
+									new_proc.mem = totalMem;
 								else
 									new_proc.mem = stoull(short_str) * Shared::pageSize;
 						}
@@ -1477,7 +1483,7 @@ namespace Proc {
 				if (x-offset < 24) continue;
 
 				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
-				if (new_proc.mem >= Shared::totalMem) {
+				if (new_proc.mem >= totalMem) {
 					pread.open(d.path() / "statm");
 					if (not pread.good()) continue;
 					pread.ignore(SSmax, ' ');

@@ -70,8 +70,6 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
-	extern int totalMem_len;
-	extern uint64_t totalMem;
 }
 
 
@@ -148,6 +146,9 @@ namespace Mem {
 		unordered_flat_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
+
+	//?* Get total system memory
+	uint64_t get_totalMem();
 
 	//* Collect mem & disks stats
 	auto collect(const bool no_update=false) -> mem_info&;

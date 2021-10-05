@@ -698,6 +698,7 @@ namespace Mem {
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
+		auto totalMem = Mem::get_totalMem();
 		string out;
 		out.reserve(height * width);
 
@@ -791,7 +792,7 @@ namespace Mem {
 		string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
 		bool big_mem = mem_width > 21;
 
-		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(Shared::totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
+		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
 		for (auto name : comb_names) {
@@ -1107,6 +1108,7 @@ namespace Proc {
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
 		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
+		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
 		string out;
@@ -1312,7 +1314,7 @@ namespace Proc {
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
 
-			const double mem_p = (double)detailed.mem_bytes.back() * 100 / Shared::totalMem;
+			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
 			string mem_str = to_string(mem_p);
 			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
@@ -1370,7 +1372,7 @@ namespace Proc {
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
 					array<string, 3> colors;
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / Shared::totalMem), (int)p.threads / 3}) {
+					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
@@ -1424,7 +1426,7 @@ namespace Proc {
 			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
-				double mem_p = clamp((double)p.mem * 100 / Shared::totalMem, 0.0, 100.0);
+				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
 				mem_str = to_string(mem_p);
 				if (mem_str.size() < 4)	mem_str = "0";
 				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
