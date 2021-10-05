@@ -20,17 +20,18 @@ jobs:
         run: |
           git init
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mkdir multiarch_bin
       - name: Compile x86_64
         run: |
           make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
-          mv bin/btop bin/btop-x86_64-$GIT_HASH
+          mv bin/btop multiarch_bin/btop-x86_64-$GIT_HASH
           make distclean
       - name: Compile aarch64
         run: |
           make CXX=aarch64-linux-gnu-g++-11 ARCH=aarch64 STATIC=true QUIET=true
-          mv bin/btop bin/btop-aarch64-$GIT_HASH
+          mv bin/btop multiarch_bin/btop-aarch64-$GIT_HASH
           make distclean
       - uses: actions/upload-artifact@v2
         with:
           name: btop
-          path: 'bin/btop-*'
+          path: 'multiarch_bin/btop-*'
