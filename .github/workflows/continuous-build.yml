@@ -72,7 +72,41 @@ jobs:
           mv bin/btop multiarch_bin/btop-sparc64-$GIT_HASH
           make distclean
 
+      - name: Make executable
+        run: |
+          chmod +x multiarch_bin/*
+
       - uses: actions/upload-artifact@v2
         with:
-          name: btop
-          path: 'multiarch_bin/btop-*'
+          name: btop-x86_64
+          path: 'multiarch_bin/btop-x86_64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-i686
+          path: 'multiarch_bin/btop-i686*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-aarch64
+          path: 'multiarch_bin/btop-aarch64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-armel
+          path: 'multiarch_bin/btop-armel*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-armhf
+          path: 'multiarch_bin/btop-armhf*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-riscv64
+          path: 'multiarch_bin/btop-riscv64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-sparc64
+          path: 'multiarch_bin/btop-sparc64*'
