@@ -13,35 +13,26 @@
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 [![Continuous Build](https://github.com/aristocratos/btop/actions/workflows/continuous-build.yml/badge.svg)](https://github.com/aristocratos/btop/actions)
+
+
 ## Index
 
 
 
-- [!btop++](#)
-  - [Index](#index)
-  - [News](#news)
-    - [Under development](#under-development)
-        - [18 September 2021](#18-september-2021)
-        - [5 May 2021](#5-may-2021)
-  - [Documents](#documents)
-  - [Description](#description)
-  - [Features](#features)
-  - [Themes](#themes)
-  - [Support and funding](#support-and-funding)
-  - [Prerequisites](#prerequisites)
-    - [**Notice (Text rendering issues)**](#notice-text-rendering-issues)
-  - [Screenshots](#screenshots)
-      - [Main UI showing details for a selected process](#main-ui-showing-details-for-a-selected-process)
-      - [Main UI in TTY mode](#main-ui-in-tty-mode)
-      - [Main UI with custom options](#main-ui-with-custom-options)
-      - [Main-menu](#main-menu)
-      - [Options-menu](#options-menu)
-      - [Help-menu](#help-menu)
-  - [Installation](#installation)
-  - [Compilation](#compilation)
-  - [Install the snap](#install-the-snap)
-      - [Command line options](#command-line-options)
-  - [LICENSE](#license)
+* [News](#news)
+* [Documents](#documents)
+* [Description](#description)
+* [Features](#features)
+* [Themes](#themes)
+* [Support and funding](#support-and-funding)
+* [Prerequisites](#prerequisites) (Read this if you are having issues!)
+* [Screenshots](#screenshots)
+* [Keybindings](#help-menu)
+* [Installation](#installation)
+* [Manual compilation](#compilation)
+* [Install the snap](#install-the-snap)
+* [Configurability](#configurability)
+* [License](#license)
 
 ## News
 
