@@ -1,7 +1,7 @@
 name: Continuous Build Linux
 
 on:
-  push
+  push:
     paths:
       - 'src/**'
       - 'include/**'
