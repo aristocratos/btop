@@ -18,6 +18,11 @@ tab-size = 4
 
 #include <ifaddrs.h>
 #include <libproc.h>
+#include <mach/mach_host.h>
+#include <mach/mach_init.h>
+#include <mach/mach_types.h>
+#include <mach/processor_info.h>
+#include <mach/vm_statistics.h>
 #include <net/if.h>
 #include <netdb.h>
 #include <pwd.h>
@@ -236,34 +241,40 @@ namespace Mem {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
+		auto& show_swap = Config::getB("show_swap");
 		auto &show_disks = Config::getB("show_disks");
 		auto &swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
-		FILE *fpIn = popen("/usr/bin/vm_stat", "r");
-		if (fpIn) {
-			char buf[512];
-			while (fgets(buf, sizeof(buf), fpIn) != NULL) {
-				char *delim = ":\n.";
-				char *tokens = strtok(buf, delim);
-				while (tokens) {
-					char *label = tokens;
-					char *val = strtok(nullptr, delim);
-					if (strstr(label, "Pages free")) {
-						uint64_t f = stoull(trim(val));
-						mem.stats.at("available") = f * 4096;
-						mem.stats.at("free") = f * 4096;
-						mem.stats.at("cached") = 1;
-						mem.stats.at("used") = Shared::totalMem - (f * 4096);
-					}
-					tokens = strtok(nullptr, delim);
-				}
-			}
-			pclose(fpIn);
-		} else {
-			Logger::error("failed to read vm_stat");
+		vm_statistics p;
+		mach_msg_type_number_t info_size = HOST_VM_INFO_COUNT;
+		if (host_statistics(mach_host_self(), HOST_VM_INFO, (host_info_t)&p, &info_size) == 0) {
+			mem.stats.at("available") = p.free_count * Shared::pageSize;
+			mem.stats.at("free") = p.free_count * Shared::pageSize;
+			mem.stats.at("cached") = 100;
+			mem.stats.at("used") = ((int64_t)p.active_count + (int64_t)p.inactive_count + (int64_t)p.wire_count) * (int64_t)Shared::pageSize;
 		}
+
+		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
+
+		struct xsw_usage swap;
+		size_t len = sizeof(struct xsw_usage);
+		if (sysctl(mib, 2, &swap, &len, NULL, 0) == 0) {
+			mem.stats.at("swap_total") = swap.xsu_total;
+			mem.stats.at("swap_free") = swap.xsu_avail;
+			mem.stats.at("swap_used") = swap.xsu_used;
+		}
+
+		if (show_swap and mem.stats.at("swap_total") > 0) {
+			for (const auto& name : swap_names) {
+				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+				while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+			}
+			has_swap = true;
+		}
+		else
+			has_swap = false;
 		//? Calculate percentages
 		for (const auto &name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
