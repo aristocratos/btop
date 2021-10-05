@@ -12,6 +12,9 @@
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
+[![Continuous Build](https://github.com/aristocratos/btop/actions/workflows/continuous-build.yml/badge.svg)](https://github.com/aristocratos/btop/actions)
+
+
 ## Index
 
 

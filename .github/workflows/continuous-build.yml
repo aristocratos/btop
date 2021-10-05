@@ -1,0 +1,112 @@
+name: Continuous Build Linux
+
+on:
+  push
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    container: ubuntu:21.04
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install build tools
+        run: |
+          apt update && \
+          apt install coreutils sed git build-essential gcc-11 g++-11 -y
+          apt install -y g++-11-aarch64-linux-gnu g++-11-i686-linux-gnu \
+          g++-11-arm-linux-gnueabi  g++-11-arm-linux-gnueabihf g++-11-riscv64-linux-gnu \
+          g++-11-sparc64-linux-gnu
+
+          mkdir -p multiarch_bin
+
+          git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
+
+      - name: Compile x86_64
+        run: |
+          make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-x86_64-$GIT_HASH
+          make distclean
+
+      - name: Compile i686
+        run: |
+          make CXX=i686-linux-gnu-g++-11 ARCH=i686 STATIC=true QUIET=true 
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-i686-$GIT_HASH
+          make distclean
+
+      - name: Compile aarch64
+        run: |
+          make CXX=aarch64-linux-gnu-g++-11 ARCH=aarch64 STATIC=true QUIET=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-aarch64-$GIT_HASH
+          make distclean
+
+      - name: Compile armel
+        run: |
+          make CXX=arm-linux-gnueabi-g++-11 ARCH=armel STATIC=true QUIET=true 
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-armel-$GIT_HASH
+          make distclean
+
+      - name: Compile armhf
+        run: |
+          make CXX=arm-linux-gnueabihf-g++-11 ARCH=armhf STATIC=true QUIET=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-armhf-$GIT_HASH
+          make distclean
+
+      - name: Compile riscv64
+        run: |
+          make CXX=riscv64-linux-gnu-g++-11 ARCH=riscv64 STATIC=true QUIET=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-riscv64-$GIT_HASH
+          make distclean
+
+      - name: Compile sparc64
+        run: |
+          make CXX=sparc64-linux-gnu-g++-11 ARCH=sparc64 STATIC=true QUIET=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop multiarch_bin/btop-sparc64-$GIT_HASH
+          make distclean
+
+      - name: Make executable
+        run: |
+          chmod +x multiarch_bin/*
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-x86_64
+          path: 'multiarch_bin/btop-x86_64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-i686
+          path: 'multiarch_bin/btop-i686*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-aarch64
+          path: 'multiarch_bin/btop-aarch64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-armel
+          path: 'multiarch_bin/btop-armel*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-armhf
+          path: 'multiarch_bin/btop-armhf*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-riscv64
+          path: 'multiarch_bin/btop-riscv64*'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-sparc64
+          path: 'multiarch_bin/btop-sparc64*'

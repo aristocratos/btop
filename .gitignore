@@ -50,3 +50,7 @@ build
 bin
 btop
 .*/
+
+
+#do not ignore .github directory
+!.github
