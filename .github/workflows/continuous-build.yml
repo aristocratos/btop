@@ -1,0 +1,22 @@
+name: Continuous Build
+
+on:
+  push
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: update system
+        run: |
+          sudo apt update && sudo apt upgrade -y
+      - name: Build
+        run: make -j `nproc`
+          
+      - uses: actions/upload-artifact@v2
+        with:
+          name: Upload built binary
+          path: 'bin/btop'
