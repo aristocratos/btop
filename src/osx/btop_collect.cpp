@@ -342,6 +342,13 @@ namespace Cpu {
 					string p(perc);
 					p.resize(3);
 					percent = atoi(p.c_str());
+					if (!strstr(buf, "discharging")) {
+						if (percent < 100) {
+							status = "charging";
+						} else {
+							status = "full";
+						}
+					}
 				} else {
 					has_battery = false;
 				}
