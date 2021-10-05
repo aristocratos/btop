@@ -324,8 +324,29 @@ namespace Cpu {
 	}
 
 	auto get_battery() -> tuple<int, long, string> {
-		// if (not has_battery)
-		return {0, 0, ""};
+		if (not has_battery) return {0, 0, ""};
+
+		int percent = -1;
+		long seconds = -1;
+		string status = "discharging";
+
+		FILE *bat = popen("pmset -g batt", "r");
+		if (bat) {
+			char buf[2048];
+			if (fgets(buf, sizeof(buf), bat) != NULL) {
+				char *perc = strstr(buf, "%");
+				if (perc) {
+					has_battery = true;
+					perc -= 3;
+					string p(perc);
+					p.resize(3);
+					percent = atoi(p.c_str());
+				} else {
+					has_battery = false;
+				}
+			}
+		}
+		return {percent, seconds, status};
 	}
 
 	auto collect(const bool no_update) -> cpu_info & {
@@ -388,7 +409,7 @@ namespace Cpu {
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
 				//? Populate cpu.cpu_percent with all fields from syscall
-				for (int ii = 0; const auto& val : times) {
+				for (int ii = 0; const auto &val : times) {
 					cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
 					cpu_old.at(time_names.at(ii)) = val;
 				}
