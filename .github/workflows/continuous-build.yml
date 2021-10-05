@@ -11,14 +11,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Install g++, make
+      - name: Install build tools
         run: |
           apt update && \
           apt install coreutils sed git build-essential gcc-11 g++-11 -y
-      - name: Build
-        run: make 
+      - name: Compile
+        run: |
+          make STATIC=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop bin/btop-$GIT_HASH
 
       - uses: actions/upload-artifact@v2
         with:
-          name: Upload built binary
-          path: 'bin/btop'
+          name: Btop
+          path: 'bin/btop-*'
