@@ -18,6 +18,7 @@ jobs:
       - name: Compile
         run: |
           make STATIC=true
+          git init
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-$GIT_HASH
 
