@@ -81,7 +81,7 @@ OBJEXT		:= o
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			:= -O2
+OPTFLAGS			:= -O2 -ftree-loop-vectorize -flto=$(THREADS)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
@@ -93,10 +93,6 @@ ifdef DEBUG
 	override OPTFLAGS := -O0 -g
 endif
 
-#? This fails to compile on M1 macos (arm64 specific? as it compiles on x86_64 macos)
-ifeq ($(ARCH),x86_64)
-	override OPTFLAGS += -ftree-loop-vectorize -flto=$(THREADS)
-endif
 ifneq ($(ARCH),arm64)
 ifneq ($(PLATFORM),OSX)
 	override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
