@@ -24,11 +24,12 @@ jobs:
         run: |
           make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
           mv bin/btop bin/btop-x86_64-$GIT_HASH
+          make distclean
       - name: Compile aarch64
         run: |
           make CXX=aarch64-linux-gnu-g++-11 ARCH=aarch64 STATIC=true QUIET=true
           mv bin/btop bin/btop-aarch64-$GIT_HASH
-
+          make distclean
       - uses: actions/upload-artifact@v2
         with:
           name: btop
