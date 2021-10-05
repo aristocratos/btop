@@ -81,7 +81,7 @@ OBJEXT		:= o
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			?= -O2
+OPTFLAGS			?= -O0 -g
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
@@ -92,6 +92,11 @@ SU_GROUP			:= root
 #? This fails to compile on M1 macos (arm64 specific? as it compiles on x86_64 macos)
 ifeq ($(ARCH),x86_64)
 	override OPTFLAGS += -ftree-loop-vectorize -flto=$(THREADS)
+endif
+ifneq ($(ARCH),arm64)
+ifneq ($(PLATFORM),OSX)
+	override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
+endif
 endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
@@ -129,7 +134,9 @@ help:
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
+ifneq ($(PLATFORM),OSX)
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
+endif
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
 	@printf "  info         Display information about Environment,compiler and linker flags\n"
 
@@ -159,6 +166,7 @@ install:
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 
+ifneq ($(PLATFORM),OSX)
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:
 	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
@@ -166,6 +174,7 @@ setuid:
 	@chown $(SU_USER):$(SU_GROUP) $(DESTDIR)$(PREFIX)/bin/btop
 	@printf "\033[1;92mSetting SUID bit\033[0m\n"
 	@chmod u+s $(DESTDIR)$(PREFIX)/bin/btop
+endif
 
 uninstall:
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
