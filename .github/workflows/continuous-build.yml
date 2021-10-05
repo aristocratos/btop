@@ -16,6 +16,7 @@ jobs:
           apt update && \
           apt install coreutils sed git build-essential gcc-11 g++-11 -y
           apt install g++-11-aarch64-linux-gnu -y
+          mkdir -p multiarch_bin
       - name: Compile x86_64
         run: |
           make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
