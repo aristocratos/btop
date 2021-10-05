@@ -24,6 +24,7 @@ jobs:
       - name: Compile x86_64
         run: |
           make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
+          git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop multiarch_bin/btop-x86_64-$GIT_HASH
           make distclean
