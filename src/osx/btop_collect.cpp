@@ -247,12 +247,12 @@ namespace Mem {
 		auto &mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
-		vm_statistics p;
-		mach_msg_type_number_t info_size = HOST_VM_INFO_COUNT;
-		if (host_statistics(mach_host_self(), HOST_VM_INFO, (host_info_t)&p, &info_size) == 0) {
+		vm_statistics64 p;
+		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
+		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
 			mem.stats.at("available") = p.free_count * Shared::pageSize;
 			mem.stats.at("free") = p.free_count * Shared::pageSize;
-			mem.stats.at("cached") = 100;
+			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
 			mem.stats.at("used") = ((int64_t)p.active_count + (int64_t)p.inactive_count + (int64_t)p.wire_count) * (int64_t)Shared::pageSize;
 		}
 
