@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <libproc.h>
 #include <mach/mach_host.h>
@@ -24,16 +25,15 @@ tab-size = 4
 #include <mach/processor_info.h>
 #include <mach/vm_statistics.h>
 #include <net/if.h>
+#include <net/if_dl.h>
 #include <netdb.h>
+#include <netinet/tcp_fsm.h>
 #include <pwd.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <netinet/tcp_fsm.h>
-#include <arpa/inet.h>
-#include <net/if_dl.h>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
@@ -128,7 +128,26 @@ namespace Shared {
 		}
 		totalMem = memsize;
 
+		//? Init for namespace Cpu
+		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
+		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
+		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
+		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
+		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Cpu::collect();
+		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
+			if (not vec.empty()) Cpu::available_fields.push_back(field);
+		}
 		Cpu::cpuName = Cpu::get_cpuName();
+		Cpu::got_sensors = Cpu::get_sensors();
+		for (const auto &[sensor, ignored] : Cpu::found_sensors) {
+			Cpu::available_sensors.push_back(sensor);
+		}
+		Cpu::core_mapping = Cpu::get_core_mapping();
+
+		//? Init for namespace Mem
+		Mem::old_uptime = system_uptime();
+		Mem::collect();
 	}
 
 }  // namespace Shared
@@ -156,13 +175,49 @@ namespace Cpu {
 	    {"guest_nice", 0}};
 
 	string get_cpuName() {
+		string name;
 		char buffer[1024];
 		size_t size = sizeof(buffer);
 		if (sysctlbyname("machdep.cpu.brand_string", &buffer, &size, NULL, 0) < 0) {
 			Logger::error("Failed to get CPU name");
-			return "";
+			return name;
 		}
-		return string(buffer);
+		name = string(buffer);
+
+		auto name_vec = ssplit(name);
+
+		if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
+			auto cpu_pos = v_index(name_vec, "CPU"s);
+			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
+				name = name_vec.at(cpu_pos + 1);
+			else
+				name.clear();
+		} else if (v_contains(name_vec, "Ryzen"s)) {
+			auto ryz_pos = v_index(name_vec, "Ryzen"s);
+			name = "Ryzen" + (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "") + (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
+		} else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
+			auto cpu_pos = v_index(name_vec, "CPU"s);
+			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
+				name = name_vec.at(cpu_pos + 1);
+			else
+				name.clear();
+		} else
+			name.clear();
+
+		if (name.empty() and not name_vec.empty()) {
+			for (const auto &n : name_vec) {
+				if (n == "@") break;
+				name += n + ' ';
+			}
+			name.pop_back();
+			for (const auto &reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
+			                        regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
+				name = std::regex_replace(name, reg, "");
+			}
+			name = trim(name);
+		}
+
+		return name;
 	}
 
 	bool get_sensors() {
@@ -207,11 +262,64 @@ namespace Cpu {
 		if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0) {
 			Logger::error("Failed to get CPU frequency");
 		}
-		return "" + freq;
+		return std::to_string(freq);
 	}
 
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
+		if (cpu_temp_only) return core_map;
+
+		natural_t cpu_count;
+		natural_t i;
+		processor_info_array_t info_array;
+		mach_msg_type_number_t info_count;
+		kern_return_t error;
+		processor_cpu_load_info_data_t *cpu_load_info = NULL;
+		int ret;
+
+		mach_port_t host_port = mach_host_self();
+		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+		if (error != KERN_SUCCESS) {
+			Logger::error("Failed getting CPU info");
+			return core_map;
+		}
+		cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
+		for (i = 0; i < cpu_count; i++) {
+			core_map[i] = i;
+		}
+
+		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
+		if (cmp_less(core_map.size(), Shared::coreCount)) {
+			if (Shared::coreCount % 2 == 0 and (long) core_map.size() == Shared::coreCount / 2) {
+				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
+					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
+					core_map[Shared::coreCount / 2 + i] = n++;
+				}
+			} else {
+				core_map.clear();
+				for (int i = 0, n = 0; i < Shared::coreCount; i++) {
+					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
+					core_map[i] = n++;
+				}
+			}
+		}
+
+		//? Apply user set custom mapping if any
+		const auto &custom_map = Config::getS("cpu_core_map");
+		if (not custom_map.empty()) {
+			try {
+				for (const auto &split : ssplit(custom_map)) {
+					const auto vals = ssplit(split, ':');
+					if (vals.size() != 2) continue;
+					int change_id = std::stoi(vals.at(0));
+					int new_id = std::stoi(vals.at(1));
+					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+					core_map.at(change_id) = new_id;
+				}
+			} catch (...) {
+			}
+		}
+
 		return core_map;
 	}
 
@@ -225,8 +333,89 @@ namespace Cpu {
 			return current_cpu;
 		auto &cpu = current_cpu;
 
+		natural_t cpu_count;
+		natural_t i;
+		processor_info_array_t info_array;
+		mach_msg_type_number_t info_count;
+		kern_return_t error;
+		processor_cpu_load_info_data_t *cpu_load_info = NULL;
+		int ret;
+
+		mach_port_t host_port = mach_host_self();
+		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+		if (error != KERN_SUCCESS) {
+			Logger::error("Failed getting CPU load info");
+		}
+		cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
+		long long global_totals = 0;
+		long long global_idles = 0;
+		for (i = 0; i < cpu_count; i++) {
+			vector<long long> times;
+			long long total_sum = 0;
+			//? 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
+			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_USER]);
+			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]);
+			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]);
+			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
+			times.push_back(0);
+			times.push_back(0);
+			times.push_back(0);
+			times.push_back(0);
+			times.push_back(0);
+			times.push_back(0);
+			for (long long t : times) {
+				total_sum += t;
+			}
+			try {
+				//? Subtract fields 8-9 and any future unknown fields
+				const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
+
+				//? Add iowait field if present
+				const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
+
+				global_totals += totals;
+				global_idles += idles;
+				//? Calculate cpu total for each core
+				if (i > Shared::coreCount) break;
+				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
+				const long long calc_idles = max(0ll, idles - core_old_idles.at(i));
+				core_old_totals.at(i) = totals;
+				core_old_idles.at(i) = idles;
+
+				cpu.core_percent.at(i).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+
+				//? Reduce size if there are more values than needed for graph
+				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
+
+				//? Populate cpu.cpu_percent with all fields from syscall
+				for (int ii = 0; const auto& val : times) {
+					cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+					cpu_old.at(time_names.at(ii)) = val;
+				}
+			} catch (const std::exception &e) {
+				Logger::error("get_cpuHz() : " + (string)e.what());
+				throw std::runtime_error("collect() : " + (string)e.what());
+			}
+		}
+		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
+		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
+		cpu_old.at("totals") = global_totals;
+		cpu_old.at("idles") = global_idles;
+
+		//? Total usage of cpu
+		cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+
+		//? Reduce size if there are more values than needed for graph
+		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
+
 		if (Config::getB("show_cpu_freq"))
 			cpuHz = get_cpuHz();
+
+		if (Config::getB("check_temp") and got_sensors)
+			update_sensors();
+
+		if (Config::getB("show_battery") and has_battery)
+			current_bat = get_battery();
 
 		return cpu;
 	}
@@ -416,10 +605,10 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
+			for (auto *ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == NULL) continue;
 				family = ifa->ifa_addr->sa_family;
-				const auto& iface = ifa->ifa_name;
+				const auto &iface = ifa->ifa_name;
 				//? Get IPv4 address
 				if (family == AF_INET) {
 					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
@@ -438,7 +627,7 @@ namespace Net {
 				}
 			}
 
-			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats; 
+			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0};
 			size_t len;
 			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
@@ -456,27 +645,25 @@ namespace Net {
 				if (ifm->ifm_type == RTM_IFINFO2) {
 					struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
 					struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
-    		        char iface[32];
+					char iface[32];
 					strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
-		            iface[sdl->sdl_nlen] = 0;
+					iface[sdl->sdl_nlen] = 0;
 					ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
-					Logger::debug(iface);
-					Logger::debug(std::to_string(if2m->ifm_data.ifi_ibytes));
-					Logger::debug(std::to_string(if2m->ifm_data.ifi_obytes));
 				}
 			}
 
 			//? Get total recieved and transmitted bytes + device address if no ip was found
-			for (const auto& iface : interfaces) {
-
+			for (const auto &iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
-					auto& saved_stat = net.at(iface).stat.at(dir);
-					auto& bandwidth = net.at(iface).bandwidth.at(dir);
+					auto &saved_stat = net.at(iface).stat.at(dir);
+					auto &bandwidth = net.at(iface).bandwidth.at(dir);
 					auto dirval = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
 					uint64_t val = saved_stat.last;
-					try { val = max(dirval, val); }
-					catch (const std::invalid_argument&) {}
-					catch (const std::out_of_range&) {}
+					try {
+						val = max(dirval, val);
+					} catch (const std::invalid_argument &) {
+					} catch (const std::out_of_range &) {
+					}
 
 					//? Update speed, total and top values
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
@@ -494,12 +681,10 @@ namespace Net {
 						if (saved_stat.speed > graph_max[dir]) {
 							++max_count[dir][0];
 							if (max_count[dir][1] > 0) --max_count[dir][1];
-						}
-						else if (graph_max[dir] > 10 << 10 and saved_stat.speed < graph_max[dir] / 10) {
+						} else if (graph_max[dir] > 10 << 10 and saved_stat.speed < graph_max[dir] / 10) {
 							++max_count[dir][1];
 							if (max_count[dir][0] > 0) --max_count[dir][0];
 						}
-
 					}
 				}
 			}
