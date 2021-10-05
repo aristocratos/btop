@@ -274,8 +274,6 @@ namespace Cpu {
 		processor_info_array_t info_array;
 		mach_msg_type_number_t info_count;
 		kern_return_t error;
-		processor_cpu_load_info_data_t *cpu_load_info = NULL;
-		int ret;
 
 		mach_port_t host_port = mach_host_self();
 		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
@@ -283,7 +281,6 @@ namespace Cpu {
 			Logger::error("Failed getting CPU info");
 			return core_map;
 		}
-		cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
 		for (i = 0; i < cpu_count; i++) {
 			core_map[i] = i;
 		}
@@ -334,7 +331,6 @@ namespace Cpu {
 		if (bat) {
 			char buf[2048];
 			while (fgets(buf, sizeof(buf), bat) != NULL) {
-				Logger::debug(buf);
 				char *perc = strstr(buf, "%");
 				if (perc) {
 					has_battery = true;
@@ -368,7 +364,6 @@ namespace Cpu {
 		mach_msg_type_number_t info_count;
 		kern_return_t error;
 		processor_cpu_load_info_data_t *cpu_load_info = NULL;
-		int ret;
 
 		mach_port_t host_port = mach_host_self();
 		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
@@ -584,6 +579,8 @@ namespace Mem {
 			for (const auto &name : last_found)
 				if (not is_in(name, "/", "swap"))
 					mem.disks_order.push_back(name);
+
+			old_uptime = uptime;
 		}
 		return mem;
 	}
@@ -877,45 +874,185 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> & {
-		int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
-		struct kinfo_proc *processes = NULL;
-		const double uptime = system_uptime();
-		auto procs = &current_procs;
+		const auto& sorting = Config::getS("proc_sorting");
+		const auto& reverse = Config::getB("proc_reversed");
+		const auto& filter = Config::getS("proc_filter");
+		const auto& per_core = Config::getB("proc_per_core");
+		const auto& tree = Config::getB("proc_tree");
+		const auto& show_detailed = Config::getB("show_detailed");
+		const size_t detailed_pid = Config::getI("detailed_pid");
+		bool should_filter = current_filter != filter;
+		if (should_filter) current_filter = filter;
+		const bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+		if (sorted_change) {
+			current_sort = sorting;
+			current_rev = reverse;
+		}
 
-		for (int retry = 3; retry > 0; retry--) {
-			size_t size = 0;
-			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
-				Logger::error("Unable to get size of kproc_infos");
+		const double uptime = system_uptime();
+
+		const int cmult = (per_core) ? Shared::coreCount : 1;
+		bool got_detailed = false;
+
+		//* Use pids from last update if only changing filter, sorting or tree options
+		if (no_update and not current_procs.empty()) {
+			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), current_procs);
+		} else {
+			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+			struct kinfo_proc *processes = NULL;
+			vector<size_t> found;
+			for (int retry = 3; retry > 0; retry--) {
+				size_t size = 0;
+				if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
+					Logger::error("Unable to get size of kproc_infos");
+				}
+
+				processes = (struct kinfo_proc *)malloc(size);
+				if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
+					size_t count = size / sizeof(struct kinfo_proc);
+					for (size_t i = 0; i < count; i++) {
+						struct kinfo_proc kproc = processes[i];
+						Proc::proc_info p{(size_t)kproc.kp_proc.p_pid};
+						char fullname[PROC_PIDPATHINFO_MAXSIZE];
+						const size_t pid = p.pid;
+						proc_pidpath(pid, fullname, sizeof(fullname));
+						p.cmd = std::string(fullname);
+						size_t lastSlash = p.cmd.find_last_of('/');
+						p.name = p.cmd.substr(lastSlash + 1);
+						p.ppid = kproc.kp_eproc.e_ppid;
+						p.p_nice = kproc.kp_proc.p_nice;
+						struct proc_taskinfo pti;
+						if (sizeof(pti) == proc_pidinfo(p.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
+							p.threads = pti.pti_threadnum;
+							p.cpu_t = pti.pti_total_user + pti.pti_total_system;
+							p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
+							p.cpu_p = 0;
+							p.cpu_s = pti.pti_total_system;
+						}
+						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
+						p.user = pwd->pw_name;
+						found.push_back(pid);
+						//? Check if pid already exists in current_procs
+						auto find_old = rng::find(current_procs, pid, &proc_info::pid);
+						bool no_cache = false;
+						if (find_old == current_procs.end()) {
+							current_procs.push_back(p);
+							find_old = current_procs.end() - 1;
+							no_cache = true;
+						}
+					}
+				}
 			}
 
-			processes = (struct kinfo_proc *)malloc(size);
+			// //? Clear dead processes from current_procs
+			// auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
+			// current_procs.erase(eraser.begin(), eraser.end());
 
-			if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
-				size_t count = size / sizeof(struct kinfo_proc);
-				for (size_t i = 0; i < count; i++) {
-					struct kinfo_proc kproc = processes[i];
-					Proc::proc_info p{kproc.kp_proc.p_pid};
-					char fullname[PROC_PIDPATHINFO_MAXSIZE];
-					proc_pidpath(p.pid, fullname, sizeof(fullname));
-					p.cmd = std::string(fullname);
-					size_t lastSlash = p.cmd.find_last_of('/');
-					p.name = p.cmd.substr(lastSlash + 1);
-					p.ppid = kproc.kp_eproc.e_ppid;
-					p.p_nice = kproc.kp_proc.p_nice;
-					struct proc_taskinfo pti;
-					if (sizeof(pti) == proc_pidinfo(p.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
-						p.threads = pti.pti_threadnum;
-						p.cpu_t = pti.pti_total_user + pti.pti_total_system;
-						p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
-						p.cpu_p = 0;
-						p.cpu_s = pti.pti_total_system;
+			//? Update the details info box for process if active
+			if (show_detailed and got_detailed) {
+				_collect_details(detailed_pid, round(uptime), current_procs);
+			}
+			else if (show_detailed and not got_detailed and detailed.status != "Dead") {
+				detailed.status = "Dead";
+				redraw = true;
+			}
+
+			old_cputimes = cputimes;
+		}
+
+		//* ---------------------------------------------Collection done-----------------------------------------------
+
+		//* Sort processes
+		if (sorted_change or not no_update) {
+			switch (v_index(sort_vector, sorting)) {
+					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
+					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
+					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
+					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
+					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
+					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
+					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
+					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
+			}
+			if (reverse) rng::reverse(current_procs);
+
+			//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
+			if (not tree and not reverse and sorting == "cpu lazy") {
+				double max = 10.0, target = 30.0;
+				for (size_t i = 0, x = 0, offset = 0; i < current_procs.size(); i++) {
+					if (i <= 5 and current_procs.at(i).cpu_p > max)
+						max = current_procs.at(i).cpu_p;
+					else if (i == 6)
+						target = (max > 30.0) ? max : 10.0;
+					if (i == offset and current_procs.at(i).cpu_p > 30.0)
+						offset++;
+					else if (current_procs.at(i).cpu_p > target) {
+						rotate(current_procs.begin() + offset, current_procs.begin() + i, current_procs.begin() + i + 1);
+						if (++x > 10) break;
 					}
-					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
-					p.user = pwd->pw_name;
-					procs->push_back(p);
 				}
 			}
 		}
+
+		//* Match filter if defined
+		if (should_filter) {
+			filter_found = 0;
+			for (auto& p : current_procs) {
+				if (not tree and not filter.empty()) {
+						if (not s_contains(to_string(p.pid), filter)
+						and not s_contains(p.name, filter)
+						and not s_contains(p.cmd, filter)
+						and not s_contains(p.user, filter)) {
+							p.filtered = true;
+							filter_found++;
+							}
+						else {
+							p.filtered = false;
+						}
+					}
+				else {
+					p.filtered = false;
+				}
+			}
+		}
+
+		//* Generate tree view if enabled
+		if (tree and (not no_update or should_filter or sorted_change)) {
+			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
+				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
+				if (collapser != current_procs.end()) {
+					if (collapse == expand) {
+						collapser->collapsed = not collapser->collapsed;
+					}
+					else if (collapse > -1) {
+						collapser->collapsed = true;
+					}
+					else if (expand > -1) {
+						collapser->collapsed = false;
+					}
+				}
+				collapse = expand = -1;
+			}
+			if (should_filter or not filter.empty()) filter_found = 0;
+
+			vector<std::reference_wrapper<proc_info>> tree_procs;
+			tree_procs.reserve(current_procs.size());
+
+			//? Stable sort to retain selected sorting among processes with the same parent
+			rng::stable_sort(current_procs, rng::less{}, &proc_info::ppid);
+
+			//? Start recursive iteration over processes with the lowest shared parent pids
+			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
+			}
+
+			//? Final sort based on tree index
+			rng::sort(current_procs, rng::less{}, &proc_info::tree_index);
+			if (reverse) rng::reverse(current_procs);
+
+		}
+
+		numpids = (int)current_procs.size() - filter_found;
 		return current_procs;
 	}
 }  // namespace Proc
