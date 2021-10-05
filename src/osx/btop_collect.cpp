@@ -272,7 +272,7 @@ namespace Cpu {
 		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
 			Logger::error("Failed to get CPU frequency: " + std::to_string(errno));
 		}
-		return std::to_string(freq);
+		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
 	}
 
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
