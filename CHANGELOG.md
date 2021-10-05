@@ -1,3 +1,9 @@
+## v1.0.14 (next release)
+
+* Changed: Total system memory is checked at every update instead of once at start
+
+* Added: Continuous Build workflow, by @ShrirajHegde
+
 ## v1.0.13
 
 * Changed: Graph empty symbol is now regular whitespace
