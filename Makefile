@@ -6,7 +6,7 @@ override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Ver
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
 
 ifneq ($(QUIET),true)
-	override PRE := info
+	override PRE := info info-quiet
 	override QUIET := false
 else
 	override PRE := info-quiet
@@ -111,8 +111,6 @@ info:
 	@printf "\033[1;95mCXXFLAGS   \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m)\n"
 	@printf "\033[1;95mLDFLAGS    \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m)\n"
 
-	@printf "\n\033[1;92mBuilding btop++ \033[93m(\033[97mv$(BTOP_VERSION)\033[93m)\033[0m\n"
-
 info-quiet:
 
 	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
@@ -128,6 +126,7 @@ help:
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
+	@printf "  info         Display information about Environment,compiler and linker flags\n"
 
 #? Make the Directories
 directories:
