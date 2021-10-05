@@ -6,16 +6,18 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:21.04
 
     steps:
       - uses: actions/checkout@v2
-      - name: update system
+      - name: Install g++, make
         run: |
-          sudo apt update && sudo apt upgrade -y
+          apt update && \
+          apt install coreutils sed git build-essential gcc-11 g++-11 -y
       - name: Build
-        run: make -j `nproc`
-          
+        run: make 
+
       - uses: actions/upload-artifact@v2
         with:
           name: Upload built binary
