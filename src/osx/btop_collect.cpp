@@ -333,7 +333,8 @@ namespace Cpu {
 		FILE *bat = popen("pmset -g batt", "r");
 		if (bat) {
 			char buf[2048];
-			if (fgets(buf, sizeof(buf), bat) != NULL) {
+			while (fgets(buf, sizeof(buf), bat) != NULL) {
+				Logger::debug(buf);
 				char *perc = strstr(buf, "%");
 				if (perc) {
 					has_battery = true;
