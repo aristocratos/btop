@@ -16,13 +16,8 @@ indent = tab
 tab-size = 4
 */
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOCFSerialize.h>
-#include <IOKit/IOMessage.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
-#include <IOKit/pwr_mgt/IOPM.h>
-#include <IOKit/pwr_mgt/IOPMLib.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <libproc.h>
@@ -627,7 +622,7 @@ namespace Mem {
 				disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 			}
 			for (const auto &name : last_found)
-				if (not is_in(name, "/", "swap"))
+				if (not is_in(name, "/", "swap", "/dev"))
 					mem.disks_order.push_back(name);
 
 			old_uptime = uptime;
