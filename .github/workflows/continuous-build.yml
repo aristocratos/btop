@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build.yml'
