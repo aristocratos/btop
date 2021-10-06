@@ -271,6 +271,7 @@ namespace Cpu {
 
 		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
 			Logger::error("Failed to get CPU frequency: " + std::to_string(errno));
+			return "";
 		}
 		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
 	}
@@ -463,8 +464,12 @@ namespace Cpu {
 		//? Reduce size if there are more values than needed for graph
 		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
-		if (Config::getB("show_cpu_freq"))
-			cpuHz = get_cpuHz();
+		if (Config::getB("show_cpu_freq")) {
+			auto hz = get_cpuHz();
+			if (hz != "") {
+				cpuHz = hz;
+			}
+		}
 
 		if (Config::getB("check_temp") and got_sensors)
 			update_sensors();
