@@ -32,6 +32,8 @@ using std::cin, std::vector, std::string_literals::operator""s;
 using namespace Tools;
 namespace rng = std::ranges;
 
+extern void clean_quit(int sig);
+
 namespace Input {
 
 	//* Map for translating key codes to readable values
@@ -187,7 +189,7 @@ namespace Input {
 			if (not filtering) {
 				bool keep_going = false;
 				if (str_to_lower(key) == "q") {
-					exit(0);
+					clean_quit(0);
 				}
 				else if (is_in(key, "escape", "m")) {
 					Menu::show(Menu::Menus::Main);
