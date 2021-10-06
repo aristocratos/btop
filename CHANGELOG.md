@@ -4,6 +4,10 @@
 
 * Added: Continuous Build workflow, by @ShrirajHegde
 
+* Fixed: Uid -> User fallback to getpwuid() if failure for non static builds
+
+* Fixed: snap root disk and changed to compiler flags instead of env variables for detection
+
 ## v1.0.13
 
 * Changed: Graph empty symbol is now regular whitespace
