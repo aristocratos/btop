@@ -919,6 +919,7 @@ namespace Proc {
 		if (s & SIDL) return "Idle";
 		if (s & SSTOP) return "Stopped";
 		if (s & SZOMB) return "Zombie";
+		return "Unknown";
 	}
 
 	//* Get detailed info for selected process
