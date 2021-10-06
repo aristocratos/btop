@@ -534,7 +534,6 @@ namespace Mem {
 				found.push_back(mountpoint);
 				if (not v_contains(last_found, mountpoint))
 					redraw = true;
-				last_found = std::move(found);
 
 				if (disks.at(mountpoint).dev.empty())
 					disks.at(mountpoint).dev = dev;
@@ -544,6 +543,17 @@ namespace Mem {
 				disks.at(mountpoint).total = stfs[i].f_iosize;
 			}
 
+			//? Remove disks no longer mounted or filtered out
+			if (swap_disk and has_swap) found.push_back("swap");
+			for (auto it = disks.begin(); it != disks.end();) {
+				if (not v_contains(found, it->first))
+					it = disks.erase(it);
+				else
+					it++;
+			}
+			if (found.size() != last_found.size()) redraw = true;
+			last_found = std::move(found);
+			
 			//? Get disk/partition stats
 			for (auto &[mountpoint, disk] : disks) {
 				if (std::error_code ec; not fs::exists(mountpoint, ec))
