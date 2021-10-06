@@ -16,6 +16,13 @@ indent = tab
 tab-size = 4
 */
 
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOCFSerialize.h>
+#include <IOKit/IOMessage.h>
+#include <IOKit/ps/IOPSKeys.h>
+#include <IOKit/ps/IOPowerSources.h>
+#include <IOKit/pwr_mgt/IOPM.h>
+#include <IOKit/pwr_mgt/IOPMLib.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <libproc.h>
@@ -323,32 +330,41 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
 
-		int percent = -1;
+		uint32_t percent = -1;
 		long seconds = -1;
 		string status = "discharging";
-
-		FILE *bat = popen("pmset -g batt", "r");
-		if (bat) {
-			char buf[2048];
-			while (fgets(buf, sizeof(buf), bat) != NULL) {
-				char *perc = strstr(buf, "%");
-				if (perc) {
-					has_battery = true;
-					perc -= 3;
-					string p(perc);
-					p.resize(3);
-					percent = atoi(p.c_str());
-					if (!strstr(buf, "discharging")) {
-						if (percent < 100) {
-							status = "charging";
-						} else {
+		CFTypeRef ps_info = IOPSCopyPowerSourcesInfo();
+		if (ps_info) {
+			CFArrayRef one_ps_descriptor = IOPSCopyPowerSourcesList(ps_info);
+			if (one_ps_descriptor) {
+				CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info, CFArrayGetValueAtIndex(one_ps_descriptor, 0));
+				has_battery = true;
+				auto state = CFDictionaryGetValue(one_ps, CFSTR(kIOPSPowerSourceStateKey));
+				CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
+				int32_t estimatedMinutesRemaining;
+				if (remaining) {
+					CFNumberGetValue(remaining, kCFNumberSInt32Type, &estimatedMinutesRemaining);
+					seconds = estimatedMinutesRemaining * 60;
+				}
+				CFNumberRef charge = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSCurrentCapacityKey));
+				if (charge) {
+					CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
+				}
+				CFBooleanRef charging = (CFBooleanRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSIsChargingKey));
+				if (charging) {
+					bool isCharging = CFBooleanGetValue(charging);
+					if (isCharging) {
+						status = "charging";
+						if (percent == 100) {
 							status = "full";
 						}
 					}
-				} else {
-					has_battery = false;
 				}
+    			CFRelease(one_ps_descriptor);
+			} else {
+				has_battery = false;
 			}
+			CFRelease(ps_info);
 		}
 		return {percent, seconds, status};
 	}
@@ -367,7 +383,6 @@ namespace Cpu {
 		cpu.load_avg[0] = avg[0];
 		cpu.load_avg[1] = avg[1];
 		cpu.load_avg[2] = avg[2];
-		
 		natural_t cpu_count;
 		natural_t i;
 		processor_info_array_t info_array;
@@ -926,7 +941,7 @@ namespace Proc {
 				if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 					Logger::error("Unable to get size of kproc_infos");
 				}
-
+				uint64_t cpu_t = 0;
 				processes = (struct kinfo_proc *)malloc(size);
 				if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
 					size_t count = size / sizeof(struct kinfo_proc);
@@ -944,10 +959,10 @@ namespace Proc {
 						struct proc_taskinfo pti;
 						if (sizeof(pti) == proc_pidinfo(p.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 							p.threads = pti.pti_threadnum;
-							p.cpu_t = pti.pti_total_user + pti.pti_total_system;
-							p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
-							p.cpu_p = 0;
+							cpu_t = pti.pti_total_user + pti.pti_total_system;
 							p.cpu_s = pti.pti_total_system;
+							p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
+							p.mem = pti.pti_resident_size;
 						}
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 						p.user = pwd->pw_name;
@@ -960,6 +975,14 @@ namespace Proc {
 							find_old = current_procs.end() - 1;
 							no_cache = true;
 						}
+						//? Process cpu usage since last update
+						p.cpu_p = clamp(round(cmult * 1000 * (cpu_t - p.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+
+						//? Process cumulative cpu usage since process start
+						p.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
+
+						//? Update cached value with latest cpu times
+						p.cpu_t = cpu_t;
 					}
 				}
 			}
