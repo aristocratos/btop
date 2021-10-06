@@ -27,6 +27,10 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 
+#ifndef STATIC_BUILD
+	#include <pwd.h>
+#endif
+
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
@@ -1416,7 +1420,26 @@ namespace Proc {
 						}
 					}
 					pread.close();
-					new_proc.user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+					if (uid_user.contains(uid)) {
+						new_proc.user = uid_user.at(uid);
+					}
+					else {
+					#ifndef STATIC_BUILD
+						try {
+							struct passwd* udet;
+							udet = getpwuid(stoi(uid));
+							if (udet != NULL and udet->pw_name != NULL) {
+								new_proc.user = string(udet->pw_name);
+							}
+							else {
+								new_proc.user = uid;
+							}
+						}
+						catch (...) { new_proc.user = uid; }
+					#else
+						new_proc.user = uid;
+					#endif
+					}
 				}
 
 				//? Parse /proc/[pid]/stat

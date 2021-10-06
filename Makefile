@@ -24,7 +24,7 @@ ifeq ($(ARCH),x86_64)
 endif
 
 ifeq ($(STATIC),true)
-	override ADDFLAGS += -static -static-libgcc -static-libstdc++
+	override ADDFLAGS += -D STATIC_BUILD -static -static-libgcc -static-libstdc++
 endif
 
 #? Make sure PLATFORM Darwin is OSX and not Darwin
