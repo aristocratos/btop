@@ -2,13 +2,16 @@ name: Continuous Build Linux
 
 on:
   push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
     paths:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/continuous-build.yml'
 
 jobs:
   build:
