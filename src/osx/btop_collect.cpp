@@ -358,10 +358,10 @@ namespace Cpu {
 						bool isCharging = CFBooleanGetValue(charging);
 						if (isCharging) {
 							status = "charging";
-							if (percent == 100) {
-								status = "full";
-							}
 						}
+					}
+					if (percent == 100) {
+						status = "full";
 					}
 				} else {
 					has_battery = false;
