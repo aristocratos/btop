@@ -262,12 +262,12 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		uint64_t freq = 0;
+		int64_t freq = 1;
 		size_t size = sizeof(freq);
 
-		return "1.0";
 		if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0) {
-			Logger::error("Failed to get CPU frequency");
+			char *err = strerror(errno);
+			Logger::error("Failed to get CPU frequency: " + string(err));
 		}
 		return std::to_string(freq);
 	}
@@ -489,7 +489,6 @@ namespace Mem {
 		auto &show_swap = Config::getB("show_swap");
 		auto &show_disks = Config::getB("show_disks");
 		auto &swap_disk = Config::getB("swap_disk");
-		auto totalMem = get_totalMem();
 		auto &mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
@@ -532,7 +531,7 @@ namespace Mem {
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-			auto &only_physical = Config::getB("only_physical");
+			// auto &only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -1000,11 +999,9 @@ namespace Proc {
 						found.push_back(pid);
 						//? Check if pid already exists in current_procs
 						auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-						bool no_cache = false;
 						if (find_old == current_procs.end()) {
 							current_procs.push_back(p);
 							find_old = current_procs.end() - 1;
-							no_cache = true;
 						}
 						//? Process cpu usage since last update
 						p.cpu_p = clamp(round(cmult * 1000 * (cpu_t - p.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
