@@ -304,6 +304,7 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output = false;
 	sigset_t mask;
+	
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {

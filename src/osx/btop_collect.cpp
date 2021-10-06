@@ -339,7 +339,6 @@ namespace Cpu {
 			if (one_ps_descriptor) {
 				CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info, CFArrayGetValueAtIndex(one_ps_descriptor, 0));
 				has_battery = true;
-				auto state = CFDictionaryGetValue(one_ps, CFSTR(kIOPSPowerSourceStateKey));
 				CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
 				int32_t estimatedMinutesRemaining;
 				if (remaining) {
@@ -905,6 +904,33 @@ namespace Proc {
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info> &procs) {
+		if (pid != detailed.last_pid) {
+			detailed = {};
+			detailed.last_pid = pid;
+			detailed.skip_smaps = not Config::getB("proc_info_smaps");
+		}
+
+		//? Copy proc_info for process from proc vector
+		auto p_info = rng::find(procs, pid, &proc_info::pid);
+		detailed.entry = *p_info;
+
+		//? Update cpu percent deque for process cpu graph
+		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
+		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
+		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
+
+		//? Process runtime
+		detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
+		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
+
+		//? Get parent process name
+		if (detailed.parent.empty()) {
+			auto p_entry = rng::find(procs, detailed.entry.ppid, &proc_info::pid);
+			if (p_entry != procs.end()) detailed.parent = p_entry->name;
+		}
+
+		//? Expand process status from single char to explanative string
+		detailed.status = (proc_states.contains(detailed.entry.state)) ? proc_states.at(detailed.entry.state) : "Unknown";
 	}
 
 	//* Collects and sorts process information from /proc
