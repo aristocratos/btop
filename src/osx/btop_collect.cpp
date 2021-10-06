@@ -262,12 +262,15 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		int64_t freq = 1;
+		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
-		if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) < 0) {
-			char *err = strerror(errno);
-			Logger::error("Failed to get CPU frequency: " + string(err));
+		int mib[2];
+		mib[0] = CTL_HW;
+		mib[1] = HW_CPU_FREQ;
+
+		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
+			Logger::error("Failed to get CPU frequency: " + std::to_string(errno));
 		}
 		return std::to_string(freq);
 	}
@@ -359,7 +362,7 @@ namespace Cpu {
 						}
 					}
 				}
-    			CFRelease(one_ps_descriptor);
+				CFRelease(one_ps_descriptor);
 			} else {
 				has_battery = false;
 			}
