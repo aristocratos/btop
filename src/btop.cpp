@@ -304,9 +304,9 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output = false;
 	sigset_t mask;
-	
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
+
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
 		{"net",		0b0000'0100},
@@ -383,7 +383,6 @@ namespace Runner {
 		thread_lock pt_lck(mtx);
 		if (pt_lck.status != 0) {
 			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-			Logger::error(Global::exit_error_msg);
 			Global::thread_exception = true;
 			Input::interrupt = true;
 			stopping = true;
@@ -537,7 +536,6 @@ namespace Runner {
 			}
 			catch (const std::exception& e) {
 				Global::exit_error_msg = "Exception in runner thread -> " + (string)e.what();
-				Logger::error(Global::exit_error_msg);
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
