@@ -913,6 +913,14 @@ namespace Proc {
 		out_procs.at(cur_pos).get().prefix = " │ "s * cur_depth + (children > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
 	}
 
+	string get_status(char s) {
+		if (s & SRUN) return "Running";
+		if (s & SSLEEP) return "Sleeping";
+		if (s & SIDL) return "Idle";
+		if (s & SSTOP) return "Stopped";
+		if (s & SZOMB) return "Zombie";
+	}
+
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info> &procs) {
 		if (pid != detailed.last_pid) {
@@ -941,7 +949,20 @@ namespace Proc {
 		}
 
 		//? Expand process status from single char to explanative string
-		detailed.status = (proc_states.contains(detailed.entry.state)) ? proc_states.at(detailed.entry.state) : "Unknown";
+		Logger::debug("pid " + std::to_string(pid) + string(":") + std::to_string(detailed.entry.state));
+		detailed.status = get_status(detailed.entry.state);
+
+		if (detailed.memory.empty()) {
+			detailed.mem_bytes.push_back(detailed.entry.mem);
+			detailed.memory = floating_humanizer(detailed.entry.mem);
+		}
+		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
+			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
+			redraw = true;
+		}
+
+		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+
 	}
 
 	//* Collects and sorts process information from /proc
@@ -970,71 +991,86 @@ namespace Proc {
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), current_procs);
 		} else {
+			//* ---------------------------------------------Collection start----------------------------------------------
+			should_filter = true;
 			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			struct kinfo_proc *processes = NULL;
 			vector<size_t> found;
-			for (int retry = 3; retry > 0; retry--) {
-				size_t size = 0;
-				if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
-					Logger::error("Unable to get size of kproc_infos");
-				}
-				uint64_t cpu_t = 0;
-				processes = (struct kinfo_proc *)malloc(size);
-				if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
-					size_t count = size / sizeof(struct kinfo_proc);
-					for (size_t i = 0; i < count; i++) {
-						struct kinfo_proc kproc = processes[i];
-						Proc::proc_info p{(size_t)kproc.kp_proc.p_pid};
+			size_t size = 0;
+			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
+				Logger::error("Unable to get size of kproc_infos");
+			}
+			uint64_t cpu_t = 0;
+			processes = (struct kinfo_proc *)malloc(size);
+			if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
+				size_t count = size / sizeof(struct kinfo_proc);
+				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
+					struct kinfo_proc kproc = processes[i];
+					const size_t pid = (size_t)kproc.kp_proc.p_pid;
+					found.push_back(pid);
+
+					//? Check if pid already exists in current_procs
+					auto find_old = rng::find(current_procs, pid, &proc_info::pid);
+					bool no_cache = false;
+					if (find_old == current_procs.end()) {
+						current_procs.push_back({pid});
+						find_old = current_procs.end() - 1;
+						no_cache = true;
+					}
+					SRUN;
+
+					auto &new_proc = *find_old;
+
+					//? Get program name, command and username
+					if (no_cache) {
 						char fullname[PROC_PIDPATHINFO_MAXSIZE];
-						const size_t pid = p.pid;
 						proc_pidpath(pid, fullname, sizeof(fullname));
-						p.cmd = std::string(fullname);
-						size_t lastSlash = p.cmd.find_last_of('/');
-						p.name = p.cmd.substr(lastSlash + 1);
-						p.ppid = kproc.kp_eproc.e_ppid;
-						p.p_nice = kproc.kp_proc.p_nice;
+						new_proc.cmd = std::string(fullname);
+						size_t lastSlash = new_proc.cmd.find_last_of('/');
+						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
+						new_proc.ppid = kproc.kp_eproc.e_ppid;
+						new_proc.p_nice = kproc.kp_proc.p_nice;
+						new_proc.state = kproc.kp_proc.p_stat;	
+						cpu_t = (kproc.kp_proc.p_uticks + kproc.kp_proc.p_sticks) * Shared::clkTck;
+						new_proc.cpu_t = cpu_t;
+						new_proc.cpu_s = kproc.kp_proc.p_sticks * Shared::clkTck;
+						new_proc.cpu_c = (double)new_proc.cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 						struct proc_taskinfo pti;
-						if (sizeof(pti) == proc_pidinfo(p.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
-							p.threads = pti.pti_threadnum;
-							cpu_t = pti.pti_total_user + pti.pti_total_system;
-							p.cpu_s = pti.pti_total_system;
-							p.cpu_c = (double)p.cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
-							p.mem = pti.pti_resident_size;
+						if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
+							new_proc.threads = pti.pti_threadnum;
+							new_proc.mem = pti.pti_resident_size;
 						}
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
-						p.user = pwd->pw_name;
-						found.push_back(pid);
-						//? Check if pid already exists in current_procs
-						auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-						if (find_old == current_procs.end()) {
-							current_procs.push_back(p);
-							find_old = current_procs.end() - 1;
-						}
-						//? Process cpu usage since last update
-						p.cpu_p = clamp(round(cmult * 1000 * (cpu_t - p.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+						new_proc.user = pwd->pw_name;
+					}
+					//? Process cpu usage since last update
+					new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
-						//? Process cumulative cpu usage since process start
-						p.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - p.cpu_s);
+					//? Process cumulative cpu usage since process start
+					new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 
-						//? Update cached value with latest cpu times
-						p.cpu_t = cpu_t;
+					//? Update cached value with latest cpu times
+					new_proc.cpu_t = cpu_t;
+
+					if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
+						got_detailed = true;
 					}
 				}
+
+				// //? Clear dead processes from current_procs
+				auto eraser = rng::remove_if(current_procs, [&](const auto &element) { return not v_contains(found, element.pid); });
+				current_procs.erase(eraser.begin(), eraser.end());
+
+				//? Update the details info box for process if active
+				if (show_detailed and got_detailed) {
+					_collect_details(detailed_pid, round(uptime), current_procs);
+				} else if (show_detailed and not got_detailed and detailed.status != "Dead") {
+					detailed.status = "Dead";
+					redraw = true;
+				}
+
+				old_cputimes = cputimes;
 			}
-
-			// //? Clear dead processes from current_procs
-			// auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
-			// current_procs.erase(eraser.begin(), eraser.end());
-
-			//? Update the details info box for process if active
-			if (show_detailed and got_detailed) {
-				_collect_details(detailed_pid, round(uptime), current_procs);
-			} else if (show_detailed and not got_detailed and detailed.status != "Dead") {
-				detailed.status = "Dead";
-				redraw = true;
-			}
-
-			old_cputimes = cputimes;
 		}
 
 		//* ---------------------------------------------Collection done-----------------------------------------------
