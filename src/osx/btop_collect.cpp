@@ -478,6 +478,10 @@ namespace Mem {
 
 	mem_info current_mem{};
 
+	uint64_t get_totalMem() {
+		return Shared::totalMem;
+	}
+
 	auto collect(const bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
@@ -485,6 +489,7 @@ namespace Mem {
 		auto &show_swap = Config::getB("show_swap");
 		auto &show_disks = Config::getB("show_disks");
 		auto &swap_disk = Config::getB("swap_disk");
+		auto totalMem = get_totalMem();
 		auto &mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
