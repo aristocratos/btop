@@ -340,27 +340,31 @@ namespace Cpu {
 		if (ps_info) {
 			CFArrayRef one_ps_descriptor = IOPSCopyPowerSourcesList(ps_info);
 			if (one_ps_descriptor) {
-				CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info, CFArrayGetValueAtIndex(one_ps_descriptor, 0));
-				has_battery = true;
-				CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
-				int32_t estimatedMinutesRemaining;
-				if (remaining) {
-					CFNumberGetValue(remaining, kCFNumberSInt32Type, &estimatedMinutesRemaining);
-					seconds = estimatedMinutesRemaining * 60;
-				}
-				CFNumberRef charge = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSCurrentCapacityKey));
-				if (charge) {
-					CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
-				}
-				CFBooleanRef charging = (CFBooleanRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSIsChargingKey));
-				if (charging) {
-					bool isCharging = CFBooleanGetValue(charging);
-					if (isCharging) {
-						status = "charging";
-						if (percent == 100) {
-							status = "full";
+				if (CFArrayGetCount(one_ps_descriptor)) {
+					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info, CFArrayGetValueAtIndex(one_ps_descriptor, 0));
+					has_battery = true;
+					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
+					int32_t estimatedMinutesRemaining;
+					if (remaining) {
+						CFNumberGetValue(remaining, kCFNumberSInt32Type, &estimatedMinutesRemaining);
+						seconds = estimatedMinutesRemaining * 60;
+					}
+					CFNumberRef charge = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSCurrentCapacityKey));
+					if (charge) {
+						CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
+					}
+					CFBooleanRef charging = (CFBooleanRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSIsChargingKey));
+					if (charging) {
+						bool isCharging = CFBooleanGetValue(charging);
+						if (isCharging) {
+							status = "charging";
+							if (percent == 100) {
+								status = "full";
+							}
 						}
 					}
+				} else {
+					has_battery = false;
 				}
 				CFRelease(one_ps_descriptor);
 			} else {
