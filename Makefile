@@ -93,6 +93,9 @@ ifdef DEBUG
 	override OPTFLAGS := -O0 -g
 endif
 
+ifeq ($(PLATFORM), OSX)
+	override LDCXXFLAGS +=  -framework IOKit -framework CoreFoundation
+endif
 ifneq ($(ARCH),arm64)
 ifneq ($(PLATFORM),OSX)
 	override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
