@@ -358,6 +358,16 @@ namespace Cpu {
 			return current_cpu;
 		auto &cpu = current_cpu;
 
+		double avg[3];
+
+		if (getloadavg(avg, sizeof(avg)) < 0) {
+			Logger::error("failed to get load averages");
+		}
+
+		cpu.load_avg[0] = avg[0];
+		cpu.load_avg[1] = avg[1];
+		cpu.load_avg[2] = avg[2];
+		
 		natural_t cpu_count;
 		natural_t i;
 		processor_info_array_t info_array;
@@ -553,7 +563,7 @@ namespace Mem {
 			}
 			if (found.size() != last_found.size()) redraw = true;
 			last_found = std::move(found);
-			
+
 			//? Get disk/partition stats
 			for (auto &[mountpoint, disk] : disks) {
 				if (std::error_code ec; not fs::exists(mountpoint, ec))
@@ -884,12 +894,12 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> & {
-		const auto& sorting = Config::getS("proc_sorting");
-		const auto& reverse = Config::getB("proc_reversed");
-		const auto& filter = Config::getS("proc_filter");
-		const auto& per_core = Config::getB("proc_per_core");
-		const auto& tree = Config::getB("proc_tree");
-		const auto& show_detailed = Config::getB("show_detailed");
+		const auto &sorting = Config::getS("proc_sorting");
+		const auto &reverse = Config::getB("proc_reversed");
+		const auto &filter = Config::getS("proc_filter");
+		const auto &per_core = Config::getB("proc_per_core");
+		const auto &tree = Config::getB("proc_tree");
+		const auto &show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
@@ -961,8 +971,7 @@ namespace Proc {
 			//? Update the details info box for process if active
 			if (show_detailed and got_detailed) {
 				_collect_details(detailed_pid, round(uptime), current_procs);
-			}
-			else if (show_detailed and not got_detailed and detailed.status != "Dead") {
+			} else if (show_detailed and not got_detailed and detailed.status != "Dead") {
 				detailed.status = "Dead";
 				redraw = true;
 			}
@@ -975,14 +984,30 @@ namespace Proc {
 		//* Sort processes
 		if (sorted_change or not no_update) {
 			switch (v_index(sort_vector, sorting)) {
-					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
-					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
-					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
-					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
-					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
-					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
-					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
-					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
+				case 0:
+					rng::sort(current_procs, rng::greater{}, &proc_info::pid);
+					break;
+				case 1:
+					rng::sort(current_procs, rng::greater{}, &proc_info::name);
+					break;
+				case 2:
+					rng::sort(current_procs, rng::greater{}, &proc_info::cmd);
+					break;
+				case 3:
+					rng::sort(current_procs, rng::greater{}, &proc_info::threads);
+					break;
+				case 4:
+					rng::sort(current_procs, rng::greater{}, &proc_info::user);
+					break;
+				case 5:
+					rng::sort(current_procs, rng::greater{}, &proc_info::mem);
+					break;
+				case 6:
+					rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);
+					break;
+				case 7:
+					rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);
+					break;
 			}
 			if (reverse) rng::reverse(current_procs);
 
@@ -1007,20 +1032,15 @@ namespace Proc {
 		//* Match filter if defined
 		if (should_filter) {
 			filter_found = 0;
-			for (auto& p : current_procs) {
+			for (auto &p : current_procs) {
 				if (not tree and not filter.empty()) {
-						if (not s_contains(to_string(p.pid), filter)
-						and not s_contains(p.name, filter)
-						and not s_contains(p.cmd, filter)
-						and not s_contains(p.user, filter)) {
-							p.filtered = true;
-							filter_found++;
-							}
-						else {
-							p.filtered = false;
-						}
+					if (not s_contains(to_string(p.pid), filter) and not s_contains(p.name, filter) and not s_contains(p.cmd, filter) and not s_contains(p.user, filter)) {
+						p.filtered = true;
+						filter_found++;
+					} else {
+						p.filtered = false;
 					}
-				else {
+				} else {
 					p.filtered = false;
 				}
 			}
@@ -1033,11 +1053,9 @@ namespace Proc {
 				if (collapser != current_procs.end()) {
 					if (collapse == expand) {
 						collapser->collapsed = not collapser->collapsed;
-					}
-					else if (collapse > -1) {
+					} else if (collapse > -1) {
 						collapser->collapsed = true;
-					}
-					else if (expand > -1) {
+					} else if (expand > -1) {
 						collapser->collapsed = false;
 					}
 				}
@@ -1052,14 +1070,13 @@ namespace Proc {
 			rng::stable_sort(current_procs, rng::less{}, &proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
-			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+			for (auto &p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
 			}
 
 			//? Final sort based on tree index
 			rng::sort(current_procs, rng::less{}, &proc_info::tree_index);
 			if (reverse) rng::reverse(current_procs);
-
 		}
 
 		numpids = (int)current_procs.size() - filter_found;
