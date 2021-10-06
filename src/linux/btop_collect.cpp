@@ -686,7 +686,6 @@ namespace Mem {
 		auto& show_disks = Config::getB("show_disks");
 		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
-		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
 		mem.stats.at("swap_total") = 0;
 
@@ -791,8 +790,12 @@ namespace Mem {
 						for (string instr; diskread >> instr;) {
 							if (not instr.starts_with('#')) {
 								diskread >> instr;
-								if (snapped and instr == "/") fstab.push_back("/mnt");
-								else if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#ifdef SNAPPED
+									if (instr == "/") fstab.push_back("/mnt");
+									else if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#else
+									if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#endif
 							}
 							diskread.ignore(SSmax, '\n');
 						}
@@ -829,7 +832,10 @@ namespace Mem {
 							if (not disks.contains(mountpoint)) {
 								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
 								if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
-								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" or (snapped and mountpoint == "/mnt") ? "root" : mountpoint);
+								#ifdef SNAPPED
+									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
+								#endif
+								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 								string devname = disks.at(mountpoint).dev.filename();
 								while (devname.size() >= 2) {
 									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
@@ -875,8 +881,11 @@ namespace Mem {
 
 				//? Setup disks order in UI and add swap if enabled
 				mem.disks_order.clear();
-				if (snapped and disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
-				else if (disks.contains("/")) mem.disks_order.push_back("/");
+				#ifdef SNAPPED
+					if (disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+				#else
+					if (disks.contains("/")) mem.disks_order.push_back("/");
+				#endif
 				if (swap_disk and has_swap) {
 					mem.disks_order.push_back("swap");
 					if (not disks.contains("swap")) disks["swap"] = {"", "swap"};

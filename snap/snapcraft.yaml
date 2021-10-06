@@ -29,7 +29,6 @@ apps:
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
-      BTOP_SNAPPED: true
     plugs:
       - mount-observe
       - process-control
@@ -48,7 +47,7 @@ parts:
     make-parameters:
       - PREFIX=/usr/local
       - STATIC=true
-      - BTOP_SNAPPED=1
+      - ADDFLAGS="-D SNAPPED"
       
     build-packages:
       - coreutils
