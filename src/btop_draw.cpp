@@ -610,9 +610,9 @@ namespace Cpu {
 			const auto [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
 			const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
 			if (b_column_size > 1 or b_columns > 1)
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
 					+ temp_graphs.at(0)(cpu.temp.at(0), data_same or redraw);
-			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 		}
 		out += Theme::c("div_line") + Symbols::v_line;
 
@@ -626,16 +626,14 @@ namespace Cpu {
 				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
-					+ Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll)) + core_graphs.at(n)(cpu.core_percent.at(n), data_same or redraw);
-			else
-				out += Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll));
-			out += rjust(to_string(cpu.core_percent.at(n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
+					+ core_graphs.at(n)(cpu.core_percent.at(n), data_same or redraw);
+			out += Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll)) + rjust(to_string(cpu.core_percent.at(n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
 
 			if (show_temps and not hide_cores) {
 				const auto [temp, unit] = celsius_to(cpu.temp.at(n+1).back(), temp_scale);
 				const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
 				if (b_column_size > 1)
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
 						+ temp_graphs.at(n+1)(cpu.temp.at(n+1), data_same or redraw);
 				out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
