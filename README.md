@@ -250,6 +250,8 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STATIC=true` to `make` command for static compilation.
 
+   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users when compiling statically.
+
    Append `QUIET=true` for less verbose output.
 
    Notice! Manually set `$ARCH` variable if cross-compiling
