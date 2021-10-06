@@ -1313,14 +1313,15 @@ namespace Proc {
 			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
-
-			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
-			string mem_str = to_string(mem_p);
-			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
-			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
-				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
-				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
-				+ Theme::c("title") + Fx::b + detailed.memory;
+			if (detailed.mem_bytes.size() > 0) {
+				const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
+				string mem_str = to_string(mem_p);
+				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+				out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
+					+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
+					+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
+					+ Theme::c("title") + Fx::b + detailed.memory;
+			}
 		}
 
 		//? Check bounds of current selection and view
