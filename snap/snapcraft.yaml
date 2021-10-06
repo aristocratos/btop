@@ -47,7 +47,7 @@ parts:
     make-parameters:
       - PREFIX=/usr/local
       - STATIC=true
-      - BTOP_SNAPPED=1
+      - ADDFLAGS="-D SNAPPED"
       
     build-packages:
       - coreutils
