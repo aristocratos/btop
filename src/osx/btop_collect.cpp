@@ -557,7 +557,9 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
-				disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+				if (string(stfs[i].f_fstypename) == "autofs") {
+					continue;
+				}
 
 				//? Match filter if not empty
 				if (not filter.empty()) {
@@ -565,6 +567,7 @@ namespace Mem {
 					if ((filter_exclude and match) or (not filter_exclude and not match))
 						continue;
 				}
+				disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
 
 				found.push_back(mountpoint);
 				if (not v_contains(last_found, mountpoint))
@@ -963,7 +966,6 @@ namespace Proc {
 		}
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
-
 	}
 
 	//* Collects and sorts process information from /proc
