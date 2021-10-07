@@ -987,7 +987,7 @@ namespace Proc {
 
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
-		
+
 		{	//* Get CPU totals
 			natural_t cpu_count;
 			processor_info_array_t info_array;
@@ -1000,7 +1000,7 @@ namespace Proc {
 				Logger::error("Failed getting CPU load info");
 			}
 			cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
-			cputimes 	= cpu_load_info[0].cpu_ticks[CPU_STATE_USER] 
+			cputimes 	= cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
 						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
 						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
 						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
@@ -1048,28 +1048,27 @@ namespace Proc {
 						size_t lastSlash = new_proc.cmd.find_last_of('/');
 						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
+						new_proc.cpu_s = round((kproc.kp_proc.p_starttime.tv_sec + kproc.kp_proc.p_starttime.tv_usec) / 1'000'000);
 					}
 					new_proc.p_nice = kproc.kp_proc.p_nice;
 					new_proc.state = kproc.kp_proc.p_stat;
-					
+
 					//? Get threads, mem and cpu usage
 					struct proc_taskinfo pti;
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
-						cpu_t = (pti.pti_total_user + pti.pti_total_system) / 1'000;
+						cpu_t = round((pti.pti_total_user + pti.pti_total_system) / 1'000);
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
-						new_proc.cpu_s = pti.pti_total_system / 1'000;
-						new_proc.cpu_c = (double)new_proc.cpu_t / max(1.0, uptime - new_proc.cpu_s);
 					}
 					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 					new_proc.user = pwd->pw_name;
-					
+
 					//? Process cpu usage since last update
 					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = (double)cpu_t / max(1.0, uptime - new_proc.cpu_s);
+					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, uptime - new_proc.cpu_s);
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
