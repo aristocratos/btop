@@ -4,6 +4,7 @@ BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m█
 
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
+DATE_CMD = date
 
 ifneq ($(QUIET),true)
 	override PRE := info info-quiet
@@ -18,6 +19,16 @@ PREFIX ?= /usr/local
 PLATFORM ?= $(shell uname -s || echo unknown)
 ARCH ?= $(shell uname -m || echo unknown)
 
+#? Make sure PLATFORM Darwin is OSX and not Darwin
+ifeq ($(PLATFORM),Darwin)
+	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
+		override PLATFORM := OSX
+		ifeq ($(shell uname -v | grep ARM64 >/dev/null 2>&1; echo $$?),0)
+			override ARCH := arm64
+		endif
+	endif
+endif
+
 #? Only enable fcf-protection if on x86_64
 ifeq ($(ARCH),x86_64)
 	override ADDFLAGS += -fcf-protection
@@ -27,20 +38,17 @@ ifeq ($(STATIC),true)
 	override ADDFLAGS += -D STATIC_BUILD -static -static-libgcc -static-libstdc++
 endif
 
-#? Make sure PLATFORM Darwin is OSX and not Darwin
-ifeq ($(PLATFORM),Darwin)
-	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
-		PLATFORM := OSX
-	endif
-endif
-
 #? Compiler and Linker
-CXX ?= g++
+CXX := g++
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
 ifeq ($(CXX),g++)
-	V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
+	ifeq ($(shell g++ --version | grep clang >/dev/null 2>&1; echo $$?),0)
+		V_MAJOR := 0
+	else
+		V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
+	endif
 	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
 		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
 			override CXX := g++-11
@@ -59,6 +67,9 @@ else ifeq ($(PLATFORM),FreeBSD)
 else ifeq ($(PLATFORM),OSX)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
+		override DATE_CMD := gdate
+	endif
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
 endif
@@ -94,12 +105,11 @@ ifdef DEBUG
 endif
 
 ifeq ($(PLATFORM), OSX)
-	override LDCXXFLAGS +=  -framework IOKit -framework CoreFoundation
-endif
-ifneq ($(ARCH),arm64)
-ifneq ($(PLATFORM),OSX)
-	override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
-endif
+	override LDCXXFLAGS += -framework IOKit -framework CoreFoundation
+else
+	ifneq ($(ARCH),arm64)
+		override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
+	endif
 endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
@@ -125,7 +135,7 @@ info:
 	@printf "\033[1;95mLDFLAGS    \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m)\n"
 
 info-quiet:
-
+	@sleep 0.1 2>/dev/null || true
 	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
 
 help:
@@ -195,8 +205,8 @@ btop: $(OBJECTS)
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
-	@printf "\033[1;92m-> \033[1;37m$(TARGETDIR)/btop \033[100D\033[35C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
-	@printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@printf "\033[1;92m-> \033[1;37m$(TARGETDIR)/btop \033[100D\033[35C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 
 #? Compile
 .ONESHELL:
@@ -210,7 +220,7 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
 	@sed -e 's|.*:|$(BUILDDIR)/$*.$(OBJEXT):|' < $(BUILDDIR)/$*.$(DEPEXT).tmp > $(BUILDDIR)/$*.$(DEPEXT)
 	@sed -e 's/.*://' -e 's/\\$$//' < $(BUILDDIR)/$*.$(DEPEXT).tmp | fmt -1 | sed -e 's/^ *//' -e 's/$$/:/' >> $(BUILDDIR)/$*.$(DEPEXT)
 	@rm -f $(BUILDDIR)/$*.$(DEPEXT).tmp
-	@printf "\033[1;92m-> \033[1;37m$@ \033[100D\033[35C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$(date -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@printf "\033[1;92m-> \033[1;37m$@ \033[100D\033[35C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$(date -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
 
 #? Non-File Targets
 .PHONY: all msg help pre
