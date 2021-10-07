@@ -1029,22 +1029,26 @@ namespace Proc {
 					found.push_back(pid);
 
 					//? Check if pid already exists in current_procs
+					bool no_cache = false;
 					auto find_old = rng::find(current_procs, pid, &proc_info::pid);
 					if (find_old == current_procs.end()) {
 						current_procs.push_back({pid});
 						find_old = current_procs.end() - 1;
+						no_cache = true;
 					}
 					SRUN;
 
 					auto &new_proc = *find_old;
 
 					//? Get program name, command, username, parent pid, nice and status
-					char fullname[PROC_PIDPATHINFO_MAXSIZE];
-					proc_pidpath(pid, fullname, sizeof(fullname));
-					new_proc.cmd = std::string(fullname);
-					size_t lastSlash = new_proc.cmd.find_last_of('/');
-					new_proc.name = new_proc.cmd.substr(lastSlash + 1);
-					new_proc.ppid = kproc.kp_eproc.e_ppid;
+					if (no_cache) {
+						char fullname[PROC_PIDPATHINFO_MAXSIZE];
+						proc_pidpath(pid, fullname, sizeof(fullname));
+						new_proc.cmd = std::string(fullname);
+						size_t lastSlash = new_proc.cmd.find_last_of('/');
+						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
+						new_proc.ppid = kproc.kp_eproc.e_ppid;
+					}
 					new_proc.p_nice = kproc.kp_proc.p_nice;
 					new_proc.state = kproc.kp_proc.p_stat;
 					
@@ -1053,16 +1057,16 @@ namespace Proc {
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
-						cpu_t = (pti.pti_total_user + pti.pti_total_system) / 1'000'000;
+						cpu_t = (pti.pti_total_user + pti.pti_total_system) / 1'000;
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
-						new_proc.cpu_s = pti.pti_total_system / 1'000'000;
+						new_proc.cpu_s = pti.pti_total_system / 1'000;
 						new_proc.cpu_c = (double)new_proc.cpu_t / max(1.0, uptime - new_proc.cpu_s);
 					}
 					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 					new_proc.user = pwd->pw_name;
 					
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
 					new_proc.cpu_c = (double)cpu_t / max(1.0, uptime - new_proc.cpu_s);
