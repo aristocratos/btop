@@ -987,6 +987,24 @@ namespace Proc {
 
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
+		
+		{	//* Get CPU totals
+			natural_t cpu_count;
+			processor_info_array_t info_array;
+			mach_msg_type_number_t info_count;
+			kern_return_t error;
+			processor_cpu_load_info_data_t *cpu_load_info = NULL;
+			mach_port_t host_port = mach_host_self();
+			error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+			if (error != KERN_SUCCESS) {
+				Logger::error("Failed getting CPU load info");
+			}
+			cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
+			cputimes 	= cpu_load_info[0].cpu_ticks[CPU_STATE_USER] 
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
+		}
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -1012,43 +1030,42 @@ namespace Proc {
 
 					//? Check if pid already exists in current_procs
 					auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-					bool no_cache = false;
 					if (find_old == current_procs.end()) {
 						current_procs.push_back({pid});
 						find_old = current_procs.end() - 1;
-						no_cache = true;
 					}
 					SRUN;
 
 					auto &new_proc = *find_old;
 
-					//? Get program name, command and username
-					if (no_cache) {
-						char fullname[PROC_PIDPATHINFO_MAXSIZE];
-						proc_pidpath(pid, fullname, sizeof(fullname));
-						new_proc.cmd = std::string(fullname);
-						size_t lastSlash = new_proc.cmd.find_last_of('/');
-						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
-						new_proc.ppid = kproc.kp_eproc.e_ppid;
-						new_proc.p_nice = kproc.kp_proc.p_nice;
-						new_proc.state = kproc.kp_proc.p_stat;	
-						cpu_t = (kproc.kp_proc.p_uticks + kproc.kp_proc.p_sticks) * Shared::clkTck;
-						new_proc.cpu_t = cpu_t;
-						new_proc.cpu_s = kproc.kp_proc.p_sticks * Shared::clkTck;
-						new_proc.cpu_c = (double)new_proc.cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
-						struct proc_taskinfo pti;
-						if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
-							new_proc.threads = pti.pti_threadnum;
-							new_proc.mem = pti.pti_resident_size;
-						}
-						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
-						new_proc.user = pwd->pw_name;
+					//? Get program name, command, username, parent pid, nice and status
+					char fullname[PROC_PIDPATHINFO_MAXSIZE];
+					proc_pidpath(pid, fullname, sizeof(fullname));
+					new_proc.cmd = std::string(fullname);
+					size_t lastSlash = new_proc.cmd.find_last_of('/');
+					new_proc.name = new_proc.cmd.substr(lastSlash + 1);
+					new_proc.ppid = kproc.kp_eproc.e_ppid;
+					new_proc.p_nice = kproc.kp_proc.p_nice;
+					new_proc.state = kproc.kp_proc.p_stat;
+					
+					//? Get threads, mem and cpu usage
+					struct proc_taskinfo pti;
+					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
+						new_proc.threads = pti.pti_threadnum;
+						new_proc.mem = pti.pti_resident_size;
+						cpu_t = (pti.pti_total_user + pti.pti_total_system) / 1'000'000;
+						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
+						new_proc.cpu_s = pti.pti_total_system / 1'000'000;
+						new_proc.cpu_c = (double)new_proc.cpu_t / max(1.0, uptime - new_proc.cpu_s);
 					}
+					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
+					new_proc.user = pwd->pw_name;
+					
 					//? Process cpu usage since last update
 					new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
+					new_proc.cpu_c = (double)cpu_t / max(1.0, uptime - new_proc.cpu_s);
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
