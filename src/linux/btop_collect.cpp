@@ -112,7 +112,7 @@ namespace Shared {
 			clkTck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
-		
+
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
@@ -675,7 +675,7 @@ namespace Mem {
 		}
 		if (not meminfo.good() or totalMem == 0)
 			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
-		
+
 		return totalMem;
 	}
 
@@ -896,7 +896,11 @@ namespace Mem {
 					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 				}
 				for (const auto& name : last_found)
-					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+					#ifdef SNAPPED
+						if (not is_in(name, "/mnt", "swap")) mem.disks_order.push_back(name);
+					#else
+						if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+					#endif
 
 				//? Get disks IO
 				int64_t sectors_read, sectors_write, io_ticks;

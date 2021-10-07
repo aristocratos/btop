@@ -38,6 +38,11 @@
 
 ### Under development
 
+##### 6 October 2021
+
+OsX development have been started by @joske , big thanks :)
+See branch [OSX](https://github.com/aristocratos/btop/tree/OSX) for current progress.
+
 ##### 18 September 2021
 
 The Linux version of btop++ is complete. Released as version 1.0.0
