@@ -516,7 +516,7 @@ namespace Mem {
 		return bool(val);
 	}
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping, double uptime) {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
@@ -571,7 +571,12 @@ namespace Mem {
 										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 										Logger::debug("bytes written:" + std::to_string(writeBytes));
 										// IOKit does not give us IO times
-										disk.io_activity.push_back(0);
+										int64_t io_ticks = 0;
+										if (disk.io_activity.empty())
+											disk.io_activity.push_back(0);
+										else
+											disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+										disk.old_io.at(2) = io_ticks;
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 									}
 								}
@@ -711,7 +716,7 @@ namespace Mem {
 				disk.used_percent = round((double)disk.used * 100 / disk.total);
 				disk.free_percent = 100 - disk.used_percent;
 			}
-			
+
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
 			if (snapped and disks.contains("/mnt"))
@@ -733,7 +738,7 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-			collect_disk(disks, mapping);
+			collect_disk(disks, mapping, uptime);
 
 			old_uptime = uptime;
 		}
