@@ -15,7 +15,8 @@
 indent = tab
 tab-size = 4
 */
-
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <arpa/inet.h>
@@ -489,6 +490,106 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
+	int64_t getCFNumber(CFDictionaryRef dict, const void *key) {
+		CFNumberRef ref = (CFNumberRef)CFDictionaryGetValue(dict, key);
+		if (ref) {
+			int64_t value;
+			CFNumberGetValue(ref, kCFNumberSInt64Type, &value);
+			return value;
+		}
+		return 0;
+	}
+
+	string getCFString(io_registry_entry_t volumeRef, CFStringRef key) {
+		CFStringRef bsdNameRef = (CFStringRef)IORegistryEntryCreateCFProperty(volumeRef, key, kCFAllocatorDefault, 0);
+		if (bsdNameRef) {
+			char buf[200];
+			CFStringGetCString(bsdNameRef, buf, 200, kCFStringEncodingASCII);
+			return string(buf);
+		}
+		return "";
+	}
+
+	bool isWhole(io_registry_entry_t volumeRef) {
+		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
+		Boolean val = CFBooleanGetValue(isWhole);
+		return bool(val);
+	}
+
+	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+		io_registry_entry_t drive;
+		io_iterator_t drive_list;
+
+		mach_port_t libtop_master_port;
+		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
+			Logger::error("errot getting master port");
+			return;
+		}
+		/* Get the list of all drive objects. */
+		if (IOServiceGetMatchingServices(libtop_master_port,
+		                                 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
+			Logger::error("Error in IOServiceGetMatchingServices()");
+			return;
+		}
+		while ((drive = IOIteratorNext(drive_list)) != 0) {
+			io_registry_entry_t volumeRef;
+			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
+			if (volumeRef) {
+				if (!isWhole(volumeRef)) {
+					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
+					if (device != "") {
+						if (mapping.contains(device)) {
+							string mountpoint = mapping.at(device);
+							if (disks.contains(mountpoint)) {
+								auto disk = disks.at(mountpoint);
+								CFDictionaryRef properties;
+								if (IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0)) {
+									Logger::error("Error in IORegistryEntryCreateCFProperties()");
+									goto RETURN;  // We must use a goto here to clean up drive_list
+								}
+
+								if (properties) {
+									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
+									if (statistics) {
+										Logger::debug("device:" + device + " = " + disk.name);
+										disk_ios++;
+										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
+										if (disk.io_read.empty())
+											disk.io_read.push_back(0);
+										else
+											disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+										disk.old_io.at(0) = readBytes;
+										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+										Logger::debug("bytes read:" + std::to_string(readBytes));
+
+										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
+										if (disk.io_write.empty())
+											disk.io_write.push_back(0);
+										else
+											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(0))));
+										disk.old_io.at(0) = writeBytes;
+										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+										Logger::debug("bytes written:" + std::to_string(writeBytes));
+										// IOKit does not give us IO times
+										disk.io_activity.push_back(0);
+										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			/* Release. */
+			IOObjectRelease(drive);
+		}
+		IOIteratorReset(drive_list);
+
+	RETURN:
+		/* Release. */
+		IOObjectRelease(drive_list);
+	}
+
 	auto collect(const bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
@@ -535,6 +636,7 @@ namespace Mem {
 		}
 
 		if (show_disks) {
+			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
@@ -557,6 +659,7 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
+				mapping[dev] = mountpoint;
 				if (string(stfs[i].f_fstypename) == "autofs") {
 					continue;
 				}
@@ -573,8 +676,9 @@ namespace Mem {
 				if (not v_contains(last_found, mountpoint))
 					redraw = true;
 
-				if (disks.at(mountpoint).dev.empty())
+				if (disks.at(mountpoint).dev.empty()) {
 					disks.at(mountpoint).dev = dev;
+				}
 				if (disks.at(mountpoint).name.empty())
 					disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				disks.at(mountpoint).free = stfs[i].f_bfree;
@@ -607,7 +711,7 @@ namespace Mem {
 				disk.used_percent = round((double)disk.used * 100 / disk.total);
 				disk.free_percent = 100 - disk.used_percent;
 			}
-
+			
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
 			if (snapped and disks.contains("/mnt"))
@@ -627,6 +731,9 @@ namespace Mem {
 			for (const auto &name : last_found)
 				if (not is_in(name, "/", "swap", "/dev"))
 					mem.disks_order.push_back(name);
+
+			disk_ios = 0;
+			collect_disk(disks, mapping);
 
 			old_uptime = uptime;
 		}
@@ -968,7 +1075,7 @@ namespace Proc {
 
 		rusage_info_current rusage;
 		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
-			// this fails for processes we don't own
+			// this fails for processes we don't own - same as in Linux
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
 		}
@@ -1008,10 +1115,7 @@ namespace Proc {
 				Logger::error("Failed getting CPU load info");
 			}
 			cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
-			cputimes = cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
+			cputimes = cpu_load_info[0].cpu_ticks[CPU_STATE_USER] + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE] + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
 		}
 
 		//* Use pids from last update if only changing filter, sorting or tree options
