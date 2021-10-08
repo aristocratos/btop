@@ -1,3 +1,7 @@
+## v1.0.15
+
+* Fixed: Extra "root" partition when running in snap
+
 ## v1.0.14
 
 * Changed: Total system memory is checked at every update instead of once at start
