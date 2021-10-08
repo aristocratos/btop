@@ -953,7 +953,6 @@ namespace Proc {
 		}
 
 		//? Expand process status from single char to explanative string
-		Logger::debug("pid " + std::to_string(pid) + string(":") + std::to_string(detailed.entry.state));
 		detailed.status = get_status(detailed.entry.state);
 
 		if (detailed.memory.empty()) {
@@ -966,6 +965,13 @@ namespace Proc {
 		}
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+
+		rusage_info_current rusage;
+		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
+			// this fails for processes we don't own
+			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
+			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
+		}
 	}
 
 	//* Collects and sorts process information from /proc
@@ -990,7 +996,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		{	//* Get CPU totals
+		{  //* Get CPU totals
 			natural_t cpu_count;
 			processor_info_array_t info_array;
 			mach_msg_type_number_t info_count;
@@ -1002,10 +1008,10 @@ namespace Proc {
 				Logger::error("Failed getting CPU load info");
 			}
 			cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
-			cputimes 	= cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
+			cputimes = cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
 		}
 
 		//* Use pids from last update if only changing filter, sorting or tree options
