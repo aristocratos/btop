@@ -1057,10 +1057,9 @@ namespace Proc {
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
-		//? Process runtime : current time - start time (in unix time - seconds since epoch)
+		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
 		gettimeofday(&currentTime, NULL);
-		Logger::debug("currentTime:" + std::to_string(currentTime.tv_sec) + " start time: " + std::to_string(detailed.entry.cpu_s));
 		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); // only interested in second granularity, so ignoring tc_usec
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
