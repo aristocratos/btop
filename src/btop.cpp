@@ -771,10 +771,12 @@ int main(int argc, char **argv) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
+#ifndef __APPLE__
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
+#endif
 
 	//? Check for valid terminal dimensions
 	{
