@@ -587,8 +587,6 @@ namespace Mem {
 			/* Release. */
 			IOObjectRelease(drive);
 		}
-		IOIteratorReset(drive_list);
-
 	RETURN:
 		/* Release. */
 		IOObjectRelease(drive_list);
