@@ -1130,7 +1130,7 @@ namespace Proc {
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
-			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), current_procs);
+			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
 			//* ---------------------------------------------Collection start----------------------------------------------
 			should_filter = true;
