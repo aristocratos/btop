@@ -28,7 +28,7 @@ jobs:
           brew install gcc
       - name: Compile
         run: |
-          make CXX=g++-11 ARCH=x86_64 STATIC=true
+          make CXX=g++-11 ARCH=x86_64
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-$GIT_HASH
           make distclean
