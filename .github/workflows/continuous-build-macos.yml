@@ -1,0 +1,39 @@
+name: Continuous Build MacOS
+
+on:
+  push:
+    branches:
+      - OSX
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/*'
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install build tools
+        run: |
+          git checkout OSX
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew install gcc
+      - name: Compile
+        run: |
+          make CXX=g++-11 ARCH=x86_64 STATIC=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop bin/btop-x86_64-$GIT_HASH
+          make distclean
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: btop-x86_64
+          path: 'bin/x86_64*'
