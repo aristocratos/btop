@@ -1041,7 +1041,7 @@ namespace Proc {
 	}
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info> &procs) {
+	void _collect_details(const size_t pid, vector<proc_info> &procs) {
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
@@ -1206,7 +1206,7 @@ namespace Proc {
 
 				//? Update the details info box for process if active
 				if (show_detailed and got_detailed) {
-					_collect_details(detailed_pid, round(uptime), current_procs);
+					_collect_details(detailed_pid, current_procs);
 				} else if (show_detailed and not got_detailed and detailed.status != "Dead") {
 					detailed.status = "Dead";
 					redraw = true;
