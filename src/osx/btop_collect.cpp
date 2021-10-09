@@ -1148,6 +1148,7 @@ namespace Proc {
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
 					struct kinfo_proc kproc = processes[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
+					if (pid < 1) continue;
 					found.push_back(pid);
 
 					//? Check if pid already exists in current_procs
@@ -1158,7 +1159,6 @@ namespace Proc {
 						find_old = current_procs.end() - 1;
 						no_cache = true;
 					}
-					SRUN;
 
 					auto &new_proc = *find_old;
 
@@ -1171,6 +1171,8 @@ namespace Proc {
 						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
 						new_proc.cpu_s = round((kproc.kp_proc.p_starttime.tv_sec + kproc.kp_proc.p_starttime.tv_usec) / 1'000'000);
+						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
+						new_proc.user = pwd->pw_name;
 					}
 					new_proc.p_nice = kproc.kp_proc.p_nice;
 					new_proc.state = kproc.kp_proc.p_stat;
@@ -1183,8 +1185,6 @@ namespace Proc {
 						cpu_t = round((pti.pti_total_user + pti.pti_total_system) / 1'000);
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
 					}
-					struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
-					new_proc.user = pwd->pw_name;
 
 					//? Process cpu usage since last update
 					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
@@ -1221,30 +1221,14 @@ namespace Proc {
 		//* Sort processes
 		if (sorted_change or not no_update) {
 			switch (v_index(sort_vector, sorting)) {
-				case 0:
-					rng::sort(current_procs, rng::greater{}, &proc_info::pid);
-					break;
-				case 1:
-					rng::sort(current_procs, rng::greater{}, &proc_info::name);
-					break;
-				case 2:
-					rng::sort(current_procs, rng::greater{}, &proc_info::cmd);
-					break;
-				case 3:
-					rng::sort(current_procs, rng::greater{}, &proc_info::threads);
-					break;
-				case 4:
-					rng::sort(current_procs, rng::greater{}, &proc_info::user);
-					break;
-				case 5:
-					rng::sort(current_procs, rng::greater{}, &proc_info::mem);
-					break;
-				case 6:
-					rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);
-					break;
-				case 7:
-					rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);
-					break;
+					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
+					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
+					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
+					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
+					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
+					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
+					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
+					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
 			}
 			if (reverse) rng::reverse(current_procs);
 
