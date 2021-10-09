@@ -33,5 +33,5 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: btop-x86_64
+          name: btop-x86_64-macos
           path: 'bin/*'
