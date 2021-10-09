@@ -536,7 +536,11 @@ namespace Mem {
 			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
 			if (volumeRef) {
 				if (!isWhole(volumeRef)) {
+					string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
 					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
+					if (!mapping.contains(device)) {
+						device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have VolGroupMntFromName property
+					}
 					if (device != "") {
 						if (mapping.contains(device)) {
 							string mountpoint = mapping.at(device);
