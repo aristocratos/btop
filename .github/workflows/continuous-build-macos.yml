@@ -15,7 +15,7 @@ on:
       - '.github/workflows/*'
 
 jobs:
-  build:
+  build-osx:
 
     runs-on: macos-latest
 
@@ -24,8 +24,6 @@ jobs:
       - name: Install build tools
         run: |
           git checkout OSX
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          brew install gcc
       - name: Compile
         run: |
           make CXX=g++-11 ARCH=x86_64
