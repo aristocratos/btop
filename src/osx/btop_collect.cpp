@@ -1057,8 +1057,11 @@ namespace Proc {
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
-		//? Process runtime
-		detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
+		//? Process runtime : current time - start time (in unix time - seconds since epoch)
+		struct timeval currentTime;
+		gettimeofday(&currentTime, NULL);
+		Logger::debug("currentTime:" + std::to_string(currentTime.tv_sec) + " start time: " + std::to_string(detailed.entry.cpu_s));
+		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); // only interested in second granularity, so ignoring tc_usec
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
@@ -1168,7 +1171,7 @@ namespace Proc {
 						size_t lastSlash = new_proc.cmd.find_last_of('/');
 						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
-						new_proc.cpu_s = round((kproc.kp_proc.p_starttime.tv_sec + kproc.kp_proc.p_starttime.tv_usec) / 1'000'000);
+						new_proc.cpu_s = round(kproc.kp_proc.p_starttime.tv_sec + (kproc.kp_proc.p_starttime.tv_usec / 1'000'000));
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 						new_proc.user = pwd->pw_name;
 					}
