@@ -516,7 +516,7 @@ namespace Mem {
 		return bool(val);
 	}
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping, double uptime) {
+	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
@@ -541,7 +541,7 @@ namespace Mem {
 						if (mapping.contains(device)) {
 							string mountpoint = mapping.at(device);
 							if (disks.contains(mountpoint)) {
-								auto disk = disks.at(mountpoint);
+								auto& disk = disks.at(mountpoint);
 								CFDictionaryRef properties;
 								if (IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0)) {
 									Logger::error("Error in IORegistryEntryCreateCFProperties()");
@@ -551,7 +551,7 @@ namespace Mem {
 								if (properties) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
-										Logger::debug("device:" + device + " = " + disk.name);
+										// Logger::debug("device:" + device + " = " + disk.name);
 										disk_ios++;
 										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
 										if (disk.io_read.empty())
@@ -560,24 +560,23 @@ namespace Mem {
 											disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
 										disk.old_io.at(0) = readBytes;
 										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-										Logger::debug("bytes read:" + std::to_string(readBytes));
+										// Logger::debug("bytes read:" + std::to_string(readBytes) + " : " + std::to_string(disk.io_read.back()));
 
 										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
 										if (disk.io_write.empty())
 											disk.io_write.push_back(0);
 										else
-											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(0))));
-										disk.old_io.at(0) = writeBytes;
+											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+										disk.old_io.at(1) = writeBytes;
 										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-										Logger::debug("bytes written:" + std::to_string(writeBytes));
-										// IOKit does not give us IO times
-										int64_t io_ticks = 0;
+										// Logger::debug("bytes written:" + std::to_string(writeBytes) + " : " + std::to_string(disk.io_write.back()));
+										// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being 100% to get some activity indication)
 										if (disk.io_activity.empty())
 											disk.io_activity.push_back(0);
 										else
-											disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
-										disk.old_io.at(2) = io_ticks;
+											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+										// Logger::debug("io activity:" + std::to_string(disk.io_activity.back()) + '%');
 									}
 								}
 							}
@@ -665,6 +664,7 @@ namespace Mem {
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
 				mapping[dev] = mountpoint;
+
 				if (string(stfs[i].f_fstypename) == "autofs") {
 					continue;
 				}
@@ -675,17 +675,22 @@ namespace Mem {
 					if ((filter_exclude and match) or (not filter_exclude and not match))
 						continue;
 				}
-				disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
 
 				found.push_back(mountpoint);
+				if (not disks.contains(mountpoint)) {
+					disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+
+					if (disks.at(mountpoint).dev.empty())
+						disks.at(mountpoint).dev = dev;
+
+					if (disks.at(mountpoint).name.empty())
+						disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+				}
+
+
 				if (not v_contains(last_found, mountpoint))
 					redraw = true;
 
-				if (disks.at(mountpoint).dev.empty()) {
-					disks.at(mountpoint).dev = dev;
-				}
-				if (disks.at(mountpoint).name.empty())
-					disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				disks.at(mountpoint).free = stfs[i].f_bfree;
 				disks.at(mountpoint).total = stfs[i].f_iosize;
 			}
@@ -738,7 +743,7 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-			collect_disk(disks, mapping, uptime);
+			collect_disk(disks, mapping);
 
 			old_uptime = uptime;
 		}
