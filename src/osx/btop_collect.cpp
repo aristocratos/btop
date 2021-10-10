@@ -516,6 +516,15 @@ namespace Mem {
 		return bool(val);
 	}
 
+	class IOObject {
+		public:
+			IOObject(string name, io_object_t obj) : name(name), object(obj) {}
+			virtual ~IOObject() { IOObjectRelease(object); }
+		private:
+			string name;
+			io_object_t &object;
+	};
+
 	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
@@ -531,7 +540,9 @@ namespace Mem {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
 		}
+		auto d = IOObject("drive list", drive_list); // dummy var so it gets destroyed
 		while ((drive = IOIteratorNext(drive_list)) != 0) {
+			auto dr = IOObject("drive", drive);
 			io_registry_entry_t volumeRef;
 			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
 			if (volumeRef) {
@@ -547,11 +558,7 @@ namespace Mem {
 							if (disks.contains(mountpoint)) {
 								auto& disk = disks.at(mountpoint);
 								CFDictionaryRef properties;
-								if (IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0)) {
-									Logger::error("Error in IORegistryEntryCreateCFProperties()");
-									goto RETURN;  // We must use a goto here to clean up drive_list
-								}
-
+								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
 								if (properties) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
@@ -588,12 +595,7 @@ namespace Mem {
 					}
 				}
 			}
-			/* Release. */
-			IOObjectRelease(drive);
 		}
-	RETURN:
-		/* Release. */
-		IOObjectRelease(drive_list);
 	}
 
 	auto collect(const bool no_update) -> mem_info & {
