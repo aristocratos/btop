@@ -22,6 +22,7 @@ tab-size = 4
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <libproc.h>
+#include <mach/mach.h>
 #include <mach/mach_host.h>
 #include <mach/mach_init.h>
 #include <mach/mach_types.h>
@@ -91,6 +92,16 @@ namespace Cpu {
 namespace Mem {
 	double old_uptime;
 }
+
+class MachProcessorInfo {
+	processor_info_array_t info_array;
+	mach_msg_type_number_t info_count;
+	public:
+		MachProcessorInfo() {}
+		processor_info_array_t* operator()() { return &info_array;}
+		mach_msg_type_number_t* getCountAddress() { return &info_count;}
+		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
+};
 
 namespace Shared {
 
@@ -269,12 +280,10 @@ namespace Cpu {
 
 		natural_t cpu_count;
 		natural_t i;
-		processor_info_array_t info_array;
-		mach_msg_type_number_t info_count;
+		MachProcessorInfo info;
 		kern_return_t error;
 
-		mach_port_t host_port = mach_host_self();
-		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU info");
 			return core_map;
@@ -393,17 +402,15 @@ namespace Cpu {
 		cpu.load_avg[2] = avg[2];
 		natural_t cpu_count;
 		natural_t i;
-		processor_info_array_t info_array;
-		mach_msg_type_number_t info_count;
 		kern_return_t error;
 		processor_cpu_load_info_data_t *cpu_load_info = NULL;
 
-		mach_port_t host_port = mach_host_self();
-		error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+		MachProcessorInfo info;
+		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU load info");
 		}
-		cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
+		cpu_load_info = (processor_cpu_load_info_data_t *)info();
 		long long global_totals = 0;
 		long long global_idles = 0;
 		vector<long long> times_summed = {0, 0, 0, 0};
@@ -1104,6 +1111,16 @@ namespace Proc {
 		}
 	}
 
+	class ProcessesContainer {
+		public:
+			ProcessesContainer(size_t size) : size(size) {processes = (struct kinfo_proc *)malloc(size);}
+			virtual ~ProcessesContainer() {free(processes);}
+			kinfo_proc* operator()() { return processes; }
+		private:
+			size_t size;
+			struct kinfo_proc *processes;
+	};
+
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
@@ -1128,16 +1145,14 @@ namespace Proc {
 
 		{  //* Get CPU totals
 			natural_t cpu_count;
-			processor_info_array_t info_array;
-			mach_msg_type_number_t info_count;
 			kern_return_t error;
 			processor_cpu_load_info_data_t *cpu_load_info = NULL;
-			mach_port_t host_port = mach_host_self();
-			error = host_processor_info(host_port, PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info_array, &info_count);
+			MachProcessorInfo info;
+			error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
 			if (error != KERN_SUCCESS) {
 				Logger::error("Failed getting CPU load info");
 			}
-			cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
+			cpu_load_info = (processor_cpu_load_info_data_t *)info();
 			cputimes = cpu_load_info[0].cpu_ticks[CPU_STATE_USER] + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE] + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
 		}
 
@@ -1148,18 +1163,17 @@ namespace Proc {
 			//* ---------------------------------------------Collection start----------------------------------------------
 			should_filter = true;
 			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
-			struct kinfo_proc *processes = NULL;
 			vector<size_t> found;
 			size_t size = 0;
 			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
 			}
 			uint64_t cpu_t = 0;
-			processes = (struct kinfo_proc *)malloc(size);
-			if (sysctl(mib, 4, processes, &size, NULL, 0) == 0) {
+			ProcessesContainer processes{size};
+			if (sysctl(mib, 4, processes(), &size, NULL, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
-					struct kinfo_proc kproc = processes[i];
+					struct kinfo_proc kproc = processes()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
 					found.push_back(pid);
