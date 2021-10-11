@@ -102,10 +102,6 @@ namespace Shared {
 	void init() {
 		//? Shared global variables init
 
-		// passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
-		// if (passwd_path.empty())
-		// 	Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
-
 		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (coreCount < 1) {
 			coreCount = 1;
@@ -327,18 +323,36 @@ namespace Cpu {
 		return core_map;
 	}
 
+	class IOPSInfo_Wrap {
+		CFTypeRef data;
+	public:
+		IOPSInfo_Wrap() { data = IOPSCopyPowerSourcesInfo(); }
+		CFTypeRef& operator()() { return data; }
+		~IOPSInfo_Wrap() { CFRelease(data); }
+	};
+
+	class IOPSList_Wrap {
+		CFArrayRef data;
+	public:
+		IOPSList_Wrap(CFTypeRef cft_ref) { data = IOPSCopyPowerSourcesList(cft_ref); }
+		CFArrayRef& operator()() { return data; }
+		~IOPSList_Wrap() { CFRelease(data); }
+	};
+
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
 
 		uint32_t percent = -1;
 		long seconds = -1;
 		string status = "discharging";
-		CFTypeRef ps_info = IOPSCopyPowerSourcesInfo();
-		if (ps_info) {
-			CFArrayRef one_ps_descriptor = IOPSCopyPowerSourcesList(ps_info);
-			if (one_ps_descriptor) {
-				if (CFArrayGetCount(one_ps_descriptor)) {
-					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info, CFArrayGetValueAtIndex(one_ps_descriptor, 0));
+		// CFTypeRef ps_info = IOPSCopyPowerSourcesInfo();
+		IOPSInfo_Wrap ps_info{};
+		if (ps_info()) {
+			// CFArrayRef one_ps_descriptor = IOPSCopyPowerSourcesList(ps_info());
+			IOPSList_Wrap one_ps_descriptor(ps_info());
+			if (one_ps_descriptor()) {
+				if (CFArrayGetCount(one_ps_descriptor())) {
+					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info(), CFArrayGetValueAtIndex(one_ps_descriptor(), 0));
 					has_battery = true;
 					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
 					int32_t estimatedMinutesRemaining;
@@ -363,11 +377,11 @@ namespace Cpu {
 				} else {
 					has_battery = false;
 				}
-				CFRelease(one_ps_descriptor);
+				// CFRelease(one_ps_descriptor);
 			} else {
 				has_battery = false;
 			}
-			CFRelease(ps_info);
+			// CFRelease(ps_info);
 		}
 		return {percent, seconds, status};
 	}
