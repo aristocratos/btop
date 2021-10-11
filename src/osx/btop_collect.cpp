@@ -841,24 +841,27 @@ namespace Net {
 			size_t len;
 			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
 				Logger::error("failed getting network interfaces");
-			}
-			char *buf = (char *)malloc(len);
-			if (sysctl(mib, 6, buf, &len, NULL, 0) < 0) {
-				Logger::error("failed getting network interfaces");
-			}
-			char *lim = buf + len;
-			char *next = NULL;
-			for (next = buf; next < lim;) {
-				struct if_msghdr *ifm = (struct if_msghdr *)next;
-				next += ifm->ifm_msglen;
-				if (ifm->ifm_type == RTM_IFINFO2) {
-					struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
-					struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
-					char iface[32];
-					strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
-					iface[sdl->sdl_nlen] = 0;
-					ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
+			} else {			
+				char *buf = (char *)malloc(len);
+				if (sysctl(mib, 6, buf, &len, NULL, 0) < 0) {
+					Logger::error("failed getting network interfaces");
+				} else {
+					char *lim = buf + len;
+					char *next = NULL;
+					for (next = buf; next < lim;) {
+						struct if_msghdr *ifm = (struct if_msghdr *)next;
+						next += ifm->ifm_msglen;
+						if (ifm->ifm_type == RTM_IFINFO2) {
+							struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
+							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
+							char iface[32];
+							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
+							iface[sdl->sdl_nlen] = 0;
+							ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
+						}
+					}
 				}
+				free(buf); // no idea how to RAII this with the funky/sketchy pointer arithmethic
 			}
 
 			//? Get total recieved and transmitted bytes + device address if no ip was found
