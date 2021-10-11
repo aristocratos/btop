@@ -59,7 +59,7 @@ using namespace Tools;
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<string> available_fields;
+	vector<string> available_fields = {"total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
@@ -135,7 +135,7 @@ namespace Shared {
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
-			if (not vec.empty()) Cpu::available_fields.push_back(field);
+			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
@@ -157,7 +157,7 @@ namespace Cpu {
 	bool has_battery = true;
 	tuple<int, long, string> current_bat;
 
-	const array<string, 10> time_names = {"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
+	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
 	unordered_flat_map<string, long long> cpu_old = {
 	    {"totals", 0},
@@ -165,13 +165,8 @@ namespace Cpu {
 	    {"user", 0},
 	    {"nice", 0},
 	    {"system", 0},
-	    {"idle", 0},
-	    {"iowait", 0},
-	    {"irq", 0},
-	    {"softirq", 0},
-	    {"steal", 0},
-	    {"guest", 0},
-	    {"guest_nice", 0}};
+	    {"idle", 0}
+	};
 
 	string get_cpuName() {
 		string name;
@@ -345,10 +340,8 @@ namespace Cpu {
 		uint32_t percent = -1;
 		long seconds = -1;
 		string status = "discharging";
-		// CFTypeRef ps_info = IOPSCopyPowerSourcesInfo();
 		IOPSInfo_Wrap ps_info{};
 		if (ps_info()) {
-			// CFArrayRef one_ps_descriptor = IOPSCopyPowerSourcesList(ps_info());
 			IOPSList_Wrap one_ps_descriptor(ps_info());
 			if (one_ps_descriptor()) {
 				if (CFArrayGetCount(one_ps_descriptor())) {
@@ -377,11 +370,9 @@ namespace Cpu {
 				} else {
 					has_battery = false;
 				}
-				// CFRelease(one_ps_descriptor);
 			} else {
 				has_battery = false;
 			}
-			// CFRelease(ps_info);
 		}
 		return {percent, seconds, status};
 	}
@@ -415,32 +406,26 @@ namespace Cpu {
 		cpu_load_info = (processor_cpu_load_info_data_t *)info_array;
 		long long global_totals = 0;
 		long long global_idles = 0;
+		vector<long long> times_summed = {0, 0, 0, 0};
 		for (i = 0; i < cpu_count; i++) {
 			vector<long long> times;
-			long long total_sum = 0;
-			//? 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
-			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_USER]);
-			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]);
-			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]);
-			times.push_back(cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
-			times.push_back(0);
-			times.push_back(0);
-			times.push_back(0);
-			times.push_back(0);
-			times.push_back(0);
-			times.push_back(0);
-			for (long long t : times) {
-				total_sum += t;
+			//? 0=user, 1=nice, 2=system, 3=idle
+			for (int x = 0; const int c_state : {CPU_STATE_USER, CPU_STATE_NICE, CPU_STATE_SYSTEM, CPU_STATE_IDLE}) {
+				auto& val = cpu_load_info[i].cpu_ticks[c_state];
+				times.push_back(val);
+				times_summed.at(x++) += val;
 			}
-			try {
-				//? Subtract fields 8-9 and any future unknown fields
-				const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
 
-				//? Add iowait field if present
-				const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
+			try {
+				//? All values
+				const long long totals = std::accumulate(times.begin(), times.end(), 0ll);
+
+				//? Idle time
+				const long long idles = times.at(3);
 
 				global_totals += totals;
 				global_idles += idles;
+
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
 				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
@@ -453,18 +438,26 @@ namespace Cpu {
 				//? Reduce size if there are more values than needed for graph
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
-				//? Populate cpu.cpu_percent with all fields from syscall
-				for (int ii = 0; const auto &val : times) {
-					cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
-					cpu_old.at(time_names.at(ii)) = val;
-				}
 			} catch (const std::exception &e) {
 				Logger::error("get_cpuHz() : " + (string)e.what());
 				throw std::runtime_error("collect() : " + (string)e.what());
 			}
 		}
+
 		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
 		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
+
+		//? Populate cpu.cpu_percent with all fields from syscall
+		for (int ii = 0; const auto &val : times_summed) {
+			cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+			cpu_old.at(time_names.at(ii)) = val;
+			
+			//? Reduce size if there are more values than needed for graph
+			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+
+			ii++;
+		}
+
 		cpu_old.at("totals") = global_totals;
 		cpu_old.at("idles") = global_idles;
 
