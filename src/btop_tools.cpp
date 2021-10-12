@@ -323,7 +323,9 @@ namespace Tools {
 
 	atomic_lock::atomic_lock(atomic<bool>& atom) : atom(atom) {
 		active_locks++;
-		while (not this->atom.compare_exchange_strong(this->not_true, true));
+		while (not this->atom.compare_exchange_strong(this->not_true, true, std::memory_order_relaxed)) {
+			busy_wait();
+		}
 	}
 
 	atomic_lock::~atomic_lock() {
