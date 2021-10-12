@@ -269,7 +269,7 @@ namespace Tools {
 	string hostname();
 	string username();
 
-	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old) sleep_ms(1); }
+	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { for (int x = 0; atom.load() == old and x < 1000; x++) sleep_ms(1); }
 
 	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false on destruct
 	class atomic_lock {
