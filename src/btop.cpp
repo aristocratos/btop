@@ -589,8 +589,7 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, const bool no_update, const bool force_redraw) {
-		atomic_lock lck(waiting);
-		atomic_wait(active);
+		if (active) atomic_wait(active);
 		if (stopping or Global::resized) return;
 
 		if (box == "overlay") {
