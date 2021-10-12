@@ -1039,9 +1039,10 @@ namespace Proc {
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
 		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
+		auto& vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
-		if (cmd_key == "up" and selected > 0) {
+		if ((cmd_key == "up" or (vim_keys and cmd_key == "k")) and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
 			if (Config::getI("proc_last_selected") > 0) Config::set("proc_last_selected", 0);
@@ -1052,7 +1053,7 @@ namespace Proc {
 		else if (cmd_key == "mouse_scroll_down" and start < numpids - select_max) {
 			start = min(numpids - select_max, start + 3);
 		}
-		else if (cmd_key == "down") {
+		else if (cmd_key == "down" or (vim_keys and cmd_key == "j")) {
 			if (start < numpids - select_max and selected == select_max) start++;
 			else if (selected == 0 and last_selected > 0) {
 				selected = last_selected;

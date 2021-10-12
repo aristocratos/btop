@@ -54,6 +54,9 @@ namespace Config {
 								"#* Use withespace \" \" as seprator between different presets.\n"
 								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
 
+		{"vim_keys",			"#* Set to True to enable \"h,j,k,l\" keys for directional control in lists.\n"
+								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
+
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
 		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
@@ -231,6 +234,7 @@ namespace Config {
 		{"net_auto", true},
 		{"net_sync", false},
 		{"show_battery", true},
+		{"vim_keys", false},
 		{"tty_mode", false},
 		{"force_tty", false},
 		{"lowcolor", false},
