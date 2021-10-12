@@ -2,6 +2,12 @@
 
 * Fixed: Extra "root" partition when running in snap
 
+* Changed: Limit atomic_wait() to 1000ms to fix rare stall
+
+* Fixed: Removed unneeded lock in Runner::run()
+
+* Added: Toggle in options for enabling directional vim keys "h,j,k,l"
+
 ## v1.0.14
 
 * Changed: Total system memory is checked at every update instead of once at start
