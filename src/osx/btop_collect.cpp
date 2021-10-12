@@ -263,9 +263,7 @@ namespace Cpu {
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
-		int mib[2];
-		mib[0] = CTL_HW;
-		mib[1] = HW_CPU_FREQ;
+		int mib[] = {CTL_HW, HW_CPU_FREQ};
 
 		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
 			// this fails on Apple Silicon macs. Apparently you're not allowed to know
@@ -397,9 +395,8 @@ namespace Cpu {
 			Logger::error("failed to get load averages");
 		}
 
-		cpu.load_avg[0] = avg[0];
-		cpu.load_avg[1] = avg[1];
-		cpu.load_avg[2] = avg[2];
+		cpu.load_avg = { (float)avg[0], (float)avg[1], (float)avg[2]};
+
 		natural_t cpu_count;
 		natural_t i;
 		kern_return_t error;
@@ -458,7 +455,7 @@ namespace Cpu {
 		for (int ii = 0; const auto &val : times_summed) {
 			cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
 			cpu_old.at(time_names.at(ii)) = val;
-			
+
 			//? Reduce size if there are more values than needed for graph
 			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
@@ -841,7 +838,7 @@ namespace Net {
 			size_t len;
 			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
 				Logger::error("failed getting network interfaces");
-			} else {			
+			} else {
 				char *buf = (char *)malloc(len);
 				if (sysctl(mib, 6, buf, &len, NULL, 0) < 0) {
 					Logger::error("failed getting network interfaces");
@@ -1095,10 +1092,9 @@ namespace Proc {
 		//? Expand process status from single char to explanative string
 		detailed.status = get_status(detailed.entry.state);
 
-		if (detailed.memory.empty()) {
-			detailed.mem_bytes.push_back(detailed.entry.mem);
-			detailed.memory = floating_humanizer(detailed.entry.mem);
-		}
+		detailed.mem_bytes.push_back(detailed.entry.mem);
+		detailed.memory = floating_humanizer(detailed.entry.mem);
+
 		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
 			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
 			redraw = true;
