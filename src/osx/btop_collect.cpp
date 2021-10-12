@@ -93,15 +93,15 @@ namespace Mem {
 	double old_uptime;
 }
 
-class MachProcessorInfo {
-	processor_info_array_t info_array;
-	mach_msg_type_number_t info_count;
+	class MachProcessorInfo {
+		processor_info_array_t info_array;
+		mach_msg_type_number_t info_count;
 	public:
 		MachProcessorInfo() {}
 		processor_info_array_t* operator()() { return &info_array;}
 		mach_msg_type_number_t* getCountAddress() { return &info_count;}
 		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
-};
+	};
 
 namespace Shared {
 
@@ -402,7 +402,7 @@ namespace Cpu {
 		kern_return_t error;
 		processor_cpu_load_info_data_t *cpu_load_info = NULL;
 
-		MachProcessorInfo info;
+		MachProcessorInfo info{};
 		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU load info");
@@ -414,8 +414,8 @@ namespace Cpu {
 		for (i = 0; i < cpu_count; i++) {
 			vector<long long> times;
 			//? 0=user, 1=nice, 2=system, 3=idle
-			for (int x = 0; const int c_state : {CPU_STATE_USER, CPU_STATE_NICE, CPU_STATE_SYSTEM, CPU_STATE_IDLE}) {
-				auto& val = cpu_load_info[i].cpu_ticks[c_state];
+			for (int x = 0; const unsigned int c_state : {CPU_STATE_USER, CPU_STATE_NICE, CPU_STATE_SYSTEM, CPU_STATE_IDLE}) {
+				auto val = cpu_load_info[i].cpu_ticks[c_state];
 				times.push_back(val);
 				times_summed.at(x++) += val;
 			}
@@ -443,7 +443,7 @@ namespace Cpu {
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
 			} catch (const std::exception &e) {
-				Logger::error("get_cpuHz() : " + (string)e.what());
+				Logger::error("Cpu::collect() : " + (string)e.what());
 				throw std::runtime_error("collect() : " + (string)e.what());
 			}
 		}
@@ -839,13 +839,13 @@ namespace Net {
 			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
 				Logger::error("failed getting network interfaces");
 			} else {
-				char *buf = (char *)malloc(len);
-				if (sysctl(mib, 6, buf, &len, NULL, 0) < 0) {
+				std::unique_ptr<char[]> buf(new char[len]);
+				if (sysctl(mib, 6, buf.get(), &len, NULL, 0) < 0) {
 					Logger::error("failed getting network interfaces");
 				} else {
-					char *lim = buf + len;
+					char *lim = buf.get() + len;
 					char *next = NULL;
-					for (next = buf; next < lim;) {
+					for (next = buf.get(); next < lim;) {
 						struct if_msghdr *ifm = (struct if_msghdr *)next;
 						next += ifm->ifm_msglen;
 						if (ifm->ifm_type == RTM_IFINFO2) {
@@ -858,7 +858,6 @@ namespace Net {
 						}
 					}
 				}
-				free(buf); // no idea how to RAII this with the funky/sketchy pointer arithmethic
 			}
 
 			//? Get total recieved and transmitted bytes + device address if no ip was found
@@ -1110,16 +1109,6 @@ namespace Proc {
 		}
 	}
 
-	class ProcessesContainer {
-		public:
-			ProcessesContainer(size_t size) : size(size) {processes = (struct kinfo_proc *)malloc(size);}
-			virtual ~ProcessesContainer() {free(processes);}
-			kinfo_proc* operator()() { return processes; }
-		private:
-			size_t size;
-			struct kinfo_proc *processes;
-	};
-
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
@@ -1139,7 +1128,7 @@ namespace Proc {
 
 		const double uptime = system_uptime();
 
-		const int cmult = (per_core) ? Shared::coreCount : 1;
+		const int cmult = (per_core) ? 1 : Shared::coreCount;
 		bool got_detailed = false;
 
 		{  //* Get CPU totals
@@ -1152,7 +1141,11 @@ namespace Proc {
 				Logger::error("Failed getting CPU load info");
 			}
 			cpu_load_info = (processor_cpu_load_info_data_t *)info();
-			cputimes = cpu_load_info[0].cpu_ticks[CPU_STATE_USER] + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE] + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE];
+			cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE])
+					 * Shared::clkTck;
 		}
 
 		//* Use pids from last update if only changing filter, sorting or tree options
@@ -1168,11 +1161,12 @@ namespace Proc {
 				Logger::error("Unable to get size of kproc_infos");
 			}
 			uint64_t cpu_t = 0;
-			ProcessesContainer processes{size};
-			if (sysctl(mib, 4, processes(), &size, NULL, 0) == 0) {
+
+			std::unique_ptr<kinfo_proc[]> processes(new kinfo_proc[size / sizeof(kinfo_proc)]);
+			if (sysctl(mib, 4, processes.get(), &size, NULL, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
-					struct kinfo_proc kproc = processes()[i];
+					struct kinfo_proc kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
 					found.push_back(pid);
@@ -1213,7 +1207,7 @@ namespace Proc {
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round((cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 1000.0 / cmult, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
 					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, uptime - new_proc.cpu_s);
