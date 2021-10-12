@@ -1,0 +1,109 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  static-build:
+    strategy:
+      matrix:
+        toolchain:
+          - x86_64-linux-musl
+          - i686-linux-musl
+          - aarch64-linux-musl
+          - arm-linux-musleabi
+          - arm-linux-musleabihf
+
+    runs-on: ubuntu-latest
+    container: 
+      image: muslcc/x86_64:${{ matrix.toolchain }}
+
+    steps:
+      - name: Install build tools
+        run: apk add --no-cache git cmake ninja tar zstd
+
+      - name: Checkout source
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      
+      - name: Set up directories
+        run: |
+          mkdir build
+          mkdir packages
+
+      - name: Configure and compile
+        run: |
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="Release" -DSTATIC=ON .
+          cmake --build build --config Release
+
+      - name: Package
+        run: cpack -G 'TGZ;TBZ2;TXZ' -C Release --config build/CPackConfig.cmake
+
+      - name: Setup package cache
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-${{ matrix.toolchain }}-${{ github.sha }}
+
+      - name: Cache packages
+        run: |
+          pwd
+          for f in btop-*-Linux.tar.*
+          do
+            echo "$f -> packages/${f/Linux/$(g++ -dumpmachine | sed 's/-musl//')-static}"
+            mv $f packages/${f/Linux/$(g++ -dumpmachine | sed 's/-musl//')-static}
+          done
+
+  release:
+    runs-on: ubuntu-latest  
+    needs: static-build
+    if: startsWith(github.ref, 'refs/tags/')
+    concurrency: release-${{ github.ref }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Restore static package cache x86_64
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-x86_64-linux-musl-${{ github.sha }}
+
+      - name: Restore static package cache i686
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-i686-linux-musl-${{ github.sha }}
+
+      - name: Restore static package cache aarch64
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-aarch64-linux-musl-${{ github.sha }}
+
+      - name: Restore static package cache arm
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-arm-linux-musleabi-${{ github.sha }}
+
+      - name: Restore static package cache armhf
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: static-packages-arm-linux-musleabihf-${{ github.sha }}
+
+      - name: Extract release notes
+        run: awk 'FNR > 1 && $1 == "##" {exit} FNR > 1 && $0 !~ /^[ \t]*$/ {print $0}' CHANGELOG.md | tee releasenotes
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: releasenotes
+          files: packages/*
