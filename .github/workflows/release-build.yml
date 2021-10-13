@@ -57,9 +57,70 @@ jobs:
             mv $f packages/${f/Linux/$(g++ -dumpmachine | sed 's/-musl//')-static}
           done
 
+  ubuntu-build:
+    strategy:
+      matrix:
+        system:
+          -
+            codename: focal
+            gcc_version: 10
+            deps: libstdc++6 (>= 10.3.0-1ubuntu1~20.04)
+          -
+            codename: hirsute
+            gcc_version: 11
+            deps: libstdc++6 (>= 11.1.0-1ubuntu1~21.04)
+
+
+    runs-on: ubuntu-latest
+    container: 
+      image: ubuntu:${{ matrix.system.codename }}
+
+    steps:
+      - name: Install build tools
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+          apt-get -y update
+          apt-get -y --no-install-recommends install g++-${{ matrix.system.gcc_version }} git ninja-build wget rename ca-certificates zstd
+          wget -q https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+          chmod +x cmake-3.21.3-linux-x86_64.sh
+          ./cmake-3.21.3-linux-x86_64.sh --prefix=/usr --skip-license
+
+      - name: Checkout source
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      
+      - name: Set up directories
+        run: |
+          mkdir build
+          mkdir packages
+
+      - name: Configure and compile
+        run: |
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="Release" \
+                -DCMAKE_CXX_COMPILER="g++-${{ matrix.system.gcc_version }}" \
+                -DCPACK_DEBIAN_PACKAGE_DEPENDS="${{ matrix.system.deps }}" \
+                .
+          cmake --build build --config Release
+
+      - name: Package
+        run: cpack -G 'DEB' -C Release --config build/CPackConfig.cmake
+
+      - name: Setup package cache
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: ubuntu-${{ matrix.system.codename }}-packages-${{ github.sha }}
+
+      - name: Cache packages
+        run: rename 's,btop-(.*)-Linux.deb$,packages/btop-$1-${{ matrix.system.codename }}-amd64.deb,' btop-*-Linux.deb 
+
   release:
     runs-on: ubuntu-latest  
-    needs: static-build
+    needs: 
+      - static-build
+      - ubuntu-build
     if: startsWith(github.ref, 'refs/tags/')
     concurrency: release-${{ github.ref }}
 
@@ -98,6 +159,18 @@ jobs:
         with:
           path: packages
           key: static-packages-arm-linux-musleabihf-${{ github.sha }}
+
+      - name: Restore ubuntu focal package cache
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: ubuntu-focal-packages-${{ github.sha }}
+
+      - name: Restore ubuntu hirsute package cache
+        uses: actions/cache@v2
+        with:
+          path: packages
+          key: ubuntu-hirsute-packages-${{ github.sha }}
 
       - name: Extract release notes
         run: awk 'FNR > 1 && $1 == "##" {exit} FNR > 1 && $0 !~ /^[ \t]*$/ {print $0}' CHANGELOG.md | tee releasenotes
