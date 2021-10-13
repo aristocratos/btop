@@ -38,6 +38,7 @@ tab-size = 4
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdexcept>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
@@ -48,6 +49,8 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+
+#include "smc.hpp"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -83,7 +86,6 @@ namespace Cpu {
 		int64_t crit = 0;
 	};
 
-	unordered_flat_map<string, Sensor> found_sensors;
 	string cpu_sensor;
 	vector<string> core_sensors;
 	unordered_flat_map<int, int> core_mapping;
@@ -105,16 +107,21 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount;
+	long pageSize, clkTck, coreCount, physicalCoreCount;
 	int totalMem_len;
 
 	void init() {
 		//? Shared global variables init
 
-		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		coreCount = sysconf(_SC_NPROCESSORS_ONLN); // this returns all logical cores (threads)
 		if (coreCount < 1) {
 			coreCount = 1;
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
+		}
+
+		size_t physicalCoreCountSize = sizeof(physicalCoreCount);
+		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, NULL, 0) < 0) {
+			Logger::error("Could not get physical core count");
 		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
@@ -148,9 +155,6 @@ namespace Shared {
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
-		for (const auto &[sensor, ignored] : Cpu::found_sensors) {
-			Cpu::available_sensors.push_back(sensor);
-		}
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
@@ -223,37 +227,164 @@ namespace Cpu {
 		return name;
 	}
 
+	class SMCConnection {
+		io_connect_t conn;
+		kern_return_t result;
+		mach_port_t masterPort;
+		io_iterator_t iterator;
+		io_object_t device;
+
+	   public:
+		SMCConnection() {
+			IOMasterPort(MACH_PORT_NULL, &masterPort);
+
+			CFMutableDictionaryRef matchingDictionary = IOServiceMatching("AppleSMC");
+			result = IOServiceGetMatchingServices(masterPort, matchingDictionary, &iterator);
+			if (result != kIOReturnSuccess) {
+				throw std::runtime_error("failed to get AppleSMC");
+			}
+
+			device = IOIteratorNext(iterator);
+			IOObjectRelease(iterator);
+			if (device == 0) {
+				throw std::runtime_error("failed to get SMC device");
+			}
+
+			result = IOServiceOpen(device, mach_task_self(), 0, &conn);
+			IOObjectRelease(device);
+			if (result != kIOReturnSuccess) {
+				throw std::runtime_error("failed to get SMC connection");
+			}
+		}
+		// core means physical core in SMC, while in core map it's cpu threads :-/ Only an issue on hackintosh?
+		// this means we can only get the T per physical core
+		// another issue with the SMC API is that the key is always 4 chars -> what with systems with more than 9 physical cores?
+		// no Mac models with more than 18 threads are released, so no problem so far
+		// according to VirtualSMC docs (hackintosh fake SMC) the enumeration follows with alphabetic chars - not implemented yet here (nor in VirtualSMC)
+		long long getTemp(int core) {
+			SMCVal_t val;
+			kern_return_t result;
+			char key[] = SMC_KEY_CPU_TEMP;
+			if (core >= 0) {
+				snprintf(key, 5, "TC%1dc", core);
+			}
+			result = SMCReadKey(key, &val);
+			if (result == kIOReturnSuccess) {
+				if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
+					// convert sp78 value to temperature
+					int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
+					return static_cast<long long>(intValue / 256.0);
+				}
+			}
+			return -1;
+		}
+		virtual ~SMCConnection() {
+			IOServiceClose(conn);
+		}
+	   private:
+		UInt32 _strtoul(char *str, int size, int base) {
+			UInt32 total = 0;
+			int i;
+
+			for (i = 0; i < size; i++) {
+				if (base == 16) {
+					total += str[i] << (size - 1 - i) * 8;
+				} else {
+					total += (unsigned char)(str[i] << (size - 1 - i) * 8);
+				}
+			}
+			return total;
+		}
+		void _ultostr(char *str, UInt32 val) {
+			str[0] = '\0';
+			sprintf(str, "%c%c%c%c",
+			        (unsigned int)val >> 24,
+			        (unsigned int)val >> 16,
+			        (unsigned int)val >> 8,
+			        (unsigned int)val);
+		}
+
+		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure) {
+			size_t structureInputSize;
+			size_t structureOutputSize;
+
+			structureInputSize = sizeof(SMCKeyData_t);
+			structureOutputSize = sizeof(SMCKeyData_t);
+
+			return IOConnectCallStructMethod(conn, index,
+			                                 // inputStructure
+			                                 inputStructure, structureInputSize,
+			                                 // ouputStructure
+			                                 outputStructure, &structureOutputSize);
+		}
+
+		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
+			kern_return_t result;
+			SMCKeyData_t inputStructure;
+			SMCKeyData_t outputStructure;
+
+			memset(&inputStructure, 0, sizeof(SMCKeyData_t));
+			memset(&outputStructure, 0, sizeof(SMCKeyData_t));
+			memset(val, 0, sizeof(SMCVal_t));
+
+			inputStructure.key = _strtoul(key, 4, 16);
+			inputStructure.data8 = SMC_CMD_READ_KEYINFO;
+
+			result = SMCCall(KERNEL_INDEX_SMC, &inputStructure, &outputStructure);
+			if (result != kIOReturnSuccess)
+				return result;
+
+			val->dataSize = outputStructure.keyInfo.dataSize;
+			_ultostr(val->dataType, outputStructure.keyInfo.dataType);
+			inputStructure.keyInfo.dataSize = val->dataSize;
+			inputStructure.data8 = SMC_CMD_READ_BYTES;
+
+			result = SMCCall(KERNEL_INDEX_SMC, &inputStructure, &outputStructure);
+			if (result != kIOReturnSuccess)
+				return result;
+
+			memcpy(val->bytes, outputStructure.bytes, sizeof(outputStructure.bytes));
+
+			return kIOReturnSuccess;
+		}
+	};
+
 	bool get_sensors() {
-		return not found_sensors.empty();
+		SMCConnection smcCon;
+		try {
+			long long t = smcCon.getTemp(-1); // check if we have package T
+			if (t > -1) {
+				got_sensors = true;
+			} else {
+				got_sensors = false;
+			}
+		} catch(std::runtime_error &e) {
+			// ignore, we don't have temp
+			got_sensors = false;
+		}
+		return got_sensors;
 	}
 
 	void update_sensors() {
-		if (cpu_sensor.empty())
-			return;
+		current_cpu.temp_max = 95; // we have no idea how to get the critical temp
+		SMCConnection smcCon;
+		int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
+		try {
+			long long packageT = smcCon.getTemp(-1); // -1 returns package T
+			current_cpu.temp.at(0).push_back(packageT);
 
-		const auto &cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
-
-		found_sensors.at(cpu_sensor).temp = stol(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
-		current_cpu.temp.at(0).push_back(found_sensors.at(cpu_sensor).temp);
-		current_cpu.temp_max = found_sensors.at(cpu_sensor).crit;
-		if (current_cpu.temp.at(0).size() > 20)
-			current_cpu.temp.at(0).pop_front();
-
-		if (Config::getB("show_coretemp") and not cpu_temp_only) {
-			vector<string> done;
-			for (const auto &sensor : core_sensors) {
-				if (v_contains(done, sensor))
-					continue;
-				found_sensors.at(sensor).temp = stol(readfile(found_sensors.at(sensor).path, "0")) / 1000;
-				done.push_back(sensor);
-			}
-			for (const auto &[core, temp] : core_mapping) {
-				if (cmp_less(core + 1, current_cpu.temp.size()) and cmp_less(temp, core_sensors.size())) {
-					current_cpu.temp.at(core + 1).push_back(found_sensors.at(core_sensors.at(temp)).temp);
-					if (current_cpu.temp.at(core + 1).size() > 20)
-						current_cpu.temp.at(core + 1).pop_front();
+			if (Config::getB("show_coretemp") and not cpu_temp_only) {
+				for (int core = 0; core < Shared::coreCount; core++) {
+					long long temp = smcCon.getTemp(core / threadsPerCore); // same temp for all threads of same physical core
+					if (cmp_less(core + 1, current_cpu.temp.size())) {
+						current_cpu.temp.at(core + 1).push_back(temp);
+						if (current_cpu.temp.at(core + 1).size() > 20)
+							current_cpu.temp.at(core + 1).pop_front();
+					}
 				}
 			}
+		} catch (std::runtime_error &e) {
+			Logger::error("failed getting CPU temp");
 		}
 	}
 
