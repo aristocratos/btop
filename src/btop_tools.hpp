@@ -281,9 +281,9 @@ namespace Tools {
 	#endif
 	}
 
-	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old) busy_wait();
-	}
+	void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept;
+
+	void atomic_wait_for(const atomic<bool>& atom, const bool old=true, const uint64_t wait_ms=0) noexcept;
 
 	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false on destruct
 	class atomic_lock {

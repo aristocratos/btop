@@ -21,12 +21,13 @@ tab-size = 4
 #include <atomic>
 #include <fstream>
 #include <string_view>
+#include <mutex>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::array, std::atomic, std::string_view, std::string_literals::operator""s;
+using std::array, std::atomic, std::string_view, std::string_literals::operator""s, std::mutex, std::lock_guard;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -35,7 +36,7 @@ using namespace Tools;
 namespace Config {
 
 	atomic<bool> locked (false);
-	atomic<bool> writelock (false);
+	mutex writelock;
 	bool write_new;
 
 	const vector<array<string, 2>> descriptions = {
@@ -256,7 +257,7 @@ namespace Config {
 	unordered_flat_map<string, int> intsTmp;
 
 	bool _locked(const string& name) {
-		atomic_wait(writelock);
+		lock_guard<mutex> lock(writelock);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
 		return locked.load();
@@ -334,7 +335,7 @@ namespace Config {
 	}
 
 	void lock() {
-		atomic_wait(writelock);
+		lock_guard<mutex> lock(writelock);
 		locked = true;
 	}
 
@@ -448,7 +449,7 @@ namespace Config {
 	void unlock() {
 		if (not locked) return;
 		atomic_wait(Runner::active);
-		atomic_lock lck(writelock);
+		lock_guard<mutex> lock(writelock);
 		try {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;

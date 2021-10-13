@@ -30,6 +30,7 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#include <mutex>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -40,7 +41,7 @@ tab-size = 4
 #include <btop_menu.hpp>
 
 using std::string, std::string_view, std::vector, std::atomic, std::endl, std::cout, std::min, std::flush, std::endl;
-using std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
+using std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status, std::mutex, std::lock_guard;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -79,7 +80,6 @@ namespace Global {
 	uint64_t start_time;
 
 	atomic<bool> resized (false);
-	atomic<bool> resizing (false);
 	atomic<bool> quitting (false);
 	atomic<bool> _runner_started (false);
 
@@ -150,8 +150,8 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
-	if (Global::resizing) return;
-	atomic_lock lck(Global::resizing);
+	static mutex resizing;
+	lock_guard<mutex> lock(resizing);
 	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
 	}
@@ -271,6 +271,7 @@ namespace Runner {
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
+	// mutex runner_mtx;
 
 	//* Setup semaphore for triggering thread to do work
 #if __GNUC__ < 11
@@ -302,6 +303,7 @@ namespace Runner {
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
+	pthread_mutex_t active_mtx;
 
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
@@ -387,6 +389,7 @@ namespace Runner {
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
 			thread_wait();
+			thread_lock lock(active_mtx);
 			if (stopping or Global::resized) {
 				continue;
 			}
@@ -589,34 +592,40 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, const bool no_update, const bool force_redraw) {
-		if (active) atomic_wait(active);
-		if (stopping or Global::resized) return;
+		bool trigger = false;
+		{
+			thread_lock lock(active_mtx);
+			if (stopping or Global::resized) return;
 
-		if (box == "overlay") {
-			cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
-		}
-		else if (box == "clock") {
-			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
-		}
-		else {
-			Config::unlock();
-			Config::lock();
-
-			//? Setup bitmask for selected boxes and pass to _runner thread
-			bitset<8> box_mask;
-			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
-				box_mask |= box_bits.at(box);
+			if (box == "overlay") {
+				cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
 			}
+			else if (box == "clock") {
+				cout << Term::sync_start << Global::clock << Term::sync_end << flush;
+			}
+			else {
+				Config::unlock();
+				Config::lock();
 
-			current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
+				//? Setup bitmask for selected boxes and pass to _runner thread
+				bitset<8> box_mask;
+				for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
+					box_mask |= box_bits.at(box);
+				}
 
-			if (Menu::active and not current_conf.background_update) Global::overlay.clear();
+				current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
 
-			thread_trigger();
+				if (Menu::active and not current_conf.background_update) Global::overlay.clear();
 
-			//? Wait for _runner thread to be active before returning
-			for (int i = 0; not active and i < 10; i++) sleep_ms(1);
+				trigger = true;
+			}
 		}
+		//? Trigger thread start and wait for it to be active before returning
+		if (trigger) {
+			thread_trigger();
+			atomic_wait_for(active, false, 10);
+		}
+
 	}
 
 	//* Stops any work being done in runner thread and checks for thread errors
@@ -629,9 +638,15 @@ namespace Runner {
 			exit(1);
 		}
 		else if (ret == EBUSY) {
-			atomic_wait(active);
+			atomic_wait_for(active, true, 1000);
+			if (active) {
+				Global::exit_error_msg = "No response from Runner thread, quitting!";
+				active = false;
+				exit(1);
+			}
 			thread_trigger();
-			sleep_ms(1);
+			atomic_wait_for(active, false, 100);
+			atomic_wait_for(active, true, 100);
 		}
 		stopping = false;
 	}
@@ -857,7 +872,7 @@ int main(int argc, char **argv) {
 				Global::resized = false;
 				if (Menu::active) Menu::process();
 				else Runner::run("all", true, true);
-				atomic_wait(Runner::active);
+				atomic_wait_for(Runner::active, true, 1000);
 			}
 
 			//? Update clock if needed
