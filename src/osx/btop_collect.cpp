@@ -94,12 +94,10 @@ namespace Mem {
 }
 
 	class MachProcessorInfo {
+	public:
 		processor_info_array_t info_array;
 		mach_msg_type_number_t info_count;
-	public:
 		MachProcessorInfo() {}
-		processor_info_array_t* operator()() { return &info_array;}
-		mach_msg_type_number_t* getCountAddress() { return &info_count;}
 		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
 	};
 
@@ -278,10 +276,10 @@ namespace Cpu {
 
 		natural_t cpu_count;
 		natural_t i;
-		MachProcessorInfo info;
+		MachProcessorInfo info {};
 		kern_return_t error;
 
-		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
+		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU info");
 			return core_map;
@@ -403,11 +401,11 @@ namespace Cpu {
 		processor_cpu_load_info_data_t *cpu_load_info = NULL;
 
 		MachProcessorInfo info{};
-		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
+		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU load info");
 		}
-		cpu_load_info = (processor_cpu_load_info_data_t *)info();
+		cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
 		long long global_totals = 0;
 		long long global_idles = 0;
 		vector<long long> times_summed = {0, 0, 0, 0};
@@ -429,8 +427,6 @@ namespace Cpu {
 
 				global_totals += totals;
 				global_idles += idles;
-
-				// Logger::debug("Core" + to_string(i) + " : T" + to_string(totals) + "   I" + to_string(idles));
 
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
@@ -1128,24 +1124,23 @@ namespace Proc {
 			current_rev = reverse;
 		}
 
-		const int cmult = (per_core) ? 1 : Shared::coreCount;
+		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
 		{  //* Get CPU totals
 			natural_t cpu_count;
 			kern_return_t error;
 			processor_cpu_load_info_data_t *cpu_load_info = NULL;
-			MachProcessorInfo info;
-			error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, info(), info.getCountAddress());
+			MachProcessorInfo info{};
+			error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
 			if (error != KERN_SUCCESS) {
 				Logger::error("Failed getting CPU load info");
 			}
-			cpu_load_info = (processor_cpu_load_info_data_t *)info();
+			cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
 			cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
 					 + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
 					 + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE])
-					 * Shared::clkTck;
+					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
 		}
 
 		//* Use pids from last update if only changing filter, sorting or tree options
@@ -1211,7 +1206,7 @@ namespace Proc {
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round((cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 1000.0 / cmult, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
 					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, timeNow - new_proc.cpu_s);
