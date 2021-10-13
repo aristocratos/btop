@@ -98,7 +98,6 @@ override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
-SU_GROUP			:= root
 
 ifdef DEBUG
 	override OPTFLAGS := -O0 -g
@@ -106,7 +105,9 @@ endif
 
 ifeq ($(PLATFORM), OSX)
 	override LDCXXFLAGS += -framework IOKit -framework CoreFoundation
+	SU_GROUP := wheel
 else
+	SU_GROUP := root
 	ifneq ($(ARCH),arm64)
 		override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
 	endif
@@ -179,7 +180,7 @@ install:
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 
-ifneq ($(PLATFORM),OSX)
+
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:
 	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
@@ -187,7 +188,6 @@ setuid:
 	@chown $(SU_USER):$(SU_GROUP) $(DESTDIR)$(PREFIX)/bin/btop
 	@printf "\033[1;92mSetting SUID bit\033[0m\n"
 	@chmod u+s $(DESTDIR)$(PREFIX)/bin/btop
-endif
 
 uninstall:
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
