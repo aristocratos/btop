@@ -17,8 +17,6 @@ tab-size = 4
 */
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
-#include <IOKit/ps/IOPSKeys.h>
-#include <IOKit/ps/IOPowerSources.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <libproc.h>
@@ -51,6 +49,7 @@ tab-size = 4
 #include <string>
 
 #include "sensors.hpp"
+#include "smc.hpp"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -107,7 +106,7 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount;
+	long pageSize, clkTck, coreCount, physicalCoreCount;
 	int totalMem_len;
 
 	void init() {
@@ -117,6 +116,11 @@ namespace Shared {
 		if (coreCount < 1) {
 			coreCount = 1;
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
+		}
+
+		size_t physicalCoreCountSize = sizeof(physicalCoreCount);
+		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, NULL, 0) < 0) {
+			Logger::error("Could not get physical core count");
 		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
@@ -229,6 +233,20 @@ namespace Cpu {
 			ThermalSensors sensors;
 			if (sensors.getSensors().size() > 0) {
 				got_sensors = true;
+			} else {
+				// try SMC (intel)
+				SMCConnection smcCon;
+				try {
+					long long t = smcCon.getTemp(-1);  // check if we have package T
+					if (t > -1) {
+						got_sensors = true;
+					} else {
+						got_sensors = false;
+					}
+				} catch (std::runtime_error &e) {
+					// ignore, we don't have temp
+					got_sensors = false;
+				}
 			}
 			Logger::debug("got sensors:" + std::to_string(got_sensors));
 		}
@@ -236,19 +254,37 @@ namespace Cpu {
 	}
 
 	void update_sensors() {
-		current_cpu.temp_max = 95; // we have no idea how to get the critical temp
-		ThermalSensors sensors;
-		auto sensor = sensors.getSensors();
+		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
-			current_cpu.temp.at(0).push_back((long long)sensor[0]);
+			ThermalSensors sensors;
+			auto sensor = sensors.getSensors();
+			if (sensor.size() > 0) {
+				current_cpu.temp.at(0).push_back((long long)sensor[0]);
 
-			if (Config::getB("show_coretemp") and not cpu_temp_only) {
-				for (int core = 1; core <= Shared::coreCount; core++) {
-					long long temp = (long long) sensor[core];
-					if (cmp_less(core, current_cpu.temp.size())) {
-						current_cpu.temp.at(core).push_back(temp);
-						if (current_cpu.temp.at(core).size() > 20)
-							current_cpu.temp.at(core).pop_front();
+				if (Config::getB("show_coretemp") and not cpu_temp_only) {
+					for (int core = 1; core <= Shared::coreCount; core++) {
+						long long temp = (long long)sensor[core];
+						if (cmp_less(core, current_cpu.temp.size())) {
+							current_cpu.temp.at(core).push_back(temp);
+							if (current_cpu.temp.at(core).size() > 20)
+								current_cpu.temp.at(core).pop_front();
+						}
+					}
+				}
+			} else {
+				SMCConnection smcCon;
+				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
+				long long packageT = smcCon.getTemp(-1); // -1 returns package T
+				current_cpu.temp.at(0).push_back(packageT);
+
+				if (Config::getB("show_coretemp") and not cpu_temp_only) {
+					for (int core = 0; core < Shared::coreCount; core++) {
+						long long temp = smcCon.getTemp(core / threadsPerCore); // same temp for all threads of same physical core
+						if (cmp_less(core + 1, current_cpu.temp.size())) {
+							current_cpu.temp.at(core + 1).push_back(temp);
+							if (current_cpu.temp.at(core + 1).size() > 20)
+								current_cpu.temp.at(core + 1).pop_front();
+						}
 					}
 				}
 			}

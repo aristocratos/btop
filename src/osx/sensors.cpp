@@ -3,11 +3,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 
+#include <btop_tools.hpp>
 #include <iostream>
 #include <map>
 #include <string>
-
-#include <btop_tools.hpp>
 
 extern "C" {
 typedef struct __IOHIDEvent *IOHIDEventRef;
@@ -45,25 +44,28 @@ CFDictionaryRef matching(int page, int usage) {
 
 CFArrayRef getProductNames(CFDictionaryRef sensors) {
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);  // in CFBase.h = NULL
-	// ... this is the same as using kCFAllocatorDefault or the return value from CFAllocatorGetDefault()
-	IOHIDEventSystemClientSetMatching(system, sensors);
-	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);  // matchingsrvs = matching services
+	if (system) {
+		IOHIDEventSystemClientSetMatching(system, sensors);
+		CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);  // matchingsrvs = matching services
+		if (matchingsrvs) {
+			long count = CFArrayGetCount(matchingsrvs);
+			CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
 
-	long count = CFArrayGetCount(matchingsrvs);
-	CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
-
-	for (int i = 0; i < count; i++) {
-		IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
-		CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
-		if (name) {
-			CFArrayAppendValue(array, name);
-		} else {
-			CFArrayAppendValue(array, CFSTR("noname"));  // @ gives a Ref like in "CFStringRef name"
+			for (int i = 0; i < count; i++) {
+				IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
+				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
+				if (name) {
+					CFArrayAppendValue(array, name);
+				} else {
+					CFArrayAppendValue(array, CFSTR("noname"));  // @ gives a Ref like in "CFStringRef name"
+				}
+				CFRelease(name);
+			}
+			return array;
 		}
-		CFRelease(name);
+		CFRelease(system);
 	}
-	CFRelease(system);
-	return array;
+	return nullptr;
 }
 
 CFArrayRef getThermalValues(CFDictionaryRef sensors) {
@@ -99,35 +101,37 @@ unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 	// thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
 	// can be checked by ioreg -lfx
 	CFArrayRef thermalNames = getProductNames(thermalSensors);
-	CFArrayRef thermalValues = getThermalValues(thermalSensors);
-	long count = CFArrayGetCount(thermalNames);
-	for (int i = 0; i < count; i++) {
-		CFStringRef nameRef = (CFStringRef)CFArrayGetValueAtIndex(thermalNames, i);
-		char buf[200];
-		CFStringGetCString(nameRef, buf, 200, kCFStringEncodingASCII);
-		std::string n(buf);
-        CFNumberRef value = (CFNumberRef)CFArrayGetValueAtIndex(thermalValues, i);
-        double temp = 0.0;
-        CFNumberGetValue(value, kCFNumberDoubleType, &temp);
-		if (n.starts_with("PMU tdie")) {
-            // Apple Silicon
-			std::string indexString = n.substr(8, 1);
-			int index = stoi(indexString);
-			cpuValues[index - 1] = temp;
-		} else if (n.starts_with("TC") && n[3] == 'c') {
-            // intel mac
-			std::string indexString = n.substr(2, 1);
-			int index = stoi(indexString);
-            cpuValues[index] = temp;
-        } else if (n == "TCAD") {
-            cpuValues[0] = temp; // package T for intel
-        } else if (n == "SOC MTR Temp Sensor0") {
-            cpuValues[0] = temp; // package T for Apple Silicon
-        }
+	if (thermalNames) {
+		CFArrayRef thermalValues = getThermalValues(thermalSensors);
+		long count = CFArrayGetCount(thermalNames);
+		for (int i = 0; i < count; i++) {
+			CFStringRef nameRef = (CFStringRef)CFArrayGetValueAtIndex(thermalNames, i);
+			char buf[200];
+			CFStringGetCString(nameRef, buf, 200, kCFStringEncodingASCII);
+			std::string n(buf);
+			CFNumberRef value = (CFNumberRef)CFArrayGetValueAtIndex(thermalValues, i);
+			double temp = 0.0;
+			CFNumberGetValue(value, kCFNumberDoubleType, &temp);
+			if (n.starts_with("PMU tdie")) {
+				// Apple Silicon
+				std::string indexString = n.substr(8, 1);
+				int index = stoi(indexString);
+				cpuValues[index - 1] = temp;
+			} else if (n.starts_with("TC") && n[3] == 'c') {
+				// intel mac
+				std::string indexString = n.substr(2, 1);
+				int index = stoi(indexString);
+				cpuValues[index] = temp;
+			} else if (n == "TCAD") {
+				cpuValues[0] = temp;  // package T for intel
+			} else if (n == "SOC MTR Temp Sensor0") {
+				cpuValues[0] = temp;  // package T for Apple Silicon
+			}
+		}
+		CFRelease(thermalNames);
+		CFRelease(thermalValues);
 	}
 	CFRelease(thermalSensors);
-	CFRelease(thermalNames);
-	CFRelease(thermalValues);
 
 	return cpuValues;
 }
