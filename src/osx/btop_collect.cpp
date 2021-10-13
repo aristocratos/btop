@@ -430,6 +430,8 @@ namespace Cpu {
 				global_totals += totals;
 				global_idles += idles;
 
+				// Logger::debug("Core" + to_string(i) + " : T" + to_string(totals) + "   I" + to_string(idles));
+
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
 				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
@@ -1126,8 +1128,6 @@ namespace Proc {
 			current_rev = reverse;
 		}
 
-		const double uptime = system_uptime();
-
 		const int cmult = (per_core) ? 1 : Shared::coreCount;
 		bool got_detailed = false;
 
@@ -1157,6 +1157,10 @@ namespace Proc {
 			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
 			size_t size = 0;
+			struct timeval currentTime;
+			gettimeofday(&currentTime, NULL);
+			const double timeNow = currentTime.tv_sec + (currentTime.tv_usec / 1'000'000);
+
 			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
 			}
@@ -1210,7 +1214,7 @@ namespace Proc {
 					new_proc.cpu_p = clamp(round((cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 1000.0 / cmult, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, uptime - new_proc.cpu_s);
+					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, timeNow - new_proc.cpu_s);
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
