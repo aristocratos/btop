@@ -303,7 +303,7 @@ namespace Runner {
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
-	pthread_mutex_t active_mtx;
+	// pthread_mutex_t active_mtx;
 
 	const unordered_flat_map<string, uint_fast8_t> box_bits = {
 		{"proc",	0b0000'0001},
@@ -389,8 +389,15 @@ namespace Runner {
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
 			thread_wait();
-			thread_lock lock(active_mtx);
+			atomic_wait_for(active, true, 5000);
+			if (active) {
+				Global::exit_error_msg = "Runner thread failed to get active lock!";
+				Global::thread_exception = true;
+				Input::interrupt = true;
+				stopping = true;
+			}
 			if (stopping or Global::resized) {
+				sleep_ms(1);
 				continue;
 			}
 
@@ -592,39 +599,38 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, const bool no_update, const bool force_redraw) {
-		bool trigger = false;
-		{
-			thread_lock lock(active_mtx);
-			if (stopping or Global::resized) return;
-
-			if (box == "overlay") {
-				cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
-			}
-			else if (box == "clock") {
-				cout << Term::sync_start << Global::clock << Term::sync_end << flush;
-			}
-			else {
-				Config::unlock();
-				Config::lock();
-
-				//? Setup bitmask for selected boxes and pass to _runner thread
-				bitset<8> box_mask;
-				for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
-					box_mask |= box_bits.at(box);
-				}
-
-				current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
-
-				if (Menu::active and not current_conf.background_update) Global::overlay.clear();
-
-				trigger = true;
-			}
+		atomic_wait_for(active, true, 5000);
+		if (active) {
+			Global::exit_error_msg = "Stall in Runner thread, quitting!";
+			active = false;
+			exit(1);
 		}
-		//? Trigger thread start and wait for it to be active before returning
-		if (trigger) {
+		if (stopping or Global::resized) return;
+
+		if (box == "overlay") {
+			cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
+		}
+		else if (box == "clock") {
+			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
+		}
+		else {
+			Config::unlock();
+			Config::lock();
+
+			//? Setup bitmask for selected boxes and pass to _runner thread
+			bitset<8> box_mask;
+			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
+				box_mask |= box_bits.at(box);
+			}
+
+			current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
+
+			if (Menu::active and not current_conf.background_update) Global::overlay.clear();
+
 			thread_trigger();
 			atomic_wait_for(active, false, 10);
 		}
+
 
 	}
 
@@ -638,7 +644,7 @@ namespace Runner {
 			exit(1);
 		}
 		else if (ret == EBUSY) {
-			atomic_wait_for(active, true, 1000);
+			atomic_wait_for(active, true, 5000);
 			if (active) {
 				Global::exit_error_msg = "No response from Runner thread, quitting!";
 				active = false;
