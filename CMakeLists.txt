@@ -66,7 +66,7 @@ target_link_options_if_supported(btop PRIVATE -fexceptions -fstack-protector -fs
 
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
 	target_compile_options_if_supported(btop PRIVATE -ftree-loop-vectorize -flto)
-	target_link_options_if_supported(btop PRIVATE -flto)
+	target_link_options_if_supported(btop PRIVATE -flto -s)
 endif()
 
 target_compile_definitions(btop PRIVATE _FORTIFY_SOURCE=2 _GLIBCXX_ASSERTIONS)
@@ -84,7 +84,7 @@ if(STATIC)
 	if(NOT STATIC_GETPWUID)
 		target_compile_definitions(btop PRIVATE STATIC_BUILD)
 	endif()
-	target_link_libraries(btop PRIVATE -static)
+	target_link_options_if_supported(btop PRIVATE -static)
 endif()
 
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Nobody <nobody@nowhere.no>")
