@@ -541,9 +541,14 @@ namespace Runner {
 	void run(const string& box, const bool no_update, const bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
 		if (active) {
-			Global::exit_error_msg = "Stall in Runner thread, quitting!";
+			Logger::error("Stall in Runner thread, restarting!");
 			active = false;
-			exit(1);
+			// exit(1);
+			pthread_cancel(Runner::runner_id);
+			if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+				Global::exit_error_msg = "Failed to re-create _runner thread!";
+				exit(1);
+			}
 		}
 		if (stopping or Global::resized) return;
 
