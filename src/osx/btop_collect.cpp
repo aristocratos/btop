@@ -236,7 +236,7 @@ namespace Cpu {
 	void update_sensors() {
 		current_cpu.temp_max = 95; // we have no idea how to get the critical temp
 		ThermalSensors sensors;
-		std::map<int, double> sensor = sensors.getSensors();
+		auto sensor = sensors.getSensors();
 		try {
 			current_cpu.temp.at(0).push_back((long long)sensor[0]);
 
@@ -512,6 +512,7 @@ namespace Mem {
 		if (bsdNameRef) {
 			char buf[200];
 			CFStringGetCString(bsdNameRef, buf, 200, kCFStringEncodingASCII);
+			CFRelease(bsdNameRef);
 			return string(buf);
 		}
 		return "";
@@ -520,12 +521,13 @@ namespace Mem {
 	bool isWhole(io_registry_entry_t volumeRef) {
 		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
 		Boolean val = CFBooleanGetValue(isWhole);
+		CFRelease(isWhole);
 		return bool(val);
 	}
 
 	class IOObject {
 		public:
-			IOObject(string name, io_object_t obj) : name(name), object(obj) {}
+			IOObject(string name, io_object_t& obj) : name(name), object(obj) {}
 			virtual ~IOObject() { IOObjectRelease(object); }
 		private:
 			string name;
@@ -569,7 +571,6 @@ namespace Mem {
 								if (properties) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
-										// Logger::debug("device:" + device + " = " + disk.name);
 										disk_ios++;
 										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
 										if (disk.io_read.empty())
@@ -578,7 +579,6 @@ namespace Mem {
 											disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
 										disk.old_io.at(0) = readBytes;
 										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-										// Logger::debug("bytes read:" + std::to_string(readBytes) + " : " + std::to_string(disk.io_read.back()));
 
 										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
 										if (disk.io_write.empty())
@@ -587,16 +587,16 @@ namespace Mem {
 											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
 										disk.old_io.at(1) = writeBytes;
 										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-										// Logger::debug("bytes written:" + std::to_string(writeBytes) + " : " + std::to_string(disk.io_write.back()));
+
 										// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being 100% to get some activity indication)
 										if (disk.io_activity.empty())
 											disk.io_activity.push_back(0);
 										else
 											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
-										// Logger::debug("io activity:" + std::to_string(disk.io_activity.back()) + '%');
 									}
 								}
+								CFRelease(properties);
 							}
 						}
 					}

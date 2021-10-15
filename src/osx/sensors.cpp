@@ -37,6 +37,7 @@ CFDictionaryRef matching(int page, int usage) {
 	nums[1] = CFNumberCreate(0, kCFNumberSInt32Type, &usage);
 
 	CFDictionaryRef dict = CFDictionaryCreate(0, (const void **)keys, (const void **)nums, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFRelease(keys);
 	return dict;
 }
 
@@ -57,6 +58,7 @@ CFArrayRef getProductNames(CFDictionaryRef sensors) {
 		} else {
 			CFArrayAppendValue(array, CFSTR("noname"));  // @ gives a Ref like in "CFStringRef name"
 		}
+		CFRelease(name);
 	}
 	return array;
 }
@@ -82,12 +84,14 @@ CFArrayRef getThermalValues(CFDictionaryRef sensors) {
 			value = CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, &temp);
 		}
 		CFArrayAppendValue(array, value);
+		CFRelease(value);
 	}
+	CFRelease(system);
 	return array;
 }
 }
-std::map<int, double> Cpu::ThermalSensors::getSensors() {
-	std::map<int, double> cpuValues;
+unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
+	unordered_flat_map<int, double> cpuValues;
 	CFDictionaryRef thermalSensors = matching(0xff00, 5);  // 65280_10 = FF00_16
 	// thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
 	// can be checked by ioreg -lfx
@@ -118,6 +122,9 @@ std::map<int, double> Cpu::ThermalSensors::getSensors() {
             cpuValues[0] = temp; // package T for Apple Silicon
         }
 	}
+	CFRelease(thermalSensors);
+	CFRelease(thermalNames);
 	CFRelease(thermalValues);
+
 	return cpuValues;
 }
