@@ -40,8 +40,8 @@
 
 ##### 6 October 2021
 
-OsX development have been started by @joske , big thanks :)
-See branch [OSX](https://github.com/aristocratos/btop/tree/OSX) for current progress.
+OsX development have been started by @joske, big thanks :)
+See [branch OSX](https://github.com/aristocratos/btop/tree/OSX) for current progress.
 
 ##### 18 September 2021
 
@@ -55,7 +55,7 @@ Please report any bugs to the [Issues](https://github.com/aristocratos/btop/issu
 
 The development plan right now:
 
-* 1.1.0 Mac OsX support
+* 1.1.0 macOS support
 * 1.2.0 FreeBSD support
 * 1.3.0 Support for GPU monitoring
 * 1.X.0 Other platforms and features...
