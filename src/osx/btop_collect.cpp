@@ -1258,29 +1258,39 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		{  //* Get CPU totals
-			natural_t cpu_count;
-			kern_return_t error;
-			processor_cpu_load_info_data_t *cpu_load_info = NULL;
-			MachProcessorInfo info{};
-			error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
-			if (error != KERN_SUCCESS) {
-				Logger::error("Failed getting CPU load info");
-			}
-			cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
-			cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-					 + cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
-		}
-
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
 			//* ---------------------------------------------Collection start----------------------------------------------
+
+			{  //* Get CPU totals
+				natural_t cpu_count;
+				kern_return_t error;
+				processor_cpu_load_info_data_t *cpu_load_info = NULL;
+				MachProcessorInfo info{};
+				error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
+				if (error != KERN_SUCCESS) {
+					Logger::error("Failed getting CPU load info");
+				}
+				cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
+				cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
+						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
+			}
+
+			size_t arg_max;
+			{	//* Get maximum length of process arguments
+				size_t size = sizeof(int);
+				int mib[] = {CTL_KERN, KERN_ARGMAX};
+				if (sysctl(mib, 2, &arg_max, &size, NULL, 0) != 0) {
+					arg_max = 0;
+				}
+			}
+
 			should_filter = true;
-			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
 			size_t size = 0;
 			struct timeval currentTime;
@@ -1316,9 +1326,30 @@ namespace Proc {
 					if (no_cache) {
 						char fullname[PROC_PIDPATHINFO_MAXSIZE];
 						proc_pidpath(pid, fullname, sizeof(fullname));
-						new_proc.cmd = std::string(fullname);
-						size_t lastSlash = new_proc.cmd.find_last_of('/');
-						new_proc.name = new_proc.cmd.substr(lastSlash + 1);
+						const string f_name = std::string(fullname);
+						size_t lastSlash = f_name.find_last_of('/');
+						new_proc.name = f_name.substr(lastSlash + 1);
+						//? Get process arguments if possible, fallback to process path in case of failure
+						if (arg_max > 0) {
+							string proc_args;
+							proc_args.resize(arg_max);
+							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
+							if (sysctl(mib, 3, proc_args.data(), &arg_max, NULL, 0) == 0) {
+								int argc;
+								memcpy(&argc, &proc_args[0], sizeof(argc));
+								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
+									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
+										while (argc-- > 0 and null_pos != string::npos) {
+											null_pos = proc_args.find('\0', start_pos);
+											new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
+											start_pos = null_pos + 1;
+										}
+									}
+								}
+								if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
+							}
+						}
+						if (new_proc.cmd.empty()) new_proc.cmd = f_name;
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
 						new_proc.cpu_s = round(kproc.kp_proc.p_starttime.tv_sec + (kproc.kp_proc.p_starttime.tv_usec / 1'000'000));
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
