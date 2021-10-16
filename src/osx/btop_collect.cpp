@@ -225,11 +225,13 @@ namespace Cpu {
 	bool get_sensors() {
 		Logger::debug("get_sensors");
 		got_sensors = false;
-		ThermalSensors sensors;
-		if (sensors.getSensors().size() > 0) {
-			got_sensors = true;
+		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
+			ThermalSensors sensors;
+			if (sensors.getSensors().size() > 0) {
+				got_sensors = true;
+			}
+			Logger::debug("got sensors:" + std::to_string(got_sensors));
 		}
-		Logger::debug("got sensors:" + std::to_string(got_sensors));
 		return got_sensors;
 	}
 
