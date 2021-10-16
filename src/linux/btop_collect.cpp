@@ -27,7 +27,7 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 
-#if !defined(STATIC_BUILD) || !defined(__GLIBC__)
+#if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
 #endif
 
@@ -1437,7 +1437,7 @@ namespace Proc {
 						new_proc.user = uid_user.at(uid);
 					}
 					else {
-					#if !defined(STATIC_BUILD) || !defined(__GLIBC__)
+					#if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 						try {
 							struct passwd* udet;
 							udet = getpwuid(stoi(uid));
