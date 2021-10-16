@@ -42,96 +42,50 @@ CFDictionaryRef matching(int page, int usage) {
 	return dict;
 }
 
-CFArrayRef getProductNames(CFDictionaryRef sensors) {
-	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);  // in CFBase.h = NULL
-	if (system) {
-		IOHIDEventSystemClientSetMatching(system, sensors);
-		CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);  // matchingsrvs = matching services
-		if (matchingsrvs) {
-			long count = CFArrayGetCount(matchingsrvs);
-			CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
-
-			for (int i = 0; i < count; i++) {
-				IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
-				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
-				if (name) {
-					CFArrayAppendValue(array, name);
-				} else {
-					CFArrayAppendValue(array, CFSTR("noname"));  // @ gives a Ref like in "CFStringRef name"
-				}
-				CFRelease(name);
-			}
-			return array;
-		}
-		CFRelease(system);
+double getValue(IOHIDServiceClientRef sc) {
+	IOHIDEventRef event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0);  // here we use ...CopyEvent
+	double temp = 0.0;
+	if (event != 0) {
+		temp = IOHIDEventGetFloatValue(event, IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
+		CFRelease(event);
 	}
-	return nullptr;
+	return temp;
 }
 
-CFArrayRef getThermalValues(CFDictionaryRef sensors) {
-	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
-	IOHIDEventSystemClientSetMatching(system, sensors);
-	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
+} // extern C
 
-	long count = CFArrayGetCount(matchingsrvs);
-	CFMutableArrayRef array = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
-
-	for (int i = 0; i < count; i++) {
-		IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
-		IOHIDEventRef event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0);  // here we use ...CopyEvent
-
-		CFNumberRef value;
-		if (event != 0) {
-			double temp = IOHIDEventGetFloatValue(event, IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
-			value = CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, &temp);
-		} else {
-			double temp = 0;
-			value = CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, &temp);
-		}
-		CFArrayAppendValue(array, value);
-		CFRelease(value);
-	}
-	CFRelease(system);
-	return array;
-}
-}
 unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 	unordered_flat_map<int, double> cpuValues;
 	CFDictionaryRef thermalSensors = matching(0xff00, 5);  // 65280_10 = FF00_16
-	// thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
-	// can be checked by ioreg -lfx
-	CFArrayRef thermalNames = getProductNames(thermalSensors);
-	if (thermalNames) {
-		CFArrayRef thermalValues = getThermalValues(thermalSensors);
-		long count = CFArrayGetCount(thermalNames);
-		for (int i = 0; i < count; i++) {
-			CFStringRef nameRef = (CFStringRef)CFArrayGetValueAtIndex(thermalNames, i);
-			char buf[200];
-			CFStringGetCString(nameRef, buf, 200, kCFStringEncodingASCII);
-			std::string n(buf);
-			CFNumberRef value = (CFNumberRef)CFArrayGetValueAtIndex(thermalValues, i);
-			double temp = 0.0;
-			CFNumberGetValue(value, kCFNumberDoubleType, &temp);
-			if (n.starts_with("PMU tdie")) {
-				// Apple Silicon
-				std::string indexString = n.substr(8, 1);
-				int index = stoi(indexString);
-				cpuValues[index - 1] = temp;
-			} else if (n.starts_with("TC") && n[3] == 'c') {
-				// intel mac
-				std::string indexString = n.substr(2, 1);
-				int index = stoi(indexString);
-				cpuValues[index] = temp;
-			} else if (n == "TCAD") {
-				cpuValues[0] = temp;  // package T for intel
-			} else if (n == "SOC MTR Temp Sensor0") {
-				cpuValues[0] = temp;  // package T for Apple Silicon
+	                                                       // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
+	                                                       // can be checked by ioreg -lfx
+	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+	IOHIDEventSystemClientSetMatching(system, thermalSensors);
+	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
+
+	long count = CFArrayGetCount(matchingsrvs);
+	for (int i = 0; i < count; i++) {
+		IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
+		if (sc) {
+			CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
+			if (name) {
+				char buf[200];
+				CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
+				std::string n(buf);
+				if (n.starts_with("PMU tdie")) {
+					// Apple Silicon
+					std::string indexString = n.substr(8, 1);
+					int index = stoi(indexString);
+					cpuValues[index - 1] = getValue(sc);
+				} else if (n == "SOC MTR Temp Sensor0") {
+					cpuValues[0] = getValue(sc);  // package T for Apple Silicon
+				}
+				CFRelease(name);
 			}
 		}
-		CFRelease(thermalNames);
-		CFRelease(thermalValues);
 	}
+    CFRelease(matchingsrvs);
 	CFRelease(thermalSensors);
-
+    CFRelease(system);
 	return cpuValues;
 }
