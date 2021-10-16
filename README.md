@@ -259,7 +259,10 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `QUIET=true` for less verbose output.
 
-   Notice! Manually set `$ARCH` variable if cross-compiling
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 

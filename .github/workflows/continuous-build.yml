@@ -1,9 +1,10 @@
 name: Continuous Build Linux
-
+  
 on:
+  workflow_dispatch:
   push:
     branches:
-      - main
+      - master
     tags-ignore:
       - '*.*'
     paths:
@@ -12,111 +13,99 @@ on:
       - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
+      - '.github/workflows/continuous-build.yml'
 
 jobs:
-  build:
+  static-build:
+    continue-on-error: true
+    strategy:
+      matrix:
+        toolchain:
+          - aarch64-linux-musl
+          - aarch64_be-linux-musl
+          - arm-linux-musleabi
+          - arm-linux-musleabihf
+          - armeb-linux-musleabi
+          - armeb-linux-musleabihf
+          - armel-linux-musleabi
+          - armel-linux-musleabihf
+          - armv5l-linux-musleabi
+          - armv5l-linux-musleabihf
+          - armv6-linux-musleabi
+          - armv6-linux-musleabihf
+          - armv7l-linux-musleabihf
+          - armv7m-linux-musleabi
+          - armv7r-linux-musleabihf
+          - i486-linux-musl
+          - i686-linux-musl
+          - m68k-linux-musl
+          - microblaze-linux-musl
+          - microblazeel-linux-musl
+          - mips-linux-musl
+          - mips-linux-musln32sf
+          - mips-linux-muslsf
+          - mips64-linux-musl
+          - mips64-linux-musln32
+          - mips64-linux-musln32sf
+          - mips64el-linux-musl
+          - mips64el-linux-musln32
+          - mips64el-linux-musln32sf
+          - mipsel-linux-musl
+          - mipsel-linux-musln32
+          - mipsel-linux-musln32sf
+          - mipsel-linux-muslsf
+          - or1k-linux-musl
+          - powerpc-linux-musl
+          - powerpc-linux-muslsf
+          - powerpc64-linux-musl
+          - powerpc64le-linux-musl
+          - powerpcle-linux-musl
+          - powerpcle-linux-muslsf
+          - riscv32-linux-musl
+          - riscv64-linux-musl
+          - s390x-linux-musl
+          - sh2-linux-musl
+          - sh2-linux-muslfdpic
+          - sh2eb-linux-musl
+          - sh2eb-linux-muslfdpic
+          - sh4-linux-musl
+          - sh4eb-linux-musl
+          - x86_64-linux-musl
+          - x86_64-linux-muslx32
 
     runs-on: ubuntu-latest
-    container: ubuntu:21.04
+    container: muslcc/x86_64:${{ matrix.toolchain }}
 
     steps:
-      - uses: actions/checkout@v2
       - name: Install build tools
-        run: |
-          apt update && \
-          apt install coreutils sed git build-essential gcc-11 g++-11 -y
-          apt install -y g++-11-aarch64-linux-gnu g++-11-i686-linux-gnu \
-          g++-11-arm-linux-gnueabi  g++-11-arm-linux-gnueabihf g++-11-riscv64-linux-gnu \
-          g++-11-sparc64-linux-gnu
+        run: apk add --no-cache coreutils git make tar zstd
 
-          mkdir -p multiarch_bin
+      - name: Checkout source
+        uses: actions/checkout@v2
+      
+      - name: Fix - Stopping at filesystem boundary
+        run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
-          git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
-
-      - name: Compile x86_64
-        run: |
-          make CXX=g++-11 ARCH=x86_64 STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-x86_64-$GIT_HASH
-          make distclean
-
-      - name: Compile i686
-        run: |
-          make CXX=i686-linux-gnu-g++-11 ARCH=i686 STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-i686-$GIT_HASH
-          make distclean
-
-      - name: Compile aarch64
-        run: |
-          make CXX=aarch64-linux-gnu-g++-11 ARCH=aarch64 STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-aarch64-$GIT_HASH
-          make distclean
-
-      - name: Compile armel
-        run: |
-          make CXX=arm-linux-gnueabi-g++-11 ARCH=armel STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-armel-$GIT_HASH
-          make distclean
-
-      - name: Compile armhf
-        run: |
-          make CXX=arm-linux-gnueabihf-g++-11 ARCH=armhf STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-armhf-$GIT_HASH
-          make distclean
-
-      - name: Compile riscv64
-        run: |
-          make CXX=riscv64-linux-gnu-g++-11 ARCH=riscv64 STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-riscv64-$GIT_HASH
-          make distclean
-
-      - name: Compile sparc64
-        run: |
-          make CXX=sparc64-linux-gnu-g++-11 ARCH=sparc64 STATIC=true QUIET=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop multiarch_bin/btop-sparc64-$GIT_HASH
-          make distclean
+      - name: Build
+        run: make STATIC=true STRIP=true QUIET=true
 
       - name: Make executable
+        run: chmod +x bin/*
+
+      - name: Set up directories
         run: |
-          chmod +x multiarch_bin/*
+          mkdir .artifacts
+          mkdir .package
 
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-x86_64
-          path: 'multiarch_bin/btop-x86_64*'
+      - name: Create binary atrifacts
+        run: |
+          TOOLCHAIN=${{ matrix.toolchain }}
+          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
+          FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
+          cp bin/btop .artifacts/$FILENAME
 
-      - uses: actions/upload-artifact@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
         with:
-          name: btop-i686
-          path: 'multiarch_bin/btop-i686*'
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-aarch64
-          path: 'multiarch_bin/btop-aarch64*'
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-armel
-          path: 'multiarch_bin/btop-armel*'
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-armhf
-          path: 'multiarch_bin/btop-armhf*'
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-riscv64
-          path: 'multiarch_bin/btop-riscv64*'
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: btop-sparc64
-          path: 'multiarch_bin/btop-sparc64*'
+          name: btop-${{ matrix.toolchain }}
+          path: '.artifacts/**'
