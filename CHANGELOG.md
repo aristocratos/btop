@@ -1,3 +1,19 @@
+## v1.0.16
+
+* Fixed: atomic_wait() and atomic_lock{} use cpu pause instructions instead of thread sleep
+
+* Fixed: Swapped from atomic bool spinlocks to mutexes to fix rare deadlock
+
+* Added: Continuous Build workflow for OSX branch, by @ShrirajHegde
+
+* Changed: Reverted thread mutex lock to atomic bool with wait and timeout
+
+* Changed: Removed unnecessary async threads in Runner thread
+
+* Added: Try to restart secondary thread in case of stall and additional error checks for ifstream in Proc::collect()
+
+* Fixed: change [k]ill to [K]ill when enabling vim keys, by @jlopezcur
+
 ## v1.0.15
 
 * Fixed: Extra "root" partition when running in snap
