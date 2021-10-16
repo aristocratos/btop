@@ -290,7 +290,7 @@ namespace Tools {
 		atomic<bool>& atom;
 		bool not_true = false;
 	public:
-		atomic_lock(atomic<bool>& atom);
+		atomic_lock(atomic<bool>& atom, bool wait=false);
 		~atomic_lock();
 	};
 
