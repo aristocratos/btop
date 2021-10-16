@@ -52,7 +52,7 @@ double getValue(IOHIDServiceClientRef sc) {
 	return temp;
 }
 
-} // extern C
+}  // extern C
 
 unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 	unordered_flat_map<int, double> cpuValues;
@@ -62,29 +62,30 @@ unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	IOHIDEventSystemClientSetMatching(system, thermalSensors);
 	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
-
-	long count = CFArrayGetCount(matchingsrvs);
-	for (int i = 0; i < count; i++) {
-		IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
-		if (sc) {
-			CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
-			if (name) {
-				char buf[200];
-				CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
-				std::string n(buf);
-				if (n.starts_with("PMU tdie")) {
-					std::string indexString = n.substr(8, 1);
-					int index = stoi(indexString);
-					cpuValues[index - 1] = getValue(sc);
-				} else if (n == "SOC MTR Temp Sensor0") {
-					cpuValues[0] = getValue(sc);  // package T for Apple Silicon
+	if (matchingsrvs) {
+		long count = CFArrayGetCount(matchingsrvs);
+		for (int i = 0; i < count; i++) {
+			IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
+			if (sc) {
+				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
+				if (name) {
+					char buf[200];
+					CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
+					std::string n(buf);
+					if (n.starts_with("PMU tdie")) {
+						std::string indexString = n.substr(8, 1);
+						int index = stoi(indexString);
+						cpuValues[index - 1] = getValue(sc);
+					} else if (n == "SOC MTR Temp Sensor0") {
+						cpuValues[0] = getValue(sc);  // package T for Apple Silicon
+					}
+					CFRelease(name);
 				}
-				CFRelease(name);
 			}
 		}
+		CFRelease(matchingsrvs);
 	}
-    CFRelease(matchingsrvs);
-    CFRelease(system);
+	CFRelease(system);
 	CFRelease(thermalSensors);
 	return cpuValues;
 }
