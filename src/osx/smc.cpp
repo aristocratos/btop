@@ -1,6 +1,6 @@
 #include "smc.hpp"
 
-UInt32 _strtoul(char *str, int size, int base) {
+static UInt32 _strtoul(char *str, int size, int base) {
 	UInt32 total = 0;
 	int i;
 
@@ -14,7 +14,7 @@ UInt32 _strtoul(char *str, int size, int base) {
 	return total;
 }
 
-void _ultostr(char *str, UInt32 val) {
+static void _ultostr(char *str, UInt32 val) {
 	str[0] = '\0';
 	sprintf(str, "%c%c%c%c",
 	        (unsigned int)val >> 24,
