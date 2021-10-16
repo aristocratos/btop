@@ -7,6 +7,8 @@
 #include <map>
 #include <string>
 
+#include <btop_tools.hpp>
+
 extern "C" {
 typedef struct __IOHIDEvent *IOHIDEventRef;
 typedef struct __IOHIDServiceClient *IOHIDServiceClientRef;
@@ -60,6 +62,7 @@ CFArrayRef getProductNames(CFDictionaryRef sensors) {
 		}
 		CFRelease(name);
 	}
+	CFRelease(system);
 	return array;
 }
 
