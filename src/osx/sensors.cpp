@@ -73,7 +73,6 @@ unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 				CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
 				std::string n(buf);
 				if (n.starts_with("PMU tdie")) {
-					// Apple Silicon
 					std::string indexString = n.substr(8, 1);
 					int index = stoi(indexString);
 					cpuValues[index - 1] = getValue(sc);
@@ -85,7 +84,7 @@ unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 		}
 	}
     CFRelease(matchingsrvs);
-	CFRelease(thermalSensors);
     CFRelease(system);
+	CFRelease(thermalSensors);
 	return cpuValues;
 }
