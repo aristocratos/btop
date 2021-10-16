@@ -28,7 +28,6 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
-#include <mutex>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -39,7 +38,7 @@ tab-size = 4
 #include <btop_menu.hpp>
 
 using std::string, std::string_view, std::vector, std::atomic, std::endl, std::cout, std::min, std::flush, std::endl;
-using std::string_literals::operator""s, std::to_string, std::mutex, std::lock_guard;
+using std::string_literals::operator""s, std::to_string;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -148,8 +147,8 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
-	static mutex resizing;
-	lock_guard<mutex> lock(resizing);
+	static atomic<bool> resizing (false);
+	atomic_lock lck(resizing, true);
 	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
 	}

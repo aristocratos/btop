@@ -24,7 +24,6 @@ tab-size = 4
 #include <iomanip>
 #include <utility>
 #include <robin_hood.h>
-#include <mutex>
 
 #include <unistd.h>
 #include <limits.h>
@@ -34,8 +33,7 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using 	std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map,
-		std::mutex, std::lock_guard;
+using std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -332,9 +330,11 @@ namespace Tools {
 		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
 
-	atomic_lock::atomic_lock(atomic<bool>& atom) : atom(atom) {
+	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
 		active_locks++;
-		this->atom.store(true);
+		if (wait) {
+			while (not this->atom.compare_exchange_strong(this->not_true, true));
+		} else this->atom.store(true);
 	}
 
 	atomic_lock::~atomic_lock() {
@@ -384,8 +384,7 @@ namespace Tools {
 
 namespace Logger {
 	using namespace Tools;
-
-	mutex logger_mtx;
+	std::atomic<bool> busy (false);
 	bool first = true;
 	const string tdf = "%Y/%m/%d (%T) | ";
 
@@ -398,7 +397,7 @@ namespace Logger {
 
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
-		lock_guard<mutex> lock(logger_mtx);
+		atomic_lock lck(busy, true);
 		std::error_code ec;
 		try {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
