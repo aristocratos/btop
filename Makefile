@@ -21,7 +21,7 @@ ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Only enable fcf-protection if on x86_64
-ifeq ($(ARCH),x86_64)
+ifneq ($(filter x86_64 i%86, $(ARCH)),)
 	override ADDFLAGS += -fcf-protection
 endif
 
