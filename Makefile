@@ -33,13 +33,6 @@ ifeq ($(STRIP),true)
 	override ADDFLAGS += -s
 endif
 
-#? Make sure PLATFORM Darwin is OSX and not Darwin
-ifeq ($(PLATFORM_LC),darwin)
-	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
-		PLATFORM := OSX
-	endif
-endif
-
 #? Compiler and Linker
 CXX ?= g++
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
@@ -62,7 +55,7 @@ ifeq ($(PLATFORM_LC),linux)
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
-else ifeq ($(PLATFORM_LC),osx)
+else ifeq ($(PLATFORM_LC),apple)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 else

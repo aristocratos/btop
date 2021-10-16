@@ -261,7 +261,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
 
-   Append `ARCH=<architecture>` to manually set the target architectur.
+   Append `ARCH=<architecture>` to manually set the target architecture.
    If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
