@@ -44,10 +44,12 @@ contents of `~/.config/btop/btop.log`
 
 If btop++ is crashing at start the following steps could be helpful:
 
+(Extra helpful if compiled with `make OPTFLAGS="-O0 -g"`)
+
 1. run `gdb btop`
 
 2. `r` to run, wait for crash and press enter
 
-3. `bt` to get backtrace
+3. `thread apply all bt` to get backtrace for all threads
 
 4. Copy and paste the backtrace here:
