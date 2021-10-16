@@ -88,9 +88,7 @@ jobs:
         run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
       - name: Build
-        run: |
-          TOOLCHAIN=${{ matrix.toolchain }}
-          make -j $(getconf _NPROCESSORS_ONLN) ARCH=${TOOLCHAIN/-*/} STATIC=true QUIET=true
+        run: make STATIC=true STRIP=true QUIET=true
 
       - name: Make executable
         run: chmod +x bin/*
