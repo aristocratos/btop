@@ -1354,7 +1354,7 @@ namespace Proc {
 				uid_user.clear();
 				pread.open(Shared::passwd_path);
 				if (pread.good()) {
-					while (not pread.eof()) {
+					while (pread.good()) {
 						getline(pread, r_user, ':');
 						pread.ignore(SSmax, ':');
 						getline(pread, r_uid, ':');
@@ -1422,7 +1422,7 @@ namespace Proc {
 					if (not pread.good()) continue;
 					string uid;
 					string line;
-					while (not pread.eof()) {
+					while (pread.good()) {
 						getline(pread, line, ':');
 						if (line == "Uid") {
 							pread.ignore();
@@ -1465,9 +1465,9 @@ namespace Proc {
 				uint64_t cpu_t = 0;
 				try {
 					for (;;) {
-						while (++x < next_x + offset) pread.ignore(SSmax, ' ');
-						getline(pread, short_str, ' ');
+						while (pread.good() and ++x < next_x + offset) pread.ignore(SSmax, ' ');
 						if (not pread.good()) break;
+						else getline(pread, short_str, ' ');
 
 						switch (x-offset) {
 							case 3: //? Process state

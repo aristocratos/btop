@@ -19,8 +19,6 @@ tab-size = 4
 #include <csignal>
 #include <pthread.h>
 #include <thread>
-#include <future>
-#include <bitset>
 #include <numeric>
 #include <ranges>
 #include <unistd.h>
@@ -30,6 +28,7 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#include <mutex>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -40,7 +39,7 @@ tab-size = 4
 #include <btop_menu.hpp>
 
 using std::string, std::string_view, std::vector, std::atomic, std::endl, std::cout, std::min, std::flush, std::endl;
-using std::string_literals::operator""s, std::to_string, std::future, std::async, std::bitset, std::future_status;
+using std::string_literals::operator""s, std::to_string, std::mutex, std::lock_guard;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -55,7 +54,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.0.14";
+	const string Version = "1.0.16";
 
 	int coreCount;
 	string overlay;
@@ -79,7 +78,6 @@ namespace Global {
 	uint64_t start_time;
 
 	atomic<bool> resized (false);
-	atomic<bool> resizing (false);
 	atomic<bool> quitting (false);
 	atomic<bool> _runner_started (false);
 
@@ -150,8 +148,8 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
-	if (Global::resizing) return;
-	atomic_lock lck(Global::resizing);
+	static mutex resizing;
+	lock_guard<mutex> lock(resizing);
 	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
 	}
@@ -200,8 +198,20 @@ void clean_quit(int sig) {
 	if (Global::quitting) return;
 	Global::quitting = true;
 	Runner::stop();
-	if (Global::_runner_started and pthread_join(Runner::runner_id, NULL) != 0) {
-		Logger::error("Failed to join _runner thread!");
+	if (Global::_runner_started) {
+	#ifdef __APPLE__
+		if (pthread_join(Runner::runner_id, NULL) != 0) {
+			Logger::error("Failed to join _runner thread!");
+			pthread_cancel(Runner::runner_id);
+		}
+	#else
+		struct timespec ts;
+		ts.tv_sec = 5;
+		if (pthread_timedjoin_np(Runner::runner_id, NULL, &ts) != 0) {
+			Logger::error("Failed to join _runner thread!");
+			pthread_cancel(Runner::runner_id);
+		}
+	#endif
 	}
 
 	Config::write();
@@ -224,13 +234,11 @@ void clean_quit(int sig) {
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
+#ifndef __APPLE__
 	if (Tools::active_locks > 0) {
-#ifdef __APPLE__
-		exit((sig != -1 ? sig : 0));
-#else
 		quick_exit((sig != -1 ? sig : 0));
-#endif
 	}
+#endif
 
 	if (sig != -1) exit(sig);
 }
@@ -307,20 +315,6 @@ namespace Runner {
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
 
-	const unordered_flat_map<string, uint_fast8_t> box_bits = {
-		{"proc",	0b0000'0001},
-		{"net",		0b0000'0100},
-		{"mem",		0b0001'0000},
-		{"cpu",		0b0100'0000},
-	};
-
-	enum bit_pos {
-		proc_present, proc_running,
-		net_present, net_running,
-		mem_present, mem_running,
-		cpu_present, cpu_running
-	};
-
 	enum debug_actions {
 		collect_begin,
 		draw_begin,
@@ -332,16 +326,11 @@ namespace Runner {
 		draw
 	};
 
-	const uint_fast8_t proc_done 	= 0b0000'0011;
-	const uint_fast8_t net_done 	= 0b0000'1100;
-	const uint_fast8_t mem_done 	= 0b0011'0000;
-	const uint_fast8_t cpu_done 	= 0b1100'0000;
-
 	string debug_bg;
 	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
 
 	struct runner_conf {
-		bitset<8> box_mask;
+		vector<string> boxes;
 		bool no_update;
 		bool force_redraw;
 		bool background_update;
@@ -391,7 +380,15 @@ namespace Runner {
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
 			thread_wait();
+			atomic_wait_for(active, true, 5000);
+			if (active) {
+				Global::exit_error_msg = "Runner thread failed to get active lock!";
+				Global::thread_exception = true;
+				Input::interrupt = true;
+				stopping = true;
+			}
 			if (stopping or Global::resized) {
+				sleep_ms(1);
 				continue;
 			}
 
@@ -409,128 +406,86 @@ namespace Runner {
 
 			output.clear();
 
-			//* Start collection functions for all boxes in async threads and draw in this thread when finished
-			//? Starting order below based on mean time to finish
+			//* Run collection and draw functions for all boxes
 			try {
-				future<Cpu::cpu_info&> cpu;
-				future<Mem::mem_info&> mem;
-				future<Net::net_info&> net;
-				future<vector<Proc::proc_info>&> proc;
+				//? PROC
+				if (v_contains(conf.boxes, "proc")) {
+					try {
+						if (Global::debug) debug_timer("proc", collect_begin);
 
-				//? Loop until all box flags present in bitmask have been zeroed
-				while (conf.box_mask.count() > 0) {
-					if (stopping) break;
+						//? Start collect
+						auto proc = Proc::collect(conf.no_update);
 
-					//? PROC
-					if (conf.box_mask.test(proc_present)) {
-						if (not conf.box_mask.test(proc_running)) {
-							if (Global::debug) debug_timer("proc", collect_begin);
+						if (Global::debug) debug_timer("proc", draw_begin);
 
-							//? Start async collect
-							proc = async(Proc::collect, conf.no_update);
-							conf.box_mask.set(proc_running);
-						}
-						else if (not proc.valid())
-							throw std::runtime_error("Proc::collect() future not valid.");
+						//? Draw box
+						if (not pause_output) output += Proc::draw(proc, conf.force_redraw, conf.no_update);
 
-						else if (proc.wait_for(10us) == future_status::ready) {
-							try {
-								if (Global::debug) debug_timer("proc", draw_begin);
-
-								//? Draw box
-								if (not pause_output) output += Proc::draw(proc.get(), conf.force_redraw, conf.no_update);
-
-								if (Global::debug) debug_timer("proc", draw_done);
-							}
-							catch (const std::exception& e) {
-								throw std::runtime_error("Proc:: -> " + (string)e.what());
-							}
-							conf.box_mask ^= proc_done;
-						}
+						if (Global::debug) debug_timer("proc", draw_done);
 					}
-
-					//? NET
-					if (conf.box_mask.test(net_present)) {
-						if (not conf.box_mask.test(net_running)) {
-							if (Global::debug) debug_timer("net", collect_begin);
-
-							//? Start async collect
-							net = async(Net::collect, conf.no_update);
-							conf.box_mask.set(net_running);
-						}
-						else if (not net.valid())
-							throw std::runtime_error("Net::collect() future not valid.");
-
-						else if (net.wait_for(10us) == future_status::ready) {
-							try {
-								if (Global::debug) debug_timer("net", draw_begin);
-
-								//? Draw box
-								if (not pause_output) output += Net::draw(net.get(), conf.force_redraw, conf.no_update);
-
-								if (Global::debug) debug_timer("net", draw_done);
-							}
-							catch (const std::exception& e) {
-								throw std::runtime_error("Net:: -> " + (string)e.what());
-							}
-							conf.box_mask ^= net_done;
-						}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Proc:: -> " + (string)e.what());
 					}
+				}
 
-					//? MEM
-					if (conf.box_mask.test(mem_present)) {
-						if (not conf.box_mask.test(mem_running)) {
-							if (Global::debug) debug_timer("mem", collect_begin);
 
-							//? Start async collect
-							mem = async(Mem::collect, conf.no_update);
-							conf.box_mask.set(mem_running);
-						}
-						else if (not mem.valid())
-							throw std::runtime_error("Mem::collect() future not valid.");
+				//? NET
+				if (v_contains(conf.boxes, "net")) {
+					try {
+						if (Global::debug) debug_timer("net", collect_begin);
 
-						else if (mem.wait_for(10us) == future_status::ready) {
-							try {
-								if (Global::debug) debug_timer("mem", draw_begin);
+						//? Start collect
+						auto net = Net::collect(conf.no_update);
 
-								//? Draw box
-								if (not pause_output) output += Mem::draw(mem.get(), conf.force_redraw, conf.no_update);
+						if (Global::debug) debug_timer("net", draw_begin);
 
-								if (Global::debug) debug_timer("mem", draw_done);
-							}
-							catch (const std::exception& e) {
-								throw std::runtime_error("Mem:: -> " + (string)e.what());
-							}
-							conf.box_mask ^= mem_done;
-						}
+						//? Draw box
+						if (not pause_output) output += Net::draw(net, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("net", draw_done);
 					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Net:: -> " + (string)e.what());
+					}
+				}
 
-					//? CPU
-					if (conf.box_mask.test(cpu_present)) {
-						if (not conf.box_mask.test(cpu_running)) {
-							if (Global::debug) debug_timer("cpu", collect_begin);
+				//? MEM
+				if (v_contains(conf.boxes, "mem")) {
+					try {
+						if (Global::debug) debug_timer("mem", collect_begin);
 
-							//? Start async collect
-							cpu = async(Cpu::collect, conf.no_update);
-							conf.box_mask.set(cpu_running);
-						}
-						else if (not cpu.valid())
-							throw std::runtime_error("Cpu::collect() future not valid.");
+						//? Start collect
+						auto mem = Mem::collect(conf.no_update);
 
-						else if (cpu.wait_for(10us) == future_status::ready) {
-							try {
-								if (Global::debug) debug_timer("cpu", draw_begin);
+						if (Global::debug) debug_timer("mem", draw_begin);
 
-								//? Draw box
-								if (not pause_output) output += Cpu::draw(cpu.get(), conf.force_redraw, conf.no_update);
+						//? Draw box
+						if (not pause_output) output += Mem::draw(mem, conf.force_redraw, conf.no_update);
 
-								if (Global::debug) debug_timer("cpu", draw_done);
-							}
-							catch (const std::exception& e) {
-								throw std::runtime_error("Cpu:: -> " + (string)e.what());
-							}
-							conf.box_mask ^= cpu_done;
-						}
+						if (Global::debug) debug_timer("mem", draw_done);
+					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Mem:: -> " + (string)e.what());
+					}
+				}
+
+				//? CPU
+				if (v_contains(conf.boxes, "cpu")) {
+					try {
+						if (Global::debug) debug_timer("cpu", collect_begin);
+
+						//? Start collect
+						auto cpu = Cpu::collect(conf.no_update);
+
+						if (Global::debug) debug_timer("cpu", draw_begin);
+
+						//? Draw box
+						if (not pause_output) output += Cpu::draw(cpu, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("cpu", draw_done);
+					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Cpu:: -> " + (string)e.what());
 					}
 				}
 			}
@@ -593,8 +548,17 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, const bool no_update, const bool force_redraw) {
-		atomic_lock lck(waiting);
-		atomic_wait(active);
+		atomic_wait_for(active, true, 5000);
+		if (active) {
+			Logger::error("Stall in Runner thread, restarting!");
+			active = false;
+			// exit(1);
+			pthread_cancel(Runner::runner_id);
+			if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+				Global::exit_error_msg = "Failed to re-create _runner thread!";
+				exit(1);
+			}
+		}
 		if (stopping or Global::resized) return;
 
 		if (box == "overlay") {
@@ -607,21 +571,21 @@ namespace Runner {
 			Config::unlock();
 			Config::lock();
 
-			//? Setup bitmask for selected boxes and pass to _runner thread
-			bitset<8> box_mask;
-			for (const auto& box : (box == "all" ? Config::current_boxes : vector{box})) {
-				box_mask |= box_bits.at(box);
-			}
-
-			current_conf = {box_mask, no_update, force_redraw, (not Config::getB("tty_mode") and Config::getB("background_update")), Global::overlay, Global::clock};
+			current_conf = {
+				(box == "all" ? Config::current_boxes : vector{box}),
+				no_update, force_redraw,
+				(not Config::getB("tty_mode") and Config::getB("background_update")),
+				Global::overlay,
+				Global::clock
+			};
 
 			if (Menu::active and not current_conf.background_update) Global::overlay.clear();
 
 			thread_trigger();
-
-			//? Wait for _runner thread to be active before returning
-			for (int i = 0; not active and i < 10; i++) sleep_ms(1);
+			atomic_wait_for(active, false, 10);
 		}
+
+
 	}
 
 	//* Stops any work being done in runner thread and checks for thread errors
@@ -634,9 +598,20 @@ namespace Runner {
 			exit(1);
 		}
 		else if (ret == EBUSY) {
-			atomic_wait(active);
+			atomic_wait_for(active, true, 5000);
+			if (active) {
+				active = false;
+				if (Global::quitting) {
+					return;
+				}
+				else {
+					Global::exit_error_msg = "No response from Runner thread, quitting!";
+					exit(1);
+				}
+			}
 			thread_trigger();
-			sleep_ms(1);
+			atomic_wait_for(active, false, 100);
+			atomic_wait_for(active, true, 100);
 		}
 		stopping = false;
 	}
@@ -864,7 +839,7 @@ int main(int argc, char **argv) {
 				Global::resized = false;
 				if (Menu::active) Menu::process();
 				else Runner::run("all", true, true);
-				atomic_wait(Runner::active);
+				atomic_wait_for(Runner::active, true, 1000);
 			}
 
 			//? Update clock if needed

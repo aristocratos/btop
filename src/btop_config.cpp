@@ -21,12 +21,13 @@ tab-size = 4
 #include <atomic>
 #include <fstream>
 #include <string_view>
+#include <mutex>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::array, std::atomic, std::string_view, std::string_literals::operator""s;
+using std::array, std::atomic, std::string_view, std::string_literals::operator""s, std::mutex, std::lock_guard;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
@@ -35,7 +36,7 @@ using namespace Tools;
 namespace Config {
 
 	atomic<bool> locked (false);
-	atomic<bool> writelock (false);
+	mutex writelock;
 	bool write_new;
 
 	const vector<array<string, 2>> descriptions = {
@@ -53,6 +54,9 @@ namespace Config {
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positons, G=graph symbol to use for box.\n"
 								"#* Use withespace \" \" as seprator between different presets.\n"
 								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
+
+		{"vim_keys",			"#* Set to True to enable \"h,j,k,l\" keys for directional control in lists.\n"
+								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
@@ -231,6 +235,7 @@ namespace Config {
 		{"net_auto", true},
 		{"net_sync", false},
 		{"show_battery", true},
+		{"vim_keys", false},
 		{"tty_mode", false},
 		{"force_tty", false},
 		{"lowcolor", false},
@@ -252,7 +257,7 @@ namespace Config {
 	unordered_flat_map<string, int> intsTmp;
 
 	bool _locked(const string& name) {
-		atomic_wait(writelock);
+		lock_guard<mutex> lock(writelock);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
 		return locked.load();
@@ -330,7 +335,7 @@ namespace Config {
 	}
 
 	void lock() {
-		atomic_wait(writelock);
+		lock_guard<mutex> lock(writelock);
 		locked = true;
 	}
 
@@ -444,7 +449,7 @@ namespace Config {
 	void unlock() {
 		if (not locked) return;
 		atomic_wait(Runner::active);
-		atomic_lock lck(writelock);
+		lock_guard<mutex> lock(writelock);
 		try {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;

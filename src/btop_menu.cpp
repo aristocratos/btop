@@ -177,6 +177,15 @@ namespace Menu {
 				"Will force 16-color mode and TTY theme,",
 				"set all graph symbols to \"tty\" and swap",
 				"out other non tty friendly symbols."},
+			{"vim_keys",
+				"Enable vim keys.",
+				"Set to True to enable \"h,j,k,l\" keys for",
+				"directional control in lists.",
+				"",
+				"Conflicting keys for",
+				"h (help) and k (kill)",
+				"is accessible while holding shift."},
+
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -695,7 +704,7 @@ namespace Menu {
 		else if (key == "backspace" and selected_signal != -1) {
 			selected_signal = (selected_signal < 10 ? -1 : selected_signal / 10);
 		}
-		else if (key == "up" and selected_signal != 16) {
+		else if (is_in(key, "up", "k") and selected_signal != 16) {
 			if (selected_signal == 1) selected_signal = 31;
 			else if (selected_signal < 6) selected_signal += 25;
 			else {
@@ -704,7 +713,7 @@ namespace Menu {
 				if (selected_signal <= 16 and offset) selected_signal--;
 			}
 		}
-		else if (key == "down") {
+		else if (is_in(key, "down", "j")) {
 			if (selected_signal == 31) selected_signal = 1;
 			else if (selected_signal < 1 or selected_signal == 16) selected_signal = 1;
 			else if (selected_signal > 26) selected_signal -= 25;
@@ -715,11 +724,11 @@ namespace Menu {
 				if (selected_signal > 31) selected_signal = 31;
 			}
 		}
-		else if (key == "left" and selected_signal > 0 and selected_signal != 16) {
+		else if (is_in(key, "left", "h") and selected_signal > 0 and selected_signal != 16) {
 			if (--selected_signal < 1) selected_signal = 31;
 			else if (selected_signal == 16) selected_signal--;
 		}
-		else if (key == "right" and selected_signal <= 31 and selected_signal != 16) {
+		else if (is_in(key, "right", "l") and selected_signal <= 31 and selected_signal != 16) {
 			if (++selected_signal > 31) selected_signal = 1;
 			else if (selected_signal == 16) selected_signal++;
 		}
@@ -903,10 +912,10 @@ namespace Menu {
 					exit(0);
 			}
 		}
-		else if (is_in(key, "down", "tab", "mouse_scroll_down")) {
+		else if (is_in(key, "down", "tab", "mouse_scroll_down", "j")) {
 			if (++selected > 2) selected = 0;
 		}
-		else if (is_in(key, "up", "shift_tab", "mouse_scroll_up")) {
+		else if (is_in(key, "up", "shift_tab", "mouse_scroll_up", "k")) {
 			if (--selected < 0) selected = 2;
 		}
 		else {
@@ -956,6 +965,7 @@ namespace Menu {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)}
 		};
 		auto& tty_mode = Config::getB("tty_mode");
+		auto& vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();
@@ -1054,14 +1064,14 @@ namespace Menu {
 		else if (is_in(key, "escape", "q", "o", "backspace")) {
 			return Closed;
 		}
-		else if (is_in(key, "down", "mouse_scroll_down")) {
+		else if (is_in(key, "down", "mouse_scroll_down") or (vim_keys and key == "j")) {
 			if (++selected > select_max or selected >= item_height) {
 				if (page < pages - 1) page++;
 				else if (pages > 1) page = 0;
 				selected = 0;
 			}
 		}
-		else if (is_in(key, "up", "mouse_scroll_up")) {
+		else if (is_in(key, "up", "mouse_scroll_up") or (vim_keys and key == "k")) {
 			if (--selected < 0) {
 				if (page > 0) page--;
 				else if (pages > 1) page = pages - 1;
@@ -1089,12 +1099,12 @@ namespace Menu {
 			selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
-		else if (is_in(key, "left", "right")) {
+		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
 			const auto& option = categories[selected_cat][item_height * page + selected][0];
 			if (selPred.test(isInt)) {
 				const int mod = (option == "update_ms" ? 100 : 1);
 				long value = Config::getI(option);
-				if (key == "right") value += mod;
+				if (key == "right" or (vim_keys and key == "l")) value += mod;
 				else value -= mod;
 
 				if (Config::intValid(option, to_string(value)))

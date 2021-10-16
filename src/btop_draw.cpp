@@ -815,7 +815,7 @@ namespace Mem {
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(mem.stats.at(name));
 			const string graphics = (use_graphs ? mem_graphs.at(name)(mem.percent.at(name), redraw or data_same) : mem_meters.at(name)(mem.percent.at(name).back()));
-			if (mem_size > 2 && mem.percent.at(name).size() > 0) {
+			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + ljust(title, 4, false, false, not big_mem) + ljust(":", (big_mem ? 1 : 6))
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + trans(humanized)
 					+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(mem.percent.at(name).back()) + "%", 4);
@@ -1039,9 +1039,10 @@ namespace Proc {
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
 		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
+		auto& vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
-		if (cmd_key == "up" and selected > 0) {
+		if ((cmd_key == "up" or (vim_keys and cmd_key == "k")) and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
 			if (Config::getI("proc_last_selected") > 0) Config::set("proc_last_selected", 0);
@@ -1052,7 +1053,7 @@ namespace Proc {
 		else if (cmd_key == "mouse_scroll_down" and start < numpids - select_max) {
 			start = min(numpids - select_max, start + 3);
 		}
-		else if (cmd_key == "down") {
+		else if (cmd_key == "down" or (vim_keys and cmd_key == "j")) {
 			if (start < numpids - select_max and selected == select_max) start++;
 			else if (selected == 0 and last_selected > 0) {
 				selected = last_selected;
@@ -1103,6 +1104,7 @@ namespace Proc {
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& mem_bytes = Config::getB("proc_mem_bytes");
+		auto& vim_keys = Config::getB("vim_keys");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
@@ -1167,7 +1169,7 @@ namespace Proc {
 					if (alive and selected == 0) Input::mouse_mappings["t"] = {d_y, mouse_x, 1, 9};
 					mouse_x += 11;
 				}
-				out += title_left + hi_color + Fx::b + 'k' + t_color + "ill" + Fx::ub + title_right
+				out += title_left + hi_color + Fx::b + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
 					+ Mv::to(d_y, d_x + d_width - 10) + title_left + t_color + Fx::b + hide + Symbols::enter + Fx::ub + title_right;
 				if (alive and selected == 0) {
@@ -1260,7 +1262,7 @@ namespace Proc {
 				mouse_x += 11;
 			}
 			if (width > 55) {
-				out += title_left_down + Fx::b + hi_color + 'k' + t_color + "ill" + Fx::ub + title_right_down;
+				out += title_left_down + Fx::b + hi_color + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right_down;
 				if (selected > 0) Input::mouse_mappings["k"] = {y + height - 1, mouse_x, 1, 4};
 				mouse_x += 6;
 			}
@@ -1313,15 +1315,14 @@ namespace Proc {
 			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
-			if (detailed.mem_bytes.size() > 0) {
-				const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
-				string mem_str = to_string(mem_p);
-				mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
-				out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
-					+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
-					+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
-					+ Theme::c("title") + Fx::b + detailed.memory;
-			}
+
+			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
+			string mem_str = to_string(mem_p);
+			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
+				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
+				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
+				+ Theme::c("title") + Fx::b + detailed.memory;
 		}
 
 		//? Check bounds of current selection and view
