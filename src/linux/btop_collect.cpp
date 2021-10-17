@@ -468,75 +468,99 @@ namespace Cpu {
 		return core_map;
 	}
 
+	struct battery {
+		fs::path base_dir, energy_now, energy_full, power_now, status, online;
+		string device_type;
+		bool use_energy = true;
+	};
+
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
-		static fs::path bat_dir, energy_now_path, energy_full_path, power_now_path, status_path, online_path;
-		static bool use_energy = true;
+		static string auto_sel;
+		static unordered_flat_map<string, battery> batteries;
 
 		//? Get paths to needed files and check for valid values on first run
-		if (bat_dir.empty() and has_battery) {
+		if (batteries.empty() and has_battery) {
 			if (fs::exists("/sys/class/power_supply")) {
 				for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
 					//? Only consider online power supplies of type Battery or UPS
 					//? see kernel docs for details on the file structure and contents
 					//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
+					battery new_bat;
+					fs::path bat_dir;
 					try {
 						if (not d.is_directory()
-							or not fs::exists(d.path() / "type") 
+							or not fs::exists(d.path() / "type")
 							or not fs::exists(d.path() / "present")
 							or stoi(readfile(d.path() / "present")) != 1)
 							continue;
-						string type = readfile(d.path() / "type");
-						if (type == "Battery" or type == "UPS") {
+						string dev_type = readfile(d.path() / "type");
+						if (is_in(dev_type, "Battery", "UPS")) {
 							bat_dir = d.path();
-							break;
+							new_bat.base_dir = d.path();
+							new_bat.device_type = dev_type;
 						}
 					} catch (...) {
 						//? skip power supplies not conforming to the kernel standard
 						continue;
 					}
+
+					if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
+					else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
+					else new_bat.use_energy = false;
+
+					if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
+					else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
+					else new_bat.use_energy = false;
+
+					if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
+						continue;
+					}
+
+					if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
+					else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+
+					if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
+					else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
+
+					batteries[bat_dir.filename()] = new_bat;
+					Config::available_batteries.push_back(bat_dir.filename());
 				}
 			}
-			if (bat_dir.empty()) {
+			if (batteries.empty()) {
 				has_battery = false;
 				return {0, 0, ""};
 			}
-			else {
-				if (fs::exists(bat_dir / "energy_now")) energy_now_path = bat_dir / "energy_now";
-				else if (fs::exists(bat_dir / "charge_now")) energy_now_path = bat_dir / "charge_now";
-				else use_energy = false;
-
-				if (fs::exists(bat_dir / "energy_full")) energy_full_path = bat_dir / "energy_full";
-				else if (fs::exists(bat_dir / "charge_full")) energy_full_path = bat_dir / "charge_full";
-				else use_energy = false;
-
-				if (not use_energy and not fs::exists(bat_dir / "capacity")) {
-					has_battery = false;
-					return {0, 0, ""};
-				}
-
-				if (fs::exists(bat_dir / "power_now")) power_now_path = bat_dir / "power_now";
-				else if (fs::exists(bat_dir / "current_now")) power_now_path = bat_dir / "current_now";
-
-				if (fs::exists(bat_dir / "AC0/online")) online_path = bat_dir / "AC0/online";
-				else if (fs::exists(bat_dir / "AC/online")) online_path = bat_dir / "AC/online";
-			}
 		}
+
+		auto& battery_sel = Config::getS("selected_battery");
+
+		if ((battery_sel == "Auto" and auto_sel.empty())) {
+			for (auto& [name, bat] : batteries) {
+				if (bat.device_type == "Battery") {
+					auto_sel = name;
+					break;
+				}
+			}
+			if (auto_sel.empty()) auto_sel = batteries.begin()->first;
+		}
+
+		auto& b = (battery_sel != "Auto" and batteries.contains(battery_sel) ? batteries.at(battery_sel) : batteries.at(auto_sel));
 
 		int percent = -1;
 		long seconds = -1;
 
 		//? Try to get battery percentage
-		if (use_energy) {
+		if (b.use_energy) {
 			try {
-				percent = round(100.0 * stoll(readfile(energy_now_path, "-1")) / stoll(readfile(energy_full_path, "1")));
+				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
 		if (percent < 0) {
 			try {
-				percent = stoll(readfile(bat_dir / "capacity", "-1"));
+				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
@@ -547,9 +571,9 @@ namespace Cpu {
 		}
 
 		//? Get charging/discharging status
-		string status = str_to_lower(readfile(bat_dir / "status", "unknown"));
-		if (status == "unknown" and not online_path.empty()) {
-			const auto online = readfile(online_path, "0");
+		string status = str_to_lower(readfile(b.base_dir / "status", "unknown"));
+		if (status == "unknown" and not b.online.empty()) {
+			const auto online = readfile(b.online, "0");
 			if (online == "1" and percent < 100) status = "charging";
 			else if (online == "1") status = "full";
 			else status = "discharging";
@@ -557,16 +581,16 @@ namespace Cpu {
 
 		//? Get seconds to empty
 		if (not is_in(status, "charging", "full")) {
-			if (use_energy and not power_now_path.empty()) {
+			if (b.use_energy and not b.power_now.empty()) {
 				try {
-					seconds = round((double)stoll(readfile(energy_now_path, "0")) / stoll(readfile(power_now_path, "1")) * 3600);
+					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
-			if (seconds < 0 and fs::exists(bat_dir / "time_to_empty")) {
+			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
 				try {
-					seconds = stoll(readfile(bat_dir / "time_to_empty", "0")) * 60;
+					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }

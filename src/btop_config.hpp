@@ -45,6 +45,7 @@ namespace Config {
 
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
+	extern vector<string> available_batteries;
 	extern int current_preset;
 
 	//* Check if string only contains space seperated valid names for boxes
