@@ -106,9 +106,8 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount, physicalCoreCount;
+	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
 	int totalMem_len;
-	int arg_max;
 
 	void init() {
 		//? Shared global variables init
@@ -144,12 +143,7 @@ namespace Shared {
 		totalMem = memsize;
 
 		//* Get maximum length of process arguments
-		size = sizeof(arg_max);
-		int mib[] = {CTL_KERN, KERN_ARGMAX};
-		if (sysctl(mib, 2, &arg_max, &size, NULL, 0) != 0) {
-			arg_max = 0;
-		}
-
+		arg_max = sysconf(_SC_ARG_MAX);
 
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
