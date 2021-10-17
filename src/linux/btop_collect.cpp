@@ -480,15 +480,20 @@ namespace Cpu {
 					//? Only consider online power supplies of type Battery or UPS
 					//? see kernel docs for details on the file structure and contents
 					//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
-					if (not d.is_directory()
-						or not fs::exists(d.path() / "type") 
-						or not fs::exists(d.path() / "present")
-						or stoi(readfile(d.path() / "present")) != 1)
+					try {
+						if (not d.is_directory()
+							or not fs::exists(d.path() / "type") 
+							or not fs::exists(d.path() / "present")
+							or stoi(readfile(d.path() / "present")) != 1)
+							continue;
+						string type = readfile(d.path() / "type");
+						if (type == "Battery" or type == "UPS") {
+							bat_dir = d.path();
+							break;
+						}
+					} catch (...) {
+						//? skip power supplies not conforming to the kernel standard
 						continue;
-					string type = readfile(d.path() / "type");
-					if (type == "Battery" or type == "UPS") {
-						bat_dir = d.path();
-						break;
 					}
 				}
 			}
