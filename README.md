@@ -175,7 +175,7 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Installation
 
-**Binary release (statically compiled, for kernel 3.2.0 and newer)**
+**Binary release (statically compiled with musl, for kernel 2.6.39 and newer)**
 
 1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
@@ -237,11 +237,14 @@ Also needs a UTF8 locale and a font that covers:
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
+   For a `cmake` based build alternative see the [fork](https://github.com/jan-guenter/btop/tree/main) by @jan-guenter
+
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
+
+   Use gcc-10 g++-10 if gcc-11 isn't available
 
    ``` bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
-   # use gcc-10 g++-10 if gcc-11 isn't available
    ```
 
 2. **Clone repository**
@@ -255,7 +258,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STATIC=true` to `make` command for static compilation.
 
-   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users when compiling statically.
+   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
 
    Append `QUIET=true` for less verbose output.
 
@@ -266,7 +269,9 @@ Also needs a UTF8 locale and a font that covers:
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 
-   For example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   If `g++` is linked to an older version of gcc on your system specify the correct version by appending `CXX=g++-10` or `CXX=g++-11`.
 
    ``` bash
    make
@@ -274,9 +279,11 @@ Also needs a UTF8 locale and a font that covers:
 
 4. **Install**
 
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
    ``` bash
-   # use "make install PREFIX=/target/dir" to set target, default: /usr/local
-   # only use "sudo" when installing to a NON user owned directory
    sudo make install
    ```
 
@@ -284,9 +291,11 @@ Also needs a UTF8 locale and a font that covers:
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `root`
+
    ``` bash
-   # run after make install and use same PREFIX if any was used at install
-   # set SU_USER and SU_GROUP to select user and group, default is root:root
    sudo make setuid
    ```
 
