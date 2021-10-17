@@ -477,9 +477,23 @@ namespace Cpu {
 		if (bat_dir.empty() and has_battery) {
 			if (fs::exists("/sys/class/power_supply")) {
 				for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
-					if (const string dir_name = d.path().filename(); d.is_directory() and (dir_name.starts_with("BAT") or s_contains(str_to_lower(dir_name), "battery"))) {
-						bat_dir = d.path();
-						break;
+					//? Only consider online power supplies of type Battery or UPS
+					//? see kernel docs for details on the file structure and contents
+					//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
+					try {
+						if (not d.is_directory()
+							or not fs::exists(d.path() / "type") 
+							or not fs::exists(d.path() / "present")
+							or stoi(readfile(d.path() / "present")) != 1)
+							continue;
+						string type = readfile(d.path() / "type");
+						if (type == "Battery" or type == "UPS") {
+							bat_dir = d.path();
+							break;
+						}
+					} catch (...) {
+						//? skip power supplies not conforming to the kernel standard
+						continue;
 					}
 				}
 			}
