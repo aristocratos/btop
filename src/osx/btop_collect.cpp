@@ -108,7 +108,7 @@ namespace Shared {
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount, physicalCoreCount;
 	int totalMem_len;
-	size_t arg_max;
+	int arg_max;
 
 	void init() {
 		//? Shared global variables init
@@ -1237,7 +1237,8 @@ namespace Proc {
 							string proc_args;
 							proc_args.resize(Shared::arg_max);
 							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
-							if (sysctl(mib, 3, proc_args.data(), &Shared::arg_max, NULL, 0) == 0) {
+							size_t argmax = Shared::arg_max;
+							if (sysctl(mib, 3, proc_args.data(), &argmax, NULL, 0) == 0) {
 								int argc;
 								memcpy(&argc, &proc_args[0], sizeof(argc));
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
