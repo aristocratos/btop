@@ -108,6 +108,7 @@ namespace Shared {
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount, physicalCoreCount;
 	int totalMem_len;
+	size_t arg_max;
 
 	void init() {
 		//? Shared global variables init
@@ -141,6 +142,14 @@ namespace Shared {
 			Logger::warning("Could not get memory size");
 		}
 		totalMem = memsize;
+
+		//* Get maximum length of process arguments
+		size = sizeof(arg_max);
+		int mib[] = {CTL_KERN, KERN_ARGMAX};
+		if (sysctl(mib, 2, &arg_max, &size, NULL, 0) != 0) {
+			arg_max = 0;
+		}
+
 
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
@@ -1183,15 +1192,6 @@ namespace Proc {
 						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
 			}
 
-			size_t arg_max;
-			{	//* Get maximum length of process arguments
-				size_t size = sizeof(int);
-				int mib[] = {CTL_KERN, KERN_ARGMAX};
-				if (sysctl(mib, 2, &arg_max, &size, NULL, 0) != 0) {
-					arg_max = 0;
-				}
-			}
-
 			should_filter = true;
 			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
@@ -1233,11 +1233,11 @@ namespace Proc {
 						size_t lastSlash = f_name.find_last_of('/');
 						new_proc.name = f_name.substr(lastSlash + 1);
 						//? Get process arguments if possible, fallback to process path in case of failure
-						if (arg_max > 0) {
+						if (Shared::arg_max > 0) {
 							string proc_args;
-							proc_args.resize(arg_max);
+							proc_args.resize(Shared::arg_max);
 							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
-							if (sysctl(mib, 3, proc_args.data(), &arg_max, NULL, 0) == 0) {
+							if (sysctl(mib, 3, proc_args.data(), &Shared::arg_max, NULL, 0) == 0) {
 								int argc;
 								memcpy(&argc, &proc_args[0], sizeof(argc));
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
