@@ -535,7 +535,7 @@ namespace Cpu {
 
 		auto& battery_sel = Config::getS("selected_battery");
 
-		if ((battery_sel == "Auto" and auto_sel.empty())) {
+		if (auto_sel.empty()) {
 			for (auto& [name, bat] : batteries) {
 				if (bat.device_type == "Battery") {
 					auto_sel = name;
