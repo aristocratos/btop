@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="341" height="90" version="1.1" xmlns="http://www.w3.org/2000/svg">
+	<defs>
+		<pattern id="red-stripes" width="341" height="90" patternUnits="userSpaceOnUse">
+			<rect width="341" height="16" fill="#f00"/>
+			<rect y="16" width="341" height="16" fill="#d70000"/>
+			<rect y="32" width="341" height="16" fill="#af0000"/>
+			<rect y="48" width="341" height="16" fill="#870000"/>
+			<rect y="64" width="341" height="16" fill="#5f0000"/>
+		</pattern>
+		<pattern id="gray-stripes" width="341" height="90" patternUnits="userSpaceOnUse">
+			<rect width="341" height="16" fill="#585858"/>
+			<rect y="16" width="341" height="16" fill="#4e4e4e"/>
+			<rect y="32" width="341" height="16" fill="#444"/>
+			<rect y="48" width="341" height="16" fill="#3a3a3a"/>
+			<rect y="64" width="341" height="16" fill="#303030"/>
+			<rect y="80" width="341" height="10" fill="#262626"/>
+		</pattern>
+	</defs>
+	<g fill="#080808">
+		<path d="m2,7v83h45v-16h7v-19h-7v-13h7v-19h-7v-16h-45zm17,19h18v13h-18v-13zm0,32h18v13h-18v-13z"/>
+		<path d="m58,7v19h21v64h17v-64h21v-19h-59z"/>
+		<path d="m128,7v16h-7v51h7v16h45v-16h7v-51h-7v-16h-45zm10,19h25v45h-25v-45z"/>
+		<path d="m184,7v83h17v-32h28v-16h7v-19h-7v-16h-45zm17,19h18v13h-18v-13z"/>
+		<path d="m261,23v16h-14v19h14v16h17v-16h14v-19h-14v-16h-17z"/>
+		<path d="m310,23v16h-14v19h14v16h17v-16h14v-19h-14v-16h-17z"/>
+	</g>
+	<g fill="url(#gray-stripes)">
+		<path d="m2,7v83h45v-16h7v-19h-7v-13h7v-19h-7v-16h-45zm1,1h43v16h7v17h-7v15h7v17h-7v16h-43v-81zm15,17h20v15h-20v-15zm1,1v13h18v-13h-18zm-1,31h20v15h-20v-15zm1,1v13h18v-13h-18zm-15-49v79h41v-16h7v-15h-7v-17h7v-15h-7v-16h-41zm1,1h39v16h7v13h-7v19h7v13h-7v16h-39v-77zm11,13h24v19h-24v-19zm1,1v17h22v-17h-22zm-1,31h24v19h-24v-19zm1,1v17h22v-17h-22z"/>
+		<path d="m58,7v19h21v64h17v-64h21v-19h-59zm1,1h57v17h-21v64h-15v-64h-21v-17zm1,1v15h21v64h13v-64h21v-15h-55zm1,1h53v13h-21v64h-11v-64h-21v-13z"/>
+		<path d="m128,7v16h-7v51h7v16h45v-16h7v-51h-7v-16h-45zm1,1h43v16h7v49h-7v16h-43v-16h-7v-49h7v-16zm9,18v45h25v-45h-25zm-1-1h27v47h-27v-47zm-7-16v16h-7v47h7v16h41v-16h7v-47h-7v-16h-41zm1,1h39v16h7v45h-7v16h-39v-16h-7v-45h7v-16zm5,14v49h29v-49h-29zm-1-1h31v51h-31v-51z"/>
+		<path d="m184,7v83h17v-32h28v-16h7v-19h-7v-16h-45zm1,1h43v16h7v17h-7v16h-28v32h-15v-81zm16,18v13h18v-13h-18zm-1-1h20v15h-20v-15zm-14-16v79h13v-32h28v-16h7v-15h-7v-16h-41zm1,1h39v16h7v13h-7v16h-28v32h-11v-77zm12,14v17h22v-17h-22zm-1-1h24v19h-24v-19z"/>
+		<path d="m261,23v16h-14v19h14v16h17v-16h14v-19h-14v-16h-17zm1,1h15v16h14v17h-14v16h-15v-16h-14v-17h14v-16zm1,1v16h-14v15h14v16h13v-16h14v-15h-14v-16h-13zm1,1h11v16h14v13h-14v16h-11v-16h-14v-13h14v-16z"/>
+		<path d="m310,23v16h-14v19h14v16h17v-16h14v-19h-14v-16h-17zm1,1h15v16h14v17h-14v16h-15v-16h-14v-17h14v-16zm1,1v16h-14v15h14v16h13v-16h14v-15h-14v-16h-13zm1,1h11v16h14v13h-14v16h-11v-16h-14v-13h14v-16z"/>
+	</g>
+	<g fill="url(#red-stripes)">
+		<path d="m0,0v80h42v-16h7v-16h-7v-16h7v-16h-7v-16h-42zm14,16h21v16h-21v-16zm0,32h21v16h-21v-16z"/>
+		<path d="m56,0v16h21v64h14v-64h21v-16h-56z"/>
+		<path d="m126,0v16h-7v48h7v16h42v-16h7v-48h-7v-16h-42zm7,16h28v48h-28v-48z"/>
+		<path d="m182,0v80h14v-32h28v-16h7v-16h-7v-16h-42zm14,16h21v16h-21v-16z"/>
+		<path d="m259,16v16h-14v16h14v16h14v-16h14v-16h-14v-16h-14z"/>
+		<path d="m308,16v16h-14v16h14v16h14v-16h14v-16h-14v-16h-14z"/>
+	</g>
+</svg>
