@@ -1,7 +1,6 @@
 name: Continuous Build Linux
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
@@ -14,6 +13,7 @@ on:
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build.yml'
+  workflow_dispatch:
 
 jobs:
   static-build:
