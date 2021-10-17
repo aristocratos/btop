@@ -1,5 +1,5 @@
 name: Continuous Build Linux
-  
+
 on:
   workflow_dispatch:
   push:
@@ -39,8 +39,6 @@ jobs:
           - i486-linux-musl
           - i686-linux-musl
           - m68k-linux-musl
-          - microblaze-linux-musl
-          - microblazeel-linux-musl
           - mips-linux-musl
           - mips-linux-musln32sf
           - mips-linux-muslsf
@@ -82,7 +80,7 @@ jobs:
 
       - name: Checkout source
         uses: actions/checkout@v2
-      
+
       - name: Fix - Stopping at filesystem boundary
         run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
