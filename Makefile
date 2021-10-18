@@ -105,6 +105,7 @@ endif
 
 ifeq ($(PLATFORM), OSX)
 	override LDCXXFLAGS += -framework IOKit -framework CoreFoundation
+	override WARNFLAGS += -Wno-format-truncation
 	SU_GROUP := wheel
 else
 	SU_GROUP := root
