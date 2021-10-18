@@ -44,7 +44,7 @@ CFDictionaryRef matching(int page, int usage) {
 
 double getValue(IOHIDServiceClientRef sc) {
 	IOHIDEventRef event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0);  // here we use ...CopyEvent
-	double temp = 0.0;
+	IOHIDFloat temp = 0.0;
 	if (event != 0) {
 		temp = IOHIDEventGetFloatValue(event, IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
 		CFRelease(event);
@@ -72,12 +72,19 @@ unordered_flat_map<int, double> Cpu::ThermalSensors::getSensors() {
 					char buf[200];
 					CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
 					std::string n(buf);
-					if (n.starts_with("PMU tdie")) {
+					if (n.starts_with("PMU tdie")) { 
+                        // this is just a guess, nobody knows which sensors mean what
+                        // on my system PMU tdie 3 and 9 are missing...
+                        // there is also PMU tdev1-8 but it has negative values??
+                        // there is also eACC for efficiency package but it only has 2 entries
+                        // and pACC for performance but it has 7 entries (2 - 9) WTF
 						std::string indexString = n.substr(8, 1);
 						int index = stoi(indexString);
 						cpuValues[index - 1] = getValue(sc);
+                        Logger::debug("T " + n + "=" + std::to_string(cpuValues[index - 1]));
 					} else if (n == "SOC MTR Temp Sensor0") {
-						cpuValues[0] = getValue(sc);  // package T for Apple Silicon
+                        // package T for Apple Silicon - also a guess
+						cpuValues[0] = getValue(sc); 
 					}
 					CFRelease(name);
 				}
