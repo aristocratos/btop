@@ -1,3 +1,15 @@
+## v1.0.17
+
+* Changed: Reverted mutexes back to custom atomic bool based locks
+
+* Added: Static binaries switched to building with musl + more platforms, by @jan-guenter
+
+* Fixed: Improved battery detection, by @jan-guenter
+
+* Added: Displayed battery selectable in options menu
+
+* Fixed: Battery error if non existent battery named is entered
+
 ## v1.0.16
 
 * Fixed: atomic_wait() and atomic_lock{} use cpu pause instructions instead of thread sleep
