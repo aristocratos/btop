@@ -14,8 +14,11 @@ endif
 
 PREFIX ?= /usr/local
 
-#? Detect PLATFORM and ARCH from gcc if not set
-PLATFORM ?= $(shell $(CXX) -dumpmachine | awk -F"-" '{ print (NF==4) ? $$3 : $$2 }')
+#? Detect PLATFORM and ARCH from uname/gcc if not set
+PLATFORM ?= $(shell uname -s || echo unknown)
+ifneq ($(filter unknown darwin, $(PLATFORM)),)
+	override PLATFORM := $(shell $(CXX) -dumpmachine | awk -F"-" '{ print (NF==4) ? $$3 : $$2 }')
+endif
 ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
