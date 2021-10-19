@@ -1,3 +1,7 @@
+## v1.0.18
+
+* Fixed: Makefile g++ -dumpmachine failure to get platform on some distros
+
 ## v1.0.17
 
 * Changed: Reverted mutexes back to custom atomic bool based locks
