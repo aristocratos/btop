@@ -270,6 +270,13 @@ namespace Menu {
 				"",
 				"Show battery stats in the top right corner",
 				"if a battery is present."},
+			{"selected_battery",
+				"Select battery.",
+				"",
+				"Which battery to use if multiple are present.",
+				"Can be both batteries and UPS.",
+				"",
+				"\"Auto\" for auto detection."},
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
@@ -962,7 +969,8 @@ namespace Menu {
 			{"graph_symbol_proc", std::cref(Config::valid_graph_symbols_def)},
 			{"cpu_graph_upper", std::cref(Cpu::available_fields)},
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
-			{"cpu_sensor", std::cref(Cpu::available_sensors)}
+			{"cpu_sensor", std::cref(Cpu::available_sensors)},
+			{"selected_battery", std::cref(Config::available_batteries)},
 		};
 		auto& tty_mode = Config::getB("tty_mode");
 		auto& vim_keys = Config::getB("vim_keys");

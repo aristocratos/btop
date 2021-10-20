@@ -1,6 +1,6 @@
 #* Btop++ makefile v1.2
 
-BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.2\033[0m
+BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.3\033[0m
 
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
@@ -15,9 +15,14 @@ endif
 
 PREFIX ?= /usr/local
 
-#? NOTICE! Manually set PLATFORM and ARCH if not compiling for host system
+#? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
-ARCH ?= $(shell uname -m || echo unknown)
+ifneq ($(filter unknown darwin, $(PLATFORM)),)
+	override PLATFORM := $(shell $(CXX) -dumpmachine | awk -F"-" '{ print (NF==4) ? $$3 : $$2 }')
+endif
+ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
+
+override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Make sure PLATFORM Darwin is OSX and not Darwin
 ifeq ($(PLATFORM),Darwin)
@@ -30,12 +35,16 @@ ifeq ($(PLATFORM),Darwin)
 endif
 
 #? Only enable fcf-protection if on x86_64
-ifeq ($(ARCH),x86_64)
+ifneq ($(filter x86_64 i%86, $(ARCH)),)
 	override ADDFLAGS += -fcf-protection
 endif
 
 ifeq ($(STATIC),true)
-	override ADDFLAGS += -D STATIC_BUILD -static -static-libgcc -static-libstdc++
+	override ADDFLAGS += -D STATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
+endif
+
+ifeq ($(STRIP),true)
+	override ADDFLAGS += -s
 endif
 
 #? Compiler and Linker
@@ -58,13 +67,13 @@ ifeq ($(CXX),g++)
 endif
 
 #? Pull in platform specific source files and get thread count
-ifeq ($(PLATFORM),Linux)
+ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
-else ifeq ($(PLATFORM),FreeBSD)
+else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
-else ifeq ($(PLATFORM),OSX)
+else ifeq ($(PLATFORM_LC),apple)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
