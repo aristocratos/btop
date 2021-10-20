@@ -73,7 +73,7 @@ ifeq ($(PLATFORM_LC),linux)
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
-else ifeq ($(PLATFORM_LC),apple)
+else ifeq ($(PLATFORM_LC),darwin)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
