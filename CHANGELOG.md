@@ -1,3 +1,7 @@
+## v1.0.19
+
+* Fixed: Makefile now tests compiler flag compatibility
+
 ## v1.0.18
 
 * Fixed: Makefile g++ -dumpmachine failure to get platform on some distros
