@@ -79,8 +79,7 @@ else ifeq ($(PLATFORM_LC),macos)
 	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
 		override DATE_CMD := gdate
 	endif
-	override ADDFLAGS += -framework IOKit -framework CoreFoundation
-	override WARNFLAGS += -Wno-format-truncation
+	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
 	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
