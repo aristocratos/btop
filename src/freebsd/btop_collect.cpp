@@ -20,6 +20,7 @@ tab-size = 4
 #include <libproc.h>
 #include <net/if.h>
 #include <net/if_dl.h>
+#include <net/route.h>
 #include <netdb.h>
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
@@ -667,13 +668,14 @@ namespace Net {
 					for (next = buf.get(); next < lim;) {
 						struct if_msghdr *ifm = (struct if_msghdr *)next;
 						next += ifm->ifm_msglen;
-						if (ifm->ifm_type == NET_RT_IFLISTL) {
-							struct if_msghdrl *if2m = (struct if_msghdrl *)ifm;
-							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
+						struct if_data ifm_data = ifm->ifm_data;
+						if (ifm->ifm_addrs & RTA_IFP) {
+							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(ifm + 1);
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
-							ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
+							Logger::debug("" + string(iface) + " i=" + std::to_string(ifm_data.ifi_ibytes) + " o=" + std::to_string(ifm_data.ifi_obytes));
+							ifstats[iface] = std::tuple(ifm_data.ifi_ibytes, ifm_data.ifi_obytes);
 						}
 					}
 				}
