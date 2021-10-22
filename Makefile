@@ -101,8 +101,8 @@ OBJEXT		:= o
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			?= -O0 -g # -ftree-loop-vectorize -flto=$(THREADS)
-LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -Wl,-rpath=/usr/local/lib/gcc11 -lstdc++ -lm -lkvm #-fstack-protector -fstack-clash-protection $(ADDFLAGS)
+OPTFLAGS			?= -O2 -ftree-loop-vectorize -flto=$(THREADS)
+LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector -fstack-clash-protection $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
@@ -110,6 +110,11 @@ SU_USER				:= root
 
 ifdef DEBUG
 	override OPTFLAGS := -O0 -g
+endif
+
+ifeq ($(PLATFORM_LC),freebsd)
+	override LDCXXFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
+	override OPTFLAGS := -O2
 endif
 
 ifeq ($(PLATFORM), OSX)
