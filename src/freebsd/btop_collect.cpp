@@ -674,7 +674,6 @@ namespace Net {
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
-							Logger::debug("" + string(iface) + " i=" + std::to_string(ifm_data.ifi_ibytes) + " o=" + std::to_string(ifm_data.ifi_obytes));
 							ifstats[iface] = std::tuple(ifm_data.ifi_ibytes, ifm_data.ifi_obytes);
 						}
 					}
