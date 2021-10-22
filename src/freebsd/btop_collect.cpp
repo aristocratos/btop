@@ -297,9 +297,32 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
 
-		uint32_t percent = -1;
 		long seconds = -1;
+		uint32_t percent = -1;
+		size_t size = sizeof(percent);
 		string status = "discharging";
+		if (sysctlbyname("hw.acpi.battery.life", &percent, &size, NULL, 0) < 0) {
+			Logger::warning("Could not get battery pct");
+		} else {
+			has_battery = true;
+			size_t size = sizeof(seconds);
+			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, NULL, 0) < 0) {
+				Logger::warning("Could not get battery seconds");
+			}
+			int state;
+			size = sizeof(state);
+			if (sysctlbyname("hw.acpi.battery.state", &state, &size, NULL, 0) < 0) {
+				Logger::warning("Could not get battery state");
+			} else {
+				if (state == 2) {
+					status = "charging";
+				}
+			}
+			if (percent == 100) {
+				status = "full";
+			}
+		}
+
 		return {percent, seconds, status};
 	}
 
