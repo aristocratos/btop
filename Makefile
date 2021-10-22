@@ -102,7 +102,7 @@ OBJEXT		:= o
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			?= -O0 -g # -ftree-loop-vectorize -flto=$(THREADS)
-LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -Wl,-rpath=/usr/local/lib/gcc11 -lstdc++ -lm #-fstack-protector -fstack-clash-protection $(ADDFLAGS)
+LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fexceptions -Wl,-rpath=/usr/local/lib/gcc11 -lstdc++ -lm -lkvm #-fstack-protector -fstack-clash-protection $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)

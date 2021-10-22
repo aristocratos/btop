@@ -34,6 +34,9 @@ tab-size = 4
 #include <sys/vmmeter.h>
 #include <sys/limits.h>
 #include <vm/vm_param.h>
+#include <kvm.h>
+#include <paths.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdexcept>
 
@@ -96,6 +99,7 @@ namespace Shared {
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
 	int totalMem_len;
+	long bootTime;
 
 	void init() {
 		//? Shared global variables init
@@ -128,6 +132,11 @@ namespace Shared {
 			Logger::warning("Could not get memory size");
 		}
 		totalMem = memsize;
+
+		size = sizeof(bootTime);
+		if (sysctlbyname("kern.boottime", &bootTime, &size, NULL, 0) < 0) {
+			Logger::warning("Could not get memory size");
+		}
 
 		//* Get maximum length of process arguments
 		arg_max = sysconf(_SC_ARG_MAX);
@@ -952,45 +961,20 @@ namespace Proc {
 		} else {
 			//* ---------------------------------------------Collection start----------------------------------------------
 
-			{  //* Get CPU totals
-				// natural_t cpu_count;
-				// kern_return_t error;
-				// processor_cpu_load_info_data_t *cpu_load_info = NULL;
-				// MachProcessorInfo info{};
-				// error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
-				// if (error != KERN_SUCCESS) {
-				// 	Logger::error("Failed getting CPU load info");
-				// }
-				// cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
-				// cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-				// 		+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-				// 		+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-				// 		+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
-			}
-
 			should_filter = true;
 			vector<size_t> found;
 			struct timeval currentTime;
 			gettimeofday(&currentTime, NULL);
 			const double timeNow = currentTime.tv_sec + (currentTime.tv_usec / 1'000'000);
 
-			int mib[4];
-	   		size_t len;
+			int count = 0;
+    		char buf[_POSIX2_LINE_MAX];
+			kvm_t *kd = kvm_openfiles(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
+   			const struct kinfo_proc* kprocs = kvm_getprocs(kd, KERN_PROC_PROC, 0, &count);
 
-			/* Fill out the first three components of the mib */
-			len = 4;
-			sysctlnametomib("kern.proc.pid", mib, &len);
-			Logger::debug("pid len=" + std::to_string(len));
-
-			/* Fetch all pids */
-			struct kinfo_proc kproc;
-			for (size_t i = 0; i < len; i++) {
-				mib[3] = i;
-				len = sizeof(kproc);
-				// if (sysctl(mib, 4, &kproc, &len, NULL, 0) == -1)
-				// 	Logger::error("Failed getting processes");
-				const size_t pid = (size_t)kproc.ki_pid;
-				if (pid < 1) continue;
+   			for (int i = 0; i < count; i++) {
+      			const struct kinfo_proc* kproc = &kprocs[i];
+				const size_t pid = (size_t)kproc->ki_pid;
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1018,49 +1002,40 @@ namespace Proc {
 					// size = sizeof(pathname);
 					// sysctl(mib, 4, pathname, &size, NULL, 0);
 					// new_proc.cmd = pathname;
-					new_proc.name = kproc.ki_comm;
+					new_proc.name = kproc->ki_comm;
 					//? Get process arguments if possible, fallback to process path in case of failure
-					if (Shared::arg_max > 0) {
-						string proc_args;
-						proc_args.resize(Shared::arg_max);
-						int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ARGS, (int)pid};
-						size_t argmax = Shared::arg_max;
-						if (sysctl(mib, 4, proc_args.data(), &argmax, NULL, 0) == 0) {
-							int argc;
-							memcpy(&argc, &proc_args[0], sizeof(argc));
-							if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
-								if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
-									while (argc-- > 0 and null_pos != string::npos) {
-										null_pos = proc_args.find('\0', start_pos);
-										new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
-										start_pos = null_pos + 1;
-									}
-								}
-							}
-							if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
-						}
-					}
+					// if (Shared::arg_max > 0) {
+					// 	string proc_args;
+					// 	proc_args.resize(Shared::arg_max);
+					// 	int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ARGS, (int)pid};
+					// 	size_t argmax = Shared::arg_max;
+					// 	if (sysctl(mib, 4, proc_args.data(), &argmax, NULL, 0) == 0) {
+					// 		int argc;
+					// 		memcpy(&argc, &proc_args[0], sizeof(argc));
+					// 		if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
+					// 			if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
+					// 				while (argc-- > 0 and null_pos != string::npos) {
+					// 					null_pos = proc_args.find('\0', start_pos);
+					// 					new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
+					// 					start_pos = null_pos + 1;
+					// 				}
+					// 			}
+					// 		}
+					// 		if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
+					// 	}
+					// }
 					if (new_proc.cmd.empty()) new_proc.cmd = new_proc.name;
-					new_proc.ppid = kproc.ki_ppid;
-					new_proc.cpu_s = round(kproc.ki_start.tv_sec);
-					struct passwd *pwd = getpwuid(kproc.ki_uid);
+					new_proc.ppid = kproc->ki_ppid;
+					new_proc.cpu_s = round(kproc->ki_start.tv_sec);
+					struct passwd *pwd = getpwuid(kproc->ki_uid);
 					if (pwd) 
 						new_proc.user = pwd->pw_name;
 				}
-				new_proc.p_nice = kproc.ki_nice;
-				new_proc.state = kproc.ki_stat;
+				new_proc.p_nice = kproc->ki_nice;
+				new_proc.state = kproc->ki_stat;
 				int cpu_t = 0;
-				new_proc.mem = 0;
-				new_proc.threads = 1;
-
-				//? Get threads, mem and cpu usage
-				// struct proc_taskinfo pti;
-				// if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
-				// 	new_proc.threads = pti.pti_threadnum;
-				// 	new_proc.mem = pti.pti_resident_size;
-				// 	cpu_t = round((pti.pti_total_user + pti.pti_total_system) / 1'000);
-				// 	if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
-				// }
+				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
+				new_proc.threads = kproc->ki_numthreads;
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
