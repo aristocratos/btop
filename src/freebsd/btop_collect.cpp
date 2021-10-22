@@ -24,6 +24,7 @@ tab-size = 4
 #include <netdb.h>
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
@@ -136,7 +137,7 @@ namespace Shared {
 
 		size = sizeof(bootTime);
 		if (sysctlbyname("kern.boottime", &bootTime, &size, NULL, 0) < 0) {
-			Logger::warning("Could not get memory size");
+			Logger::warning("Could not get boot time size");
 		}
 
 		//* Get maximum length of process arguments
@@ -430,7 +431,6 @@ namespace Mem {
 
 		int mib[4];
 		u_int memActive, memWire, cachedMem, freeMem;
-		long buffersMem;
 		size_t len;
 
    		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
@@ -985,27 +985,12 @@ namespace Proc {
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
 					new_proc.name = kproc->ki_comm;
-					//? Get process arguments if possible, fallback to process path in case of failure
-					// if (Shared::arg_max > 0) {
-					// 	string proc_args;
-					// 	proc_args.resize(Shared::arg_max);
-					// 	int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ARGS, (int)pid};
-					// 	size_t argmax = Shared::arg_max;
-					// 	if (sysctl(mib, 4, proc_args.data(), &argmax, NULL, 0) == 0) {
-					// 		int argc;
-					// 		memcpy(&argc, &proc_args[0], sizeof(argc));
-					// 		if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
-					// 			if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
-					// 				while (argc-- > 0 and null_pos != string::npos) {
-					// 					null_pos = proc_args.find('\0', start_pos);
-					// 					new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
-					// 					start_pos = null_pos + 1;
-					// 				}
-					// 			}
-					// 		}
-					// 		if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
-					// 	}
-					// }
+					char** argv = kvm_getargv(kd, kproc, 0);
+					if (argv) {
+						for (int i = 0; argv[i]; i++) {
+							new_proc.cmd += argv[i];
+						}
+					}
 					if (new_proc.cmd.empty()) new_proc.cmd = new_proc.name;
 					new_proc.ppid = kproc->ki_ppid;
 					new_proc.cpu_s = round(kproc->ki_start.tv_sec);
@@ -1015,7 +1000,10 @@ namespace Proc {
 				}
 				new_proc.p_nice = kproc->ki_nice;
 				new_proc.state = kproc->ki_stat;
+
 				int cpu_t = 0;
+				cpu_t = kproc->ki_rusage.ru_utime.tv_sec + kproc->ki_rusage.ru_stime.tv_sec;
+					
 				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
 				new_proc.threads = kproc->ki_numthreads;
 
