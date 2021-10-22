@@ -427,42 +427,35 @@ namespace Mem {
 		auto &mem = current_mem;
 		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
-		int mib[2] = {CTL_VM, VM_TOTAL};
-		struct vmtotal vminfo;
-		size_t len = sizeof(struct vmtotal);
-		if (sysctl(mib, 2, &vminfo, &len, NULL, 0) == 0) {
-			mem.stats.at("free") = vminfo.t_free * Shared::pageSize;
-			mem.stats.at("cached") = vminfo.t_sw * Shared::pageSize;
-			mem.stats.at("used") = (vminfo.t_avm) * Shared::pageSize;
-			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+		int mib[4];
+		u_int memActive, memWire, cachedMem, freeMem;
+		long buffersMem;
+		size_t len;
 
-		}
-		// {
-		// 	// swap
-		// 	int mib[3] = {0, 0, 0};
-		// 	size_t len = 2;
-		// 	if (sysctlnametomib("vm.swap_info", mib, &len)) {
-		// 		Logger::error("DISABLED: system.swap chart");
-		// 		Logger::error("DISABLED: vm.swap_info module");
-		// 	} else {
-		// 		int i;
-		// 		struct xswdev xsw;
-		// 		for (i = 0; ; i++) {
-		// 			size_t size;
+   		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
+		len = sizeof(memActive);
+		sysctl(mib, 4, &(memActive), &len, NULL, 0);
+		memActive *= Shared::pageSize;
 
-		// 			mib[2] = i;
-		// 			size = sizeof(xsw);
-		// 			if (sysctl(mib, 3, &xsw, &size, NULL, 0) == -1) {
-		// 				Logger::error("failed getting swap");
-		// 			} else {
-		// 				mem.stats.at("swap_total") = xsw.xsw_nblks;
-		// 				mem.stats.at("swap_free") = xsw.xsw_nblks - xsw.xsw_used;
-		// 				mem.stats.at("swap_used") = xsw.xsw_used;
-		// 			}
-		// 		}
-		// 	}
-		// }
+		len = 4; sysctlnametomib("vm.stats.vm.v_wire_count", mib, &len);
+		len = sizeof(memWire);
+		sysctl(mib, 4, &(memWire), &len, NULL, 0);
+		memWire *= Shared::pageSize;
 
+		mem.stats.at("used") = memWire + memActive;
+		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
+
+		len = sizeof(cachedMem);
+   		len = 4; sysctlnametomib("vm.stats.vm.v_cache_count", mib, &len);
+   		sysctl(mib, 4, &(cachedMem), &len, NULL, 0);
+   		cachedMem *= Shared::pageSize;
+   		mem.stats.at("cached") = cachedMem;
+
+		len = sizeof(freeMem);
+   		len = 4; sysctlnametomib("vm.stats.vm.v_free_count", mib, &len);
+   		sysctl(mib, 4, &(freeMem), &len, NULL, 0);
+   		freeMem *= Shared::pageSize;
+   		mem.stats.at("free") = freeMem;
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
 			for (const auto &name : swap_names) {
@@ -990,18 +983,6 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
-					// char pathname[PATH_MAX];
-					// int error;
-					// int mib[4];
-					// size_t size;
-					
-					// mib[0] = CTL_KERN;
-					// mib[1] = KERN_PROC;
-					// mib[2] = KERN_PROC_PATHNAME;
-					// mib[3] = pid;
-					// size = sizeof(pathname);
-					// sysctl(mib, 4, pathname, &size, NULL, 0);
-					// new_proc.cmd = pathname;
 					new_proc.name = kproc->ki_comm;
 					//? Get process arguments if possible, fallback to process path in case of failure
 					// if (Shared::arg_max > 0) {
