@@ -339,7 +339,7 @@ namespace Cpu {
 
 		cpu.load_avg = { (float)avg[0], (float)avg[1], (float)avg[2]};
 
-		long cpu_time[Shared::coreCount][CPUSTATES];
+		long cpu_time[256][CPUSTATES]; // 256 should be enough, can't have variable array length :-/
 
 		size_t size = sizeof(cpu_time);
 		if (sysctlbyname("kern.cp_times", &cpu_time, &size, NULL, 0) == -1) {
@@ -437,9 +437,6 @@ namespace Mem {
 
 	uint64_t get_totalMem() {
 		return Shared::totalMem;
-	}
-
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
 	}
 
 	auto collect(const bool no_update) -> mem_info & {
@@ -601,7 +598,6 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-			collect_disk(disks, mapping);
 
 			old_uptime = uptime;
 		}
@@ -1011,6 +1007,7 @@ namespace Proc {
 					char** argv = kvm_getargv(kd, kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i]; i++) {
+							new_proc.cmd += " ";
 							new_proc.cmd += argv[i];
 						}
 					}
