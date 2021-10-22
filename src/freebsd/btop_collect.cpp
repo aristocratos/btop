@@ -174,7 +174,7 @@ namespace Cpu {
 		string name;
 		char buffer[1024];
 		size_t size = sizeof(buffer);
-		if (sysctlbyname("machdep.cpu.brand_string", &buffer, &size, NULL, 0) < 0) {
+		if (sysctlbyname("hw.model", &buffer, &size, NULL, 0) < 0) {
 			Logger::error("Failed to get CPU name");
 			return name;
 		}
@@ -355,6 +355,26 @@ namespace Cpu {
 		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
 		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
 
+		//? Populate cpu.cpu_percent with all fields from syscall
+		for (int ii = 0; const auto &val : times_summed) {
+			cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+			cpu_old.at(time_names.at(ii)) = val;
+
+			//? Reduce size if there are more values than needed for graph
+			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+
+			ii++;
+		}
+
+		cpu_old.at("totals") = global_totals;
+		cpu_old.at("idles") = global_idles;
+
+		//? Total usage of cpu
+		cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+
+		//? Reduce size if there are more values than needed for graph
+		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
+
 		if (Config::getB("show_cpu_freq")) {
 			auto hz = get_cpuHz();
 			if (hz != "") {
@@ -407,10 +427,33 @@ namespace Mem {
 			mem.stats.at("used") = (vminfo.t_avm) * Shared::pageSize;
 			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 
-			// mem.stats.at("swap_total") = vminfo;
-			// mem.stats.at("swap_free") = swap.xsu_avail;
-			// mem.stats.at("swap_used") = swap.xsu_used;
 		}
+		// {
+		// 	// swap
+		// 	int mib[3] = {0, 0, 0};
+		// 	size_t len = 2;
+		// 	if (sysctlnametomib("vm.swap_info", mib, &len)) {
+		// 		Logger::error("DISABLED: system.swap chart");
+		// 		Logger::error("DISABLED: vm.swap_info module");
+		// 	} else {
+		// 		int i;
+		// 		struct xswdev xsw;
+		// 		for (i = 0; ; i++) {
+		// 			size_t size;
+
+		// 			mib[2] = i;
+		// 			size = sizeof(xsw);
+		// 			if (sysctl(mib, 3, &xsw, &size, NULL, 0) == -1) {
+		// 				Logger::error("failed getting swap");
+		// 			} else {
+		// 				mem.stats.at("swap_total") = xsw.xsw_nblks;
+		// 				mem.stats.at("swap_free") = xsw.xsw_nblks - xsw.xsw_used;
+		// 				mem.stats.at("swap_used") = xsw.xsw_used;
+		// 			}
+		// 		}
+		// 	}
+		// }
+
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
 			for (const auto &name : swap_names) {
