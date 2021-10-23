@@ -948,6 +948,17 @@ namespace Proc {
 		// }
 	}
 
+	//* RAII wrapper for kvm_openfiles
+	class kvm_openfiles_wrapper {
+		kvm_t* kd = NULL;
+	public:
+		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
+			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
+		}
+		~kvm_openfiles_wrapper() { kvm_close(kd); }
+		auto operator()() -> kvm_t* { return kd; }
+	};
+
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
@@ -982,12 +993,13 @@ namespace Proc {
 
 			int count = 0;
     		char buf[_POSIX2_LINE_MAX];
-			kvm_t *kd = kvm_openfiles(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
-   			const struct kinfo_proc* kprocs = kvm_getprocs(kd, KERN_PROC_PROC, 0, &count);
+			kvm_openfiles_wrapper kd(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
+   			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
 
    			for (int i = 0; i < count; i++) {
       			const struct kinfo_proc* kproc = &kprocs[i];
 				const size_t pid = (size_t)kproc->ki_pid;
+				if (pid < 1) continue;
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1003,19 +1015,23 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
+					if (kproc->ki_comm == NULL or kproc->ki_comm == "idle"s) {
+						current_procs.pop_back();
+						continue;
+					}
 					new_proc.name = kproc->ki_comm;
-					char** argv = kvm_getargv(kd, kproc, 0);
+					char** argv = kvm_getargv(kd(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i]; i++) {
-							new_proc.cmd += " ";
-							new_proc.cmd += argv[i];
+							new_proc.cmd += argv[i] + " "s;
 						}
+						if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 					}
 					if (new_proc.cmd.empty()) new_proc.cmd = new_proc.name;
 					new_proc.ppid = kproc->ki_ppid;
 					new_proc.cpu_s = round(kproc->ki_start.tv_sec);
 					struct passwd *pwd = getpwuid(kproc->ki_uid);
-					if (pwd) 
+					if (pwd)
 						new_proc.user = pwd->pw_name;
 				}
 				new_proc.p_nice = kproc->ki_nice;
@@ -1023,7 +1039,7 @@ namespace Proc {
 
 				int cpu_t = 0;
 				cpu_t = kproc->ki_rusage.ru_utime.tv_sec + kproc->ki_rusage.ru_stime.tv_sec;
-					
+
 				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
 				new_proc.threads = kproc->ki_numthreads;
 
@@ -1039,7 +1055,7 @@ namespace Proc {
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 					got_detailed = true;
 				}
-			
+
 				// //? Clear dead processes from current_procs
 				auto eraser = rng::remove_if(current_procs, [&](const auto &element) { return not v_contains(found, element.pid); });
 				current_procs.erase(eraser.begin(), eraser.end());
