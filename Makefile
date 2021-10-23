@@ -24,14 +24,14 @@ ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
-override TESTFLAGS := -fexceptions -fcf-protection -fstack-protector -fstack-clash-protection -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS
+override TESTFLAGS := -fexceptions -fcf-protection -fstack-protector -fstack-clash-protection
 
 ifeq ($(STATIC),true)
-	override TESTFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
+	override ADDFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
 endif
 
 ifeq ($(STRIP),true)
-	override TESTFLAGS += -s
+	override ADDFLAGS += -s
 endif
 
 #? Compiler and Linker
@@ -84,8 +84,8 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			?= -O2 -ftree-loop-vectorize -flto=$(THREADS)
-LDCXXFLAGS			:= -pthread $(GOODFLAGS) $(ADDFLAGS)
+OPTFLAGS			:= -O2 -ftree-loop-vectorize -flto=$(THREADS)
+LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
