@@ -242,13 +242,10 @@ namespace Cpu {
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
-		int mib[] = {CTL_KERN, KERN_CLOCKRATE};
-
-		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
-			// this fails on Apple Silicon macs. Apparently you're not allowed to know
+		if (sysctlbyname("dev.cpu.0.freq", &freq, &size, NULL, 0) < 0) {
 			return "";
 		}
-		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
+		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
 	}
 
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
