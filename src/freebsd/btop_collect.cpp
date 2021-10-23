@@ -24,6 +24,7 @@ tab-size = 4
 #include <netdb.h>
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
+#include <sys/_timeval.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
@@ -134,9 +135,12 @@ namespace Shared {
 		}
 		totalMem = memsize;
 
-		size = sizeof(bootTime);
-		if (sysctlbyname("kern.boottime", &bootTime, &size, NULL, 0) < 0) {
-			Logger::warning("Could not get boot time size");
+		struct timeval result;
+		size = sizeof(result);
+		if (sysctlbyname("kern.boottime", &result, &size, NULL, 0) < 0) {
+			Logger::warning("Could not get boot time");
+		} else {
+			bootTime = result.tv_sec;
 		}
 
 		//* Get maximum length of process arguments
