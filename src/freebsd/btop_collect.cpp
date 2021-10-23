@@ -66,7 +66,6 @@ namespace Cpu {
 	vector<string> available_fields = {"total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
-	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors = false, cpu_temp_only = false;
 
 	//* Populate found_sensors map
@@ -144,7 +143,6 @@ namespace Shared {
 		arg_max = sysconf(_SC_ARG_MAX);
 
 		//? Init for namespace Cpu
-		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
@@ -230,12 +228,41 @@ namespace Cpu {
 	bool get_sensors() {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
+		int32_t temp;
+		size_t size = sizeof(temp);
+		if (sysctlbyname("dev.cpu.0.temperature", &temp, &size, NULL, 0) < 0) {
+			Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
+		} else {
+			got_sensors = true;
+		}
 		}
 		return got_sensors;
 	}
 
 	void update_sensors() {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
+		int temp;
+		size_t size = sizeof(temp);
+		sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp, &size, NULL, 0);
+		temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
+		current_cpu.temp.at(0).push_back(temp);
+		if (current_cpu.temp.at(0).size() > 20)
+			current_cpu.temp.at(0).pop_front();
+
+		for (int i = 0; i < Shared::coreCount; i++) {
+			string s = "dev.cpu." + std::to_string(i) + ".temperature";
+			if (sysctlbyname(s.c_str(), &temp, &size, NULL, 0) < 0) {
+				Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
+			} else {
+				temp = (temp - 2732) / 10;
+				if (cmp_less(i + 1, current_cpu.temp.size())) {
+					current_cpu.temp.at(i + 1).push_back(temp);
+					if (current_cpu.temp.at(i + 1).size() > 20)
+						current_cpu.temp.at(i + 1).pop_front();
+				}
+			}
+		}
+
 	}
 
 	string get_cpuHz() {

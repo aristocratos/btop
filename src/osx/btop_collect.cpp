@@ -261,6 +261,8 @@ namespace Cpu {
 			auto sensor = sensors.getSensors();
 			if (sensor.size() > 0) {
 				current_cpu.temp.at(0).push_back((long long)sensor[0]);
+				if (current_cpu.temp.at(0).size() > 20)
+					current_cpu.temp.at(0).pop_front();
 
 				if (Config::getB("show_coretemp") and not cpu_temp_only) {
 					for (int core = 1; core <= Shared::coreCount; core++) {
