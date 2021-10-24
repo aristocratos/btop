@@ -36,7 +36,7 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
-override TESTFLAGS := -fexceptions -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fstack-clash-protection -fcf-protection
+override TESTFLAGS := -fexceptions -fstack-clash-protection -fcf-protection
 ifneq ($(PLATFORM) $(ARCH),macos arm64)
 	override TESTFLAGS += -fstack-protector
 endif
@@ -96,7 +96,7 @@ $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFOR
 endif
 
 #? Use all CPU cores (will only be set if using Make 4.3+)
-MAKEFLAGS	:= --jobs=$(THREADS)
+MAKEFLAGS := --jobs=$(THREADS)
 ifeq ($(THREADS),1)
 	override THREADS := auto
 endif
