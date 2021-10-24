@@ -317,6 +317,11 @@ namespace Cpu {
 					cpu_sensor = name;
 					break;
 				}
+				if (s_contains(str_to_lower(name), "k10temp")) {
+					Logger::warning("Using k10temp sensors for AMD.");
+					cpu_sensor = name;
+					break;
+				}
 			}
 			if (cpu_sensor.empty()) {
 				cpu_sensor = found_sensors.begin()->first;
