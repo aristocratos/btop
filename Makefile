@@ -4,7 +4,11 @@ BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m█
 
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
-DATE_CMD = date
+ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
+	DATE_CMD := gdate
+else
+	DATE_CMD := date
+endif
 
 ifneq ($(QUIET),true)
 	override PRE := info info-quiet
@@ -32,21 +36,28 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
-override TESTFLAGS := -fexceptions -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fstack-clash-protection -fcf-protection
+override TESTFLAGS := -fexceptions -fstack-clash-protection -fcf-protection
 ifneq ($(PLATFORM) $(ARCH),macos arm64)
 	override TESTFLAGS += -fstack-protector
 endif
 
 ifeq ($(STATIC),true)
-	override TESTFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
+	override ADDFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
 endif
 
 ifeq ($(STRIP),true)
-	override TESTFLAGS += -s
+	override ADDFLAGS += -s
 endif
 
 #? Compiler and Linker
-CXX := g++
+ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+	CXX := g++-11
+else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
+	CXX := g++11
+else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
+	CXX := g++
+endif
+
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
@@ -73,12 +84,11 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
+	override ADDFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
+	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
-		override DATE_CMD := gdate
-	endif
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
 	SU_GROUP := wheel
 else
@@ -107,7 +117,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			?= -O2 -ftree-loop-vectorize -flto=$(THREADS)
-LDCXXFLAGS			:= -pthread $(GOODFLAGS) $(ADDFLAGS)
+LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
@@ -152,9 +162,7 @@ help:
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
-ifneq ($(PLATFORM),OSX)
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
-endif
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
 	@printf "  info         Display information about Environment,compiler and linker flags\n"
 
