@@ -42,6 +42,7 @@ tab-size = 4
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <devstat.h>
 
 #include <btop_config.hpp>
 #include <btop_shared.hpp>
@@ -466,6 +467,22 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
+    void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+        static struct statinfo cur, last;
+        long double etime = 0;
+        u_int64_t total_bytes_read;
+    	u_int64_t total_bytes_write;
+
+        cur.dinfo = (struct devinfo *)calloc(1, sizeof(struct devinfo));
+        last.dinfo = (struct devinfo *)calloc(1, sizeof(struct devinfo));
+        int n = devstat_getdevs(NULL, &cur);
+        for (int i = 0; i < n; i++) {
+            devstat_compute_statistics(&cur.dinfo->devices[i], NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read,
+		    DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
+            Logger::debug("dev " + string(cur.dinfo->devices[i].device_name) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+        }
+    }
+
 	auto collect(const bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
@@ -545,6 +562,7 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
+				Logger::debug(dev + "->" + mountpoint);
 				mapping[dev] = mountpoint;
 
 				if (string(stfs[i].f_fstypename) == "autofs") {
@@ -625,7 +643,8 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-
+			collect_disk(disks, mapping);
+			
 			old_uptime = uptime;
 		}
 		return mem;

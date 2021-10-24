@@ -84,7 +84,7 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
-	override ADDFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
+	override ADDFLAGS += -lstdc++ -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc11
 	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
