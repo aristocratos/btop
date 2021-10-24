@@ -330,17 +330,17 @@ namespace Cpu {
 		size_t size = sizeof(percent);
 		string status = "discharging";
 		if (sysctlbyname("hw.acpi.battery.life", &percent, &size, NULL, 0) < 0) {
-			Logger::warning("Could not get battery pct");
+			has_battery = false;
 		} else {
 			has_battery = true;
 			size_t size = sizeof(seconds);
 			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, NULL, 0) < 0) {
-				Logger::warning("Could not get battery seconds");
+				seconds = 0;
 			}
 			int state;
 			size = sizeof(state);
 			if (sysctlbyname("hw.acpi.battery.state", &state, &size, NULL, 0) < 0) {
-				Logger::warning("Could not get battery state");
+				status = "unknown";
 			} else {
 				if (state == 2) {
 					status = "charging";
@@ -367,10 +367,9 @@ namespace Cpu {
 
 		cpu.load_avg = { (float)avg[0], (float)avg[1], (float)avg[2]};
 
-		long cpu_time[256][CPUSTATES]; // 256 should be enough, can't have variable array length :-/
-
-		size_t size = sizeof(cpu_time);
-		if (sysctlbyname("kern.cp_times", &cpu_time, &size, NULL, 0) == -1) {
+		vector<array<long, CPUSTATES>> cpu_time(Shared::coreCount);
+		size_t size = sizeof(long) * CPUSTATES * Shared::coreCount;
+		if (sysctlbyname("kern.cp_times", &cpu_time[0], &size, NULL, 0) == -1) {
 			Logger::error("failed to get CPU times");
 		}
 		long long global_totals = 0;
@@ -381,7 +380,7 @@ namespace Cpu {
 			vector<long long> times;
 			//? 0=user, 1=nice, 2=system, 3=idle
 			for (int x = 0; const unsigned int c_state : {CP_USER, CP_NICE, CP_SYS, CP_IDLE}) {
-				auto val = cpu_time[i][c_state] / CLOCKS_PER_SEC;
+				auto val = cpu_time[i][c_state];
 				times.push_back(val);
 				times_summed.at(x++) += val;
 			}
@@ -1007,6 +1006,18 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
+		vector<array<long, CPUSTATES>> cpu_time(Shared::coreCount);
+		size_t size = sizeof(long) * CPUSTATES * Shared::coreCount;
+		if (sysctlbyname("kern.cp_times", &cpu_time[0], &size, NULL, 0) == -1) {
+			Logger::error("failed to get CPU times");
+		}
+		cputimes = 0;
+		for (const auto core : cpu_time) {
+			for (const unsigned int c_state : {CP_USER, CP_NICE, CP_SYS, CP_IDLE}) {
+				cputimes += core[c_state];
+			}
+		}
+
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
@@ -1066,16 +1077,17 @@ namespace Proc {
 				new_proc.state = kproc->ki_stat;
 
 				int cpu_t = 0;
-				cpu_t = kproc->ki_rusage.ru_utime.tv_sec + kproc->ki_rusage.ru_stime.tv_sec;
+				cpu_t 	= kproc->ki_rusage.ru_utime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_utime.tv_usec
+						+ kproc->ki_rusage.ru_stime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_stime.tv_usec;
 
 				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
 				new_proc.threads = kproc->ki_numthreads;
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+				new_proc.cpu_p = clamp((100.0 * ((cpu_t - new_proc.cpu_t) / 1'000'000.0) / max((uint64_t)1, (cputimes - old_cputimes) * Shared::clkTck)) * cmult / 100'000.0, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, timeNow - new_proc.cpu_s);
+				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
 
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
