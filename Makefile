@@ -1,10 +1,14 @@
-#* Btop++ makefile v1.2
+#* Btop++ makefile v1.4
 
-BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.3\033[0m
+BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.4\033[0m
 
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
-DATE_CMD = date
+ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
+	DATE_CMD := gdate
+else
+	DATE_CMD := date
+endif
 
 ifneq ($(QUIET),true)
 	override PRE := info info-quiet
@@ -17,30 +21,25 @@ PREFIX ?= /usr/local
 
 #? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
-ifneq ($(filter unknown darwin, $(PLATFORM)),)
+ifneq ($(filter unknown Darwin, $(PLATFORM)),)
 	override PLATFORM := $(shell $(CXX) -dumpmachine | awk -F"-" '{ print (NF==4) ? $$3 : $$2 }')
+	ifeq ($(PLATFORM),apple)
+		override PLATFORM := macos
+	endif
+	ifeq ($(shell uname -v | grep ARM64 >/dev/null 2>&1; echo $$?),0)
+		ARCH ?= arm64
+	endif
+else
+	ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 endif
-ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
-#? Make sure PLATFORM Darwin is OSX and not Darwin
-ifeq ($(PLATFORM),Darwin)
-	ifeq ($(shell sw_vers >/dev/null 2>&1; echo $$?),0)
-		override PLATFORM := OSX
-		ifeq ($(shell uname -v | grep ARM64 >/dev/null 2>&1; echo $$?),0)
-			override ARCH := arm64
-		endif
-	endif
-endif
-
-#? Only enable fcf-protection if on x86_64
-ifneq ($(filter x86_64 i%86, $(ARCH)),)
-	override ADDFLAGS += -fcf-protection
-endif
+#? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
+override TESTFLAGS := -fexceptions -fcf-protection -fstack-protector -fstack-clash-protection
 
 ifeq ($(STATIC),true)
-	override ADDFLAGS += -D STATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
+	override ADDFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
 endif
 
 ifeq ($(STRIP),true)
@@ -48,7 +47,14 @@ ifeq ($(STRIP),true)
 endif
 
 #? Compiler and Linker
-CXX := g++
+ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+	CXX := g++-11
+else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
+	CXX := g++11
+else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
+	CXX := g++
+endif
+
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
@@ -70,15 +76,21 @@ endif
 ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+	SU_GROUP := root
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
-else ifeq ($(PLATFORM_LC),apple)
+	SU_GROUP := root
+	override ADDFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
+	export MAKE = gmake
+else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
 		override DATE_CMD := gdate
 	endif
+	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
 endif
@@ -110,22 +122,6 @@ SU_USER				:= root
 
 ifdef DEBUG
 	override OPTFLAGS := -O0 -g
-endif
-
-ifeq ($(PLATFORM_LC),freebsd)
-	override LDCXXFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
-	override OPTFLAGS := -O2
-endif
-
-ifeq ($(PLATFORM), OSX)
-	override LDCXXFLAGS += -framework IOKit -framework CoreFoundation
-	override WARNFLAGS += -Wno-format-truncation
-	SU_GROUP := wheel
-else
-	SU_GROUP := root
-	ifneq ($(ARCH),arm64)
-		override LDCXXFLAGS += -fstack-protector -fstack-clash-protection
-	endif
 endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
