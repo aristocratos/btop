@@ -36,7 +36,10 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
-override TESTFLAGS := -fexceptions -fcf-protection -fstack-protector -fstack-clash-protection
+override TESTFLAGS := -fexceptions -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fstack-clash-protection -fcf-protection
+ifneq ($(PLATFORM) $(ARCH),macos arm64)
+	override TESTFLAGS += -fstack-protector
+endif
 
 ifeq ($(STATIC),true)
 	override ADDFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
@@ -86,9 +89,6 @@ else ifeq ($(PLATFORM_LC),freebsd)
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
-		override DATE_CMD := gdate
-	endif
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
 	SU_GROUP := wheel
 else
@@ -162,9 +162,7 @@ help:
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
-ifneq ($(PLATFORM),OSX)
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
-endif
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
 	@printf "  info         Display information about Environment,compiler and linker flags\n"
 
