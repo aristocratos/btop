@@ -170,6 +170,7 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
+	bool macM1 = false;
 	tuple<int, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
@@ -233,8 +234,10 @@ namespace Cpu {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
 			ThermalSensors sensors;
-			if (sensors.getSensors().size() > 0) {
+			if (sensors.getSensors() > 0) {
 				got_sensors = true;
+				cpu_temp_only = true;
+				macM1 = true;
 			} else {
 				// try SMC (intel)
 				SMCConnection smcCon;
@@ -257,23 +260,12 @@ namespace Cpu {
 	void update_sensors() {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
-			ThermalSensors sensors;
-			auto sensor = sensors.getSensors();
-			if (sensor.size() > 0) {
-				current_cpu.temp.at(0).push_back((long long)sensor[0]);
+			if (macM1) {
+				ThermalSensors sensors;
+				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
-
-				if (Config::getB("show_coretemp") and not cpu_temp_only) {
-					for (int core = 1; core <= Shared::coreCount; core++) {
-						long long temp = (long long)sensor[core];
-						if (cmp_less(core, current_cpu.temp.size())) {
-							current_cpu.temp.at(core).push_back(temp);
-							if (current_cpu.temp.at(core).size() > 20)
-								current_cpu.temp.at(core).pop_front();
-						}
-					}
-				}
+			
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
@@ -292,6 +284,7 @@ namespace Cpu {
 				}
 			}
 		} catch (std::runtime_error &e) {
+			got_sensors = false;
 			Logger::error("failed getting CPU temp");
 		}
 	}
@@ -1182,19 +1175,19 @@ namespace Proc {
 					Logger::error("Failed getting CPU load info");
 				}
 				cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
-				cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
+				for (natural_t i = 0; i < cpu_count; i++) {
+					cputimes 	= (cpu_load_info[i].cpu_ticks[CPU_STATE_USER]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
+				}
 			}
 
 			should_filter = true;
 			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
 			size_t size = 0;
-			struct timeval currentTime;
-			gettimeofday(&currentTime, NULL);
-			const double timeNow = currentTime.tv_sec + (currentTime.tv_usec / 1'000'000);
+			const double timeNow = (time_micros() / 1'000'000);
 
 			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
