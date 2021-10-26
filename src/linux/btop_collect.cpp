@@ -313,7 +313,7 @@ namespace Cpu {
 		if (not got_coretemp or core_sensors.empty()) cpu_temp_only = true;
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
-				if (s_contains(str_to_lower(name), "cpu")) {
+				if (s_contains(str_to_lower(name), "cpu") or s_contains(str_to_lower(name), "k10temp")) {
 					cpu_sensor = name;
 					break;
 				}
