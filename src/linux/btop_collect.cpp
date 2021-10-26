@@ -21,7 +21,6 @@ tab-size = 4
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <regex>
 #include <sys/statvfs.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -217,9 +216,8 @@ namespace Cpu {
 					name += n + ' ';
 				}
 				name.pop_back();
-				for (const auto& reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-										regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-					name = std::regex_replace(name, reg, "");
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
 				}
 				name = trim(name);
 			}

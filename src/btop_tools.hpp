@@ -21,7 +21,6 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <array>
-#include <regex>
 #include <atomic>
 #include <filesystem>
 #include <ranges>
@@ -30,7 +29,7 @@ tab-size = 4
 #include <tuple>
 #include <pthread.h>
 
-using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple, std::array;
+using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
 
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -56,12 +55,6 @@ namespace Fx {
 
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
-
-	//* Regex for matching color, style and cursor move escape sequences
-	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
-
-	//* Regex for matching only color and style escape sequences
-	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
 	//* Return a string with all colors and text styling removed
 	string uncolor(const string& s);

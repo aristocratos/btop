@@ -1,3 +1,13 @@
+## v1.0.20
+
+* Added: Improved cpu sensor detection for Ryzen Mobile, by @adnanpri
+
+* Changed: Updated makefile
+
+* Changed: Regex for Fx::uncolor() changed to string search and replace
+
+* Changed: Removed all use of regex with dedicated string functions
+
 ## v1.0.19
 
 * Fixed: Makefile now tests compiler flag compatibility

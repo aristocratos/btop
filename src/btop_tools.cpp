@@ -145,12 +145,12 @@ namespace Fx {
 		for (size_t offset = 0, start_pos = 0, end_pos = 0, next_pos = 0;;) {
 			if ((start_pos = next_pos > 0 ? next_pos : out.find('\x1b', offset)) == string::npos)
 				break;
-			offset = start_pos;
+			offset = ++start_pos;
 			if ((end_pos = out.find('m', offset)) == string::npos)
 				break;
-			else if (next_pos = out.find('\x1b', offset + 1); end_pos - start_pos > next_pos - start_pos)
+			else if (next_pos = out.find('\x1b', offset); not isdigit(out[end_pos - 1]) or end_pos - start_pos > next_pos - start_pos)
 				continue;
-			out.replace(start_pos, (end_pos - start_pos) + 1, "");
+			out.replace(start_pos, end_pos - start_pos, "");
 			next_pos = 0;
 		}
 		out.shrink_to_fit();
