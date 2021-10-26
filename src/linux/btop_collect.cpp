@@ -218,6 +218,7 @@ namespace Cpu {
 				name.pop_back();
 				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
 					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
 				}
 				name = trim(name);
 			}
