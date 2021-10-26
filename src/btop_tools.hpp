@@ -64,7 +64,7 @@ namespace Fx {
 	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
 	//* Return a string with all colors and text styling removed
-	inline string uncolor(const string& s) { return regex_replace(s, color_regex, ""); }
+	string uncolor(const string& s);
 
 }
 
