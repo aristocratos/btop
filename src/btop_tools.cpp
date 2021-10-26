@@ -46,7 +46,6 @@ namespace Term {
 	atomic<int> width = 0;
 	atomic<int> height = 0;
 	string current_tty;
-	char* custombuf;
 
 	namespace {
 		struct termios initial_settings;
@@ -121,9 +120,6 @@ namespace Term {
 				echo(false);
 				linebuffered(false);
 				refresh();
-
-				//? Set 1MB buffer for cout
-				std::cout.rdbuf()->pubsetbuf(custombuf, 1048576);
 
 				cout << alt_screen << hide_cursor << mouse_on << flush;
 				Global::resized = false;
