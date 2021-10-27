@@ -266,7 +266,7 @@ namespace Input {
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "f") {
+				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;
