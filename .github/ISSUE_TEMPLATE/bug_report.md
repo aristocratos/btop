@@ -21,7 +21,9 @@ assignees: aristocratos
 
 **Screenshots**
 
-[If applicable, add screenshots to help explain your problem.]
+[If applicable, add screenshots to help explain your problem. Use the template below.]
+
+![Alt text for visually impaired people](url)
 
 **Info (please complete the following information):**
  - btop++ version: `btop -v`
