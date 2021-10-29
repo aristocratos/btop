@@ -47,6 +47,7 @@ stage/
 *.app
 
 build
+builddir
 bin
 btop
 .*/
