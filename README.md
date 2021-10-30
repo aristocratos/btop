@@ -38,9 +38,38 @@
 
 ### Under development
 
+##### 30 October 2021
+
+Work on the OSX and FreeBSD branches, both initiated and mostly worked on by [@joske](https://github.com/joske), will likely be completed in the coming weeks.
+The OSX branch has some memory leaks that needs to be sorted out and both have some issues with the processes cpu usage calculation and other smaller issues that needs fixing.
+
+If you want to help out, test for bugs/fix bugs or just try out the branches:
+
+**OSX**
+```bash
+# Install and use Homebrew or MacPorts package managers for easy dependency installation
+brew install coreutils make gcc@11
+git clone https://github.com/aristocratos/btop.git
+cd btop
+git checkout osx
+gmake
+```
+
+**FreeBSD**
+```bash
+sudo pkg install gmake gcc11 coreutils git
+git clone https://github.com/aristocratos/btop.git
+cd btop
+git checkout freebsd
+gmake
+```
+
+Note that GNU make (`gmake`) is recommended but not required for OSX but it is required on FreeBSD.
+
+
 ##### 6 October 2021
 
-OsX development have been started by @joske , big thanks :)
+OsX development have been started by [@joske](https://github.com/joske), big thanks :)
 See branch [OSX](https://github.com/aristocratos/btop/tree/OSX) for current progress.
 
 ##### 18 September 2021
