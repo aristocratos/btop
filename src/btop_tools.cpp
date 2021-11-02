@@ -406,6 +406,18 @@ namespace Logger {
 	size_t loglevel;
 	fs::path logfile;
 
+	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
+	class lose_priv {
+		int status = -1;
+	public:
+		lose_priv() {
+			if (geteuid() != Global::real_uid) this->status = seteuid(Global::real_uid);
+		}
+		~lose_priv() {
+			if (status == 0) status = seteuid(Global::set_uid);
+		}
+	};
+
 	void set(const string& level) {
 		loglevel = v_index(log_levels, level);
 	}
@@ -413,6 +425,7 @@ namespace Logger {
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
 		atomic_lock lck(busy, true);
+		lose_priv neutered{};
 		std::error_code ec;
 		try {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {

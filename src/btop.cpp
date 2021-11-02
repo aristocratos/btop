@@ -64,6 +64,7 @@ namespace Global {
 	string fg_green = "\x1b[1;92m";
 	string fg_red = "\x1b[0;91m";
 
+	uid_t real_uid, set_uid;
 
 	fs::path self_path;
 
@@ -298,6 +299,18 @@ namespace Runner {
 		~thread_lock() { if (status == 0) pthread_mutex_unlock(&pt_mutex); }
 	};
 
+	//* Wrapper for raising priviliges when using SUID bit
+	class gain_priv {
+		int status = -1;
+	public:
+		gain_priv() {
+			if (Global::real_uid != Global::set_uid) this->status = seteuid(Global::set_uid);
+		}
+		~gain_priv() {
+			if (status == 0) status = seteuid(Global::real_uid);
+		}
+	};
+
 	string output;
 	string empty_bg;
 	bool pause_output = false;
@@ -384,6 +397,9 @@ namespace Runner {
 
 			//? Atomic lock used for blocking non thread-safe actions in main thread
 			atomic_lock lck(active);
+
+			//? Set effective user if SUID bit is set
+			gain_priv powers{};
 
 			auto& conf = current_conf;
 
@@ -615,6 +631,17 @@ int main(int argc, char **argv) {
 	//? ------------------------------------------------ INIT ---------------------------------------------------------
 
 	Global::start_time = time_s();
+
+	//? Save real and effective userid's and drop priviliges until needed if running with SUID bit set
+	Global::real_uid = getuid();
+	Global::set_uid = geteuid();
+	if (Global::real_uid != Global::set_uid) {
+		if (seteuid(Global::real_uid) != 0) {
+			Global::real_uid = Global::set_uid;
+			Global::exit_error_msg = "Failed to change effective user ID. Unset btop SUID bit to ensure security on this system. Quitting!";
+			clean_quit(1);
+		}
+	}
 
 	//? Call argument parser if launched with arguments
 	if (argc > 1) argumentParser(argc, argv);

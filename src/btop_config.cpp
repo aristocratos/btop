@@ -589,6 +589,7 @@ namespace Config {
 	void write() {
 		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
+		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version;
