@@ -1,3 +1,11 @@
+## v1.0.21
+
+* Fixed: Removed extra spaces in cpu name
+
+* Added: / as alternative bind for filter
+
+* Fixed: Security issue when running with SUID bit set
+
 ## v1.0.20
 
 * Added: Improved cpu sensor detection for Ryzen Mobile, by @adnanpri
