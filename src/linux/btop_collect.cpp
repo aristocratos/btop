@@ -904,8 +904,8 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto& [mountpoint, disk] : disks) {
 					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
-					struct statvfs vfs;
-					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+					struct statvfs64 vfs;
+					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
 						continue;
 					}
@@ -1065,7 +1065,7 @@ namespace Net {
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
 					uint64_t val = saved_stat.last;
-					try { val = max((uint64_t)stoul(readfile(sys_file, "0")), val); }
+					try { val = max((uint64_t)stoull(readfile(sys_file, "0")), val); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 
