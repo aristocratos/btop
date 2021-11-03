@@ -51,7 +51,7 @@ If you want to help out, test for bugs/fix bugs or just try out the branches:
 brew install coreutils make gcc@11
 git clone https://github.com/aristocratos/btop.git
 cd btop
-git checkout osx
+git checkout OSX
 gmake
 ```
 
