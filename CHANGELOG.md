@@ -1,3 +1,7 @@
+## v1.0.22
+
+* Fixed: Bad values for disks and network on 32-bit
+
 ## v1.0.21
 
 * Fixed: Removed extra spaces in cpu name
