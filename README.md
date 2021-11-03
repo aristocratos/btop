@@ -208,6 +208,8 @@ Also needs a UTF8 locale and a font that covers:
 
 1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
+   **Notice! Use x86_64 for 64-bit x86 systems, i486 and i686 are 32-bit!**
+
 2. **Install (from created folder)**
 
    * **Run install.sh or:**
