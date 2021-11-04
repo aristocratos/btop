@@ -1142,8 +1142,8 @@ namespace Menu {
 				auto& optList = optionsList.at(option).get();
 				int i = v_index(optList, Config::getS(option));
 
-				if (key == "right" and ++i >= (int)optList.size()) i = 0;
-				else if (key == "left" and --i < 0) i = optList.size() - 1;
+				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
+				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
 				Config::set(option, optList.at(i));
 
 				if (option == "color_theme")
