@@ -1,3 +1,13 @@
+## v1.0.23
+
+* Fixed: Config parser missing first value when not including version header
+
+* Fixed: Vim keys menu lists selection
+
+* Fixed: Stall when clearing input queue on exit and queue is >1
+
+* Fixed: Inconsistent behaviour of "q" key in the menus
+
 ## v1.0.22
 
 * Fixed: Bad values for disks and network on 32-bit
