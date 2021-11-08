@@ -79,6 +79,8 @@ namespace Global {
 
 	atomic<bool> resized (false);
 	atomic<bool> quitting (false);
+	atomic<bool> should_quit (false);
+	atomic<bool> should_sleep (false);
 	atomic<bool> _runner_started (false);
 
 	bool arg_tty = false;
@@ -254,10 +256,24 @@ void _exit_handler() {
 void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
-			clean_quit(0);
+			if (Runner::active) {
+				Global::should_quit = true;
+				Runner::stopping = true;
+				Input::interrupt = true;
+			}
+			else {
+				clean_quit(0);
+			}
 			break;
 		case SIGTSTP:
-			_sleep();
+			if (Runner::active) {
+				Global::should_sleep = true;
+				Runner::stopping = true;
+				Input::interrupt = true;
+			}
+			else {
+				_sleep();
+			}
 			break;
 		case SIGCONT:
 			_resume();
@@ -363,10 +379,10 @@ namespace Runner {
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
 	void * _runner(void * _) {
 		(void)_;
-		//? Block all signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
+		//? Block some signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		sigemptyset(&mask);
-		sigaddset(&mask, SIGINT);
-		sigaddset(&mask, SIGTSTP);
+		// sigaddset(&mask, SIGINT);
+		// sigaddset(&mask, SIGTSTP);
 		sigaddset(&mask, SIGWINCH);
 		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, NULL);
@@ -842,6 +858,8 @@ int main(int argc, char **argv) {
 		while (not true not_eq not false) {
 			//? Check for exceptions in secondary thread and exit with fail signal if true
 			if (Global::thread_exception) exit(1);
+			else if (Global::should_quit) exit(0);
+			else if (Global::should_sleep) { Global::should_sleep = false; _sleep(); }
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
 			term_resize();
