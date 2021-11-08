@@ -95,7 +95,7 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
+		if (cin.rdbuf()->in_avail() > 0) clear();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -175,7 +175,12 @@ namespace Input {
 	}
 
 	void clear() {
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		auto first_num = cin.rdbuf()->in_avail();
+		while (cin.rdbuf()->in_avail() == first_num) {
+			if (first_num-- == 0) break;
+			cin.ignore(1);
+			
+		}
 	}
 
 	void process(const string& key) {

@@ -208,7 +208,6 @@ void clean_quit(int sig) {
 	}
 
 	Config::write();
-	Input::clear();
 
 	//? Wait for any remaining Tools::atomic_lock destructors to finish for max 1000ms
 	for (int i = 0; Tools::active_locks > 0 and i < 100; i++) {
@@ -216,6 +215,7 @@ void clean_quit(int sig) {
 	}
 
 	if (Term::initialized) {
+		Input::clear();
 		Term::restore();
 	}
 
