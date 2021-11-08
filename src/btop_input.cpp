@@ -179,7 +179,6 @@ namespace Input {
 		while (cin.rdbuf()->in_avail() == first_num) {
 			if (first_num-- == 0) break;
 			cin.ignore(1);
-			
 		}
 	}
 

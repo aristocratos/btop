@@ -892,10 +892,7 @@ namespace Menu {
 				};
 			}
 		}
-		else if (key == "q") {
-			exit(0);
-		}
-		else if (is_in(key, "escape", "m", "mouse_click")) {
+		else if (is_in(key, "escape", "q", "m", "mouse_click")) {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
