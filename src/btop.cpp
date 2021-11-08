@@ -414,44 +414,23 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
-				//? PROC
-				if (v_contains(conf.boxes, "proc")) {
+				//? CPU
+				if (v_contains(conf.boxes, "cpu")) {
 					try {
-						if (Global::debug) debug_timer("proc", collect_begin);
+						if (Global::debug) debug_timer("cpu", collect_begin);
 
 						//? Start collect
-						auto proc = Proc::collect(conf.no_update);
+						auto cpu = Cpu::collect(conf.no_update);
 
-						if (Global::debug) debug_timer("proc", draw_begin);
-
-						//? Draw box
-						if (not pause_output) output += Proc::draw(proc, conf.force_redraw, conf.no_update);
-
-						if (Global::debug) debug_timer("proc", draw_done);
-					}
-					catch (const std::exception& e) {
-						throw std::runtime_error("Proc:: -> " + (string)e.what());
-					}
-				}
-
-
-				//? NET
-				if (v_contains(conf.boxes, "net")) {
-					try {
-						if (Global::debug) debug_timer("net", collect_begin);
-
-						//? Start collect
-						auto net = Net::collect(conf.no_update);
-
-						if (Global::debug) debug_timer("net", draw_begin);
+						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Net::draw(net, conf.force_redraw, conf.no_update);
+						if (not pause_output) output += Cpu::draw(cpu, conf.force_redraw, conf.no_update);
 
-						if (Global::debug) debug_timer("net", draw_done);
+						if (Global::debug) debug_timer("cpu", draw_done);
 					}
 					catch (const std::exception& e) {
-						throw std::runtime_error("Net:: -> " + (string)e.what());
+						throw std::runtime_error("Cpu:: -> " + (string)e.what());
 					}
 				}
 
@@ -475,23 +454,43 @@ namespace Runner {
 					}
 				}
 
-				//? CPU
-				if (v_contains(conf.boxes, "cpu")) {
+				//? NET
+				if (v_contains(conf.boxes, "net")) {
 					try {
-						if (Global::debug) debug_timer("cpu", collect_begin);
+						if (Global::debug) debug_timer("net", collect_begin);
 
 						//? Start collect
-						auto cpu = Cpu::collect(conf.no_update);
+						auto net = Net::collect(conf.no_update);
 
-						if (Global::debug) debug_timer("cpu", draw_begin);
+						if (Global::debug) debug_timer("net", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, conf.force_redraw, conf.no_update);
+						if (not pause_output) output += Net::draw(net, conf.force_redraw, conf.no_update);
 
-						if (Global::debug) debug_timer("cpu", draw_done);
+						if (Global::debug) debug_timer("net", draw_done);
 					}
 					catch (const std::exception& e) {
-						throw std::runtime_error("Cpu:: -> " + (string)e.what());
+						throw std::runtime_error("Net:: -> " + (string)e.what());
+					}
+				}
+
+				//? PROC
+				if (v_contains(conf.boxes, "proc")) {
+					try {
+						if (Global::debug) debug_timer("proc", collect_begin);
+
+						//? Start collect
+						auto proc = Proc::collect(conf.no_update);
+
+						if (Global::debug) debug_timer("proc", draw_begin);
+
+						//? Draw box
+						if (not pause_output) output += Proc::draw(proc, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("proc", draw_done);
+					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Proc:: -> " + (string)e.what());
 					}
 				}
 			}
