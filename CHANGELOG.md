@@ -1,3 +1,11 @@
+## v1.0.24
+
+* Changed: Collection ordering
+
+* Fixed: Restore all escape seq mouse modes on exit
+
+* Fixed: SIGINT not cleaning up on exit
+
 ## v1.0.23
 
 * Fixed: Config parser missing first value when not including version header
