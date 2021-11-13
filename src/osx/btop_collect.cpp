@@ -1119,7 +1119,7 @@ namespace Proc {
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
 		gettimeofday(&currentTime, NULL);
-		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); // only interested in second granularity, so ignoring tc_usec
+		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - (detailed.entry.cpu_s / 1'000'000));
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
@@ -1234,18 +1234,18 @@ namespace Proc {
 						new_proc.name = f_name.substr(lastSlash + 1);
 						//? Get process arguments if possible, fallback to process path in case of failure
 						if (Shared::arg_max > 0) {
-							string proc_args;
-							proc_args.resize(Shared::arg_max);
+							std::unique_ptr<char[]> proc_chars(new char[Shared::arg_max]);
 							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
 							size_t argmax = Shared::arg_max;
-							if (sysctl(mib, 3, proc_args.data(), &argmax, NULL, 0) == 0) {
-								int argc;
-								memcpy(&argc, &proc_args[0], sizeof(argc));
+							if (sysctl(mib, 3, proc_chars.get(), &argmax, NULL, 0) == 0) {
+								int argc = 0;
+								memcpy(&argc, &proc_chars.get()[0], sizeof(argc));
+								std::string_view proc_args(proc_chars.get(), argmax);
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
 									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
 										while (argc-- > 0 and null_pos != string::npos) {
 											null_pos = proc_args.find('\0', start_pos);
-											new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
+											new_proc.cmd += (string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
 											start_pos = null_pos + 1;
 										}
 									}
