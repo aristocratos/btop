@@ -26,6 +26,7 @@ tab-size = 4
 #include <mach/mach_types.h>
 #include <mach/processor_info.h>
 #include <mach/vm_statistics.h>
+#include <mach/mach_time.h>
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <netdb.h>
@@ -106,7 +107,8 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
+	long pageSize, coreCount, clkTck, physicalCoreCount, arg_max;
+	double machTck;
 	int totalMem_len;
 
 	void init() {
@@ -127,6 +129,14 @@ namespace Shared {
 		if (pageSize <= 0) {
 			pageSize = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+		}
+
+		mach_timebase_info_data_t convf;
+		if (mach_timebase_info(&convf) == KERN_SUCCESS) {
+			machTck = convf.numer / convf.denom;
+		} else {
+			Logger::warning("Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be incorrect.");
+			machTck = 100;
 		}
 
 		clkTck = sysconf(_SC_CLK_TCK);
@@ -265,7 +275,7 @@ namespace Cpu {
 				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
-			
+
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
@@ -1175,8 +1185,9 @@ namespace Proc {
 					Logger::error("Failed getting CPU load info");
 				}
 				cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
+				cputimes = 0;
 				for (natural_t i = 0; i < cpu_count; i++) {
-					cputimes 	= (cpu_load_info[i].cpu_ticks[CPU_STATE_USER]
+					cputimes 	+= (cpu_load_info[i].cpu_ticks[CPU_STATE_USER]
 								+ cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]
 								+ cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]
 								+ cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
@@ -1187,7 +1198,7 @@ namespace Proc {
 			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
 			size_t size = 0;
-			const double timeNow = (time_micros() / 1'000'000);
+			const auto timeNow = time_micros();
 
 			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
@@ -1198,7 +1209,7 @@ namespace Proc {
 			if (sysctl(mib, 4, processes.get(), &size, NULL, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
-					struct kinfo_proc kproc = processes.get()[i];
+					struct kinfo_proc& kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
 					found.push_back(pid);
@@ -1244,7 +1255,7 @@ namespace Proc {
 						}
 						if (new_proc.cmd.empty()) new_proc.cmd = f_name;
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
-						new_proc.cpu_s = round(kproc.kp_proc.p_starttime.tv_sec + (kproc.kp_proc.p_starttime.tv_usec / 1'000'000));
+						new_proc.cpu_s = kproc.kp_proc.p_starttime.tv_sec * 1'000'000 + kproc.kp_proc.p_starttime.tv_usec;
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 						new_proc.user = pwd->pw_name;
 					}
@@ -1256,15 +1267,16 @@ namespace Proc {
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
-						cpu_t = round((pti.pti_total_user + pti.pti_total_system) / 1'000);
+						cpu_t = pti.pti_total_user + pti.pti_total_system;
+
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, timeNow - new_proc.cpu_s);
+					new_proc.cpu_c = (double)(cpu_t * Shared::machTck) / (timeNow - new_proc.cpu_s);
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
