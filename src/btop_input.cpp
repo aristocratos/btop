@@ -193,7 +193,7 @@ namespace Input {
 			if (not filtering) {
 				bool keep_going = false;
 				if (str_to_lower(key) == "q") {
-					exit(0);
+					clean_quit(0);
 				}
 				else if (is_in(key, "escape", "m")) {
 					Menu::show(Menu::Menus::Main);

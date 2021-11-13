@@ -28,6 +28,14 @@ tab-size = 4
 #include <thread>
 #include <tuple>
 #include <pthread.h>
+#include <limits.h>
+#ifndef HOST_NAME_MAX
+	#ifdef __APPLE__
+		#define HOST_NAME_MAX 255
+	#else
+		#define HOST_NAME_MAX 64
+	#endif
+#endif
 
 using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
 

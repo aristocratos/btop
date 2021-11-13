@@ -34,6 +34,8 @@ using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std:
 void term_resize(bool force=false);
 void banner_gen();
 
+extern void clean_quit(int sig);
+
 namespace Global {
 	extern const vector<array<string, 2>> Banner_src;
 	extern const string Version;

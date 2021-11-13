@@ -913,7 +913,7 @@ namespace Menu {
 					currentMenu = Menus::Help;
 					return Switch;
 				case Quit:
-					exit(0);
+					clean_quit(0);
 			}
 		}
 		else if (is_in(key, "down", "tab", "mouse_scroll_down", "j")) {

@@ -88,7 +88,6 @@ namespace Global {
 	int arg_preset = -1;
 }
 
-
 //* A simple argument parser
 void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
@@ -320,7 +319,7 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { pthread_mutex_init(&mtx, NULL); status = pthread_mutex_lock(&pt_mutex); }
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { pthread_mutex_init(&pt_mutex, NULL); status = pthread_mutex_lock(&pt_mutex); }
 		~thread_lock() { if (status == 0) pthread_mutex_unlock(&pt_mutex); }
 	};
 
@@ -571,7 +570,6 @@ namespace Runner {
 				<< Term::sync_end << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
-
 		pthread_exit(NULL);
 	}
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
