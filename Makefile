@@ -57,7 +57,6 @@ else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
 else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
 	CXX := g++
 endif
-
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
 #? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
@@ -116,16 +115,12 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			?= -O2 -ftree-loop-vectorize -flto=$(THREADS)
+OPTFLAGS			:= -O2 -ftree-loop-vectorize -flto=$(THREADS)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
-
-ifdef DEBUG
-	override OPTFLAGS := -O0 -g
-endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
 
@@ -191,7 +186,6 @@ install:
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
-
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:

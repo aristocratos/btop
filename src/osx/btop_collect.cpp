@@ -230,11 +230,11 @@ namespace Cpu {
 				name += n + ' ';
 			}
 			name.pop_back();
-			for (const auto &reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-			                        regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-				name = std::regex_replace(name, reg, "");
-			}
-			name = trim(name);
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
+				}
+				name = trim(name);
 		}
 
 		return name;

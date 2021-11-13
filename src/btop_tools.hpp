@@ -21,7 +21,6 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <array>
-#include <regex>
 #include <atomic>
 #include <filesystem>
 #include <ranges>
@@ -29,16 +28,17 @@ tab-size = 4
 #include <thread>
 #include <tuple>
 #include <pthread.h>
-
-using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple, std::array;
-
+#include <limits.h>
 #ifndef HOST_NAME_MAX
-#if defined(__APPLE__)
-#define HOST_NAME_MAX 255
-#else
-#define HOST_NAME_MAX 64
-#endif /* __APPLE__ */
-#endif /* HOST_NAME_MAX */
+	#ifdef __APPLE__
+		#define HOST_NAME_MAX 255
+	#else
+		#define HOST_NAME_MAX 64
+	#endif
+#endif
+
+using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
+
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -64,14 +64,8 @@ namespace Fx {
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
 
-	//* Regex for matching color, style and cursor move escape sequences
-	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
-
-	//* Regex for matching only color and style escape sequences
-	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
-
 	//* Return a string with all colors and text styling removed
-	inline string uncolor(const string& s) { return regex_replace(s, color_regex, ""); }
+	string uncolor(const string& s);
 
 }
 
@@ -114,7 +108,7 @@ namespace Term {
 	const string clear_end = Fx::e + "0J";
 	const string clear_begin = Fx::e + "1J";
 	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //? Enable reporting of mouse position on click and release
-	const string mouse_off = Fx::e + "?1002l";
+	const string mouse_off = Fx::e + "?1002l" + Fx::e + "?1015l" + Fx::e + "?1006l";
 	const string mouse_direct_on = Fx::e + "?1003h"; //? Enable reporting of mouse position at any movement
 	const string mouse_direct_off = Fx::e + "?1003l";
 	const string sync_start = Fx::e + "?2026h"; //? Start of terminal synchronized output

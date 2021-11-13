@@ -32,8 +32,6 @@ using std::cin, std::vector, std::string_literals::operator""s;
 using namespace Tools;
 namespace rng = std::ranges;
 
-extern void clean_quit(int sig);
-
 namespace Input {
 
 	//* Map for translating key codes to readable values
@@ -97,7 +95,7 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
+		if (cin.rdbuf()->in_avail() > 0) clear();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -177,7 +175,11 @@ namespace Input {
 	}
 
 	void clear() {
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		auto first_num = cin.rdbuf()->in_avail();
+		while (cin.rdbuf()->in_avail() == first_num) {
+			if (first_num-- == 0) break;
+			cin.ignore(1);
+		}
 	}
 
 	void process(const string& key) {
@@ -268,7 +270,7 @@ namespace Input {
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "f") {
+				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;

@@ -3,11 +3,9 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 
-#include <btop_tools.hpp>
-#include <iostream>
-#include <map>
 #include <string>
 #include <numeric>
+#include <vector>
 
 extern "C" {
 typedef struct __IOHIDEvent *IOHIDEventRef;
@@ -62,7 +60,7 @@ long long Cpu::ThermalSensors::getSensors() {
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	IOHIDEventSystemClientSetMatching(system, thermalSensors);
 	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
-	vector<double> temps;
+	std::vector<double> temps;
 	if (matchingsrvs) {
 		long count = CFArrayGetCount(matchingsrvs);
 		for (int i = 0; i < count; i++) {

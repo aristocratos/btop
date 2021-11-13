@@ -21,7 +21,6 @@ tab-size = 4
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <regex>
 #include <sys/statvfs.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -217,9 +216,9 @@ namespace Cpu {
 					name += n + ' ';
 				}
 				name.pop_back();
-				for (const auto& reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-										regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-					name = std::regex_replace(name, reg, "");
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
 				}
 				name = trim(name);
 			}
@@ -313,7 +312,7 @@ namespace Cpu {
 		if (not got_coretemp or core_sensors.empty()) cpu_temp_only = true;
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
-				if (s_contains(str_to_lower(name), "cpu")) {
+				if (s_contains(str_to_lower(name), "cpu") or s_contains(str_to_lower(name), "k10temp")) {
 					cpu_sensor = name;
 					break;
 				}
@@ -905,8 +904,8 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto& [mountpoint, disk] : disks) {
 					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
-					struct statvfs vfs;
-					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+					struct statvfs64 vfs;
+					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
 						continue;
 					}
@@ -1066,7 +1065,7 @@ namespace Net {
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
 					uint64_t val = saved_stat.last;
-					try { val = max((uint64_t)stoul(readfile(sys_file, "0")), val); }
+					try { val = max((uint64_t)stoull(readfile(sys_file, "0")), val); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 
