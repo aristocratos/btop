@@ -26,9 +26,9 @@ ifneq ($(filter unknown Darwin, $(PLATFORM)),)
 	ifeq ($(PLATFORM),apple)
 		override PLATFORM := macos
 	endif
-	ifeq ($(shell uname -v | grep ARM64 >/dev/null 2>&1; echo $$?),0)
-		ARCH ?= arm64
-	endif
+endif
+ifeq ($(shell uname -v | grep ARM64 >/dev/null 2>&1; echo $$?),0)
+	ARCH ?= arm64
 else
 	ARCH ?= $(shell $(CXX) -dumpmachine | cut -d "-" -f 1)
 endif

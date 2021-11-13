@@ -78,8 +78,8 @@ long long Cpu::ThermalSensors::getSensors() {
 					// there is also PMU tdev1-8 but it has negative values??
 					// there is also eACC for efficiency package but it only has 2 entries
 					// and pACC for performance but it has 7 entries (2 - 9) WTF
-					if (n.starts_with("eACC") or n.starts_with("pACC")) { 
-                        temps.push_back(getValue(sc));
+					if (n.starts_with("eACC") or n.starts_with("pACC")) {
+						temps.push_back(getValue(sc));
 					}
 					CFRelease(name);
 				}
