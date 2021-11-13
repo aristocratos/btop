@@ -201,12 +201,19 @@ void clean_quit(int sig) {
 	Global::quitting = true;
 	Runner::stop();
 	if (Global::_runner_started) {
+	#ifdef __APPLE__
+		if (pthread_join(Runner::runner_id, NULL) != 0) {
+			Logger::error("Failed to join _runner thread!");
+			pthread_cancel(Runner::runner_id);
+		}
+	#else
 		struct timespec ts;
 		ts.tv_sec = 5;
 		if (pthread_timedjoin_np(Runner::runner_id, NULL, &ts) != 0) {
 			Logger::error("Failed to join _runner thread!");
 			pthread_cancel(Runner::runner_id);
 		}
+	#endif
 	}
 
 	Config::write();
@@ -229,9 +236,11 @@ void clean_quit(int sig) {
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
+#ifndef __APPLE__
 	if (Tools::active_locks > 0) {
 		quick_exit((sig != -1 ? sig : 0));
 	}
+#endif
 
 	if (sig != -1) exit(sig);
 }
@@ -311,7 +320,7 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { status = pthread_mutex_lock(&pt_mutex); }
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) { pthread_mutex_init(&mtx, NULL); status = pthread_mutex_lock(&pt_mutex); }
 		~thread_lock() { if (status == 0) pthread_mutex_unlock(&pt_mutex); }
 	};
 
@@ -778,10 +787,12 @@ int main(int argc, char **argv) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
+#ifndef __APPLE__
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
+#endif
 
 	//? Check for valid terminal dimensions
 	{
