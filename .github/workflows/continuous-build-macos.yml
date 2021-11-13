@@ -3,7 +3,7 @@ name: Continuous Build MacOS
 on:
   push:
     branches:
-      - OSX
+      - main
     tags-ignore:
       - '*.*'
     paths:
@@ -21,9 +21,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Install build tools
-        run: |
-          git checkout OSX
       - name: Compile
         run: |
           make CXX=g++-11 ARCH=x86_64
