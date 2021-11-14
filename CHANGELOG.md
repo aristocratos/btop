@@ -1,3 +1,7 @@
+## v1.1.0
+
+* Added: Support for OSX, by @joske and @aristocratos
+
 ## v1.0.24
 
 * Changed: Collection ordering

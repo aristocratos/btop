@@ -53,7 +53,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.0.24";
+	const string Version = "1.1.0";
 
 	int coreCount;
 	string overlay;
@@ -179,7 +179,7 @@ void term_resize(bool force) {
 			if (Input::poll()) {
 				auto key = Input::get();
 				if (key == "q")
-					exit(0);
+					clean_quit(0);
 				else if (is_in(key, "1", "2", "3", "4")) {
 					Config::current_preset = -1;
 					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
@@ -584,7 +584,7 @@ namespace Runner {
 			pthread_cancel(Runner::runner_id);
 			if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
-				exit(1);
+				clean_quit(1);
 			}
 		}
 		if (stopping or Global::resized) return;
@@ -623,7 +623,7 @@ namespace Runner {
 		if (ret != EBUSY and not Global::quitting) {
 			if (active) active = false;
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
-			exit(1);
+			clean_quit(1);
 		}
 		else if (ret == EBUSY) {
 			atomic_wait_for(active, true, 5000);
@@ -634,7 +634,7 @@ namespace Runner {
 				}
 				else {
 					Global::exit_error_msg = "No response from Runner thread, quitting!";
-					exit(1);
+					clean_quit(1);
 				}
 			}
 			thread_trigger();
@@ -829,7 +829,7 @@ int main(int argc, char **argv) {
 	Runner::thread_sem_init();
 	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
-		exit(1);
+		clean_quit(1);
 	}
 	else {
 		Global::_runner_started = true;
@@ -866,8 +866,8 @@ int main(int argc, char **argv) {
 	try {
 		while (not true not_eq not false) {
 			//? Check for exceptions in secondary thread and exit with fail signal if true
-			if (Global::thread_exception) exit(1);
-			else if (Global::should_quit) exit(0);
+			if (Global::thread_exception) clean_quit(1);
+			else if (Global::should_quit) clean_quit(0);
 			else if (Global::should_sleep) { Global::should_sleep = false; _sleep(); }
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
@@ -923,7 +923,7 @@ int main(int argc, char **argv) {
 	}
 	catch (const std::exception& e) {
 		Global::exit_error_msg = "Exception in main loop -> " + (string)e.what();
-		exit(1);
+		clean_quit(1);
 	}
 
 }

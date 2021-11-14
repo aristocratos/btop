@@ -5,6 +5,8 @@
 </a>
 
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
+![OSX](https://img.shields.io/badge/-OSX-black?logo=apple)
+![FreeBSD](https://img.shields.io/badge/-FreeBSD-red?logo=freebsd)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
 ![latest_release](https://img.shields.io/github/v/tag/aristocratos/btop?label=release)
@@ -12,13 +14,10 @@
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
-[![Continuous Build](https://github.com/aristocratos/btop/actions/workflows/continuous-build.yml/badge.svg)](https://github.com/aristocratos/btop/actions)
+[![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
 [![Continuous Build MacOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
 
-
 ## Index
-
-
 
 * [News](#news)
 * [Documents](#documents)
@@ -29,15 +28,26 @@
 * [Prerequisites](#prerequisites) (Read this if you are having issues!)
 * [Screenshots](#screenshots)
 * [Keybindings](#help-menu)
-* [Installation](#installation)
-* [Manual compilation](#compilation)
-* [Install the snap](#install-the-snap)
+* [Installation Linux/OSX](#installation-linux/osx)
+* [Compilation Linux](#compilation-osx)
+* [Compilation OSX](#compilation-osx)
+* [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
 ## News
 
 ### Under development
+
+##### 13 November 2021
+
+Release v1.1.0 with OSX support. Binaries in [continuous-build-macos](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml) are only x86 for now.
+Macos binaries + installer are included for both x86 and ARM64 (Apple Silicon) in the releases.
+
+Big thank you to [@joske](https://github.com/joske) who wrote the vast majority of the implementation!
+
+<details>
+<summary>More...</summary>
 
 ##### 30 October 2021
 
@@ -96,6 +106,8 @@ Windows support is not in the plans as of now, but if anyone else wants to take 
 
 This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will have to be written from scratch without any external libraries.
 And will need some help in the form of code contributions to get complete support for BSD and OSX.
+
+</details>
 
 ## Documents
 
@@ -203,11 +215,11 @@ Also needs a UTF8 locale and a font that covers:
 
 ![Screenshot 5](Img/help-menu.png)
 
-## Installation
+## Installation Linux/OSX
 
-**Binary release (statically compiled with musl, for kernel 2.6.39 and newer)**
+**Binaries for Linux are statically compiled with musl and works on kernel 2.6.39 and newer**
 
-1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
+1. **Download btop-(VERSION)-(ARCH)-(PLATFORM).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
 
    **Notice! Use x86_64 for 64-bit x86 systems, i486 and i686 are 32-bit!**
 
@@ -263,7 +275,7 @@ Also needs a UTF8 locale and a font that covers:
   sudo zypper in btop
   ```
 
-## Compilation
+## Compilation Linux
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
 
@@ -355,7 +367,92 @@ Also needs a UTF8 locale and a font that covers:
    make help
    ```
 
-## Install the snap
+## Compilation OSX
+
+   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+
+   The makefile also needs GNU coreutils and `sed`.
+
+   Install and use Homebrew or MacPorts package managers for easy dependency installation
+
+1. **Install dependencies (example for Homebrew)**
+
+   ``` bash
+   brew install coreutils make gcc@11
+   ```
+
+2. **Clone repository**
+
+   ``` bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   Append `QUIET=true` for less verbose output.
+
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
+
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   ``` bash
+   gmake
+   ```
+
+4. **Install**
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+   ``` bash
+   sudo gmake install
+   ```
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+   ``` bash
+   sudo gmake setuid
+   ```
+
+* **Uninstall**
+
+   ``` bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
+   ```
+
+
+## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
  * **Install the snap**
