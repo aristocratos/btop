@@ -28,7 +28,7 @@
 * [Prerequisites](#prerequisites) (Read this if you are having issues!)
 * [Screenshots](#screenshots)
 * [Keybindings](#help-menu)
-* [Installation Linux/OSX](#installation-linux/osx)
+* [Installation Linux/OSX](#installation)
 * [Compilation Linux](#compilation-osx)
 * [Compilation OSX](#compilation-osx)
 * [Installing the snap](#installing-the-snap)
@@ -215,7 +215,7 @@ Also needs a UTF8 locale and a font that covers:
 
 ![Screenshot 5](Img/help-menu.png)
 
-## Installation Linux/OSX
+## Installation
 
 **Binaries for Linux are statically compiled with musl and works on kernel 2.6.39 and newer**
 
