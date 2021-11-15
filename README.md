@@ -29,7 +29,7 @@
 * [Screenshots](#screenshots)
 * [Keybindings](#help-menu)
 * [Installation Linux/OSX](#installation)
-* [Compilation Linux](#compilation-osx)
+* [Compilation Linux](#compilation-linux)
 * [Compilation OSX](#compilation-osx)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
