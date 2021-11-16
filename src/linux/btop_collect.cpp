@@ -240,20 +240,36 @@ namespace Cpu {
 					if (s_contains(add_path, "coretemp"))
 						got_coretemp = true;
 
-					if (fs::exists(add_path / "temp1_input")) {
-						search_paths.push_back(add_path);
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						if (string(file.path().filename()) == "device") {
+							for (const auto & dev_file : fs::directory_iterator(file.path())) {
+								string dev_filename = dev_file.path().filename();
+								if (dev_filename.starts_with("temp") and dev_filename.ends_with("_input")) {
+									search_paths.push_back(file.path());
+									break;
+								}
+							}
+						}
+
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input")) {
+							search_paths.push_back(add_path);
+							break;
+						}
 					}
-					else if (fs::exists(add_path / "device/temp1_input"))
-						search_paths.push_back(add_path / "device");
 				}
 			}
 			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 					fs::path add_path = fs::canonical(d.path());
 
-					if (fs::exists(d.path() / "temp1_input") and not v_contains(search_paths, add_path)) {
-						search_paths.push_back(add_path);
-						got_coretemp = true;
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input") and not v_contains(search_paths, add_path)) {
+								search_paths.push_back(add_path);
+								got_coretemp = true;
+								break;
+						}
 					}
 				}
 			}
@@ -261,9 +277,17 @@ namespace Cpu {
 			if (not search_paths.empty()) {
 				for (const auto& path : search_paths) {
 					const string pname = readfile(path / "name", path.filename());
-					for (int i = 1; fs::exists(path / string("temp" + to_string(i) + "_input")); i++) {
-						const string basepath = path / string("temp" + to_string(i) + "_");
-						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(i));
+					for (const auto & file : fs::directory_iterator(path)) {
+						const string file_suffix = "input";
+						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						string file_path = file.path();
+
+						if (!s_contains(file_path, file_suffix)) {
+							continue;
+						}
+
+						const string basepath = file_path.erase(file_path.find(file_suffix), file_suffix.length());
+						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
 						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
 						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
