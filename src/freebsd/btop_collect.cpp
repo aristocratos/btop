@@ -478,12 +478,15 @@ namespace Mem {
 		static std::unique_ptr<struct devinfo, decltype(std::free)*> lastDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
 		cur.dinfo = curDevInfo.get();
         last.dinfo = lastDevInfo.get();
-        int n = devstat_getdevs(NULL, &cur);
-        for (int i = 0; i < n; i++) {
-            devstat_compute_statistics(&cur.dinfo->devices[i], NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read,
-		    DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
-            Logger::debug("dev " + string(cur.dinfo->devices[i].device_name) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
-        }
+
+        if (devstat_getdevs(NULL, &cur) != -1) {
+			for (int i = 0; i < cur.dinfo->numdevs; i++) {
+				devstat_compute_statistics(&cur.dinfo->devices[i], NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read,
+				DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
+				Logger::debug("dev " + string(cur.dinfo->devices[i].device_name) + std::to_string(cur.dinfo->devices[i].device_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+			}
+			Logger::debug("");
+		}
     }
 
 	auto collect(const bool no_update) -> mem_info & {
@@ -565,7 +568,6 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
-				Logger::debug(dev + "->" + mountpoint);
 				mapping[dev] = mountpoint;
 
 				if (string(stfs[i].f_fstypename) == "autofs") {
