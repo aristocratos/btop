@@ -1,3 +1,11 @@
+## v1.1.1
+
+* Added: Partial static build (libgcc, libstdc++) for macos
+
+* Changed: Continuous build macos switched to OSX 11.6 (Big Sur) and partial static build
+
+* Changed: Release binaries for macos switched to OSX 12 (Monterey) and partial static build
+
 ## v1.1.0
 
 * Added: Support for OSX, by @joske and @aristocratos
