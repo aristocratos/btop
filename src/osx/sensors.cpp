@@ -37,7 +37,8 @@ CFDictionaryRef matching(int page, int usage) {
 	nums[1] = CFNumberCreate(0, kCFNumberSInt32Type, &usage);
 
 	CFDictionaryRef dict = CFDictionaryCreate(0, (const void **)keys, (const void **)nums, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-	CFRelease(keys);
+	CFRelease(keys[0]);
+	CFRelease(keys[1]);
 	return dict;
 }
 
