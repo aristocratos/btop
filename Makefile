@@ -42,7 +42,10 @@ ifneq ($(PLATFORM) $(ARCH),macos arm64)
 endif
 
 ifeq ($(STATIC),true)
-	override ADDFLAGS += -DSTATIC_BUILD -static -static-libgcc -static-libstdc++ -Wl,--fatal-warnings
+	override ADDFLAGS += -static-libgcc -static-libstdc++
+	ifneq ($(PLATFORM),macos)
+		override ADDFLAGS += -DSTATIC_BUILD -static -Wl,--fatal-warnings
+	endif
 endif
 
 ifeq ($(STRIP),true)

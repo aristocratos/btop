@@ -390,6 +390,8 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
+   Append `STATIC=true` to `make` command for static compilation (only libgcc and libstdc++ will be static!).
+
    Append `QUIET=true` for less verbose output.
 
    Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
