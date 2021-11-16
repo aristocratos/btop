@@ -483,7 +483,7 @@ namespace Mem {
 			for (int i = 0; i < cur.dinfo->numdevs; i++) {
 				auto d = cur.dinfo->devices[i];
 				devstat_compute_statistics(&d, NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
-				Logger::debug("dev " + string(d.device_name) + std::to_string(d.device_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+				Logger::debug("dev " + string(d.device_name) + std::to_string(d.unit_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
 			}
 			Logger::debug("");
 		}
