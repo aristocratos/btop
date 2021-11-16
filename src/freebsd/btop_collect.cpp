@@ -481,9 +481,9 @@ namespace Mem {
 
         if (devstat_getdevs(NULL, &cur) != -1) {
 			for (int i = 0; i < cur.dinfo->numdevs; i++) {
-				devstat_compute_statistics(&cur.dinfo->devices[i], NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read,
-				DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
-				Logger::debug("dev " + string(cur.dinfo->devices[i].device_name) + std::to_string(cur.dinfo->devices[i].device_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+				auto d = cur.dinfo->devices[i];
+				devstat_compute_statistics(&d, NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
+				Logger::debug("dev " + string(d.device_name) + std::to_string(d.device_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
 			}
 			Logger::debug("");
 		}
