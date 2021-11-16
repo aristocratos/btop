@@ -17,18 +17,18 @@ on:
 jobs:
   build-osx:
 
-    runs-on: macos-latest
+    runs-on: macos-11
 
     steps:
       - uses: actions/checkout@v2
       - name: Compile
         run: |
-          make CXX=g++-11 ARCH=x86_64
+          make CXX=g++-11 ARCH=x86_64 STATIC=true STRIP=true
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-$GIT_HASH
+          mv bin/btop bin/btop-x86_64-BigSur-$GIT_HASH
           ls -alh bin
 
       - uses: actions/upload-artifact@v2
         with:
-          name: btop-x86_64-macos
+          name: btop-x86_64-macos-BigSur
           path: 'bin/*'
