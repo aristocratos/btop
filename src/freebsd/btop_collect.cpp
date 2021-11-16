@@ -53,6 +53,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <memory>
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -473,8 +474,10 @@ namespace Mem {
         u_int64_t total_bytes_read;
     	u_int64_t total_bytes_write;
 
-        cur.dinfo = (struct devinfo *)calloc(1, sizeof(struct devinfo));
-        last.dinfo = (struct devinfo *)calloc(1, sizeof(struct devinfo));
+		static std::unique_ptr<struct devinfo, decltype(std::free)*> curDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
+		static std::unique_ptr<struct devinfo, decltype(std::free)*> lastDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
+		cur.dinfo = curDevInfo.get();
+        last.dinfo = lastDevInfo.get();
         int n = devstat_getdevs(NULL, &cur);
         for (int i = 0; i < n; i++) {
             devstat_compute_statistics(&cur.dinfo->devices[i], NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read,
