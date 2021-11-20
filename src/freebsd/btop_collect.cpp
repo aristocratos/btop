@@ -479,12 +479,12 @@ namespace Mem {
 		string name;
 	};
 
-    void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+    void collect_disk(unordered_flat_map<string, disk_info> &disks) {
 		FILE *f = popen("sysctl kstat.zfs.zroot.dataset", "r");
 		unordered_flat_map<string, dataset> datasets;
 		if (f) {
 			size_t len = 512;
-			char buf[len];
+			char buf[512];
 			while (not std::feof(f)) {
 				uint64_t nread, nwritten;
 				string datasetname;
@@ -494,7 +494,7 @@ namespace Mem {
 					if (string(name).find("dataset_name") != string::npos) {
 						datasetname = string(value);
 						dataset d{nread, nwritten, datasetname};
-						datasets[datasetname] = d;
+						datasets[datasetname] = d; //relies on the fact that the dataset name is last value in the list -- alternatively you could parse the objset-0x... when this changes, you have a new entry
 						Logger::debug("created " + d.name + "(" + std::to_string(d.nread) + "," + std::to_string(d.nwritten) + ")");
 					} else if (string(name).find("nread") != string::npos) {
 						nread = atoll(value);
@@ -697,7 +697,7 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-			collect_disk(disks, mapping);
+			collect_disk(disks);
 			
 			old_uptime = uptime;
 		}
