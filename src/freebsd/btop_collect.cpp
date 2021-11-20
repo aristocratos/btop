@@ -16,6 +16,9 @@ indent = tab
 tab-size = 4
 */
 #include <arpa/inet.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ifaddrs.h>
 #include <libproc.h>
 #include <net/if.h>
@@ -25,6 +28,7 @@ tab-size = 4
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
 #include <sys/_timeval.h>
+#include <sys/endian.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
@@ -41,12 +45,8 @@ tab-size = 4
 #include <paths.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdexcept>
-#include <devstat.h>
 
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include <stdexcept>
 #include <cmath>
 #include <fstream>
 #include <numeric>
@@ -54,6 +54,10 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+
+#include <btop_config.hpp>
+#include <btop_shared.hpp>
+#include <btop_tools.hpp>
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -468,25 +472,68 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
+	class dataset {
+		public:
+		uint64_t nread;
+		uint64_t nwritten;
+		string name;
+	};
+
     void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
-        static struct statinfo cur, last;
-        long double etime = 0;
-        u_int64_t total_bytes_read;
-    	u_int64_t total_bytes_write;
-
-		static std::unique_ptr<struct devinfo, decltype(std::free)*> curDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
-		static std::unique_ptr<struct devinfo, decltype(std::free)*> lastDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
-		cur.dinfo = curDevInfo.get();
-        last.dinfo = lastDevInfo.get();
-
-        if (devstat_getdevs(NULL, &cur) != -1) {
-			for (int i = 0; i < cur.dinfo->numdevs; i++) {
-				auto d = cur.dinfo->devices[i];
-				devstat_compute_statistics(&d, NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
-				Logger::debug("dev " + string(d.device_name) + std::to_string(d.unit_number) + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+		FILE *f = popen("sysctl kstat.zfs.zroot.dataset", "r");
+		unordered_flat_map<string, dataset> datasets;
+		if (f) {
+			size_t len = 512;
+			char buf[len];
+			while (not std::feof(f)) {
+				uint64_t nread, nwritten;
+				string datasetname;
+				if (fgets(buf, len, f)) {
+					char *name = std::strtok(buf, ": \n");
+					char *value = std::strtok(NULL, ": \n");
+					if (string(name).find("dataset_name") != string::npos) {
+						datasetname = string(value);
+						dataset d{nread, nwritten, datasetname};
+						datasets[datasetname] = d;
+						Logger::debug("created " + d.name + "(" + std::to_string(d.nread) + "," + std::to_string(d.nwritten) + ")");
+					} else if (string(name).find("nread") != string::npos) {
+						nread = atoll(value);
+					} else if (string(name).find("nwritten") != string::npos) {
+						nwritten = atoll(value);
+					}
+				}
 			}
-			Logger::debug("");
+			std::fclose(f);
 		}
+
+		for (auto &[mountpoint, disk] : disks) {
+			if (datasets.contains(disk.dev)) {
+				Logger::debug("checking dev " + string(disk.dev));
+				int64_t readBytes = datasets[disk.dev].nread;
+				if (disk.io_read.empty())
+					disk.io_read.push_back(0);
+				else
+					disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+				disk.old_io.at(0) = readBytes;
+				while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+				int64_t writeBytes = datasets[disk.dev].nwritten;
+				if (disk.io_write.empty())
+					disk.io_write.push_back(0);
+				else
+					disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+				disk.old_io.at(1) = writeBytes;
+				while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+				// no io times
+				if (disk.io_activity.empty())
+					disk.io_activity.push_back(0);
+				else
+					disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
+				while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+			}
+		}
+
     }
 
 	auto collect(const bool no_update) -> mem_info & {
@@ -565,14 +612,16 @@ namespace Mem {
 			vector<string> found;
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
+				auto fstype = string(stfs[i].f_fstypename);
+				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs") {
+					// in memory filesystems -> not useful to show
+					continue;
+				}
+
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
 				mapping[dev] = mountpoint;
-
-				if (string(stfs[i].f_fstypename) == "autofs") {
-					continue;
-				}
 
 				//? Match filter if not empty
 				if (not filter.empty()) {
