@@ -45,6 +45,7 @@ tab-size = 4
 #include <paths.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <devstat.h>
 
 #include <stdexcept>
 #include <cmath>
@@ -472,30 +473,82 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
-	class dataset {
-		public:
-		uint64_t nread;
-		uint64_t nwritten;
-		string name;
-	};
+	void assign_values(auto& disk, int64_t readBytes, int64_t writeBytes) {
+		if (disk.io_read.empty())
+			disk.io_read.push_back(0);
+		else
+			disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+		disk.old_io.at(0) = readBytes;
+		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
-    void collect_disk(unordered_flat_map<string, disk_info> &disks) {
+		if (disk.io_write.empty())
+			disk.io_write.push_back(0);
+		else
+			disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+		disk.old_io.at(1) = writeBytes;
+		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+		// no io times
+		if (disk.io_activity.empty())
+			disk.io_activity.push_back(0);
+		else
+			disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
+		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+	}
+
+    void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+		// this bit is for 'regular' mounts
+        static struct statinfo cur, last;
+        long double etime = 0;
+        uint64_t total_bytes_read;
+		uint64_t total_bytes_write;
+
+		static std::unique_ptr<struct devinfo, decltype(std::free)*> curDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
+		static std::unique_ptr<struct devinfo, decltype(std::free)*> lastDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
+		cur.dinfo = curDevInfo.get();
+        last.dinfo = lastDevInfo.get();
+
+        if (devstat_getdevs(NULL, &cur) != -1) {
+			for (int i = 0; i < cur.dinfo->numdevs; i++) {
+				auto d = cur.dinfo->devices[i];
+				string devStatName = "/dev/" + string(d.device_name) + std::to_string(d.unit_number);
+				for (auto& [ignored, disk] : disks) { // find matching mountpoints - could be multiple as d.device_name is only ada (and d.unit_number is the device number), while the disk.dev is like /dev/ada0s1
+					if (disk.dev.string().rfind(devStatName, 0) == 0) {
+						devstat_compute_statistics(&d, NULL, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
+						assign_values(disk, total_bytes_read, total_bytes_write);
+						string mountpoint = mapping.at(disk.dev);
+						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+					}
+				}
+
+			}
+			Logger::debug("");
+		}
+
+		// this code is for ZFS mounts
 		FILE *f = popen("sysctl kstat.zfs.zroot.dataset", "r");
-		unordered_flat_map<string, dataset> datasets;
 		if (f) {
 			size_t len = 512;
 			char buf[512];
 			while (not std::feof(f)) {
 				uint64_t nread, nwritten;
-				string datasetname;
+				string datasetname; // this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
 				if (fgets(buf, len, f)) {
 					char *name = std::strtok(buf, ": \n");
 					char *value = std::strtok(NULL, ": \n");
 					if (string(name).find("dataset_name") != string::npos) {
+						// create entry if datasetname matches with anything in mapping
+						// relies on the fact that the dataset name is last value in the list
+						// alternatively you could parse the objset-0x... when this changes, you have a new entry
 						datasetname = string(value);
-						dataset d{nread, nwritten, datasetname};
-						datasets[datasetname] = d; //relies on the fact that the dataset name is last value in the list -- alternatively you could parse the objset-0x... when this changes, you have a new entry
-						Logger::debug("created " + d.name + "(" + std::to_string(d.nread) + "," + std::to_string(d.nwritten) + ")");
+						if (mapping.contains(datasetname)) {
+							string mountpoint = mapping.at(datasetname);
+							if (disks.contains(mountpoint)) {
+								auto& disk = disks.at(mountpoint);
+								assign_values(disk, nread, nwritten);
+							}
+						}
+						Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
 					} else if (string(name).find("nread") != string::npos) {
 						nread = atoll(value);
 					} else if (string(name).find("nwritten") != string::npos) {
@@ -504,34 +557,6 @@ namespace Mem {
 				}
 			}
 			std::fclose(f);
-		}
-
-		for (auto &[mountpoint, disk] : disks) {
-			if (datasets.contains(disk.dev)) {
-				Logger::debug("checking dev " + string(disk.dev));
-				int64_t readBytes = datasets[disk.dev].nread;
-				if (disk.io_read.empty())
-					disk.io_read.push_back(0);
-				else
-					disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
-				disk.old_io.at(0) = readBytes;
-				while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-
-				int64_t writeBytes = datasets[disk.dev].nwritten;
-				if (disk.io_write.empty())
-					disk.io_write.push_back(0);
-				else
-					disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
-				disk.old_io.at(1) = writeBytes;
-				while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-
-				// no io times
-				if (disk.io_activity.empty())
-					disk.io_activity.push_back(0);
-				else
-					disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
-				while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
-			}
 		}
 
     }
@@ -613,7 +638,8 @@ namespace Mem {
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
 				auto fstype = string(stfs[i].f_fstypename);
-				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs") {
+				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs" ||
+				    fstype == "devfs" || fstype == "fdesckfs") {
 					// in memory filesystems -> not useful to show
 					continue;
 				}
@@ -697,7 +723,7 @@ namespace Mem {
 					mem.disks_order.push_back(name);
 
 			disk_ios = 0;
-			collect_disk(disks);
+			collect_disk(disks, mapping);
 			
 			old_uptime = uptime;
 		}
