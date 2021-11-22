@@ -730,7 +730,7 @@ namespace Mem {
 		ifstream meminfo(Shared::procPath / "meminfo");
 		if (meminfo.good()) {
 			bool got_avail = false;
-			for (string label; meminfo >> label;) {
+			for (string label; meminfo.peek() != 'D' and meminfo >> label;) {
 				if (label == "MemFree:") {
 					meminfo >> mem.stats.at("free");
 					mem.stats.at("free") <<= 10;
