@@ -105,14 +105,14 @@ namespace Input {
 			if (key.starts_with("[<")) {
 				std::string_view key_view = key;
 				string mouse_event;
-				if (key_view.starts_with("[<0;") and key_view.ends_with('M')) {
+				if (key_view.starts_with("[<0;") and key_view.find('M') != std::string_view::npos) {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-					mouse_event = "mouse_release";
-					key_view.remove_prefix(4);
-				}
+				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+				// 	mouse_event = "mouse_release";
+				// 	key_view.remove_prefix(4);
+				// }
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
