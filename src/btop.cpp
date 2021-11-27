@@ -28,6 +28,9 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#ifdef __APPLE__
+	#include <CoreFoundation/CoreFoundation.h>
+#endif
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -764,12 +767,34 @@ int main(int argc, char **argv) {
 			}
 		}
 
+	#ifdef __APPLE__
+		if (found.empty()) {
+			CFLocaleRef cflocale = CFLocaleCopyCurrent();
+			CFStringRef id_value = (CFStringRef)CFLocaleGetValue(cflocale, kCFLocaleIdentifier);
+			auto loc_id = CFStringGetCStringPtr(id_value, kCFStringEncodingUTF8);
+			CFRelease(cflocale);
+			std::string cur_locale = (loc_id != nullptr ? loc_id : "");
+			if (cur_locale.empty()) {
+				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
+			}
+			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != NULL) {
+				Logger::debug("Setting LC_ALL=" + cur_locale + ".UTF-8");
+			}
+			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != NULL) {
+				Logger::debug("Setting LC_ALL=en_US.UTF-8");
+			}
+			else {
+				Logger::warning("Failed to set macos locale, continuing anyway.");
+			}
+		}
+	#else
 		if (found.empty() and Global::utf_force)
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
 		else if (found.empty()) {
 			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
+	#endif
 		else if (not set_failure)
 			Logger::debug("Setting LC_ALL=" + found);
 	}
