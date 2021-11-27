@@ -1,3 +1,17 @@
+## v1.1.2
+
+* Fixed: SISEGV on macos Mojave, by @mgradowski
+
+* Fixed: Small optimizations and fixes to Mem::collect() and Input::get()
+
+* Fixed: Wrong unit for net_upload and net_download in config menu
+
+* Fixed: UTF-8 detection on macos
+
+* Fixed: coretemp iteration due to missing tempX_input, by @KFilipek
+
+* Fixed: coretemp ordering
+
 ## v1.1.1
 
 * Added: Partial static build (libgcc, libstdc++) for macos
