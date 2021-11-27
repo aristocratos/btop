@@ -535,33 +535,44 @@ namespace Mem {
 		}
 
 		// this code is for ZFS mounts
-		PipeWrapper f = PipeWrapper("sysctl kstat.zfs.zroot.dataset", "r");
-		if (f()) {
-			size_t len = 512;
-			char buf[512];
-			while (not std::feof(f())) {
-				uint64_t nread, nwritten;
-				string datasetname; // this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
-				if (fgets(buf, len, f())) {
-					char *name = std::strtok(buf, ": \n");
-					char *value = std::strtok(NULL, ": \n");
-					if (string(name).find("dataset_name") != string::npos) {
-						// create entry if datasetname matches with anything in mapping
-						// relies on the fact that the dataset name is last value in the list
-						// alternatively you could parse the objset-0x... when this changes, you have a new entry
-						datasetname = string(value);
-						if (mapping.contains(datasetname)) {
-							string mountpoint = mapping.at(datasetname);
-							if (disks.contains(mountpoint)) {
-								auto& disk = disks.at(mountpoint);
-								assign_values(disk, nread, nwritten);
+		PipeWrapper poolPipe = PipeWrapper("zpool list -H -o name", "r");
+		if (poolPipe()) {
+			while (not std::feof(poolPipe())) {
+				char poolName[512];
+				size_t len = 512;
+				if (fgets(poolName, len, poolPipe())) {
+					poolName[strcspn(poolName, "\n")] = 0;
+					char sysCtl[1024];
+					snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset", poolName);
+					PipeWrapper f = PipeWrapper(sysCtl, "r");
+					if (f()) {
+						char buf[512];
+						while (not std::feof(f())) {
+							uint64_t nread, nwritten;
+							string datasetname; // this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
+							if (fgets(buf, len, f())) {
+								char *name = std::strtok(buf, ": \n");
+								char *value = std::strtok(NULL, ": \n");
+								if (string(name).find("dataset_name") != string::npos) {
+									// create entry if datasetname matches with anything in mapping
+									// relies on the fact that the dataset name is last value in the list
+									// alternatively you could parse the objset-0x... when this changes, you have a new entry
+									datasetname = string(value);
+									if (mapping.contains(datasetname)) {
+										string mountpoint = mapping.at(datasetname);
+										if (disks.contains(mountpoint)) {
+											auto& disk = disks.at(mountpoint);
+											assign_values(disk, nread, nwritten);
+										}
+									}
+									Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
+								} else if (string(name).find("nread") != string::npos) {
+									nread = atoll(value);
+								} else if (string(name).find("nwritten") != string::npos) {
+									nwritten = atoll(value);
+								}
 							}
 						}
-						Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
-					} else if (string(name).find("nread") != string::npos) {
-						nread = atoll(value);
-					} else if (string(name).find("nwritten") != string::npos) {
-						nwritten = atoll(value);
 					}
 				}
 			}
