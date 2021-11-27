@@ -496,6 +496,15 @@ namespace Mem {
 		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 	}
 
+	class PipeWrapper {
+		public:
+			PipeWrapper(const char *file, const char *mode) {fd = popen(file, mode);}
+			virtual ~PipeWrapper() {std::fclose(fd);}
+			auto operator()() -> FILE* { return fd;};
+		private:
+			FILE *fd;
+	};
+
     void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
 		// this bit is for 'regular' mounts
         static struct statinfo cur, last;
@@ -526,14 +535,14 @@ namespace Mem {
 		}
 
 		// this code is for ZFS mounts
-		FILE *f = popen("sysctl kstat.zfs.zroot.dataset", "r");
-		if (f) {
+		PipeWrapper f = PipeWrapper("sysctl kstat.zfs.zroot.dataset", "r");
+		if (f()) {
 			size_t len = 512;
 			char buf[512];
-			while (not std::feof(f)) {
+			while (not std::feof(f())) {
 				uint64_t nread, nwritten;
 				string datasetname; // this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
-				if (fgets(buf, len, f)) {
+				if (fgets(buf, len, f())) {
 					char *name = std::strtok(buf, ": \n");
 					char *value = std::strtok(NULL, ": \n");
 					if (string(name).find("dataset_name") != string::npos) {
@@ -556,7 +565,6 @@ namespace Mem {
 					}
 				}
 			}
-			std::fclose(f);
 		}
 
     }
