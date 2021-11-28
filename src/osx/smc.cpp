@@ -63,6 +63,11 @@ namespace Cpu {
 			snprintf(key, 5, "TC%1dc", core);
 		}
 		result = SMCReadKey(key, &val);
+		if (result != kIOReturnSuccess) {
+			// try again with C
+			snprintf(key, 5, "TC%1dC", core);
+			result = SMCReadKey(key, &val);
+		}
 		if (result == kIOReturnSuccess) {
 			if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
 				// convert sp78 value to temperature

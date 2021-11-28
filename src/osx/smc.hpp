@@ -25,7 +25,8 @@
 #define DATATYPE_SP78 "sp78"
 
 // key values
-#define SMC_KEY_CPU_TEMP "TC0P"
+#define SMC_KEY_CPU_TEMP "TC0P" // proximity temp?
+#define SMC_KEY_CPU_DIE_TEMP "TC0D" // die temp?
 #define SMC_KEY_CPU1_TEMP "TC1C"
 #define SMC_KEY_CPU2_TEMP "TC2C"  // etc
 #define SMC_KEY_FAN0_RPM_CUR "F0Ac"
