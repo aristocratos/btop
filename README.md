@@ -275,6 +275,13 @@ Also needs a UTF8 locale and a font that covers:
   sudo zypper in btop
   ```
 
+**Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
+
+* **[Homebrew](https://formulae.brew.sh/formula/btop)**
+  ```bash
+  brew install btop
+  ```
+
 ## Compilation Linux
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
