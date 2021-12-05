@@ -658,7 +658,7 @@ namespace Mem {
 			for (int i = 0; i < count; i++) {
 				auto fstype = string(stfs[i].f_fstypename);
 				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs" ||
-				    fstype == "devfs" || fstype == "fdesckfs") {
+				    fstype == "fdesckfs") {
 					// in memory filesystems -> not useful to show
 					continue;
 				}
