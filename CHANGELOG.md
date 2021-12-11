@@ -1,3 +1,17 @@
+## v1.1.3
+
+* Added: New theme ayu, by @AlphaNecron
+
+* Added: New theme gruvbox_dark_v2, by @pietryszak
+
+* Fixed: Macos cpu coretemp for Intel, by @joske
+
+* Added: New theme OneDark, by @vtmx
+
+* Fixed: Fixed network graph scale int rollover
+
+* Fixed: Suspected possibility of very rare stall in Input::clear()
+
 ## v1.1.2
 
 * Fixed: SISEGV on macos Mojave, by @mgradowski
