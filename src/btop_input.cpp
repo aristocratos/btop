@@ -175,10 +175,11 @@ namespace Input {
 	}
 
 	void clear() {
-		auto first_num = cin.rdbuf()->in_avail();
-		while (cin.rdbuf()->in_avail() == first_num) {
-			if (first_num-- == 0) break;
-			cin.ignore(1);
+		if (auto first_num = cin.rdbuf()->in_avail(); first_num > 0) {
+			while (cin.rdbuf()->in_avail() == first_num) {
+				if (first_num-- <= 0) break;
+				cin.ignore(1);
+			}
 		}
 	}
 
