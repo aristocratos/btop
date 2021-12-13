@@ -48,7 +48,7 @@ namespace Config {
 	extern vector<string> available_batteries;
 	extern int current_preset;
 
-	//* Check if string only contains space seperated valid names for boxes
+	//* Check if string only contains space separated valid names for boxes
 	bool check_boxes(const string& boxes);
 
 	//* Toggle box and update config string shown_boxes
