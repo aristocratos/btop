@@ -1,0 +1,59 @@
+.TH BTOP 1 "December 2021" "1.1.3"
+.SH NAME
+BTOP \- Resource monitor that shows usage and stats for processor, memory, disks, network and processes.
+.SH SYNOPSIS
+.B btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]
+
+.SH DESCRIPTION
+btop is a modern and colorful command line resource monitor that shows usage and stats for processor,
+memory, disks, network and processes.
+
+btop beatures:
+ - Easy to use, with a game inspired menu system.
+ - Full mouse support, all buttons with a highlighted key is clickable and mouse scroll works in process list and menu boxes.
+ - Fast and responsive UI with UP, DOWN keys process selection.
+ - Function for showing detailed stats for selected process.
+ - Ability to filter processes.
+ - Easy switching between sorting options.
+ - Tree view of processes.
+ - Send any signal to selected process.
+ - UI menu for changing all config file options.
+ - Auto scaling graph for network usage.
+ - Shows IO activity and speeds for disks
+ - Battery meter
+ - Selectable symbols for the graphs
+ - Custom presets
+ - And more...
+.SH "COMMAND-LINE OPTIONS"
+
+optional arguments:
+.TP
+\fB\-h, \-\-help
+show this help message and exit
+.TP
+\fB\-v, \-\-version
+show version info and exit
+.TP
+\fB\-lc, \-\-low-color
+disable truecolor, converts 24-bit colors to 256-color
+.TP
+\fB\-t, \-\-tty_on
+force (ON) tty mode, max 16 colors and tty friendly graph symbols
+.TP
+  +t, \-\-tty_off
+force (OFF) tty mode
+.TP
+\fB\-p, \-\-preset <id>
+start with preset, integer value between 0-9
+.TP
+\fB\-\-utf-force
+force start even if no UTF-8 locale was detected
+.TP
+\fB\-\-debug
+start in DEBUG mode: shows microsecond timer for information collect
+and screen draw functions and sets loglevel to DEBUG
+
+.SH SEE ALSO
+.BR https://github.com/aristocratos/btop
+.SH AUTHOR
+btop was written by Aristocratos.
