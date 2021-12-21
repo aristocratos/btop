@@ -50,32 +50,39 @@ namespace Cpu {
         IOServiceClose(conn);
 	}
 
+	long long SMCConnection::getSMCTemp(char *key) {
+		SMCVal_t val;
+		kern_return_t result;
+		result = SMCReadKey(key, &val);
+		if (result == kIOReturnSuccess) {
+			if (val.dataSize > 0) {
+				if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
+					// convert sp78 value to temperature
+					int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
+					return static_cast<long long>(intValue / 256.0);
+				}
+			}
+		}
+		return -1;
+	}
+
 	// core means physical core in SMC, while in core map it's cpu threads :-/ Only an issue on hackintosh?
 	// this means we can only get the T per physical core
 	// another issue with the SMC API is that the key is always 4 chars -> what with systems with more than 9 physical cores?
 	// no Mac models with more than 18 threads are released, so no problem so far
 	// according to VirtualSMC docs (hackintosh fake SMC) the enumeration follows with alphabetic chars - not implemented yet here (nor in VirtualSMC)
 	long long SMCConnection::getTemp(int core) {
-		SMCVal_t val;
-		kern_return_t result;
 		char key[] = SMC_KEY_CPU_TEMP;
 		if (core >= 0) {
 			snprintf(key, 5, "TC%1dc", core);
 		}
-		result = SMCReadKey(key, &val);
-		if (result != kIOReturnSuccess) {
+		long long result = getSMCTemp(key);
+		if (result == -1) {
 			// try again with C
 			snprintf(key, 5, "TC%1dC", core);
-			result = SMCReadKey(key, &val);
+			result = getSMCTemp(key);
 		}
-		if (result == kIOReturnSuccess) {
-			if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
-				// convert sp78 value to temperature
-				int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
-				return static_cast<long long>(intValue / 256.0);
-			}
-		}
-		return -1;
+		return result;
 	}
 
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {

@@ -68,6 +68,7 @@ namespace Cpu {
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors = false, cpu_temp_only = false;
+	int core_offset = 0;
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -241,21 +242,34 @@ namespace Cpu {
 	}
 
 	bool get_sensors() {
+		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
 			ThermalSensors sensors;
 			if (sensors.getSensors() > 0) {
+				Logger::debug("M1 sensors found");
 				got_sensors = true;
 				cpu_temp_only = true;
 				macM1 = true;
 			} else {
 				// try SMC (intel)
+				Logger::debug("checking intel");
 				SMCConnection smcCon;
 				try {
 					long long t = smcCon.getTemp(-1);  // check if we have package T
 					if (t > -1) {
+						Logger::debug("intel sensors found");
 						got_sensors = true;
+						t = smcCon.getTemp(0);
+						if (t == -1) {
+							// for some macs the core offset is 1 - check if we get a sane value with 1
+							if (smcCon.getTemp(1) > -1) {
+								Logger::debug("intel sensors with offset 1");
+								core_offset = 1;
+							}
+						}
 					} else {
+						Logger::debug("no intel sensors found");
 						got_sensors = false;
 					}
 				} catch (std::runtime_error &e) {
@@ -282,14 +296,12 @@ namespace Cpu {
 				long long packageT = smcCon.getTemp(-1); // -1 returns package T
 				current_cpu.temp.at(0).push_back(packageT);
 
-				if (Config::getB("show_coretemp") and not cpu_temp_only) {
-					for (int core = 0; core < Shared::coreCount; core++) {
-						long long temp = smcCon.getTemp(core / threadsPerCore); // same temp for all threads of same physical core
-						if (cmp_less(core + 1, current_cpu.temp.size())) {
-							current_cpu.temp.at(core + 1).push_back(temp);
-							if (current_cpu.temp.at(core + 1).size() > 20)
-								current_cpu.temp.at(core + 1).pop_front();
-						}
+				for (int core = 0; core < Shared::coreCount; core++) {
+					long long temp = smcCon.getTemp((core / threadsPerCore) + core_offset); // same temp for all threads of same physical core
+					if (cmp_less(core + 1, current_cpu.temp.size())) {
+						current_cpu.temp.at(core + 1).push_back(temp);
+						if (current_cpu.temp.at(core + 1).size() > 20)
+							current_cpu.temp.at(core + 1).pop_front();
 					}
 				}
 			}
