@@ -1,3 +1,13 @@
+## v1.1.4
+
+* Fixed: Create dependency files in build directory when compiling, by @stwnt
+
+* Fixed: fix CPU temp fallback on macOS, by @joske
+
+* Changed: From rng::sort() to rng::stable_sort() for more stability
+
+* Fixed: in_avail() can always be zero, by @pg83
+
 ## v1.1.3
 
 * Added: New theme ayu, by @AlphaNecron
