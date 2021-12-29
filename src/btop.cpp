@@ -237,15 +237,15 @@ void clean_quit(int sig) {
 		std::cerr << Global::fg_red << "ERROR: " << Global::fg_white << Global::exit_error_msg << Fx::reset << endl;
 	}
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
-	close(0);
+
+	const auto excode = (sig != -1 ? sig : 0);
+
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
 #ifndef __APPLE__
-	if (Tools::active_locks > 0) {
-		quick_exit((sig != -1 ? sig : 0));
-	}
+	quick_exit(excode);
 #endif
 
-	if (sig != -1) exit(sig);
+	exit(excode);
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
