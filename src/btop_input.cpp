@@ -82,10 +82,14 @@ namespace Input {
 
 	struct InputThr {
 		InputThr() : thr(run, this) {
+			thr.detach();
 		}
 
 		static void run(InputThr* that) {
-			that->runImpl();
+			try {
+				that->runImpl();
+			} catch (...) {}
+			delete that;
 		}
 
 		void runImpl() {
@@ -120,7 +124,6 @@ namespace Input {
 		}
 
 		static InputThr& instance() {
-			// intentional memory leak, to simplify shutdown process
 			static InputThr* input = new InputThr();
 
 			return *input;
