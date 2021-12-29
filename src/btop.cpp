@@ -241,11 +241,11 @@ void clean_quit(int sig) {
 	const auto excode = (sig != -1 ? sig : 0);
 
 	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
-#ifndef __APPLE__
+#ifdef __APPLE__
+	_Exit(excode);
+#else
 	quick_exit(excode);
 #endif
-
-	exit(excode);
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
