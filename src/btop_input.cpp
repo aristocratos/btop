@@ -19,6 +19,8 @@ tab-size = 4
 #include <iostream>
 #include <ranges>
 #include <vector>
+#include <thread>
+#include <mutex>
 
 #include <btop_input.hpp>
 #include <btop_tools.hpp>
@@ -78,14 +80,66 @@ namespace Input {
 	deque<string> history(50, "");
 	string old_filter;
 
+	struct InputThr {
+		InputThr() : thr(run, this) {
+		}
+
+		static void run(InputThr* that) {
+			that->runImpl();
+		}
+
+		void runImpl() {
+			char ch = 0;
+
+			// TODO(pg83): read whole buffer
+			while (cin.get(ch)) {
+				std::lock_guard<std::mutex> g(lock);
+				current.push_back(ch);
+				if (current.size() > 100) {
+					current.clear();
+				}
+			}
+		}
+
+		size_t avail() {
+			std::lock_guard<std::mutex> g(lock);
+
+			return current.size();
+		}
+
+		std::string get() {
+			std::string res;
+
+			{
+				std::lock_guard<std::mutex> g(lock);
+
+				res.swap(current);
+			}
+
+			return res;
+		}
+
+		static InputThr& instance() {
+			// intentional memory leak, to simplify shutdown process
+			static InputThr* input = new InputThr();
+
+			return *input;
+		}
+
+		std::string current;
+		// TODO(pg83): use std::conditional_variable instead of sleep
+		std::mutex lock;
+		std::thread thr;
+	};
+
 	bool poll(int timeout) {
-		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
+		if (timeout < 1) return InputThr::instance().avail() > 0;
 		while (timeout > 0) {
 			if (interrupt) {
 				interrupt = false;
 				return false;
 			}
-			if (cin.rdbuf()->in_avail() > 0) return true;
+			if (InputThr::instance().avail() > 0) return true;
 			sleep_ms(timeout < 10 ? timeout : 10);
 			timeout -= 10;
 		}
@@ -93,9 +147,7 @@ namespace Input {
 	}
 
 	string get() {
-		string key;
-		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) clear();
+		string key = InputThr::instance().get();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -168,19 +220,14 @@ namespace Input {
 	}
 
 	string wait() {
-		while (cin.rdbuf()->in_avail() < 1) {
+		while (InputThr::instance().avail() < 1) {
 			sleep_ms(10);
 		}
 		return get();
 	}
 
 	void clear() {
-		if (auto first_num = cin.rdbuf()->in_avail(); first_num > 0) {
-			while (cin.rdbuf()->in_avail() == first_num) {
-				if (first_num-- <= 0) break;
-				cin.ignore(1);
-			}
-		}
+		// do not need it, actually
 	}
 
 	void process(const string& key) {

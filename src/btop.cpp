@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <csignal>
+#include <clocale>
 #include <pthread.h>
 #include <thread>
 #include <numeric>
@@ -237,14 +238,14 @@ void clean_quit(int sig) {
 	}
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
-	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
-#ifndef __APPLE__
-	if (Tools::active_locks > 0) {
-		quick_exit((sig != -1 ? sig : 0));
-	}
-#endif
+	const auto excode = (sig != -1 ? sig : 0);
 
-	if (sig != -1) exit(sig);
+	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
+#ifdef __APPLE__
+	_Exit(excode);
+#else
+	quick_exit(excode);
+#endif
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
