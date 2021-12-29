@@ -507,8 +507,8 @@ truecolor = True
 force_tty = False
 
 #* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.
-#* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positons, G=graph symbol to use for box.
-#* Use withespace " " as seprator between different presets.
+#* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positions, G=graph symbol to use for box.
+#* Use withespace " " as separator between different presets.
 #* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
 presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
 
