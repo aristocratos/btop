@@ -927,10 +927,18 @@ namespace Net {
 					}
 
 					//? Update speed, total and top values
+					if (val < saved_stat.last) {
+						saved_stat.rollover += saved_stat.last;
+						saved_stat.last = 0;
+					}
+					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+						saved_stat.rollover = 0;
+						saved_stat.last = 0;
+					}
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
-					if (saved_stat.offset > val) saved_stat.offset = 0;
-					saved_stat.total = val - saved_stat.offset;
+					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
+					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
 					saved_stat.last = val;
 
 					//? Add values to graph

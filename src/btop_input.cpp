@@ -517,8 +517,8 @@ namespace Input {
 						ndev.stat.at("upload").offset = 0;
 					}
 					else {
-						ndev.stat.at("download").offset = ndev.stat.at("download").last;
-						ndev.stat.at("upload").offset = ndev.stat.at("upload").last;
+						ndev.stat.at("download").offset = ndev.stat.at("download").last + ndev.stat.at("download").rollover;
+						ndev.stat.at("upload").offset = ndev.stat.at("upload").last + ndev.stat.at("upload").rollover;
 					}
 					no_update = false;
 				}

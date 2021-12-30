@@ -171,7 +171,7 @@ namespace Net {
 	extern unordered_flat_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed = 0, top = 0, total = 0, last = 0, offset = 0;
+		uint64_t speed = 0, top = 0, total = 0, last = 0, offset = 0, rollover = 0;
 	};
 
 	struct net_info {
