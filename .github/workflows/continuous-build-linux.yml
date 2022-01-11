@@ -52,7 +52,6 @@ jobs:
           - mipsel-linux-musln32
           - mipsel-linux-musln32sf
           - mipsel-linux-muslsf
-          - or1k-linux-musl
           - powerpc-linux-musl
           - powerpc-linux-muslsf
           - powerpc64-linux-musl
@@ -62,14 +61,16 @@ jobs:
           - riscv32-linux-musl
           - riscv64-linux-musl
           - s390x-linux-musl
-          - sh2-linux-musl
-          - sh2-linux-muslfdpic
-          - sh2eb-linux-musl
-          - sh2eb-linux-muslfdpic
-          - sh4-linux-musl
-          - sh4eb-linux-musl
           - x86_64-linux-musl
           - x86_64-linux-muslx32
+
+    # - or1k-linux-musl
+    # - sh2-linux-musl
+    # - sh2-linux-muslfdpic
+    # - sh2eb-linux-musl
+    # - sh2eb-linux-muslfdpic
+    # - sh4-linux-musl
+    # - sh4eb-linux-musl
 
     runs-on: ubuntu-latest
     container: muslcc/x86_64:${{ matrix.toolchain }}
@@ -85,7 +86,7 @@ jobs:
         run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
       - name: Build
-        run: make STATIC=true STRIP=true QUIET=true
+        run: make STATIC=true STRIP=true
 
       - name: Make executable
         run: chmod +x bin/*

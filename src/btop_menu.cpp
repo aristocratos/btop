@@ -126,7 +126,7 @@ namespace Menu {
 		{"z", "Toggle totals reset for current network device"},
 		{"a", "Toggle auto scaling for the network graphs."},
 		{"y", "Toggle synced scaling mode for network graphs."},
-		{"f", "To enter a process filter."},
+		{"f, /", "To enter a process filter."},
 		{"delete", "Clear any entered filter."},
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
@@ -486,13 +486,13 @@ namespace Menu {
 			{"net_download",
 				"Fixed network graph download value.",
 				"",
-				"Value in Mebibytes, default \"100\".",
+				"Value in Mebibits, default \"100\".",
 				"",
 				"Can be toggled with auto button."},
 			{"net_upload",
 				"Fixed network graph upload value.",
 				"",
-				"Value in Mebibytes, default \"100\".",
+				"Value in Mebibits, default \"100\".",
 				"",
 				"Can be toggled with auto button."},
 			{"net_auto",
@@ -892,10 +892,7 @@ namespace Menu {
 				};
 			}
 		}
-		else if (key == "q") {
-			exit(0);
-		}
-		else if (is_in(key, "escape", "m", "mouse_click")) {
+		else if (is_in(key, "escape", "q", "m", "mouse_click")) {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
@@ -916,7 +913,7 @@ namespace Menu {
 					currentMenu = Menus::Help;
 					return Switch;
 				case Quit:
-					exit(0);
+					clean_quit(0);
 			}
 		}
 		else if (is_in(key, "down", "tab", "mouse_scroll_down", "j")) {
@@ -1142,8 +1139,8 @@ namespace Menu {
 				auto& optList = optionsList.at(option).get();
 				int i = v_index(optList, Config::getS(option));
 
-				if (key == "right" and ++i >= (int)optList.size()) i = 0;
-				else if (key == "left" and --i < 0) i = optList.size() - 1;
+				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
+				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
 				Config::set(option, optList.at(i));
 
 				if (option == "color_theme")

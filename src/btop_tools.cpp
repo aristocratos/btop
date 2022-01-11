@@ -23,10 +23,10 @@ tab-size = 4
 #include <sstream>
 #include <iomanip>
 #include <utility>
+#include <ranges>
 #include <robin_hood.h>
 
 #include <unistd.h>
-#include <limits.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
@@ -50,7 +50,6 @@ namespace Term {
 	atomic<int> width = 0;
 	atomic<int> height = 0;
 	string current_tty;
-	char* custombuf;
 
 	namespace {
 		struct termios initial_settings;
@@ -126,9 +125,6 @@ namespace Term {
 				linebuffered(false);
 				refresh();
 
-				//? Set 1MB buffer for cout
-				std::cout.rdbuf()->pubsetbuf(custombuf, 1048576);
-
 				cout << alt_screen << hide_cursor << mouse_on << flush;
 				Global::resized = false;
 			}
@@ -146,6 +142,25 @@ namespace Term {
 }
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
+
+namespace Fx {
+	string uncolor(const string& s) {
+		string out = s;
+		for (size_t offset = 0, start_pos = 0, end_pos = 0, next_pos = 0;;) {
+			if ((start_pos = next_pos > 0 ? next_pos : out.find('\x1b', offset)) == string::npos)
+				break;
+			offset = ++start_pos;
+			if ((end_pos = out.find('m', offset)) == string::npos)
+				break;
+			else if (next_pos = out.find('\x1b', offset); not isdigit(out[end_pos - 1]) or end_pos - start_pos > next_pos - start_pos)
+				continue;
+			out.replace(start_pos, end_pos - start_pos, "");
+			next_pos = 0;
+		}
+		out.shrink_to_fit();
+		return out;
+	}
+}
 
 namespace Tools {
 
@@ -395,6 +410,18 @@ namespace Logger {
 	size_t loglevel;
 	fs::path logfile;
 
+	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
+	class lose_priv {
+		int status = -1;
+	public:
+		lose_priv() {
+			if (geteuid() != Global::real_uid) this->status = seteuid(Global::real_uid);
+		}
+		~lose_priv() {
+			if (status == 0) status = seteuid(Global::set_uid);
+		}
+	};
+
 	void set(const string& level) {
 		loglevel = v_index(log_levels, level);
 	}
@@ -402,6 +429,7 @@ namespace Logger {
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
 		atomic_lock lck(busy, true);
+		lose_priv neutered{};
 		std::error_code ec;
 		try {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {

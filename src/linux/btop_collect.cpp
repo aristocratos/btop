@@ -21,7 +21,6 @@ tab-size = 4
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <regex>
 #include <sys/statvfs.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -217,9 +216,9 @@ namespace Cpu {
 					name += n + ' ';
 				}
 				name.pop_back();
-				for (const auto& reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-										regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-					name = std::regex_replace(name, reg, "");
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
 				}
 				name = trim(name);
 			}
@@ -241,20 +240,36 @@ namespace Cpu {
 					if (s_contains(add_path, "coretemp"))
 						got_coretemp = true;
 
-					if (fs::exists(add_path / "temp1_input")) {
-						search_paths.push_back(add_path);
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						if (string(file.path().filename()) == "device") {
+							for (const auto & dev_file : fs::directory_iterator(file.path())) {
+								string dev_filename = dev_file.path().filename();
+								if (dev_filename.starts_with("temp") and dev_filename.ends_with("_input")) {
+									search_paths.push_back(file.path());
+									break;
+								}
+							}
+						}
+
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input")) {
+							search_paths.push_back(add_path);
+							break;
+						}
 					}
-					else if (fs::exists(add_path / "device/temp1_input"))
-						search_paths.push_back(add_path / "device");
 				}
 			}
 			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 					fs::path add_path = fs::canonical(d.path());
 
-					if (fs::exists(d.path() / "temp1_input") and not v_contains(search_paths, add_path)) {
-						search_paths.push_back(add_path);
-						got_coretemp = true;
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input") and not v_contains(search_paths, add_path)) {
+								search_paths.push_back(add_path);
+								got_coretemp = true;
+								break;
+						}
 					}
 				}
 			}
@@ -262,9 +277,17 @@ namespace Cpu {
 			if (not search_paths.empty()) {
 				for (const auto& path : search_paths) {
 					const string pname = readfile(path / "name", path.filename());
-					for (int i = 1; fs::exists(path / string("temp" + to_string(i) + "_input")); i++) {
-						const string basepath = path / string("temp" + to_string(i) + "_");
-						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(i));
+					for (const auto & file : fs::directory_iterator(path)) {
+						const string file_suffix = "input";
+						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						string file_path = file.path();
+
+						if (!s_contains(file_path, file_suffix)) {
+							continue;
+						}
+
+						const string basepath = file_path.erase(file_path.find(file_suffix), file_suffix.length());
+						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
 						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
 						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
@@ -310,10 +333,19 @@ namespace Cpu {
 		}
 		catch (...) {}
 
-		if (not got_coretemp or core_sensors.empty()) cpu_temp_only = true;
+		if (not got_coretemp or core_sensors.empty()) {
+			cpu_temp_only = true;
+		}
+		else {
+			rng::sort(core_sensors, rng::less{});
+			rng::stable_sort(core_sensors, [](const auto& a, const auto& b){
+				return a.size() < b.size();
+			});
+		}
+
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
-				if (s_contains(str_to_lower(name), "cpu")) {
+				if (s_contains(str_to_lower(name), "cpu") or s_contains(str_to_lower(name), "k10temp")) {
 					cpu_sensor = name;
 					break;
 				}
@@ -731,7 +763,7 @@ namespace Mem {
 		ifstream meminfo(Shared::procPath / "meminfo");
 		if (meminfo.good()) {
 			bool got_avail = false;
-			for (string label; meminfo >> label;) {
+			for (string label; meminfo.peek() != 'D' and meminfo >> label;) {
 				if (label == "MemFree:") {
 					meminfo >> mem.stats.at("free");
 					mem.stats.at("free") <<= 10;
@@ -905,8 +937,8 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto& [mountpoint, disk] : disks) {
 					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
-					struct statvfs vfs;
-					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+					struct statvfs64 vfs;
+					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
 						continue;
 					}
@@ -1066,7 +1098,7 @@ namespace Net {
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
 					uint64_t val = saved_stat.last;
-					try { val = max((uint64_t)stoul(readfile(sys_file, "0")), val); }
+					try { val = max((uint64_t)stoull(readfile(sys_file, "0")), val); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 

@@ -479,7 +479,7 @@ namespace Config {
 		}
 		catch (const std::exception& e) {
 			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
-			exit(1);
+			clean_quit(1);
 		}
 
 		locked = false;
@@ -530,9 +530,7 @@ namespace Config {
 			vector<string> valid_names;
 			for (auto &n : descriptions)
 				valid_names.push_back(n[0]);
-			string v_string;
-			getline(cread, v_string, '\n');
-			if (not s_contains(v_string, Global::Version))
+			if (string v_string; cread.peek() != '#' or (getline(cread, v_string, '\n') and not s_contains(v_string, Global::Version)))
 				write_new = true;
 			while (not cread.eof()) {
 				cread >> std::ws;
@@ -589,6 +587,7 @@ namespace Config {
 	void write() {
 		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
+		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version;

@@ -97,7 +97,7 @@ namespace Input {
 	string get() {
 		string key;
 		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
+		if (cin.rdbuf()->in_avail() > 0) clear();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -107,14 +107,14 @@ namespace Input {
 			if (key.starts_with("[<")) {
 				std::string_view key_view = key;
 				string mouse_event;
-				if (key_view.starts_with("[<0;") and key_view.ends_with('M')) {
+				if (key_view.starts_with("[<0;") and key_view.find('M') != std::string_view::npos) {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-					mouse_event = "mouse_release";
-					key_view.remove_prefix(4);
-				}
+				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+				// 	mouse_event = "mouse_release";
+				// 	key_view.remove_prefix(4);
+				// }
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
@@ -177,7 +177,12 @@ namespace Input {
 	}
 
 	void clear() {
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		if (auto first_num = cin.rdbuf()->in_avail(); first_num > 0) {
+			while (cin.rdbuf()->in_avail() == first_num) {
+				if (first_num-- <= 0) break;
+				cin.ignore(1);
+			}
+		}
 	}
 
 	void process(const string& key) {
@@ -268,7 +273,7 @@ namespace Input {
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "f") {
+				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;

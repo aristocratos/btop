@@ -46,10 +46,10 @@ If btop++ is crashing at start the following steps could be helpful:
 
 (Extra helpful if compiled with `make OPTFLAGS="-O0 -g"`)
 
-1. run `gdb btop`
+1. run (linux): `gdb btop` (macos): `lldb btop`
 
-2. `r` to run, wait for crash and press enter
+2. `r` to run, wait for crash and press enter if prompted, CTRL+L to clear screen if needed.
 
-3. `thread apply all bt` to get backtrace for all threads
+3. (gdb): `thread apply all bt` (lldb): `bt all` to get backtrace for all threads
 
 4. Copy and paste the backtrace here:

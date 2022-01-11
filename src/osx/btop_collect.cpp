@@ -26,6 +26,7 @@ tab-size = 4
 #include <mach/mach_types.h>
 #include <mach/processor_info.h>
 #include <mach/vm_statistics.h>
+#include <mach/mach_time.h>
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <netdb.h>
@@ -67,6 +68,7 @@ namespace Cpu {
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors = false, cpu_temp_only = false;
+	int core_offset = 0;
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -106,7 +108,8 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
+	long pageSize, coreCount, clkTck, physicalCoreCount, arg_max;
+	double machTck;
 	int totalMem_len;
 
 	void init() {
@@ -127,6 +130,14 @@ namespace Shared {
 		if (pageSize <= 0) {
 			pageSize = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+		}
+
+		mach_timebase_info_data_t convf;
+		if (mach_timebase_info(&convf) == KERN_SUCCESS) {
+			machTck = convf.numer / convf.denom;
+		} else {
+			Logger::warning("Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be incorrect.");
+			machTck = 100;
 		}
 
 		clkTck = sysconf(_SC_CLK_TCK);
@@ -170,6 +181,7 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
+	bool macM1 = false;
 	tuple<int, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
@@ -219,30 +231,45 @@ namespace Cpu {
 				name += n + ' ';
 			}
 			name.pop_back();
-			for (const auto &reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-			                        regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-				name = std::regex_replace(name, reg, "");
-			}
-			name = trim(name);
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
+				}
+				name = trim(name);
 		}
 
 		return name;
 	}
 
 	bool get_sensors() {
+		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
 			ThermalSensors sensors;
-			if (sensors.getSensors().size() > 0) {
+			if (sensors.getSensors() > 0) {
+				Logger::debug("M1 sensors found");
 				got_sensors = true;
+				cpu_temp_only = true;
+				macM1 = true;
 			} else {
 				// try SMC (intel)
+				Logger::debug("checking intel");
 				SMCConnection smcCon;
 				try {
 					long long t = smcCon.getTemp(-1);  // check if we have package T
 					if (t > -1) {
+						Logger::debug("intel sensors found");
 						got_sensors = true;
+						t = smcCon.getTemp(0);
+						if (t == -1) {
+							// for some macs the core offset is 1 - check if we get a sane value with 1
+							if (smcCon.getTemp(1) > -1) {
+								Logger::debug("intel sensors with offset 1");
+								core_offset = 1;
+							}
+						}
 					} else {
+						Logger::debug("no intel sensors found");
 						got_sensors = false;
 					}
 				} catch (std::runtime_error &e) {
@@ -257,41 +284,29 @@ namespace Cpu {
 	void update_sensors() {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
-			ThermalSensors sensors;
-			auto sensor = sensors.getSensors();
-			if (sensor.size() > 0) {
-				current_cpu.temp.at(0).push_back((long long)sensor[0]);
+			if (macM1) {
+				ThermalSensors sensors;
+				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
 
-				if (Config::getB("show_coretemp") and not cpu_temp_only) {
-					for (int core = 1; core <= Shared::coreCount; core++) {
-						long long temp = (long long)sensor[core];
-						if (cmp_less(core, current_cpu.temp.size())) {
-							current_cpu.temp.at(core).push_back(temp);
-							if (current_cpu.temp.at(core).size() > 20)
-								current_cpu.temp.at(core).pop_front();
-						}
-					}
-				}
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
 				long long packageT = smcCon.getTemp(-1); // -1 returns package T
 				current_cpu.temp.at(0).push_back(packageT);
 
-				if (Config::getB("show_coretemp") and not cpu_temp_only) {
-					for (int core = 0; core < Shared::coreCount; core++) {
-						long long temp = smcCon.getTemp(core / threadsPerCore); // same temp for all threads of same physical core
-						if (cmp_less(core + 1, current_cpu.temp.size())) {
-							current_cpu.temp.at(core + 1).push_back(temp);
-							if (current_cpu.temp.at(core + 1).size() > 20)
-								current_cpu.temp.at(core + 1).pop_front();
-						}
+				for (int core = 0; core < Shared::coreCount; core++) {
+					long long temp = smcCon.getTemp((core / threadsPerCore) + core_offset); // same temp for all threads of same physical core
+					if (cmp_less(core + 1, current_cpu.temp.size())) {
+						current_cpu.temp.at(core + 1).push_back(temp);
+						if (current_cpu.temp.at(core + 1).size() > 20)
+							current_cpu.temp.at(core + 1).pop_front();
 					}
 				}
 			}
 		} catch (std::runtime_error &e) {
+			got_sensors = false;
 			Logger::error("failed getting CPU temp");
 		}
 	}
@@ -1116,7 +1131,7 @@ namespace Proc {
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
 		gettimeofday(&currentTime, NULL);
-		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); // only interested in second granularity, so ignoring tc_usec
+		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - (detailed.entry.cpu_s / 1'000'000));
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
@@ -1182,19 +1197,20 @@ namespace Proc {
 					Logger::error("Failed getting CPU load info");
 				}
 				cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
-				cputimes = (cpu_load_info[0].cpu_ticks[CPU_STATE_USER]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_NICE]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_SYSTEM]
-						+ cpu_load_info[0].cpu_ticks[CPU_STATE_IDLE]);
+				cputimes = 0;
+				for (natural_t i = 0; i < cpu_count; i++) {
+					cputimes 	+= (cpu_load_info[i].cpu_ticks[CPU_STATE_USER]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]
+								+ cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
+				}
 			}
 
 			should_filter = true;
 			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 			vector<size_t> found;
 			size_t size = 0;
-			struct timeval currentTime;
-			gettimeofday(&currentTime, NULL);
-			const double timeNow = currentTime.tv_sec + (currentTime.tv_usec / 1'000'000);
+			const auto timeNow = time_micros();
 
 			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
@@ -1205,7 +1221,7 @@ namespace Proc {
 			if (sysctl(mib, 4, processes.get(), &size, NULL, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
-					struct kinfo_proc kproc = processes.get()[i];
+					struct kinfo_proc& kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
 					found.push_back(pid);
@@ -1230,18 +1246,18 @@ namespace Proc {
 						new_proc.name = f_name.substr(lastSlash + 1);
 						//? Get process arguments if possible, fallback to process path in case of failure
 						if (Shared::arg_max > 0) {
-							string proc_args;
-							proc_args.resize(Shared::arg_max);
+							std::unique_ptr<char[]> proc_chars(new char[Shared::arg_max]);
 							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
 							size_t argmax = Shared::arg_max;
-							if (sysctl(mib, 3, proc_args.data(), &argmax, NULL, 0) == 0) {
-								int argc;
-								memcpy(&argc, &proc_args[0], sizeof(argc));
+							if (sysctl(mib, 3, proc_chars.get(), &argmax, NULL, 0) == 0) {
+								int argc = 0;
+								memcpy(&argc, &proc_chars.get()[0], sizeof(argc));
+								std::string_view proc_args(proc_chars.get(), argmax);
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
 									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
 										while (argc-- > 0 and null_pos != string::npos) {
 											null_pos = proc_args.find('\0', start_pos);
-											new_proc.cmd += proc_args.substr(start_pos, null_pos - start_pos) + ' ';
+											new_proc.cmd += (string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
 											start_pos = null_pos + 1;
 										}
 									}
@@ -1251,7 +1267,7 @@ namespace Proc {
 						}
 						if (new_proc.cmd.empty()) new_proc.cmd = f_name;
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
-						new_proc.cpu_s = round(kproc.kp_proc.p_starttime.tv_sec + (kproc.kp_proc.p_starttime.tv_usec / 1'000'000));
+						new_proc.cpu_s = kproc.kp_proc.p_starttime.tv_sec * 1'000'000 + kproc.kp_proc.p_starttime.tv_usec;
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
 						new_proc.user = pwd->pw_name;
 					}
@@ -1263,15 +1279,16 @@ namespace Proc {
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
-						cpu_t = round((pti.pti_total_user + pti.pti_total_system) / 1'000);
+						cpu_t = pti.pti_total_user + pti.pti_total_system;
+
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(cmult * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::coreCount);
 
 					//? Process cumulative cpu usage since process start
-					new_proc.cpu_c = (double)(cpu_t * Shared::clkTck) / max(1.0, timeNow - new_proc.cpu_s);
+					new_proc.cpu_c = (double)(cpu_t * Shared::machTck) / (timeNow - new_proc.cpu_s);
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
