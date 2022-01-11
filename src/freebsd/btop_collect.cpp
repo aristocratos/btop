@@ -482,22 +482,25 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
-	void assign_values(auto& disk, int64_t readBytes, int64_t writeBytes) {
-		if (disk.io_read.empty())
+	void assign_values(struct disk_info& disk, int64_t readBytes, int64_t writeBytes) {
+		disk_ios++;
+		if (disk.io_read.empty()) {
 			disk.io_read.push_back(0);
-		else
+		} else {
 			disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+		}
 		disk.old_io.at(0) = readBytes;
 		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
-		if (disk.io_write.empty())
+		if (disk.io_write.empty()) {
 			disk.io_write.push_back(0);
-		else
+		} else {
 			disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+		}
 		disk.old_io.at(1) = writeBytes;
 		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
-		// no io times
+		// no io times - need to push something anyway or we'll get an ABORT
 		if (disk.io_activity.empty())
 			disk.io_activity.push_back(0);
 		else
@@ -558,8 +561,7 @@ namespace Mem {
 		// this code is for ZFS mounts
 		for (string poolName : Mem::zpools) {
 			char sysCtl[1024];
-			snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset | grep dataset_name", poolName.c_str());
-			Logger::debug(poolName + string("->") + string(sysCtl));
+			snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset | egrep \'dataset_name|nread|nwritten\'", poolName.c_str());
 			PipeWrapper f = PipeWrapper(sysCtl, "r");
 			if (f()) {
 				char buf[512];
@@ -569,7 +571,6 @@ namespace Mem {
 					if (fgets(buf, len, f())) {
 						char *name = std::strtok(buf, ": \n");
 						char *value = std::strtok(NULL, ": \n");
-						Logger::debug(name + string("=") + string(value));
 						if (string(name).find("dataset_name") != string::npos) {
 							// create entry if datasetname matches with anything in mapping
 							// relies on the fact that the dataset name is last value in the list
@@ -582,7 +583,6 @@ namespace Mem {
 									assign_values(disk, nread, nwritten);
 								}
 							}
-							Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
 						} else if (string(name).find("nread") != string::npos) {
 							nread = atoll(value);
 						} else if (string(name).find("nwritten") != string::npos) {
