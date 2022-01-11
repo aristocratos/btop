@@ -40,6 +40,7 @@ tab-size = 4
 #include <sys/mount.h>
 #include <sys/vmmeter.h>
 #include <sys/limits.h>
+#include <vector>
 #include <vm/vm_param.h>
 #include <kvm.h>
 #include <paths.h>
@@ -100,6 +101,9 @@ namespace Cpu {
 
 namespace Mem {
 	double old_uptime;
+	std::vector<string> zpools;
+
+	void get_zpools();
 }
 
 namespace Shared {
@@ -169,6 +173,7 @@ namespace Shared {
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
+		Mem::get_zpools();
 	}
 
 }  // namespace Shared
@@ -239,19 +244,23 @@ namespace Cpu {
 	bool get_sensors() {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
-		int32_t temp;
-		size_t size = sizeof(temp);
-		if (sysctlbyname("dev.cpu.0.temperature", &temp, &size, NULL, 0) < 0) {
-			Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
-		} else {
-			got_sensors = true;
-		}
+			int32_t temp;
+			size_t size = sizeof(temp);
+			if (sysctlbyname("dev.cpu.0.temperature", &temp, &size, NULL, 0) < 0) {
+				Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
+			} else {
+				got_sensors = true;
+				int temp;
+				size_t size = sizeof(temp);
+				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, NULL, 0); //asuming the max temp is same for all cores
+				temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
+				current_cpu.temp_max = temp;
+			}
 		}
 		return got_sensors;
 	}
 
 	void update_sensors() {
-		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		int temp;
 		size_t size = sizeof(temp);
 		sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp, &size, NULL, 0);
@@ -499,23 +508,35 @@ namespace Mem {
 	class PipeWrapper {
 		public:
 			PipeWrapper(const char *file, const char *mode) {fd = popen(file, mode);}
-			virtual ~PipeWrapper() {std::fclose(fd);}
+			virtual ~PipeWrapper() {if (fd) pclose(fd);}
 			auto operator()() -> FILE* { return fd;};
 		private:
 			FILE *fd;
 	};
 
+	// find all zpools in the system. Do this only at startup.
+	void get_zpools() {
+		PipeWrapper poolPipe = PipeWrapper("zpool list -H -o name", "r");
+		while (not std::feof(poolPipe())) {
+			char poolName[512];
+			size_t len = 512;
+			if (fgets(poolName, len, poolPipe())) {
+				poolName[strcspn(poolName, "\n")] = 0;
+				Logger::debug("zpool found: " + string(poolName));
+				Mem::zpools.push_back(poolName);
+			}
+		}
+	}
+
     void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
 		// this bit is for 'regular' mounts
-        static struct statinfo cur, last;
+        static struct statinfo cur;
         long double etime = 0;
         uint64_t total_bytes_read;
 		uint64_t total_bytes_write;
 
 		static std::unique_ptr<struct devinfo, decltype(std::free)*> curDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
-		static std::unique_ptr<struct devinfo, decltype(std::free)*> lastDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
 		cur.dinfo = curDevInfo.get();
-        last.dinfo = lastDevInfo.get();
 
         if (devstat_getdevs(NULL, &cur) != -1) {
 			for (int i = 0; i < cur.dinfo->numdevs; i++) {
@@ -535,43 +556,37 @@ namespace Mem {
 		}
 
 		// this code is for ZFS mounts
-		PipeWrapper poolPipe = PipeWrapper("zpool list -H -o name", "r");
-		if (poolPipe()) {
-			while (not std::feof(poolPipe())) {
-				char poolName[512];
+		for (string poolName : Mem::zpools) {
+			char sysCtl[1024];
+			snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset | grep dataset_name", poolName.c_str());
+			Logger::debug(poolName + string("->") + string(sysCtl));
+			PipeWrapper f = PipeWrapper(sysCtl, "r");
+			if (f()) {
+				char buf[512];
 				size_t len = 512;
-				if (fgets(poolName, len, poolPipe())) {
-					poolName[strcspn(poolName, "\n")] = 0;
-					char sysCtl[1024];
-					snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset", poolName);
-					PipeWrapper f = PipeWrapper(sysCtl, "r");
-					if (f()) {
-						char buf[512];
-						while (not std::feof(f())) {
-							uint64_t nread, nwritten;
-							string datasetname; // this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
-							if (fgets(buf, len, f())) {
-								char *name = std::strtok(buf, ": \n");
-								char *value = std::strtok(NULL, ": \n");
-								if (string(name).find("dataset_name") != string::npos) {
-									// create entry if datasetname matches with anything in mapping
-									// relies on the fact that the dataset name is last value in the list
-									// alternatively you could parse the objset-0x... when this changes, you have a new entry
-									datasetname = string(value);
-									if (mapping.contains(datasetname)) {
-										string mountpoint = mapping.at(datasetname);
-										if (disks.contains(mountpoint)) {
-											auto& disk = disks.at(mountpoint);
-											assign_values(disk, nread, nwritten);
-										}
-									}
-									Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
-								} else if (string(name).find("nread") != string::npos) {
-									nread = atoll(value);
-								} else if (string(name).find("nwritten") != string::npos) {
-									nwritten = atoll(value);
+				while (not std::feof(f())) {
+					uint64_t nread, nwritten;
+					if (fgets(buf, len, f())) {
+						char *name = std::strtok(buf, ": \n");
+						char *value = std::strtok(NULL, ": \n");
+						Logger::debug(name + string("=") + string(value));
+						if (string(name).find("dataset_name") != string::npos) {
+							// create entry if datasetname matches with anything in mapping
+							// relies on the fact that the dataset name is last value in the list
+							// alternatively you could parse the objset-0x... when this changes, you have a new entry
+							string datasetname = string(value);// this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
+							if (mapping.contains(datasetname)) {
+								string mountpoint = mapping.at(datasetname);
+								if (disks.contains(mountpoint)) {
+									auto& disk = disks.at(mountpoint);
+									assign_values(disk, nread, nwritten);
 								}
 							}
+							Logger::debug("created " + datasetname + " with (" + std::to_string(nread) + "," + std::to_string(nwritten) + ")");
+						} else if (string(name).find("nread") != string::npos) {
+							nread = atoll(value);
+						} else if (string(name).find("nwritten") != string::npos) {
+							nwritten = atoll(value);
 						}
 					}
 				}
