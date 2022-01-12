@@ -758,7 +758,7 @@ namespace Mem {
 
 			disk_ios = 0;
 			collect_disk(disks, mapping);
-			
+
 			old_uptime = uptime;
 		}
 		return mem;
@@ -864,19 +864,21 @@ namespace Net {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);
 					auto &bandwidth = net.at(iface).bandwidth.at(dir);
-					auto dirval = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
-					uint64_t val = saved_stat.last;
-					try {
-						val = max(dirval, val);
-					} catch (const std::invalid_argument &) {
-					} catch (const std::out_of_range &) {
-					}
+					uint64_t val = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
 
 					//? Update speed, total and top values
+					if (val < saved_stat.last) {
+						saved_stat.rollover += saved_stat.last;
+						saved_stat.last = 0;
+					}
+					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+						saved_stat.rollover = 0;
+						saved_stat.last = 0;
+					}
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
-					if (saved_stat.offset > val) saved_stat.offset = 0;
-					saved_stat.total = val - saved_stat.offset;
+					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
+					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
 					saved_stat.last = val;
 
 					//? Add values to graph

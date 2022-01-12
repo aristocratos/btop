@@ -1097,8 +1097,8 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					uint64_t val = saved_stat.last;
-					try { val = max((uint64_t)stoull(readfile(sys_file, "0")), val); }
+					uint64_t val = 0;
+					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 

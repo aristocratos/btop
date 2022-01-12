@@ -918,13 +918,7 @@ namespace Net {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);
 					auto &bandwidth = net.at(iface).bandwidth.at(dir);
-					auto dirval = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
-					uint64_t val = saved_stat.last;
-					try {
-						val = max(dirval, val);
-					} catch (const std::invalid_argument &) {
-					} catch (const std::out_of_range &) {
-					}
+					uint64_t val = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
 
 					//? Update speed, total and top values
 					if (val < saved_stat.last) {
