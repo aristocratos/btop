@@ -19,6 +19,9 @@ tab-size = 4
 #include <csignal>
 #include <clocale>
 #include <pthread.h>
+#ifdef __FreeBSD__
+#include <pthread_np.h>
+#endif
 #include <thread>
 #include <numeric>
 #include <ranges>

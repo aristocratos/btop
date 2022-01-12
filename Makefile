@@ -86,7 +86,7 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
-	override ADDFLAGS += -lstdc++ -lm -lkvm -Wl,-rpath=/usr/local/lib/gcc11
+	override ADDFLAGS += -lstdc++ -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc11
 	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
@@ -124,6 +124,10 @@ override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= -I$(INCDIR) -I$(SRCDIR)
 SU_USER				:= root
+
+ifdef DEBUG
+	override OPTFLAGS := -O0 -g
+endif
 
 SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
 
@@ -189,6 +193,7 @@ install:
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
+
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:
