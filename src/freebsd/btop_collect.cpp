@@ -111,7 +111,7 @@ namespace Shared {
 	fs::path passwd_path;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
-	int totalMem_len;
+	int totalMem_len, kfscale;
 	long bootTime;
 
 	void init() {
@@ -152,6 +152,11 @@ namespace Shared {
 			Logger::warning("Could not get boot time");
 		} else {
 			bootTime = result.tv_sec;
+		}
+
+		size = sizeof(kfscale);
+		if (sysctlbyname("kern.fscale", &kfscale, &size, NULL, 0) == -1) {
+			kfscale = 2048;
 		}
 
 		//* Get maximum length of process arguments
@@ -567,7 +572,7 @@ namespace Mem {
 				char buf[512];
 				size_t len = 512;
 				while (not std::feof(f())) {
-					uint64_t nread, nwritten;
+					uint64_t nread = 0, nwritten = 0;
 					if (fgets(buf, len, f())) {
 						char *name = std::strtok(buf, ": \n");
 						char *value = std::strtok(NULL, ": \n");
@@ -1219,7 +1224,7 @@ namespace Proc {
 				new_proc.threads = kproc->ki_numthreads;
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = clamp((100.0 * ((cpu_t - new_proc.cpu_t) / 1'000'000.0) / max((uint64_t)1, (cputimes - old_cputimes) * Shared::clkTck)) * cmult / 100'000.0, 0.0, 100.0 * Shared::coreCount);
+				new_proc.cpu_p = clamp((100.0 * kproc->ki_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
@@ -1251,17 +1256,29 @@ namespace Proc {
 
 		//* Sort processes
 		if (sorted_change or not no_update) {
-			switch (v_index(sort_vector, sorting)) {
-					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
-					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
-					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
-					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
-					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
-					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
-					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
-					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
+			if (reverse) {
+				switch (v_index(sort_vector, sorting)) {
+					case 0: rng::stable_sort(current_procs, rng::less{}, &proc_info::pid); 		break;
+					case 1: rng::stable_sort(current_procs, rng::less{}, &proc_info::name);		break;
+					case 2: rng::stable_sort(current_procs, rng::less{}, &proc_info::cmd); 		break;
+					case 3: rng::stable_sort(current_procs, rng::less{}, &proc_info::threads); 	break;
+					case 4: rng::stable_sort(current_procs, rng::less{}, &proc_info::user); 	break;
+					case 5: rng::stable_sort(current_procs, rng::less{}, &proc_info::mem); 		break;
+					case 6: rng::stable_sort(current_procs, rng::less{}, &proc_info::cpu_p);   	break;
+					case 7: rng::stable_sort(current_procs, rng::less{}, &proc_info::cpu_c);   	break;
+				}
+			} else {
+				switch (v_index(sort_vector, sorting)) {
+						case 0: rng::stable_sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
+						case 1: rng::stable_sort(current_procs, rng::greater{}, &proc_info::name);		break;
+						case 2: rng::stable_sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
+						case 3: rng::stable_sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
+						case 4: rng::stable_sort(current_procs, rng::greater{}, &proc_info::user); 		break;
+						case 5: rng::stable_sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
+						case 6: rng::stable_sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
+						case 7: rng::stable_sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
+				}
 			}
-			if (reverse) rng::reverse(current_procs);
 
 			//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
 			if (not tree and not reverse and sorting == "cpu lazy") {
@@ -1327,8 +1344,7 @@ namespace Proc {
 			}
 
 			//? Final sort based on tree index
-			rng::sort(current_procs, rng::less{}, &proc_info::tree_index);
-			if (reverse) rng::reverse(current_procs);
+			rng::stable_sort(current_procs, rng::less{}, &proc_info::tree_index);
 		}
 
 		numpids = (int)current_procs.size() - filter_found;
