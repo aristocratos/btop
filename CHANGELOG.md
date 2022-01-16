@@ -1,3 +1,17 @@
+## v1.2.0
+
+* Added: Support for FreeBSD, by @joske and @aristocratos
+
+* Fixed (again): Account for system rolling over net speeds in Net::collect()
+
+* Added: Theme gruvbox_material_dark, by @marcoradocchia
+
+* Added: Option for base 10 bytes/bits
+
+## v1.1.5
+
+* Fixed: Account for system rolling over net speeds in Net::collect()
+
 ## v1.1.4
 
 * Fixed: Create dependency files in build directory when compiling, by @stwnt

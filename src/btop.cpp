@@ -20,7 +20,7 @@ tab-size = 4
 #include <clocale>
 #include <pthread.h>
 #ifdef __FreeBSD__
-#include <pthread_np.h>
+	#include <pthread_np.h>
 #endif
 #include <thread>
 #include <numeric>
@@ -60,7 +60,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.1.4";
+	const string Version = "1.2.0";
 
 	int coreCount;
 	string overlay;
@@ -209,14 +209,14 @@ void clean_quit(int sig) {
 	if (Global::_runner_started) {
 	#ifdef __APPLE__
 		if (pthread_join(Runner::runner_id, NULL) != 0) {
-			Logger::error("Failed to join _runner thread!");
+			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
 	#else
 		struct timespec ts;
 		ts.tv_sec = 5;
 		if (pthread_timedjoin_np(Runner::runner_id, NULL, &ts) != 0) {
-			Logger::error("Failed to join _runner thread!");
+			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
 	#endif
@@ -243,7 +243,6 @@ void clean_quit(int sig) {
 
 	const auto excode = (sig != -1 ? sig : 0);
 
-	//? Assume error if still not cleaned up and call quick_exit to avoid a segfault from Tools::atomic_lock destructor
 #ifdef __APPLE__
 	_Exit(excode);
 #else

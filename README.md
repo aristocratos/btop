@@ -31,13 +31,20 @@
 * [Installation Linux/OSX](#installation)
 * [Compilation Linux](#compilation-linux)
 * [Compilation OSX](#compilation-osx)
+* [Compilation FreeBSD](#compilation-freebsd)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
 ## News
 
-### Under development
+##### 16 January 2022
+
+Release v1.2.0 with FreeBSD support. No release binaries for FreeBSD provided as of yet.
+
+Again a big thanks to [@joske](https://github.com/joske) for his porting efforts!
+
+Since compatibility with Linux, MacOS and FreeBSD are done, the focus going forward will be on new features like GPU monitoring.
 
 ##### 13 November 2021
 
@@ -460,6 +467,89 @@ Also needs a UTF8 locale and a font that covers:
    gmake help
    ```
 
+## Compilation FreeBSD
+
+   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+
+   Note that GNU make (`gmake`) is required to compile on FreeBSD.
+
+1. **Install dependencies**
+
+   ``` bash
+   sudo pkg install gmake gcc11 coreutils git
+   ```
+
+2. **Clone repository**
+
+   ``` bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   Append `STATIC=true` to `make` command for static compilation.
+
+   Append `QUIET=true` for less verbose output.
+
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
+
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   ``` bash
+   gmake
+   ```
+
+4. **Install**
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+   ``` bash
+   sudo gmake install
+   ```
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+   ``` bash
+   sudo gmake setuid
+   ```
+
+* **Uninstall**
+
+   ``` bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
+   ```
 
 ## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
