@@ -7,6 +7,10 @@ assignees: aristocratos
 
 ---
 
+**Read the README.md and search for similar issues before posting a bug report!**
+
+Any bug that can be solved by just reading the [prerequisites](https://github.com/aristocratos/btop#prerequisites) section of the README will likely be ignored.
+
 **Describe the bug**
 
 [A clear and concise description of what the bug is.]
