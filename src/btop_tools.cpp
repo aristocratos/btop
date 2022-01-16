@@ -32,6 +32,7 @@ tab-size = 4
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
+#include <btop_config.hpp>
 
 using std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
@@ -288,23 +289,38 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
-		static const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
-		static const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
-		const auto& units = (bit) ? Units_bit : Units_byte;
+		const bool mega = Config::getB("base_10_sizes");
+		static const array<string, 11> mebiUnits_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+		static const array<string, 11> mebiUnits_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
+		static const array<string, 11> megaUnits_bit = {"bit", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb", "Zb", "Yb", "Bb", "Gb"};
+		static const array<string, 11> megaUnits_byte = {"Byte", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "BB", "GB"};
+		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
 		value *= 100 * mult;
 
-		while (value >= 102400) {
-			value >>= 10;
-			if (value < 100) {
-				out = to_string(value);
-				break;
+		if (mega) {
+			while (value >= 100000) {
+				value /= 1000;
+				if (value < 100) {
+					out = to_string(value);
+					break;
+				}
+				start++;
 			}
-			start++;
+		}
+		else {
+			while (value >= 102400) {
+				value >>= 10;
+				if (value < 100) {
+					out = to_string(value);
+					break;
+				}
+				start++;
+			}
 		}
 		if (out.empty()) {
 			out = to_string(value);
-			if (out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
+			if (not mega and out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
 			else if (out.size() == 3 and start > 0) out.insert(1, ".");
 			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}

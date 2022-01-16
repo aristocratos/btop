@@ -257,6 +257,14 @@ namespace Menu {
 				"\"%H\" = 24h hour, \"%I\" = 12h hour",
 				"\"%M\" = minute, \"%S\" = second",
 				"\"%d\" = day, \"%m\" = month, \"%y\" = year"},
+			{"base_10_sizes",
+				"Use base 10 for bits and bytes sizes.",
+				"",
+				"Uses KB = 1000 instead of KiB = 1024,",
+				"MB = 1000KB instead of MiB = 1024KiB,",
+				"and so on.",
+				"",
+				"True or False."},
 			{"background_update",
 				"Update main ui when menus are showing.",
 				"",
@@ -1133,6 +1141,9 @@ namespace Menu {
 					theme_refresh = true;
 				else if (option == "background_update") {
 					Runner::pause_output = false;
+				}
+				else if (option == "base_10_sizes") {
+					recollect = true;
 				}
 			}
 			else if (selPred.test(isBrowseable)) {
