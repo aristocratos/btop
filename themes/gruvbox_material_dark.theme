@@ -79,7 +79,7 @@ theme[available_end]=""
 # Mem/Disk used meter
 theme[used_start]="#ea6962"
 theme[used_mid]=""
-theme[used_end]="2"
+theme[used_end]=""
 
 # Download graph colors
 theme[download_start]="#e78a4e"
