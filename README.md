@@ -559,16 +559,15 @@ Also needs a UTF8 locale and a font that covers:
     ```bash
     sudo snap install btop
     ```
-
- * **Connect the interfaces**
+ * **Install the latest snap from the edge channel**
+   ```
+   sudo snap install btop --edge
+   ```
+   
+ * **Connect the interface**
 
     ```bash
-	sudo snap connect btop:system-observe
-    sudo snap connect btop:physical-memory-observe
-    sudo snap connect btop:mount-observe
-    sudo snap connect btop:hardware-observe
-	sudo snap connect btop:network-observe
-	sudo snap connect btop:process-control
+	sudo snap connect btop:removable-media
 	```
 
 
