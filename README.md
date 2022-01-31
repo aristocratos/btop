@@ -269,18 +269,12 @@ Also needs a UTF8 locale and a font that covers:
 **Binary release (from native os repo)**
 
 * **openSUSE**
-  * **Add repo**
-  ```bash
-  sudo zypper ar --refresh obs://home:Werwolf2517 home:Werwolf2517
-  ```
-  * **Refresh metadata**
-  ```bash
-  sudo zypper ref
-  ```
-  * **Install package**
-  ```bash
-  sudo zypper in btop
-  ```
+  * **Tumbleweed:**
+    ```bash
+    sudo zypper in btop
+    ```
+  * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
+
 
 **Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
 
