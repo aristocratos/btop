@@ -292,13 +292,14 @@ namespace Input {
 					if (key == "enter") {
 						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-						old_filter.clear();
-					}
+                        old_filter.clear();
+                    }
                     else if (key == "down") {
-						Config::set("proc_filter", Proc::filter.text);
+                        Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
                         old_filter.clear();
-					}
+	                    process("down");
+                    }          
 					else if (key == "escape" or key == "mouse_click") {
 						Config::set("proc_filter", old_filter);
 						Config::set("proc_filtering", false);
