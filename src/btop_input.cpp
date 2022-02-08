@@ -289,11 +289,15 @@ namespace Input {
 				bool no_update = true;
 				bool redraw = true;
 				if (filtering) {
-					if (key == "enter") {
+					if (key == "enter" or key == "down") {
 						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-						old_filter.clear();
-					}
+                        old_filter.clear();
+                        if(key == "down"){
+                            process("down");
+                            return;
+                        }
+                    }
 					else if (key == "escape" or key == "mouse_click") {
 						Config::set("proc_filter", old_filter);
 						Config::set("proc_filtering", false);
