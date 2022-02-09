@@ -143,16 +143,19 @@ namespace Term {
 namespace Fx {
 	string uncolor(const string& s) {
 		string out = s;
-		for (size_t offset = 0, start_pos = 0, end_pos = 0, next_pos = 0;;) {
-			if ((start_pos = next_pos > 0 ? next_pos : out.find('\x1b', offset)) == string::npos)
+		for (size_t offset = 0, start_pos = 0, end_pos = 0;;) {
+			start_pos = out.find('\x1b', offset);
+			if (start_pos == string::npos)
 				break;
-			offset = ++start_pos;
-			if ((end_pos = out.find('m', offset)) == string::npos)
+			offset = start_pos + 1;
+			for (end_pos = out.find('m', offset); end_pos != string::npos and not isdigit(out.at(end_pos - 1)); end_pos = out.find('m', end_pos + 1));
+			if (end_pos == string::npos)
 				break;
-			else if (next_pos = out.find('\x1b', offset); not isdigit(out[end_pos - 1]) or end_pos - start_pos > next_pos - start_pos)
+			else if (auto next_pos = out.find('\x1b', offset); end_pos >= next_pos) {
 				continue;
-			out.replace(start_pos, end_pos - start_pos, "");
-			next_pos = 0;
+			}
+			out.erase(start_pos, (end_pos - start_pos)+1);
+			offset = 0;
 		}
 		out.shrink_to_fit();
 		return out;
