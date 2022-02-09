@@ -157,6 +157,11 @@ void argumentParser(const int& argc, char **argv) {
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
 	static atomic<bool> resizing (false);
+	if (Input::polling) {
+		Global::resized = true;
+		Input::interrupt = true;
+		return;
+	}
 	atomic_lock lck(resizing, true);
 	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
@@ -182,8 +187,9 @@ void term_resize(bool force) {
 				 << Mv::to((Term::height / 2) + 1, (Term::width / 2) - 12) << Global::fg_white
 				 << "Needed for current config:" << Mv::to((Term::height / 2) + 2, (Term::width / 2) - 10)
 				 << "Width = " << min_size.at(0) << " Height = " << min_size.at(1) << flush;
-			while (not Term::refresh() and not Input::poll()) sleep_ms(10);
-			if (Input::poll()) {
+			bool got_key = false;
+			for (; not Term::refresh() and not got_key; got_key = Input::poll(10));
+			if (got_key) {
 				auto key = Input::get();
 				if (key == "q")
 					clean_quit(0);
@@ -899,7 +905,7 @@ int main(int argc, char **argv) {
 			else if (Global::should_sleep) { Global::should_sleep = false; _sleep(); }
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
-			term_resize();
+			term_resize(Global::resized);
 
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {

@@ -74,6 +74,7 @@ namespace Input {
 	};
 
 	std::atomic<bool> interrupt (false);
+	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
 	unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
@@ -133,6 +134,7 @@ namespace Input {
 	};
 
 	bool poll(int timeout) {
+		atomic_lock lck(polling);
 		if (timeout < 1) return InputThr::instance().avail() > 0;
 		while (timeout > 0) {
 			if (interrupt) {

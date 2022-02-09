@@ -42,6 +42,7 @@ namespace Input {
 	extern unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
 	extern atomic<bool> interrupt;
+	extern atomic<bool> polling;
 
 	//* Mouse column and line position
 	extern array<int, 2> mouse_pos;
