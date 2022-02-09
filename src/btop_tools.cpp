@@ -166,8 +166,6 @@ namespace Fx {
 
 namespace Tools {
 
-	atomic<int> active_locks (0);
-
 	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
 		for (size_t x = 0, i = 0; i < str.size(); i++) {
@@ -367,14 +365,11 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		active_locks++;
-		if (wait) {
-			while (not this->atom.compare_exchange_strong(this->not_true, true));
-		} else this->atom.store(true);
+		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
+		else this->atom.store(true);
 	}
 
 	atomic_lock::~atomic_lock() {
-		active_locks--;
 		this->atom.store(false);
 	}
 

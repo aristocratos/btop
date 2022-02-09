@@ -131,7 +131,6 @@ namespace Term {
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
-	extern atomic<int> active_locks;
 
 	//* Return number of UTF8 characters in a string (wide=true counts UTF-8 characters with a width > 1 as 2 characters)
 	inline size_t ulen(const string& str, const bool wide=false) {
