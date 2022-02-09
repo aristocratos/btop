@@ -286,7 +286,7 @@ namespace Tools {
 
 	void atomic_wait_for(const atomic<bool>& atom, const bool old=true, const uint64_t wait_ms=0) noexcept;
 
-	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false on destruct
+	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
 		bool not_true = false;
