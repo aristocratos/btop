@@ -605,7 +605,7 @@ namespace Menu {
 
 		box_contents = Draw::createBox(x, y, width, height, Theme::c("hi_fg"), true, title) + Mv::d(1);
 		for (const auto& line : content) {
-			box_contents += Mv::save + Mv::r(width / 2 - Fx::uncolor(line).size() / 2 - 1) + line + Mv::restore + Mv::d(1);
+			box_contents += Mv::save + Mv::r(max(0ul, (width / 2) - (Fx::uncolor(line).size() / 2) - 1)) + line + Mv::restore + Mv::d(1);
 		}
 	}
 
