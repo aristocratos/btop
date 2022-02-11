@@ -1,3 +1,21 @@
+## v1.2.1
+
+* Added: Arrow only after use of "f" when filtering processes, by @NavigationHazard
+
+* Fixed: Fx::uncolor not removing all escapes
+
+* Fixed: Text alignment for popup boxes
+
+* Fixed: Terminal resize warning getting stuck
+
+* Removed: Unnecessary counter for atomic_lock
+
+* Added: Percentage progress to Makefile
+
+* Fixed: Alignment of columns in proc box when wide UTF8 characters are used
+
+* Fixed: Battery meter draw fix
+
 ## v1.2.0
 
 * Added: Support for FreeBSD, by @joske and @aristocratos
