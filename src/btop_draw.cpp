@@ -1399,7 +1399,7 @@ namespace Proc {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
 					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
-					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true, true) + ' ' : "");
+					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true, true) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
 			}
 			//? Tree view line
 			else {
@@ -1412,10 +1412,10 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7 and p.short_cmd != p.name) {
-					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ") ";
+					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ')';
 					width_left -= (ulen(p.short_cmd, true) + 3);
 				}
-				out += string(max(0, width_left), ' ');
+				out += Mv::to(y+2+lc, x+2+tree_size);
 			}
 			//? Common end of line
 			string cpu_str = to_string(p.cpu_p);

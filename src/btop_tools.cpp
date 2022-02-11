@@ -25,6 +25,7 @@ tab-size = 4
 #include <utility>
 #include <ranges>
 #include <robin_hood.h>
+#include <widechar_width.hpp>
 
 #include <unistd.h>
 #include <termios.h>
@@ -166,17 +167,47 @@ namespace Fx {
 
 namespace Tools {
 
+	size_t wide_ulen(const string& str) {
+		unsigned int chars = 0;
+		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+		auto w_str = conv.from_bytes(str.c_str());
+
+		for (auto c : w_str) {
+			chars += utf8::wcwidth(c);
+		}
+
+		return chars;
+	}
+
+	size_t wide_ulen(const std::wstring& w_str) {
+		unsigned int chars = 0;
+
+		for (auto c : w_str) {
+			chars += utf8::wcwidth(c);
+		}
+
+		return chars;
+	}
+
 	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
-		for (size_t x = 0, i = 0; i < str.size(); i++) {
-			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) x += 2;
-			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
-			if (x >= len + 1) {
-				str.resize(i);
-				str.shrink_to_fit();
-				break;
+		if (wide) {
+			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+			auto w_str = conv.from_bytes(str.c_str());
+			while (wide_ulen(w_str) > len)
+				w_str.pop_back();
+  			str = conv.to_bytes(w_str);
+		}
+		else {
+			for (size_t x = 0, i = 0; i < str.size(); i++) {
+				if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
+				if (x >= len + 1) {
+					str.resize(i);
+					break;
+				}
 			}
 		}
+		str.shrink_to_fit();
 		return str;
 	}
 

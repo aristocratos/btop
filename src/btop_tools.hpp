@@ -132,10 +132,12 @@ namespace Term {
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
 
-	//* Return number of UTF8 characters in a string (wide=true counts UTF-8 characters with a width > 1 as 2 characters)
+	size_t wide_ulen(const string& str);
+	size_t wide_ulen(const std::wstring& w_str);
+
+	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
 	inline size_t ulen(const string& str, const bool wide=false) {
-		return 	std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; })
-				+ (wide ? std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) > 0xef); }) : 0);
+		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
