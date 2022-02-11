@@ -574,7 +574,7 @@ namespace Cpu {
 
 				out += Mv::to(y, bat_pos) + title_left + Theme::c("title") + Fx::b + "BAT" + bat_symbol + ' ' + str_percent
 					+ (Term::width >= 100 ? Fx::ub + ' ' + bat_meter(percent) + Fx::b : "")
-					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : "") + Fx::ub + title_right;
+					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : " ") + Fx::ub + title_right;
 			}
 		}
 		else if (bat_pos > 0) {
