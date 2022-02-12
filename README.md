@@ -557,7 +557,7 @@ Also needs a UTF8 locale and a font that covers:
    ```
    sudo snap install btop --edge
    ```
-   
+
  * **Connect the interface**
 
     ```bash
@@ -573,14 +573,14 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 #### btop.cfg: (auto generated if not found)
 
 ```bash
-#? Config file for btop v. 0.1.0
+#? Config file for btop v. 1.2.2
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
 color_theme = "Default"
 
 #* If the theme set background should be shown, set to False if you want terminal background transparency.
-theme_background = False
+theme_background = True
 
 #* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false.
 truecolor = True
@@ -594,6 +594,10 @@ force_tty = False
 #* Use withespace " " as separator between different presets.
 #* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
 presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
+
+#* Set to True to enable "h,j,k,l" keys for directional control in lists.
+#* Conflicting keys for h:"help" and k:"kill" is accessible while holding shift.
+vim_keys = False
 
 #* Rounded corners on boxes, is ignored if TTY mode is ON.
 rounded_corners = True
@@ -618,10 +622,10 @@ graph_symbol_net = "default"
 graph_symbol_proc = "default"
 
 #* Manually set which boxes to show. Available values are "cpu mem net proc", separate values with whitespace.
-shown_boxes = "cpu mem net proc"
+shown_boxes = "proc cpu mem net"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
-update_ms = 2000
+update_ms = 1500
 
 #* Processes sorting, "pid" "program" "arguments" "threads" "user" "memory" "cpu lazy" "cpu responsive",
 #* "cpu lazy" sorts top process over time (easier to follow), "cpu responsive" updates top process directly.
@@ -689,6 +693,9 @@ cpu_core_map = ""
 #* Which temperature scale to use, available values: "celsius", "fahrenheit", "kelvin" and "rankine".
 temp_scale = "celsius"
 
+#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024.
+base_10_sizes = False
+
 #* Show CPU frequency.
 show_cpu_freq = True
 
@@ -727,6 +734,9 @@ only_physical = True
 #* Read disks list from /etc/fstab. This also disables only_physical.
 use_fstab = False
 
+#* Set to true to show available disk space for privileged users.
+disk_free_priv = False
+
 #* Toggles if io activity % (disk busy time) should be shown in regular disk usage view.
 show_io_stat = True
 
@@ -756,6 +766,9 @@ net_iface = "br0"
 
 #* Show battery stats in top right if battery is present.
 show_battery = True
+
+#* Which battery to use if multiple are present. "Auto" for auto detection.
+selected_battery = "Auto"
 
 #* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
