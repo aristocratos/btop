@@ -694,7 +694,7 @@ namespace Menu {
 		if (redraw) {
 			x = Term::width/2 - 40;
 			y = Term::height/2 - 9;
-			bg = Draw::createBox(x + 2, y, 78, 18, Theme::c("hi_fg"), true, "signals");
+			bg = Draw::createBox(x + 2, y, 78, 19, Theme::c("hi_fg"), true, "signals");
 			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
 		}
@@ -776,11 +776,12 @@ namespace Menu {
 			}
 
 			cy++;
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ENTER", 38) + Theme::c("main_fg") + Fx::ub + " | To send signal.";
-			mouse_mappings["enter"] = {cy, x, 1, 78};
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "↑ ↓ ← →", 38, true) + Theme::c("main_fg") + Fx::ub + " | To choose signal.";
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ESC or \"q\"", 38) + Theme::c("main_fg") + Fx::ub + " | To abort.";
-			mouse_mappings["escape"] = {cy, x, 1, 78};
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "↑ ↓ ← →", 33, true) + Theme::c("main_fg") + Fx::ub + " | To choose signal.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("0-9", 33) + Theme::c("main_fg") + Fx::ub + " | Enter manually.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ENTER", 33) + Theme::c("main_fg") + Fx::ub + " | To send signal.";
+			mouse_mappings["enter"] = {cy, x, 1, 73};
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ESC or \"q\"", 33) + Theme::c("main_fg") + Fx::ub + " | To abort.";
+			mouse_mappings["escape"] = {cy, x, 1, 73};
 
 			out += Fx::reset;
 		}
