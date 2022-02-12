@@ -22,6 +22,7 @@ tab-size = 4
 #include <vector>
 #include <array>
 #include <atomic>
+#include <regex>
 #include <filesystem>
 #include <ranges>
 #include <chrono>
@@ -64,8 +65,15 @@ namespace Fx {
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
 
+	//* Regex for matching color, style and cursor move escape sequences
+	const std::regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
+
+	//* Regex for matching only color and style escape sequences
+	const std::regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
+
 	//* Return a string with all colors and text styling removed
-	string uncolor(const string& s);
+	inline string uncolor(const string& s) { return std::regex_replace(s, color_regex, ""); }
+	// string uncolor(const string& s);
 
 }
 
