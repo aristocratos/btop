@@ -151,6 +151,8 @@ namespace Config {
 
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
+		{"disk_free_priv",		"#* Set to true to show available disk space for privileged users."},
+
 		{"show_io_stat", 		"#* Toggles if io activity % (disk busy time) should be shown in regular disk usage view."},
 
 		{"io_mode", 			"#* Toggles io mode for disks, showing big graphs for disk read/write speeds."},
@@ -242,6 +244,7 @@ namespace Config {
 		{"show_battery", true},
 		{"vim_keys", false},
 		{"tty_mode", false},
+		{"disk_free_priv", false},
 		{"force_tty", false},
 		{"lowcolor", false},
 		{"show_detailed", false},

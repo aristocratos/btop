@@ -817,6 +817,7 @@ namespace Mem {
 		//? Get disks stats
 		if (show_disks) {
 			double uptime = system_uptime();
+			auto free_priv = Config::getB("disk_free_priv");
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
@@ -943,7 +944,7 @@ namespace Mem {
 						continue;
 					}
 					disk.total = vfs.f_blocks * vfs.f_frsize;
-					disk.free = vfs.f_bfree * vfs.f_frsize;
+					disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
 					disk.used = disk.total - disk.free;
 					disk.used_percent = round((double)disk.used * 100 / disk.total);
 					disk.free_percent = 100 - disk.used_percent;
