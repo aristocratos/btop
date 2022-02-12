@@ -1,3 +1,11 @@
+## v1.2.2
+
+* Changed: Reverted uncolor() back to using regex to fix delay in opening menu when compiled with musl
+
+* Added: Toggle for showing free disk space for privileged or normal users
+
+* Added: Clarification on signal screen that number can be manually entered
+
 ## v1.2.1
 
 * Added: Arrow only after use of "f" when filtering processes, by @NavigationHazard
