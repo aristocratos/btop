@@ -570,7 +570,7 @@ Also needs a UTF8 locale and a font that covers:
 All options changeable from within UI.
 Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
 
-#### btop.cfg: (auto generated if not found)
+#### btop.conf: (auto generated if not found)
 
 ```bash
 #? Config file for btop v. 1.2.2
