@@ -129,9 +129,9 @@ ifdef DEBUG
 	override OPTFLAGS := -O0 -g
 endif
 
-SOURCES	:= $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT))
+SOURCES	:= $(sort $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
 
-SOURCES += $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT))
+SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT)))
 
 SOURCE_COUNT := $(words $(SOURCES))
 
