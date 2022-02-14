@@ -4,6 +4,7 @@ BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m█
 
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
+override DATESTAMP := $(shell date '+%Y-%m-%d %H:%M:%S' || echo "5 minutes ago")
 ifeq ($(shell command -v gdate >/dev/null; echo $$?),0)
 	DATE_CMD := gdate
 else
@@ -133,11 +134,20 @@ SOURCES	:= $(sort $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
 
 SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT)))
 
+#? Setup percentage progress
 SOURCE_COUNT := $(words $(SOURCES))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
-PROGRESS = expr $$(find $(BUILDDIR) -maxdepth 2 -type f -name *.o | wc -l) '*' 90 / $(SOURCE_COUNT)
+ifneq ($(wildcard $(BUILDDIR)/.*),)
+	SKIPPED_SOURCES := $(foreach fname,$(SOURCES),$(shell find $(BUILDDIR) -type f -newer $(fname) -name *.o | grep "$(basename $(notdir $(fname))).o" 2>/dev/null))
+	override SOURCE_COUNT := $(shell expr $(SOURCE_COUNT) - $(words $(SKIPPED_SOURCES)))
+	ifeq ($(SOURCE_COUNT),0)
+		override SOURCE_COUNT = $(words $(SOURCES))
+	endif
+endif
+
+PROGRESS = expr $$(find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o | wc -l || echo 1) '*' 90 / $(SOURCE_COUNT) | cut -c1-2
 
 P := %%
 
