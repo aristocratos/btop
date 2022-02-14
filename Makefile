@@ -139,7 +139,7 @@ SOURCE_COUNT := $(words $(SOURCES))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
-ifeq ($(shell find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o; echo $$?),0)
+ifeq ($(shell find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o >/dev/null 2>&1; echo $$?),0)
 	ifneq ($(wildcard $(BUILDDIR)/.*),)
 		SKIPPED_SOURCES := $(foreach fname,$(SOURCES),$(shell find $(BUILDDIR) -type f -newer $(fname) -name *.o | grep "$(basename $(notdir $(fname))).o" 2>/dev/null))
 		override SOURCE_COUNT := $(shell expr $(SOURCE_COUNT) - $(words $(SKIPPED_SOURCES)))
