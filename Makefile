@@ -139,15 +139,18 @@ SOURCE_COUNT := $(words $(SOURCES))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
-ifneq ($(wildcard $(BUILDDIR)/.*),)
-	SKIPPED_SOURCES := $(foreach fname,$(SOURCES),$(shell find $(BUILDDIR) -type f -newer $(fname) -name *.o | grep "$(basename $(notdir $(fname))).o" 2>/dev/null))
-	override SOURCE_COUNT := $(shell expr $(SOURCE_COUNT) - $(words $(SKIPPED_SOURCES)))
-	ifeq ($(SOURCE_COUNT),0)
-		override SOURCE_COUNT = $(words $(SOURCES))
+ifeq ($(shell find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o; echo $$?),0)
+	ifneq ($(wildcard $(BUILDDIR)/.*),)
+		SKIPPED_SOURCES := $(foreach fname,$(SOURCES),$(shell find $(BUILDDIR) -type f -newer $(fname) -name *.o | grep "$(basename $(notdir $(fname))).o" 2>/dev/null))
+		override SOURCE_COUNT := $(shell expr $(SOURCE_COUNT) - $(words $(SKIPPED_SOURCES)))
+		ifeq ($(SOURCE_COUNT),0)
+			override SOURCE_COUNT = $(words $(SOURCES))
+		endif
 	endif
+	PROGRESS = expr $$(find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o | wc -l || echo 1) '*' 90 / $(SOURCE_COUNT) | cut -c1-2
+else
+	PROGRESS = expr $$(find $(BUILDDIR) -type f -name *.o | wc -l || echo 1) '*' 90 / $(SOURCE_COUNT) | cut -c1-2
 endif
-
-PROGRESS = expr $$(find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o | wc -l || echo 1) '*' 90 / $(SOURCE_COUNT) | cut -c1-2
 
 P := %%
 
