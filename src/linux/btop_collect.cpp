@@ -1493,7 +1493,13 @@ namespace Proc {
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
-					while(getline(pread, long_string, '\0')) new_proc.cmd += long_string + ' ';
+					while(getline(pread, long_string, '\0')) {
+						new_proc.cmd += long_string + ' '; 
+						if (new_proc.cmd.size() > 1000) {
+							new_proc.cmd.resize(1000);
+							break;
+						}
+					}
 					pread.close();
 					if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 
