@@ -1412,10 +1412,10 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7 and p.short_cmd != p.name) {
-					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ')';
+					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ") ";
 					width_left -= (ulen(p.short_cmd, true) + 3);
 				}
-				out += Mv::to(y+2+lc, x+2+tree_size);
+				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
 			}
 			//? Common end of line
 			string cpu_str = to_string(p.cpu_p);
