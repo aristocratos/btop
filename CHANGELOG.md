@@ -1,3 +1,11 @@
+## v1.2.3
+
+* Changed: floating_humanizer() now show fractions when shortened and value is < 10
+
+* Fixed: Process tree not redrawing properly
+
+* Fixed: string to wstring conversion crash when string is too big
+
 ## v1.2.2
 
 * Changed: Reverted uncolor() back to using regex to fix delay in opening menu when compiled with musl
