@@ -1024,6 +1024,7 @@ namespace Proc {
 	int selected_pid = 0;
 	string selected_name;
 	unordered_flat_map<size_t, Draw::Graph> p_graphs;
+	unordered_flat_map<size_t, bool> p_wide_cmd;
 	unordered_flat_map<size_t, int> p_counters;
 	int counter = 0;
 	Draw::TextEdit filter;
@@ -1394,12 +1395,14 @@ namespace Proc {
 				}
 			}
 
+			if (not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(p.cmd) != ulen(p.cmd, true);
+
 			//? Normal view line
 			if (not proc_tree) {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
 					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
-					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true, true) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
+					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
 			}
 			//? Tree view line
 			else {
@@ -1412,7 +1415,7 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7 and p.short_cmd != p.name) {
-					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, true) + ") ";
+					out += g_color + '(' + uresize(p.short_cmd, width_left - 3, p_wide_cmd[p.pid]) + ") ";
 					width_left -= (ulen(p.short_cmd, true) + 3);
 				}
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
@@ -1473,6 +1476,15 @@ namespace Proc {
 			}
 			p_graphs.compact();
 			p_counters.compact();
+
+			for (auto element = p_wide_cmd.begin(); element != p_wide_cmd.end();) {
+				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
+					element = p_wide_cmd.erase(element);
+				}
+				else
+					++element;
+			}
+			p_wide_cmd.compact();
 		}
 
 		if (selected == 0 and selected_pid != 0) {
