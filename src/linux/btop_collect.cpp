@@ -885,6 +885,9 @@ namespace Mem {
 					while (not diskread.eof()) {
 						std::error_code ec;
 						diskread >> dev >> mountpoint >> fstype;
+						diskread.ignore(SSmax, '\n');
+
+						if (v_contains(found, mountpoint)) continue;
 
 						//? Match filter if not empty
 						if (not filter.empty()) {
@@ -918,7 +921,6 @@ namespace Mem {
 							}
 
 						}
-						diskread.ignore(SSmax, '\n');
 					}
 					//? Remove disks no longer mounted or filtered out
 					if (swap_disk and has_swap) found.push_back("swap");
@@ -1494,7 +1496,7 @@ namespace Proc {
 					if (not pread.good()) continue;
 					long_string.clear();
 					while(getline(pread, long_string, '\0')) {
-						new_proc.cmd += long_string + ' '; 
+						new_proc.cmd += long_string + ' ';
 						if (new_proc.cmd.size() > 1000) {
 							new_proc.cmd.resize(1000);
 							break;
