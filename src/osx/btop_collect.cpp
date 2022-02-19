@@ -1258,7 +1258,7 @@ namespace Proc {
 								std::string_view proc_args(proc_chars.get(), argmax);
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
 									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
-										while (argc-- > 0 and null_pos != string::npos) {
+										while (argc-- > 0 and null_pos != string::npos and cmp_less(new_proc.cmd.size(), 1000)) {
 											null_pos = proc_args.find('\0', start_pos);
 											new_proc.cmd += (string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
 											start_pos = null_pos + 1;
@@ -1269,6 +1269,10 @@ namespace Proc {
 							}
 						}
 						if (new_proc.cmd.empty()) new_proc.cmd = f_name;
+						if (new_proc.cmd.size() > 1000) {
+							new_proc.cmd.resize(1000);
+							new_proc.cmd.shrink_to_fit();
+						}
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
 						new_proc.cpu_s = kproc.kp_proc.p_starttime.tv_sec * 1'000'000 + kproc.kp_proc.p_starttime.tv_usec;
 						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);

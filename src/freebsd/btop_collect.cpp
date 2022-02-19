@@ -1201,12 +1201,16 @@ namespace Proc {
 					new_proc.name = kproc->ki_comm;
 					char** argv = kvm_getargv(kd(), kproc, 0);
 					if (argv) {
-						for (int i = 0; argv[i]; i++) {
+						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
 							new_proc.cmd += argv[i] + " "s;
 						}
 						if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 					}
 					if (new_proc.cmd.empty()) new_proc.cmd = new_proc.name;
+					if (new_proc.cmd.size() > 1000) {
+						new_proc.cmd.resize(1000);
+						new_proc.cmd.shrink_to_fit();
+					}
 					new_proc.ppid = kproc->ki_ppid;
 					new_proc.cpu_s = round(kproc->ki_start.tv_sec);
 					struct passwd *pwd = getpwuid(kproc->ki_uid);
