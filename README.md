@@ -595,7 +595,7 @@ force_tty = False
 #* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
 presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
 
-#* Set to True to enable "h,j,k,l" keys for directional control in lists.
+#* Set to True to enable "h,j,k,l,g,G" keys for directional control in lists.
 #* Conflicting keys for h:"help" and k:"kill" is accessible while holding shift.
 vim_keys = False
 

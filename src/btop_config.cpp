@@ -54,7 +54,7 @@ namespace Config {
 								"#* Use withespace \" \" as separator between different presets.\n"
 								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
 
-		{"vim_keys",			"#* Set to True to enable \"h,j,k,l\" keys for directional control in lists.\n"
+		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
 								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
