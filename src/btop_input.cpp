@@ -416,7 +416,7 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
-				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k"))) {
+				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G"))) {
 					proc_mouse_scroll:
 					redraw = false;
 					auto old_selected = Config::getI("proc_selected");

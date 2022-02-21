@@ -1070,11 +1070,11 @@ namespace Proc {
 			if (selected > 0 and start >= numpids - select_max) selected = select_max;
 			else start = clamp(start + select_max, 0, max(0, numpids - select_max));
 		}
-		else if (cmd_key == "home") {
+		else if (cmd_key == "home" or (vim_keys and cmd_key == "g")) {
 			start = 0;
 			if (selected > 0) selected = 1;
 		}
-		else if (cmd_key == "end") {
+		else if (cmd_key == "end" or (vim_keys and cmd_key == "G")) {
 			start = max(0, numpids - select_max);
 			if (selected > 0) selected = select_max;
 		}
