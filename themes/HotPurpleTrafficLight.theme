@@ -68,9 +68,9 @@ theme[cached_mid]="#ccff66"
 theme[cached_end]="#ff0000"
 
 # Mem/Disk available meter
-theme[available_start]="#00ff00"
+theme[available_start]="#ff0000"
 theme[available_mid]="#ccff66"
-theme[available_end]="#ff0000"
+theme[available_end]="#00ff00"
 
 # Mem/Disk used meter
 theme[used_start]="#00ff00"
