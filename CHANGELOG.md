@@ -1,3 +1,13 @@
+## v1.2.4
+
+* Optimization: Proc::draw()
+
+* Fixed: Ignore duplicate disks with same mountpoint
+
+* Changed: Restrict command line for processes to 1000 characters to fix utf8 conversion errors
+
+* Added: add "g" and "G" to vim keys, by @mohi001
+
 ## v1.2.3
 
 * Changed: floating_humanizer() now show fractions when shortened and value is < 10
