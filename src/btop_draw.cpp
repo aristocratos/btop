@@ -967,9 +967,9 @@ namespace Net {
 				+ uresize(selected_iface, 10) + Theme::c("hi_fg") + " n>" + title_right
 				+ Mv::to(y, x+width - i_size - 15) + title_left + Theme::c("hi_fg") + (net.stat.at("download").offset + net.stat.at("upload").offset > 0 ? Fx::b : "") + 'z'
 				+ Theme::c("title") + "ero" + title_right;
-			Input::mouse_mappings["b"] = {y, x+width - i_size - 9, 1, 3};
+			Input::mouse_mappings["b"] = {y, x+width - i_size - 8, 1, 3};
 			Input::mouse_mappings["n"] = {y, x+width - 6, 1, 3};
-			Input::mouse_mappings["z"] = {y, x+width - i_size - 15, 1, 4};
+			Input::mouse_mappings["z"] = {y, x+width - i_size - 14, 1, 4};
 			if (width - i_size - 20 > 6) {
 				out += Mv::to(y, x+width - i_size - 21) + title_left + Theme::c("hi_fg") + (net_auto ? Fx::b : "") + 'a' + Theme::c("title") + "uto" + title_right;
 				Input::mouse_mappings["a"] = {y, x+width - i_size - 20, 1, 4};
