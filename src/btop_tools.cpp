@@ -170,11 +170,16 @@ namespace Tools {
 
 	size_t wide_ulen(const string& str) {
 		unsigned int chars = 0;
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-		auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+		try {
+			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
 
-		for (auto c : w_str) {
-			chars += utf8::wcwidth(c);
+			for (auto c : w_str) {
+				chars += utf8::wcwidth(c);
+			}
+		}
+		catch (...) {
+			return ulen(str);
 		}
 
 		return chars;
@@ -193,11 +198,17 @@ namespace Tools {
 	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
 		if (wide) {
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
-			while (wide_ulen(w_str) > len)
-				w_str.pop_back();
-  			str = conv.to_bytes(w_str);
+			try {
+				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+				while (wide_ulen(w_str) > len)
+					w_str.pop_back();
+				string n_str = conv.to_bytes(w_str);
+				return n_str;
+			}
+			catch (...) {
+				return uresize(str, len, false);
+			}
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {
