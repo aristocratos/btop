@@ -1,3 +1,15 @@
+## v1.2.5
+
+* Fixed: Fallback to less accurate UTF8 char count if conversion to wstring fails
+
+* Fixed: Small ui fixes for mem and disks
+
+* Added: New theme HotPurpleTrafficLight, by @pallebone
+
+* Fixed: title_left symbol between auto and zero in the net box is not displayed, by @mrdotx
+
+* Fixed: Mouse mappings for net box
+
 ## v1.2.4
 
 * Optimization: Proc::draw()
