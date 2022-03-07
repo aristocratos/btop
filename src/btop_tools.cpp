@@ -372,7 +372,7 @@ namespace Tools {
 		}
 		if (shorten) {
 			auto f_pos = out.find('.');
-			if (f_pos == 1 and out.size() > 3) out = out.substr(0,2) + to_string((int)round(stof(out.substr(2)) / 10));
+			if (f_pos == 1 and out.size() > 3) out = to_string(round(stof(out) * 10) / 10).substr(0,3);
 			else if (f_pos != string::npos) out = to_string((int)round(stof(out)));
 			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
 			out.push_back(units[start][0]);
