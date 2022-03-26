@@ -266,20 +266,25 @@ namespace Cpu {
 	}
 
 	void update_sensors() {
-		int temp;
-		size_t size = sizeof(temp);
-		sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp, &size, NULL, 0);
-		temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
-		current_cpu.temp.at(0).push_back(temp);
-		if (current_cpu.temp.at(0).size() > 20)
-			current_cpu.temp.at(0).pop_front();
+		int temp = 0;
+		int p_temp = 0;
+		int found = 0;
+		bool got_package = false;
+		size_t size = sizeof(p_temp);
+		if (sysctlbyname("hw.acpi.thermal.tz0.temperature", &p_temp, &size, NULL, 0) >= 0) {
+			got_package = true;
+			p_temp = (p_temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
+		}
 
+		size = sizeof(temp);
 		for (int i = 0; i < Shared::coreCount; i++) {
 			string s = "dev.cpu." + std::to_string(i) + ".temperature";
-			if (sysctlbyname(s.c_str(), &temp, &size, NULL, 0) < 0) {
-				Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
-			} else {
+			if (sysctlbyname(s.c_str(), &temp, &size, NULL, 0) >= 0) {
 				temp = (temp - 2732) / 10;
+				if (not got_package) {
+					p_temp += temp;
+					found++;
+				}
 				if (cmp_less(i + 1, current_cpu.temp.size())) {
 					current_cpu.temp.at(i + 1).push_back(temp);
 					if (current_cpu.temp.at(i + 1).size() > 20)
@@ -287,6 +292,11 @@ namespace Cpu {
 				}
 			}
 		}
+
+		if (not got_package) p_temp /= found;
+		current_cpu.temp.at(0).push_back(p_temp);
+		if (current_cpu.temp.at(0).size() > 20)
+			current_cpu.temp.at(0).pop_front();
 
 	}
 
