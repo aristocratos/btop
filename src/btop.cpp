@@ -60,7 +60,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.2.5";
+	const string Version = "1.2.6";
 
 	int coreCount;
 	string overlay;

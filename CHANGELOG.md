@@ -1,3 +1,11 @@
+## v1.2.6
+
+* Fixed: Wrong memory unit when shorten and size is less than 10, by @mohi001
+
+* Fixed: Use cpu cores avarage temp if missing cpu package temp for FreeBSD
+
+* Changed: Enter symbol to a more common variant
+
 ## v1.2.5
 
 * Fixed: Fallback to less accurate UTF8 char count if conversion to wstring fails
