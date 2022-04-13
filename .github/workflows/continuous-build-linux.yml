@@ -79,6 +79,9 @@ jobs:
       - name: Install build tools
         run: apk add --no-cache coreutils git make tar zstd
 
+      - name: Fix - Unsafe repository stop
+        run: git config --global --add safe.directory /__w/btop/btop
+
       - name: Checkout source
         uses: actions/checkout@v2
 
