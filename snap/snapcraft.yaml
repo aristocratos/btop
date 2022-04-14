@@ -33,7 +33,6 @@ apps:
       - hardware-observe
       - network
       - network-observe
-    #  - physical-memory-observe
       - home
       - removable-media
 
