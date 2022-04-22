@@ -14,7 +14,7 @@ compression: lzo
 
 architectures:
   - build-on: amd64
-    run-on: [all]
+    run-on: [amd64, armhf, arm64, ppc64el, s390x]
 
 package-repositories:
  - type: apt
