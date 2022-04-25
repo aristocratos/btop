@@ -14,7 +14,10 @@ compression: lzo
 
 architectures:
   - build-on: amd64
-    run-on: [amd64, armhf, arm64, ppc64el, s390x]
+  - build-on: arm64
+  - build-on: armhf
+  - build-on: ppc64el
+  - build-on: s390x
 
 package-repositories:
  - type: apt
@@ -33,7 +36,6 @@ apps:
       - hardware-observe
       - network
       - network-observe
-    #  - physical-memory-observe
       - home
       - removable-media
 
