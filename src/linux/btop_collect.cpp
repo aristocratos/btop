@@ -732,6 +732,7 @@ namespace Mem {
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
+	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
 	mem_info current_mem {};
 
@@ -754,10 +755,27 @@ namespace Mem {
 		auto& show_swap = Config::getB("show_swap");
 		auto& swap_disk = Config::getB("swap_disk");
 		auto& show_disks = Config::getB("show_disks");
+		auto& zfs_arc_cached = Config::getB("zfs_arc_cached");
 		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 
 		mem.stats.at("swap_total") = 0;
+
+		//? Read ZFS ARC info from /proc/spl/kstat/zfs/arcstats
+		uint64_t arc_size = 0;
+		if (zfs_arc_cached) {
+			ifstream arcstats(Shared::procPath / "spl/kstat/zfs/arcstats");
+			if (arcstats.good()) {
+				std::string line;
+				while (std::getline(arcstats, line)) {
+					std::smatch match;
+					if (std::regex_match(line, match, zfs_size_regex) && match.size() == 2) {
+						arc_size = stoull(match.str(1));
+					}
+				}
+			}
+			arcstats.close();
+		}
 
 		//? Read memory info from /proc/meminfo
 		ifstream meminfo(Shared::procPath / "meminfo");
@@ -790,6 +808,10 @@ namespace Mem {
 				meminfo.ignore(SSmax, '\n');
 			}
 			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
+			if (zfs_arc_cached) {
+				mem.stats.at("cached") += arc_size;
+				mem.stats.at("available") += arc_size;
+			}
 			mem.stats.at("used") = totalMem - mem.stats.at("available");
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
 		}

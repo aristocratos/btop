@@ -141,6 +141,8 @@ namespace Config {
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
+		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
+
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
 
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
@@ -230,6 +232,7 @@ namespace Config {
 		{"background_update", true},
 		{"mem_graphs", true},
 		{"mem_below_net", false},
+		{"zfs_arc_cached", true},
 		{"show_swap", true},
 		{"swap_disk", true},
 		{"show_disks", true},
