@@ -19,8 +19,6 @@ else
 endif
 
 PREFIX ?= /usr/local
-DESKTOPENTRY ?= /usr/share/applications/btop.desktop
-ICONDIR ?= /usr/share/icons/hicolor
 
 #? Detect PLATFORM and ARCH from uname/gcc if not set
 PLATFORM ?= $(shell uname -s || echo unknown)
@@ -214,11 +212,15 @@ install:
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESKTOPENTRY)\n"
-	@cp -p btop.desktop $(DESKTOPENTRY)
-	@printf "\033[1;92mInstalling icons to: \033[1;97m$(ICONDIR)\n"
-	@cp -p Img/icon.png $(ICONDIR)/48x48/apps/btop.png
-	@cp -p Img/icon.svg $(ICONDIR)/scalable/apps/btop.svg
+	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
+	@cp -p btop.desktop $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
+	@printf "\033[1;92mInstalling PNG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps
+	@cp -p Img/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
+	@printf "\033[1;92mInstalling SVG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
+	@cp -p Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
 
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
@@ -234,12 +236,12 @@ uninstall:
 	@rm -rf $(DESTDIR)$(PREFIX)/bin/btop
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\033[0m\n"
 	@rm -rf $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESKTOPENTRY)\033[0m\n"
-	@rm -rf $(DESKTOPENTRY)
-	@printf "\033[1;91mRemoving: \033[1;97m$(ICONDIR)/48x48/btop.png\033[0m\n"
-	@rm -rf $(ICONDIR)/48x48/apps/btop.png
-	@printf "\033[1;91mRemoving: \033[1;97m$(ICONDIR)/scalable/btop.svg\033[0m\n"
-	@rm -rf $(ICONDIR)/scalable/apps/btop.svg
+	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
+	@rm -rf $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
+	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\033[0m\n"
+	@rm -rf $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
+	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\033[0m\n"
+	@rm -rf $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
 
 #? Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
