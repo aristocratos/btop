@@ -2128,9 +2128,8 @@ auto collect(const bool no_update) -> vector<proc_info>& {
         rng::stable_sort(current_procs, rng::less{}, &proc_info::tree_index);
     }
 
-    numpids = (int)current_procs.size() - filter_found;
-
     filter_kernel(should_filter_kernel);
+    numpids = (int)current_procs.size() - filter_found;
     return current_procs;
 }
 }  // namespace Proc
