@@ -54,3 +54,4 @@ btop
 
 #do not ignore .github directory
 !.github
+compile_commands.json
