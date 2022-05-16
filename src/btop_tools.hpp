@@ -187,6 +187,16 @@ namespace Tools {
 		return str.find(find_val) != string::npos;
 	}
 
+	//* Check if string <str> contains string <find_val>, while ignoring case
+	inline bool s_contains_ic(const string& str, const string& find_val) {
+        auto it = std::search(
+            str.begin(), str.end(),
+            find_val.begin(), find_val.end(),
+            [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+        );
+		return it != str.end();
+	}
+
 	//* Return index of <find_val> from vector <vec>, returns size of <vec> if <find_val> is not present
 	template <typename T>
 	inline size_t v_index(const vector<T>& vec, const T& find_val) {
