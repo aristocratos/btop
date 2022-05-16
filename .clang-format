@@ -1,3 +1,4 @@
 BasedOnStyle: Google
-IndentWidth: 4
+UseTab: ForIndentation
+TabWidth: 4
 PointerAlignment: Left
