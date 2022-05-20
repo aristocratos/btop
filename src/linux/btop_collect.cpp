@@ -23,6 +23,8 @@ tab-size = 4
 #include <unistd.h>
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <numeric>
 #include <ranges>
@@ -1424,6 +1426,8 @@ int filter_found = 0;
 
 detail_container detailed;
 
+uint64_t kthreadd_pid{};
+
 static void filter_kernel(const bool& should_filter) {
   if (!should_filter) {
 	return;
@@ -1431,14 +1435,7 @@ static void filter_kernel(const bool& should_filter) {
 
   // Filter out kernel processes
   auto keraser = rng::remove_if(current_procs, [](const proc_info& curr) {
-	if (curr.name == "kthreadd") {
-	  return true;
-	}
-	auto parent = rng::find_if(current_procs.begin(), current_procs.end(),
-	                           [&curr](const auto& possible_parent) {
-	                             return possible_parent.pid == curr.ppid;
-	                           });
-	return parent != current_procs.end() && parent->name == "kthreadd";
+	return curr.pid == kthreadd_pid || curr.ppid == kthreadd_pid;
   });
   current_procs.erase(keraser.begin(), keraser.end());
 }
@@ -1730,6 +1727,9 @@ auto collect(const bool no_update) -> vector<proc_info>& {
 		pread.open(d.path() / "comm");
 		if (not pread.good()) continue;
 		getline(pread, new_proc.name);
+		if (new_proc.name == "kthreadd") {
+		  kthreadd_pid = new_proc.pid;
+		}
 		pread.close();
 		//? Check for whitespace characters in name and set offset to
 		// get correct fields from stat file
@@ -1979,6 +1979,9 @@ auto collect(const bool no_update) -> vector<proc_info>& {
 	}
   }
 
+  // Filter kernel procs before filtering others
+  filter_kernel(should_filter_kernel);
+
   //* Match filter if defined
   if (should_filter) {
 	filter_found = 0;
@@ -1997,9 +2000,6 @@ auto collect(const bool no_update) -> vector<proc_info>& {
 	  }
 	}
   }
-
-  // Filter kernel procs before filtering others
-  filter_kernel(should_filter_kernel);
 
   //* Generate tree view if enabled
   if (tree and (not no_update or should_filter or sorted_change)) {
