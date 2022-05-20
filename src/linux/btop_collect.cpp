@@ -5,7 +5,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-         http://www.apache.org/licenses/LICENSE-2.0
+		 http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -1259,19 +1259,19 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-    uint64_t kthreadd_pid{};
+	uint64_t kthreadd_pid{};
 
-    static void filter_kernel(const bool& should_filter) {
-        if (!should_filter) {
-          return;
-        }
+	static void filter_kernel(const bool& should_filter) {
+		if (!should_filter) {
+		  return;
+		}
 
-        // Filter out kernel processes
-        auto keraser = rng::remove_if(current_procs, [](const proc_info& curr) {
-          return curr.pid == kthreadd_pid || curr.ppid == kthreadd_pid;
-        });
-        current_procs.erase(keraser.begin(), keraser.end());
-    }
+		// Filter out kernel processes
+		auto keraser = rng::remove_if(current_procs, [](const proc_info& curr) {
+		  return curr.pid == kthreadd_pid || curr.ppid == kthreadd_pid;
+		});
+		current_procs.erase(keraser.begin(), keraser.end());
+	}
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
@@ -1439,7 +1439,7 @@ namespace Proc {
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
 		const auto& per_core = Config::getB("proc_per_core");
-        const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
+		const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
 		const auto& tree = Config::getB("proc_tree");
 		const auto& show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
@@ -1505,7 +1505,7 @@ namespace Proc {
 			vector<size_t> found;
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 				if (Runner::stopping) 
-                    return current_procs; 
+					return current_procs; 
 				if (pread.is_open()) pread.close();
 
 				const string pid_str = d.path().filename();
@@ -1530,9 +1530,9 @@ namespace Proc {
 					pread.open(d.path() / "comm");
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
-                    if (new_proc.name == "kthreadd") {
-                        kthreadd_pid = new_proc.pid;            
-                    }
+					if (new_proc.name == "kthreadd") {
+						kthreadd_pid = new_proc.pid;			
+					}
 					pread.close();
 					//? Check for whitespace characters in name and set offset to get correct fields from stat file
 					new_proc.name_offset = rng::count(new_proc.name, ' ');
@@ -1690,7 +1690,7 @@ namespace Proc {
 			old_cputimes = cputimes;
 		}
 
-        filter_kernel(should_filter_kernel); // Filter here to make sorting faster.
+		filter_kernel(should_filter_kernel); // Filter here to make sorting faster.
 		//* ---------------------------------------------Collection done-----------------------------------------------
 
 		//* Sort processes
