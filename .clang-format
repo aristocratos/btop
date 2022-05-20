@@ -2,3 +2,4 @@ BasedOnStyle: Google
 UseTab: ForIndentation
 TabWidth: 4
 PointerAlignment: Left
+NamespaceIndentation: All
