@@ -1,3 +1,4 @@
+// clang-format off
 /* Copyright 2021 Aristocratos (jakob@qvantnet.com)
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,6 +96,8 @@ namespace Config {
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
+
+        {"proc_filter_kernel",  "#* Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
@@ -222,6 +225,7 @@ namespace Config {
 		{"proc_mem_bytes", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
+        {"proc_filter_kernel", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
