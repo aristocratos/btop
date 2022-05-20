@@ -1,3 +1,4 @@
+// clang-format off
 /* Copyright 2021 Aristocratos (jakob@qvantnet.com)
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -598,6 +599,10 @@ namespace Menu {
 				" ",
 				"Will show percentage of total memory",
 				"if False."},
+            {"proc_filter_kernel",
+                "Filter kernel processes from output",
+                "", 
+                "Removes processes most users don't care about."},
 		}
 	};
 
