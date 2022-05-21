@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-		 http://www.apache.org/licenses/LICENSE-2.0
+	 http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -1258,7 +1258,7 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-    constexpr size_t KTHREADD = 2;
+	constexpr size_t KTHREADD = 2;
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
@@ -1491,18 +1491,18 @@ namespace Proc {
 			//? Iterate over all pids in /proc
 			vector<size_t> found;
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
-				if (Runner::stopping) 
-					return current_procs; 
+				if (Runner::stopping)
+					return current_procs;
 				if (pread.is_open()) pread.close();
 
 				const string pid_str = d.path().filename();
 				if (not isdigit(pid_str[0])) continue;
 
 				const size_t pid = stoul(pid_str);
-                
-                if (should_filter_kernel && pid == KTHREADD) {
-                    continue;
-                }
+				
+				if (should_filter_kernel && pid == KTHREADD) {
+					continue;
+				}
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1596,7 +1596,7 @@ namespace Proc {
 								continue;
 							case 4: //? Parent pid
 								new_proc.ppid = stoull(short_str);
-                                next_x = 14;
+								next_x = 14;
 								continue;
 							case 14: //? Process utime
 								cpu_t = stoull(short_str);
@@ -1635,11 +1635,11 @@ namespace Proc {
 				catch (const std::out_of_range&) { continue; }
 
 				pread.close();
-                
-                if (should_filter_kernel && new_proc.ppid == KTHREADD) {
-                    current_procs.pop_back();
-                    found.pop_back();    
-                }
+				
+				if (should_filter_kernel && new_proc.ppid == KTHREADD) {
+					current_procs.pop_back();
+					found.pop_back();	
+				}
 
 				if (x-offset < 24) continue;
 
@@ -1682,7 +1682,6 @@ namespace Proc {
 
 			old_cputimes = cputimes;
 		}
-
 		//* ---------------------------------------------Collection done-----------------------------------------------
 
 		//* Sort processes
