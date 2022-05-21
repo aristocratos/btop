@@ -1258,7 +1258,7 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-    constexpr size_t KTHREADD = 2ull;
+    constexpr size_t KTHREADD = 2;
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
