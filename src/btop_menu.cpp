@@ -599,9 +599,10 @@ namespace Menu {
 				"Will show percentage of total memory",
 				"if False."},
             {"proc_filter_kernel",
-                "Filter kernel processes from output",
-                "", 
-                "Removes processes most users don't care about."},
+                "(Linux) Filter kernel processes from output.",
+                "",
+                "Set to 'True' to filter out internal",
+                "processes started by the Linux kernel."},
 		}
 	};
 
