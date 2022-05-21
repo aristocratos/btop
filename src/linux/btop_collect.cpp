@@ -1596,7 +1596,7 @@ namespace Proc {
 								continue;
 							case 4: //? Parent pid
 								new_proc.ppid = stoull(short_str);
-next_x = 14;
+                                next_x = 14;
 								continue;
 							case 14: //? Process utime
 								cpu_t = stoull(short_str);
