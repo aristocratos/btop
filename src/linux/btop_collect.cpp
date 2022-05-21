@@ -1,4 +1,3 @@
-// clang-format off
 /* Copyright 2021 Aristocratos (jakob@qvantnet.com)
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -1259,19 +1258,7 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-	uint64_t kthreadd_pid{};
-
-	static void filter_kernel(const bool& should_filter) {
-		if (!should_filter) {
-		  return;
-		}
-
-		// Filter out kernel processes
-		auto keraser = rng::remove_if(current_procs, [](const proc_info& curr) {
-		  return curr.pid == kthreadd_pid || curr.ppid == kthreadd_pid;
-		});
-		current_procs.erase(keraser.begin(), keraser.end());
-	}
+    constexpr size_t KTHREADD = 2ull;
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
@@ -1512,6 +1499,10 @@ namespace Proc {
 				if (not isdigit(pid_str[0])) continue;
 
 				const size_t pid = stoul(pid_str);
+                
+                if (should_filter_kernel && pid == KTHREADD) {
+                    continue;
+                }
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1530,9 +1521,6 @@ namespace Proc {
 					pread.open(d.path() / "comm");
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
-					if (new_proc.name == "kthreadd") {
-						kthreadd_pid = new_proc.pid;			
-					}
 					pread.close();
 					//? Check for whitespace characters in name and set offset to get correct fields from stat file
 					new_proc.name_offset = rng::count(new_proc.name, ' ');
@@ -1608,7 +1596,7 @@ namespace Proc {
 								continue;
 							case 4: //? Parent pid
 								new_proc.ppid = stoull(short_str);
-								next_x = 14;
+next_x = 14;
 								continue;
 							case 14: //? Process utime
 								cpu_t = stoull(short_str);
@@ -1647,6 +1635,11 @@ namespace Proc {
 				catch (const std::out_of_range&) { continue; }
 
 				pread.close();
+                
+                if (should_filter_kernel && new_proc.ppid == KTHREADD) {
+                    current_procs.pop_back();
+                    found.pop_back();    
+                }
 
 				if (x-offset < 24) continue;
 
@@ -1690,7 +1683,6 @@ namespace Proc {
 			old_cputimes = cputimes;
 		}
 
-		filter_kernel(should_filter_kernel); // Filter here to make sorting faster.
 		//* ---------------------------------------------Collection done-----------------------------------------------
 
 		//* Sort processes
