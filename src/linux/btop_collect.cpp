@@ -16,7 +16,7 @@ indent = tab
 tab-size = 4
 */
 
-#include "robin_hood.h"
+#include <robin_hood.h>
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -1274,6 +1274,7 @@ namespace Proc {
         
         latest_clear_time++;
     }
+
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
 		auto cur_pos = out_procs.size();
@@ -1467,8 +1468,11 @@ namespace Proc {
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
 			should_filter = true;
+
             // First make sure kernel proc cache is cleared.
-            clear_kernel_cache();
+            if (should_filter_kernel) {
+                clear_kernel_cache();
+            }
 
 			auto totalMem = Mem::get_totalMem();
 			int totalMem_len = to_string(totalMem >> 10).size();
@@ -1519,6 +1523,7 @@ namespace Proc {
 				if (should_filter_kernel && (pid == KTHREADD || kernels_procs.contains(pid))) {
 					continue;
 				}
+
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
