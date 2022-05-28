@@ -1,3 +1,17 @@
+## v1.2.7
+
+* Fixed: Disk IO stats for individual partitions instead of whole disk (Linux)
+
+* Added: Case insensitive process filtering, by @abrasumente233
+
+* Added: Include ZFS ARC in cached/available memory on Linux, by @mattico
+
+* Added: Desktop entry and icons, by @yonatan8070
+
+* Fixed: Net sync scale bug
+
+* Added: tokyo-night & tokyo-storm themes, by @Schievel1
+
 ## v1.2.6
 
 * Fixed: Wrong memory unit when shorten and size is less than 10, by @mohi001
