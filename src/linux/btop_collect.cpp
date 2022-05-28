@@ -1153,6 +1153,7 @@ namespace Net {
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
+						if (net_sync and saved_stat.speed < net.at(iface).stat.at(dir == "download" ? "upload" : "download").speed) continue;
 						if (saved_stat.speed > graph_max[dir]) {
 							++max_count[dir][0];
 							if (max_count[dir][1] > 0) --max_count[dir][1];

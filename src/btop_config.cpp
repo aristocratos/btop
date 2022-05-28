@@ -243,7 +243,7 @@ namespace Config {
 		{"base_10_sizes", false},
 		{"io_graph_combined", false},
 		{"net_auto", true},
-		{"net_sync", false},
+		{"net_sync", true},
 		{"show_battery", true},
 		{"vim_keys", false},
 		{"tty_mode", false},
