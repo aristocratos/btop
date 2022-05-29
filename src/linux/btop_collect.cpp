@@ -1267,7 +1267,7 @@ namespace Proc {
     static void clear_kernel_cache() {
         static size_t latest_clear_time = 0;
         
-        if (latest_clear_time >= static_cast<size_t>(Config::getI("update_ms") * 100)) {
+        if (latest_clear_time >= 256) {
             kernels_procs.clear();        
             latest_clear_time = 0;
         }
