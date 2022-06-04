@@ -55,11 +55,11 @@ endif
 
 #? Compiler and Linker
 ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-	CXX := g++-11
+	CXX ?= g++-11
 else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
-	CXX := g++11
+	CXX ?= g++11
 else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
-	CXX := g++
+	CXX ?= g++
 endif
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 
