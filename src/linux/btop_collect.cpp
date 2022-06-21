@@ -513,51 +513,56 @@ namespace Cpu {
 
 		//? Get paths to needed files and check for valid values on first run
 		if (batteries.empty() and has_battery) {
-			if (fs::exists("/sys/class/power_supply")) {
-				for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
-					//? Only consider online power supplies of type Battery or UPS
-					//? see kernel docs for details on the file structure and contents
-					//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
-					battery new_bat;
-					fs::path bat_dir;
-					try {
-						if (not d.is_directory()
-							or not fs::exists(d.path() / "type")
-							or not fs::exists(d.path() / "present")
-							or stoi(readfile(d.path() / "present")) != 1)
+			try {
+				if (fs::exists("/sys/class/power_supply")) {
+					for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
+						//? Only consider online power supplies of type Battery or UPS
+						//? see kernel docs for details on the file structure and contents
+						//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
+						battery new_bat;
+						fs::path bat_dir;
+						try {
+							if (not d.is_directory()
+								or not fs::exists(d.path() / "type")
+								or not fs::exists(d.path() / "present")
+								or stoi(readfile(d.path() / "present")) != 1)
+								continue;
+							string dev_type = readfile(d.path() / "type");
+							if (is_in(dev_type, "Battery", "UPS")) {
+								bat_dir = d.path();
+								new_bat.base_dir = d.path();
+								new_bat.device_type = dev_type;
+							}
+						} catch (...) {
+							//? skip power supplies not conforming to the kernel standard
 							continue;
-						string dev_type = readfile(d.path() / "type");
-						if (is_in(dev_type, "Battery", "UPS")) {
-							bat_dir = d.path();
-							new_bat.base_dir = d.path();
-							new_bat.device_type = dev_type;
 						}
-					} catch (...) {
-						//? skip power supplies not conforming to the kernel standard
-						continue;
+
+						if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
+						else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
+						else new_bat.use_energy = false;
+
+						if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
+						else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
+						else new_bat.use_energy = false;
+
+						if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
+							continue;
+						}
+
+						if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
+						else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+
+						if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
+						else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
+
+						batteries[bat_dir.filename()] = new_bat;
+						Config::available_batteries.push_back(bat_dir.filename());
 					}
-
-					if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
-					else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
-					else new_bat.use_energy = false;
-
-					if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
-					else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
-					else new_bat.use_energy = false;
-
-					if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
-						continue;
-					}
-
-					if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
-					else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
-
-					if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
-					else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
-
-					batteries[bat_dir.filename()] = new_bat;
-					Config::available_batteries.push_back(bat_dir.filename());
 				}
+			}
+			catch (...) {
+				batteries.clear();
 			}
 			if (batteries.empty()) {
 				has_battery = false;
