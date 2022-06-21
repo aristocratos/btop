@@ -1099,7 +1099,8 @@ namespace Proc {
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		auto& proc_tree = Config::getB("proc_tree");
-		const bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
+		auto& proc_visuals = Config::getB("proc_visuals");
+        const bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
 		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
 		auto& proc_colors = Config::getB("proc_colors");
 		auto& tty_mode = Config::getB("tty_mode");
@@ -1190,8 +1191,8 @@ namespace Proc {
 				if (item_fit >= 3) out += cjust("IO/R:", item_width);
 				if (item_fit >= 4) out += cjust("IO/W:", item_width);
 				if (item_fit >= 5) out += cjust("Parent:", item_width);
-				if (item_fit >= 6) out += cjust("User:", item_width);
-				if (item_fit >= 7) out += cjust("Threads:", item_width);
+				if (item_fit >= 6 && proc_visuals) out += cjust("User:", item_width);
+				if (item_fit >= 7 && proc_visuals) out += cjust("Threads:", item_width);
 				if (item_fit >= 8) out += cjust("Nice:", item_width);
 
 
@@ -1280,11 +1281,17 @@ namespace Proc {
 			else
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
 					+ ljust("Tree:", tree_size) + ' ';
-
-			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
+            if(proc_visuals)
+                out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
 					+ rjust("Cpu%", 10) + Fx::ub;
+            else {
+                thread_size = 0;
+                user_size = 0;
+                out += (mem_bytes ? "  MemB" : "Mem%")
+                    + rjust(" Cpu%", 11) + Fx::ub;
+            }
 		}
 		//* End of redraw block
 
@@ -1313,8 +1320,8 @@ namespace Proc {
 			if (item_fit >= 3) out += cjust(detailed.io_read, item_width);
 			if (item_fit >= 4) out += cjust(detailed.io_write, item_width);
 			if (item_fit >= 5) out += cjust(detailed.parent, item_width, true);
-			if (item_fit >= 6) out += cjust(detailed.entry.user, item_width, true);
-			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
+			if (item_fit >= 6 && proc_visuals) out += cjust(detailed.entry.user, item_width, true);
+			if (item_fit >= 7 && proc_visuals) out += cjust(to_string(detailed.entry.threads), item_width);
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
 

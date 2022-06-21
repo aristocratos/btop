@@ -84,6 +84,8 @@ namespace Config {
 
 		{"proc_tree",			"#* Show processes as a tree."},
 
+        {"proc_visuals",			"#* Hide visuals for Threads and User in Proc List."},
+
 		{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
 
 		{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
@@ -216,7 +218,8 @@ namespace Config {
 		{"rounded_corners", true},
 		{"proc_reversed", false},
 		{"proc_tree", false},
-		{"proc_colors", true},
+        {"proc_visuals", true},
+        {"proc_colors", true},
 		{"proc_gradient", true},
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
