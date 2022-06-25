@@ -929,14 +929,15 @@ namespace Mem {
 							found.push_back(mountpoint);
 							if (not v_contains(last_found, mountpoint)) redraw = true;
 
-							//? Save mountpoint, name, dev path and path to /sys/block stat file
+							//? Save mountpoint, name, fstype, dev path and path to /sys/block stat file
 							if (not disks.contains(mountpoint)) {
-								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename(), fstype};
 								if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
 								#ifdef SNAPPED
 									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
 								#endif
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+								disks.at(mountpoint).fstype = fstype;
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
 								while (devname.size() >= 2) {
@@ -945,6 +946,11 @@ namespace Mem {
 											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
 										else
 											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										break;
+									//? Set ZFS stat filepath
+									} else if (fs::exists("/proc/spl/kstat/zfs/" + devname + "/io", ec) and access(string("/proc/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
+										Logger::warning("Adding ZFS stat path for " + (string)dev);
+										disks.at(mountpoint).stat = "/proc/spl/kstat/zfs/" + devname + "/io";
 										break;
 									}
 									devname.resize(devname.size() - 1);
@@ -993,7 +999,7 @@ namespace Mem {
 				#endif
 				if (swap_disk and has_swap) {
 					mem.disks_order.push_back("swap");
-					if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
+					if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
 					disks.at("swap").total = mem.stats.at("swap_total");
 					disks.at("swap").used = mem.stats.at("swap_used");
 					disks.at("swap").free = mem.stats.at("swap_free");
@@ -1008,39 +1014,76 @@ namespace Mem {
 					#endif
 
 				//? Get disks IO
-				int64_t sectors_read, sectors_write, io_ticks;
+				int64_t sectors_read, sectors_write, io_ticks, io_ticks_read, io_ticks_write;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
 					diskread.open(disk.stat);
 					if (diskread.good()) {
-						disk_ios++;
-						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> sectors_read;
-						if (disk.io_read.empty())
-							disk.io_read.push_back(0);
-						else
-							disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
-						disk.old_io.at(0) = sectors_read;
-						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+						//? ZFS Pool Support
+						if (disk.fstype == "zfs") {
+							disk_ios++;
+							for (int i = 0; i < 18; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> sectors_read; // nbytes read
+							Logger::warning("ZFS device " + (string)disk.name + " read bytes: " + to_string(sectors_read));
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
-						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> sectors_write;
-						if (disk.io_write.empty())
-							disk.io_write.push_back(0);
-						else
-							disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
-						disk.old_io.at(1) = sectors_write;
-						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+							diskread >> sectors_write; // nbytes written
+							Logger::warning("ZFS device " + (string)disk.name + " write bytes: " + to_string(sectors_write));
+							if (disk.io_write.empty())
+								disk.io_write.push_back(0);
+							else
+								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1))));
+							disk.old_io.at(1) = sectors_write;
+							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
-						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> io_ticks;
-						if (disk.io_activity.empty())
-							disk.io_activity.push_back(0);
-						else
-							disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
-						disk.old_io.at(2) = io_ticks;
-						while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> io_ticks_write;
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> io_ticks_read;
+							io_ticks = io_ticks_write + io_ticks_read;
+							if (disk.io_activity.empty())
+								disk.io_activity.push_back(0);
+							else
+								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+							disk.old_io.at(2) = io_ticks;
+							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+						} else {
+							disk_ios++;
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> sectors_read;
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+							for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> sectors_write;
+							if (disk.io_write.empty())
+								disk.io_write.push_back(0);
+							else
+								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
+							disk.old_io.at(1) = sectors_write;
+							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> io_ticks;
+							if (disk.io_activity.empty())
+								disk.io_activity.push_back(0);
+							else
+								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+							disk.old_io.at(2) = io_ticks;
+							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+						}
+					} else {
+						Logger::warning("Error in Mem::collect() : when opening " + (string)disk.stat);
 					}
 					diskread.close();
 				}
