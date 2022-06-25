@@ -949,7 +949,6 @@ namespace Mem {
 										break;
 									//? Set ZFS stat filepath
 									} else if (fs::exists("/proc/spl/kstat/zfs/" + devname + "/io", ec) and access(string("/proc/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
-										Logger::warning("Adding ZFS stat path for " + (string)dev);
 										disks.at(mountpoint).stat = "/proc/spl/kstat/zfs/" + devname + "/io";
 										break;
 									}
@@ -1025,7 +1024,6 @@ namespace Mem {
 							disk_ios++;
 							for (int i = 0; i < 18; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 							diskread >> sectors_read; // nbytes read
-							Logger::warning("ZFS device " + (string)disk.name + " read bytes: " + to_string(sectors_read));
 							if (disk.io_read.empty())
 								disk.io_read.push_back(0);
 							else
@@ -1034,7 +1032,6 @@ namespace Mem {
 							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
 							diskread >> sectors_write; // nbytes written
-							Logger::warning("ZFS device " + (string)disk.name + " write bytes: " + to_string(sectors_write));
 							if (disk.io_write.empty())
 								disk.io_write.push_back(0);
 							else
