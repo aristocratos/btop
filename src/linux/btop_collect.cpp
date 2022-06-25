@@ -937,7 +937,6 @@ namespace Mem {
 									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
 								#endif
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
-								disks.at(mountpoint).fstype = fstype;
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
 								while (devname.size() >= 2) {
