@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <robin_hood.h>
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -1264,6 +1265,21 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
+	static robin_hood::unordered_set<size_t> kernels_procs{};
+	constexpr size_t KTHREADD = 2;
+
+	// Clearing the cache is used in the event of a pid wrap around. 
+	// In that event processes that acquire old kernel pids would also be filtered out so we need to manually clean the cache every now and then.
+	static void clear_kernel_cache() {
+		static size_t latest_clear_time = 0;
+		
+		if (latest_clear_time >= 256) {
+			kernels_procs.clear();		
+			latest_clear_time = 0;
+		}
+		
+		latest_clear_time++;
+	}
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
@@ -1431,6 +1447,7 @@ namespace Proc {
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
 		const auto& per_core = Config::getB("proc_per_core");
+		const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
 		const auto& tree = Config::getB("proc_tree");
 		const auto& show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
@@ -1457,6 +1474,11 @@ namespace Proc {
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
 			should_filter = true;
+
+			// First make sure kernel proc cache is cleared.
+			if (should_filter_kernel) {
+				clear_kernel_cache();
+			}
 
 			auto totalMem = Mem::get_totalMem();
 			int totalMem_len = to_string(totalMem >> 10).size();
@@ -1503,6 +1525,11 @@ namespace Proc {
 				if (not isdigit(pid_str[0])) continue;
 
 				const size_t pid = stoul(pid_str);
+				
+				if (should_filter_kernel && (pid == KTHREADD || kernels_procs.contains(pid))) {
+					continue;
+				}
+
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1635,6 +1662,13 @@ namespace Proc {
 				catch (const std::out_of_range&) { continue; }
 
 				pread.close();
+				
+				if (should_filter_kernel && new_proc.ppid == KTHREADD) {
+					kernels_procs.emplace(new_proc.pid);
+					current_procs.pop_back();
+					found.pop_back();	
+					continue;
+				}
 
 				if (x-offset < 24) continue;
 
