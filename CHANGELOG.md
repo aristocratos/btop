@@ -1,3 +1,15 @@
+## v1.2.8
+
+* Added: Support for ZFS pool io stats monitoring, by @simplepad
+
+* Added: Filtering of kernel processes, by @0xJoeMama
+
+* Added: New theme everforest-dark-hard, by @iambeingtracked
+
+* Added: New theme tomorrow-night, by @appuchias
+
+* Changed: Disable battery monitoring if it fails instead of exiting
+
 ## v1.2.7
 
 * Fixed: Disk IO stats for individual partitions instead of whole disk (Linux)
