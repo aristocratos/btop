@@ -1265,8 +1265,8 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-	static robin_hood::unordered_set<size_t> kernels_procs{};
 	constexpr size_t KTHREADD = 2;
+	static robin_hood::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
@@ -1468,7 +1468,8 @@ namespace Proc {
 			if (should_filter_kernel and ++proc_clear_count >= 256) {
 				//? Clearing the cache is used in the event of a pid wrap around. 
 				//? In that event processes that acquire old kernel pids would also be filtered out so we need to manually clean the cache every now and then.
-				kernels_procs.clear();		
+				kernels_procs.clear();
+				kernels_procs.emplace(KTHREADD);
 				proc_clear_count = 0;
 			}
 
@@ -1518,7 +1519,7 @@ namespace Proc {
 
 				const size_t pid = stoul(pid_str);
 				
-				if (should_filter_kernel && (pid == KTHREADD || kernels_procs.contains(pid))) {
+				if (should_filter_kernel and kernels_procs.contains(pid)) {
 					continue;
 				}
 
@@ -1655,11 +1656,9 @@ namespace Proc {
 
 				pread.close();
 				
-				if (should_filter_kernel && new_proc.ppid == KTHREADD) {
+				if (should_filter_kernel and new_proc.ppid == KTHREADD) {
 					kernels_procs.emplace(new_proc.pid);
-					current_procs.pop_back();
-					found.pop_back();	
-					continue;
+					found.pop_back();
 				}
 
 				if (x-offset < 24) continue;
@@ -1688,7 +1687,7 @@ namespace Proc {
 				}
 			}
 
-			//? Clear dead processes from current_procs
+			//? Clear dead processes from current_procs and remove kernel processes if enabled
 			auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
 			current_procs.erase(eraser.begin(), eraser.end());
 
