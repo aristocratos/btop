@@ -1268,19 +1268,6 @@ namespace Proc {
 	static robin_hood::unordered_set<size_t> kernels_procs{};
 	constexpr size_t KTHREADD = 2;
 
-	// Clearing the cache is used in the event of a pid wrap around. 
-	// In that event processes that acquire old kernel pids would also be filtered out so we need to manually clean the cache every now and then.
-	static void clear_kernel_cache() {
-		static size_t latest_clear_time = 0;
-		
-		if (latest_clear_time >= 256) {
-			kernels_procs.clear();		
-			latest_clear_time = 0;
-		}
-		
-		latest_clear_time++;
-	}
-
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
 		auto cur_pos = out_procs.size();
@@ -1467,6 +1454,8 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
+		static size_t proc_clear_count = 0;
+
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, round(uptime), current_procs);
@@ -1475,9 +1464,12 @@ namespace Proc {
 		else {
 			should_filter = true;
 
-			// First make sure kernel proc cache is cleared.
-			if (should_filter_kernel) {
-				clear_kernel_cache();
+			//? First make sure kernel proc cache is cleared.
+			if (should_filter_kernel and ++proc_clear_count >= 256) {
+				//? Clearing the cache is used in the event of a pid wrap around. 
+				//? In that event processes that acquire old kernel pids would also be filtered out so we need to manually clean the cache every now and then.
+				kernels_procs.clear();		
+				proc_clear_count = 0;
 			}
 
 			auto totalMem = Mem::get_totalMem();
