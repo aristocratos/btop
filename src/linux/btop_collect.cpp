@@ -947,8 +947,8 @@ namespace Mem {
 											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
 										break;
 									//? Set ZFS stat filepath
-									} else if (fs::exists("/proc/spl/kstat/zfs/" + devname + "/io", ec) and access(string("/proc/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
-										disks.at(mountpoint).stat = "/proc/spl/kstat/zfs/" + devname + "/io";
+									} else if (fs::exists(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io", ec) and access(string(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
+										disks.at(mountpoint).stat = Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io";
 										break;
 									}
 									devname.resize(devname.size() - 1);
@@ -1079,7 +1079,7 @@ namespace Mem {
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						}
 					} else {
-						Logger::warning("Error in Mem::collect() : when opening " + (string)disk.stat);
+						Logger::debug("Error in Mem::collect() : when opening " + (string)disk.stat);
 					}
 					diskread.close();
 				}
