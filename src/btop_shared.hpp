@@ -131,6 +131,7 @@ namespace Mem {
 	struct disk_info {
 		std::filesystem::path dev;
 		string name;
+		string fstype;
 		std::filesystem::path stat = "";
 		int64_t total = 0, used = 0, free = 0;
 		int used_percent = 0, free_percent = 0;
