@@ -851,6 +851,7 @@ namespace Mem {
 				bool filter_exclude = false;
 				auto& use_fstab = Config::getB("use_fstab");
 				auto& only_physical = Config::getB("only_physical");
+				auto& zfs_pools_only = Config::getB("zfs_pools_only");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
