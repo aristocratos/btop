@@ -275,7 +275,7 @@ namespace Proc {
 	};
 
 	//* Sort vector of proc_info's
-	void proc_sorter(vector<proc_info>& proc_vec, string sorting, const bool reverse, const bool tree = false);
+	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, const bool reverse, const bool tree = false);
 
 	//* Recursive sort of process tree
 	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, const bool reverse, int& c_index, const int index_max, const bool collapsed = false);

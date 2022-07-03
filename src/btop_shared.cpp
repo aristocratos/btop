@@ -27,7 +27,7 @@ using namespace Tools;
 
 
 namespace Proc {
-	void proc_sorter(vector<proc_info>& proc_vec, string sorting, const bool reverse, const bool tree) {
+	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, const bool reverse, const bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
