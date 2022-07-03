@@ -264,6 +264,7 @@ namespace Config {
 		{"net_upload", 100},
 		{"detailed_pid", 0},
 		{"selected_pid", 0},
+		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
@@ -472,6 +473,7 @@ namespace Config {
 				strings.at("selected_name") = Proc::selected_name;
 				ints.at("proc_start") = Proc::start;
 				ints.at("proc_selected") = Proc::selected;
+				ints.at("selected_depth") = Proc::selected_depth;
 			}
 
 			for (auto& item : stringsTmp) {

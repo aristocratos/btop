@@ -131,7 +131,7 @@ namespace Mem {
 	struct disk_info {
 		std::filesystem::path dev;
 		string name;
-		string fstype;
+		string fstype = "";
 		std::filesystem::path stat = "";
 		int64_t total = 0, used = 0, free = 0;
 		int used_percent = 0, free_percent = 0;
@@ -199,7 +199,7 @@ namespace Proc {
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
-	extern int selected_pid, start, selected, collapse, expand;
+	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth;
 	extern string selected_name;
 
 	//? Contains the valid sorting options for processes
@@ -268,4 +268,18 @@ namespace Proc {
 
 	//* Draw contents of proc box using <plist> as data source
 	string draw(const vector<proc_info>& plist, const bool force_redraw=false, const bool data_same=false);
+
+	struct tree_proc {
+		std::reference_wrapper<proc_info> entry;
+		vector<tree_proc> children;
+	};
+
+	//* Sort vector of proc_info's
+	void proc_sorter(vector<proc_info>& proc_vec, string sorting, const bool reverse, const bool tree = false);
+
+	//* Recursive sort of process tree
+	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, const bool reverse, int& c_index, const int index_max, const bool collapsed = false);
+
+	//* Generate process tree list
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false);
 }

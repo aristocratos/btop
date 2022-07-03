@@ -354,7 +354,16 @@ namespace Input {
 								const auto& current_selection = Config::getI("proc_selected");
 								if (current_selection == line - y - 1) {
 									redraw = true;
-									goto proc_mouse_enter;
+									if (Config::getB("proc_tree")) {
+										const int x_pos = col - Proc::x;
+										const int offset = Config::getI("selected_depth") * 3;
+										if (x_pos > offset and x_pos < 4 + offset) {
+											process("space");
+											return;
+										}
+									}
+									process("enter");
+									return;
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
@@ -380,7 +389,6 @@ namespace Input {
 						keep_going = true;
 				}
 				else if (key == "enter") {
-					proc_mouse_enter:
 					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
 						return;
 					}
