@@ -160,6 +160,9 @@ namespace Mem {
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
+
+	//? * Find the filepath to the specified ZFS object's stat file
+	string get_zfs_stat_file(const string& device_name, size_t dataset_name_start);
 }
 
 namespace Net {

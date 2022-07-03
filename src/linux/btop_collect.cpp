@@ -26,6 +26,7 @@ tab-size = 4
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <dirent.h>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
@@ -925,6 +926,10 @@ namespace Mem {
 								continue;
 						}
 
+						//? Skip ZFS datasets if zfs_pools_only option is enabled
+						size_t zfs_dataset_name_start = 0;
+						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_pools_only) continue;
+
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))
 						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
@@ -949,8 +954,11 @@ namespace Mem {
 											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
 										break;
 									//? Set ZFS stat filepath
-									} else if (fs::exists(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io", ec) and access(string(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
-										disks.at(mountpoint).stat = Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io";
+									} else if (fstype == "zfs") {
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start);
+										if (disks.at(mountpoint).stat.empty()) {
+											Logger::warning("Failed to get ZFS stat file for device " + dev);
+										}
 										break;
 									}
 									devname.resize(devname.size() - 1);
@@ -1020,18 +1028,17 @@ namespace Mem {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
 					diskread.open(disk.stat);
 					if (diskread.good()) {
+						disk_ios++;
 						//? ZFS Pool Support
 						if (disk.fstype == "zfs") {
-							disk_ios++;
-							for (int i = 0; i < 18; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> sectors_read; // nbytes read
-							if (disk.io_read.empty())
-								disk.io_read.push_back(0);
-							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
-							disk.old_io.at(0) = sectors_read;
-							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+							// skip first three lines
+							for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> io_ticks_write;
 
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
 							diskread >> sectors_write; // nbytes written
 							if (disk.io_write.empty())
 								disk.io_write.push_back(0);
@@ -1040,10 +1047,20 @@ namespace Mem {
 							disk.old_io.at(1) = sectors_write;
 							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> io_ticks_write;
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
 							diskread >> io_ticks_read;
+
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> sectors_read; // nbytes read
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
 							io_ticks = io_ticks_write + io_ticks_read;
 							if (disk.io_activity.empty())
 								disk.io_activity.push_back(0);
@@ -1052,7 +1069,6 @@ namespace Mem {
 							disk.old_io.at(2) = io_ticks;
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						} else {
-							disk_ios++;
 							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 							diskread >> sectors_read;
 							if (disk.io_read.empty())
@@ -1093,6 +1109,53 @@ namespace Mem {
 		}
 
 		return mem;
+	}
+
+	string get_zfs_stat_file(const string& device_name, size_t dataset_name_start) {
+		ifstream filestream;
+		DIR *directory;
+		struct dirent *entity;
+		string filename;
+		string filepath;
+		string zfs_pool_stat_path;
+		string pool_name;
+		if (dataset_name_start != std::string::npos) { // device is a dataset
+			pool_name = device_name.substr(0, dataset_name_start);
+			zfs_pool_stat_path = Shared::procPath.string() + "/spl/kstat/zfs/" + pool_name + "/";
+		} else { // device is a pool
+			zfs_pool_stat_path = Shared::procPath.string() + "/spl/kstat/zfs/" + device_name + "/";
+		}
+		string name_compare;
+
+		if ((directory = opendir(zfs_pool_stat_path.c_str())) == nullptr) {
+			return "";
+		}
+		// looking through all files that start with 'objset' to find the one containing `device_name` object stats
+		while ((entity = readdir(directory)) != nullptr) {
+			filename = entity->d_name;
+			if (filename.find("objset") != std::string::npos) {
+				filepath = zfs_pool_stat_path + filename;
+				filestream.open(filepath);
+				if (filestream.good()) {
+					// skip first two lines
+					for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
+					// skip characters until '7' is reached, indicating data type 7, next value will be object name
+					filestream.ignore(numeric_limits<streamsize>::max(), '7');
+					filestream >> name_compare;
+					if (name_compare == device_name) {
+						filestream.close();
+						if (access((filepath).c_str(), R_OK) == 0) {
+							return filepath;
+						} else {
+							return "";
+						}
+					}
+				}
+				filestream.close();
+			}
+		}
+
+		return "";
 	}
 
 }
