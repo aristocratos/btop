@@ -741,6 +741,12 @@ namespace Mem {
 	vector<string> last_found;
 	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
+	//?* Find the filepath to the specified ZFS object's stat file
+	string get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only);
+
+	//?* Collect total ZFS pool io stats
+	bool zfs_collect_pool_total_stats(struct disk_info &disk);
+
 	mem_info current_mem {};
 
 	uint64_t get_totalMem() {
