@@ -26,7 +26,6 @@ tab-size = 4
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-#include <dirent.h>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
@@ -742,7 +741,7 @@ namespace Mem {
 	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
 	//?* Find the filepath to the specified ZFS object's stat file
-	string get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only);
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only);
 
 	//?* Collect total ZFS pool io stats
 	bool zfs_collect_pool_total_stats(struct disk_info &disk);
@@ -1129,43 +1128,33 @@ namespace Mem {
 		return mem;
 	}
 
-	string get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only) {
-		string zfs_pool_stat_path;
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only) {
+		fs::path zfs_pool_stat_path;
 		if (zfs_pools_only) {
-			zfs_pool_stat_path = Shared::procPath.string() + "/spl/kstat/zfs/" + device_name;
-			if (access((zfs_pool_stat_path).c_str(), R_OK) == 0) {
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
+			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
 			} else {
-				Logger::warning("Cant access folder: " + zfs_pool_stat_path);
+				Logger::warning("Cant access folder: " + zfs_pool_stat_path.string());
 				return "";
 			}
 		}
 
 		ifstream filestream;
-		DIR *directory;
-		struct dirent *entity;
 		string filename;
-		string filepath;
-		string pool_name;
 		string name_compare;
 
 		if (dataset_name_start != std::string::npos) { // device is a dataset
-			pool_name = device_name.substr(0, dataset_name_start);
-			zfs_pool_stat_path = Shared::procPath.string() + "/spl/kstat/zfs/" + pool_name + "/";
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name.substr(0, dataset_name_start);
 		} else { // device is a pool
-			zfs_pool_stat_path = Shared::procPath.string() + "/spl/kstat/zfs/" + device_name + "/";
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
 		}
 
-		if ((directory = opendir(zfs_pool_stat_path.c_str())) == nullptr) {
-			Logger::warning("Cant access folder: " + zfs_pool_stat_path);
-			return "";
-		}
 		// looking through all files that start with 'objset' to find the one containing `device_name` object stats
-		while ((entity = readdir(directory)) != nullptr) {
-			filename = entity->d_name;
-			if (filename.find("objset") != std::string::npos) {
-				filepath = zfs_pool_stat_path + filename;
-				filestream.open(filepath);
+		for (const auto& file: fs::directory_iterator(zfs_pool_stat_path)) {
+			filename = file.path().filename();
+			if (filename.starts_with("objset")) {
+				filestream.open(file.path());
 				if (filestream.good()) {
 					// skip first two lines
 					for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -1174,10 +1163,10 @@ namespace Mem {
 					filestream >> name_compare;
 					if (name_compare == device_name) {
 						filestream.close();
-						if (access((filepath).c_str(), R_OK) == 0) {
-							return filepath;
+						if (access(file.path().c_str(), R_OK) == 0) {
+							return file.path();
 						} else {
-							Logger::warning("Cant access file: " + filepath);
+							Logger::warning("Can't access file: " + file.path().string());
 							return "";
 						}
 					}
@@ -1186,28 +1175,19 @@ namespace Mem {
 			}
 		}
 
-		Logger::warning("Could not read directory: " + zfs_pool_stat_path);
+		Logger::warning("Could not read directory: " + zfs_pool_stat_path.string());
 		return "";
 	}
 
 	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
 		ifstream diskread;
-		DIR *directory;
-		struct dirent *entity;
-		string filename;
 
 		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0;
 
-		if ((directory = opendir(disk.stat.c_str())) == nullptr) {
-			Logger::warning("Cant access folder: " + disk.stat.string());
-			return false;
-		}
-
 		// looking through all files that start with 'objset'
-		while ((entity = readdir(directory)) != nullptr) {
-			filename = entity->d_name;
-			if (filename.find("objset") != std::string::npos) {
-				diskread.open(disk.stat / filename);
+		for (const auto& file: fs::directory_iterator(disk.stat)) {
+			if ((file.path().filename()).string().starts_with("objset")) {
+				diskread.open(file.path());
 				if (diskread.good()) {
 					// skip first three lines
 					for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -1231,7 +1211,7 @@ namespace Mem {
 					diskread >> bytes_read;
 					bytes_read_total += bytes_read;
 				} else {
-					Logger::warning("Could not read file: " + (disk.stat / filename).string());
+					Logger::warning("Could not read file: " + file.path().string());
 				}
 				diskread.close();
 			}
