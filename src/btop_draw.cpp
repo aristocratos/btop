@@ -111,7 +111,7 @@ namespace Draw {
 				}
 				for (size_t i = 0; i < line[1].size(); i += 3) {
 					if (line[1][i] == ' ') {
-						letter = ' ';
+						letter = Mv::r(1);
 						i -= 2;
 					}
 					else
