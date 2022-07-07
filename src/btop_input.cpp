@@ -249,7 +249,7 @@ namespace Input {
 					Menu::show(Menu::Menus::Main);
 					return;
 				}
-				else if (is_in(key, "F1", help_key)) {
+				else if (is_in(key, "F1", "?", help_key)) {
 					Menu::show(Menu::Menus::Help);
 					return;
 				}
