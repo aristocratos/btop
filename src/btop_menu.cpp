@@ -111,7 +111,7 @@ namespace Menu {
 		{"4", "Toggle PROC box."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
-		{"F1, h", "Shows this window."},
+		{"F1, ?, h", "Shows this window."},
 		{"ctrl + z", "Sleep program and put in background."},
 		{"q, ctrl + c", "Quits program."},
 		{"+, -", "Add/Subtract 100ms to/from update timer."},
