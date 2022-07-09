@@ -1182,40 +1182,50 @@ namespace Mem {
 	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
 		ifstream diskread;
 
-		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0;
+		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0, objects_read = 0;
 
 		// looking through all files that start with 'objset'
 		for (const auto& file: fs::directory_iterator(disk.stat)) {
 			if ((file.path().filename()).string().starts_with("objset")) {
 				diskread.open(file.path());
 				if (diskread.good()) {
-					// skip first three lines
-					for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
-					// skip characters until '4' is reached, indicating data type 4, next value will be out target
-					diskread.ignore(numeric_limits<streamsize>::max(), '4');
-					diskread >> io_ticks;
-					io_ticks_total += io_ticks;
+					try {
+						// skip first three lines
+						for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
 
-					// skip characters until '4' is reached, indicating data type 4, next value will be out target
-					diskread.ignore(numeric_limits<streamsize>::max(), '4');
-					diskread >> bytes_write;
-					bytes_write_total += bytes_write;
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_write;
+						bytes_write_total += bytes_write;
 
-					// skip characters until '4' is reached, indicating data type 4, next value will be out target
-					diskread.ignore(numeric_limits<streamsize>::max(), '4');
-					diskread >> io_ticks;
-					io_ticks_total += io_ticks;
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
 
-					// skip characters until '4' is reached, indicating data type 4, next value will be out target
-					diskread.ignore(numeric_limits<streamsize>::max(), '4');
-					diskread >> bytes_read;
-					bytes_read_total += bytes_read;
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_read;
+						bytes_read_total += bytes_read;
+					} catch (const std::exception& e) {
+						continue;
+					}
+
+					// increment read objects counter if no errors were encountered
+					objects_read++;
 				} else {
 					Logger::warning("Could not read file: " + file.path().string());
 				}
 				diskread.close();
 			}
 		}
+
+		// if for some reason no objects were read
+		if (objects_read == 0) return false;
 
 		if (disk.io_write.empty())
 			disk.io_write.push_back(0);
