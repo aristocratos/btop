@@ -740,6 +740,12 @@ namespace Mem {
 	vector<string> last_found;
 	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
+	//?* Find the filepath to the specified ZFS object's stat file
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets);
+
+	//?* Collect total ZFS pool io stats
+	bool zfs_collect_pool_total_stats(struct disk_info &disk);
+
 	mem_info current_mem {};
 
 	uint64_t get_totalMem() {
@@ -851,6 +857,7 @@ namespace Mem {
 				bool filter_exclude = false;
 				auto& use_fstab = Config::getB("use_fstab");
 				auto& only_physical = Config::getB("only_physical");
+				auto& zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
@@ -924,6 +931,10 @@ namespace Mem {
 								continue;
 						}
 
+						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
+						size_t zfs_dataset_name_start = 0;
+						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
+
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))
 						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
@@ -948,8 +959,11 @@ namespace Mem {
 											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
 										break;
 									//? Set ZFS stat filepath
-									} else if (fs::exists(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io", ec) and access(string(Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io").c_str(), R_OK) == 0) {
-										disks.at(mountpoint).stat = Shared::procPath.string() + "/spl/kstat/zfs/" + devname + "/io";
+									} else if (fstype == "zfs") {
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+										if (disks.at(mountpoint).stat.empty()) {
+											Logger::debug("Failed to get ZFS stat file for device " + dev);
+										}
 										break;
 									}
 									devname.resize(devname.size() - 1);
@@ -957,6 +971,14 @@ namespace Mem {
 								}
 							}
 
+							//? If zfs_hide_datasets option was switched, refresh stat filepath
+							if (fstype == "zfs" && ((zfs_hide_datasets && !is_directory(disks.at(mountpoint).stat))
+								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
+								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+								if (disks.at(mountpoint).stat.empty()) {
+									Logger::debug("Failed to get ZFS stat file for device " + dev);
+								}
+							}
 						}
 					}
 					//? Remove disks no longer mounted or filtered out
@@ -1013,24 +1035,27 @@ namespace Mem {
 					#endif
 
 				//? Get disks IO
-				int64_t sectors_read, sectors_write, io_ticks, io_ticks_read, io_ticks_write;
+				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
+					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
+						disk_ios++;
+						continue;
+					}
 					diskread.open(disk.stat);
 					if (diskread.good()) {
+						disk_ios++;
 						//? ZFS Pool Support
 						if (disk.fstype == "zfs") {
-							disk_ios++;
-							for (int i = 0; i < 18; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> sectors_read; // nbytes read
-							if (disk.io_read.empty())
-								disk.io_read.push_back(0);
-							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
-							disk.old_io.at(0) = sectors_read;
-							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+							// skip first three lines
+							for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> io_ticks;
 
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
 							diskread >> sectors_write; // nbytes written
 							if (disk.io_write.empty())
 								disk.io_write.push_back(0);
@@ -1039,19 +1064,28 @@ namespace Mem {
 							disk.old_io.at(1) = sectors_write;
 							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> io_ticks_write;
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> io_ticks_read;
-							io_ticks = io_ticks_write + io_ticks_read;
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> io_ticks_temp;
+							io_ticks += io_ticks_temp;
+
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> sectors_read; // nbytes read
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
 							if (disk.io_activity.empty())
 								disk.io_activity.push_back(0);
 							else
-								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+								disk.io_activity.push_back(max((int64_t)0, (io_ticks - disk.old_io.at(2))));
 							disk.old_io.at(2) = io_ticks;
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						} else {
-							disk_ios++;
 							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 							diskread >> sectors_read;
 							if (disk.io_read.empty())
@@ -1092,6 +1126,129 @@ namespace Mem {
 		}
 
 		return mem;
+	}
+
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets) {
+		fs::path zfs_pool_stat_path;
+		if (zfs_hide_datasets) {
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
+			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
+				return zfs_pool_stat_path;
+			} else {
+				Logger::debug("Cant access folder: " + zfs_pool_stat_path.string());
+				return "";
+			}
+		}
+
+		ifstream filestream;
+		string filename;
+		string name_compare;
+
+		if (dataset_name_start != std::string::npos) { // device is a dataset
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name.substr(0, dataset_name_start);
+		} else { // device is a pool
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
+		}
+
+		// looking through all files that start with 'objset' to find the one containing `device_name` object stats
+		for (const auto& file: fs::directory_iterator(zfs_pool_stat_path)) {
+			filename = file.path().filename();
+			if (filename.starts_with("objset")) {
+				filestream.open(file.path());
+				if (filestream.good()) {
+					// skip first two lines
+					for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
+					// skip characters until '7' is reached, indicating data type 7, next value will be object name
+					filestream.ignore(numeric_limits<streamsize>::max(), '7');
+					filestream >> name_compare;
+					if (name_compare == device_name) {
+						filestream.close();
+						if (access(file.path().c_str(), R_OK) == 0) {
+							return file.path();
+						} else {
+							Logger::debug("Can't access file: " + file.path().string());
+							return "";
+						}
+					}
+				}
+				filestream.close();
+			}
+		}
+
+		Logger::debug("Could not read directory: " + zfs_pool_stat_path.string());
+		return "";
+	}
+
+	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
+		ifstream diskread;
+
+		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0, objects_read = 0;
+
+		// looking through all files that start with 'objset'
+		for (const auto& file: fs::directory_iterator(disk.stat)) {
+			if ((file.path().filename()).string().starts_with("objset")) {
+				diskread.open(file.path());
+				if (diskread.good()) {
+					try {
+						// skip first three lines
+						for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_write;
+						bytes_write_total += bytes_write;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_read;
+						bytes_read_total += bytes_read;
+					} catch (const std::exception& e) {
+						continue;
+					}
+
+					// increment read objects counter if no errors were encountered
+					objects_read++;
+				} else {
+					Logger::debug("Could not read file: " + file.path().string());
+				}
+				diskread.close();
+			}
+		}
+
+		// if for some reason no objects were read
+		if (objects_read == 0) return false;
+
+		if (disk.io_write.empty())
+			disk.io_write.push_back(0);
+		else
+			disk.io_write.push_back(max((int64_t)0, (bytes_write_total - disk.old_io.at(1))));
+		disk.old_io.at(1) = bytes_write_total;
+		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+		if (disk.io_read.empty())
+			disk.io_read.push_back(0);
+		else
+			disk.io_read.push_back(max((int64_t)0, (bytes_read_total - disk.old_io.at(0))));
+		disk.old_io.at(0) = bytes_read_total;
+		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+		if (disk.io_activity.empty())
+			disk.io_activity.push_back(0);
+		else
+			disk.io_activity.push_back(max((int64_t)0, (io_ticks_total - disk.old_io.at(2))));
+		disk.old_io.at(2) = io_ticks_total;
+		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+
+		return true;
 	}
 
 }
