@@ -741,7 +741,7 @@ namespace Mem {
 	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
 	//?* Find the filepath to the specified ZFS object's stat file
-	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only);
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets);
 
 	//?* Collect total ZFS pool io stats
 	bool zfs_collect_pool_total_stats(struct disk_info &disk);
@@ -857,7 +857,7 @@ namespace Mem {
 				bool filter_exclude = false;
 				auto& use_fstab = Config::getB("use_fstab");
 				auto& only_physical = Config::getB("only_physical");
-				auto& zfs_pools_only = Config::getB("zfs_pools_only");
+				auto& zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
@@ -931,9 +931,9 @@ namespace Mem {
 								continue;
 						}
 
-						//? Skip ZFS datasets if zfs_pools_only option is enabled
+						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
 						size_t zfs_dataset_name_start = 0;
-						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_pools_only) continue;
+						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
 
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))
@@ -960,7 +960,7 @@ namespace Mem {
 										break;
 									//? Set ZFS stat filepath
 									} else if (fstype == "zfs") {
-										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_pools_only);
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 										if (disks.at(mountpoint).stat.empty()) {
 											Logger::warning("Failed to get ZFS stat file for device " + dev);
 										}
@@ -971,10 +971,10 @@ namespace Mem {
 								}
 							}
 
-							//? If zfs_pools_only option was switched, refresh stat filepath
-							if (fstype == "zfs" && ((zfs_pools_only && !is_directory(disks.at(mountpoint).stat))
-								|| (!zfs_pools_only && is_directory(disks.at(mountpoint).stat)))) {
-								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_pools_only);
+							//? If zfs_hide_datasets option was switched, refresh stat filepath
+							if (fstype == "zfs" && ((zfs_hide_datasets && !is_directory(disks.at(mountpoint).stat))
+								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
+								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 								if (disks.at(mountpoint).stat.empty()) {
 									Logger::warning("Failed to get ZFS stat file for device " + dev);
 								}
@@ -1039,7 +1039,7 @@ namespace Mem {
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
-					if (disk.fstype == "zfs" && zfs_pools_only && zfs_collect_pool_total_stats(disk)) {
+					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
 						disk_ios++;
 						continue;
 					}
@@ -1128,9 +1128,9 @@ namespace Mem {
 		return mem;
 	}
 
-	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_pools_only) {
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets) {
 		fs::path zfs_pool_stat_path;
-		if (zfs_pools_only) {
+		if (zfs_hide_datasets) {
 			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
 			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
