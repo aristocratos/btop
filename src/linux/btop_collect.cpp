@@ -962,7 +962,7 @@ namespace Mem {
 									} else if (fstype == "zfs") {
 										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 										if (disks.at(mountpoint).stat.empty()) {
-											Logger::warning("Failed to get ZFS stat file for device " + dev);
+											Logger::debug("Failed to get ZFS stat file for device " + dev);
 										}
 										break;
 									}
@@ -976,7 +976,7 @@ namespace Mem {
 								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
 								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 								if (disks.at(mountpoint).stat.empty()) {
-									Logger::warning("Failed to get ZFS stat file for device " + dev);
+									Logger::debug("Failed to get ZFS stat file for device " + dev);
 								}
 							}
 						}
@@ -1135,7 +1135,7 @@ namespace Mem {
 			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
 			} else {
-				Logger::warning("Cant access folder: " + zfs_pool_stat_path.string());
+				Logger::debug("Cant access folder: " + zfs_pool_stat_path.string());
 				return "";
 			}
 		}
@@ -1166,7 +1166,7 @@ namespace Mem {
 						if (access(file.path().c_str(), R_OK) == 0) {
 							return file.path();
 						} else {
-							Logger::warning("Can't access file: " + file.path().string());
+							Logger::debug("Can't access file: " + file.path().string());
 							return "";
 						}
 					}
@@ -1175,7 +1175,7 @@ namespace Mem {
 			}
 		}
 
-		Logger::warning("Could not read directory: " + zfs_pool_stat_path.string());
+		Logger::debug("Could not read directory: " + zfs_pool_stat_path.string());
 		return "";
 	}
 
@@ -1218,7 +1218,7 @@ namespace Mem {
 					// increment read objects counter if no errors were encountered
 					objects_read++;
 				} else {
-					Logger::warning("Could not read file: " + file.path().string());
+					Logger::debug("Could not read file: " + file.path().string());
 				}
 				diskread.close();
 			}
