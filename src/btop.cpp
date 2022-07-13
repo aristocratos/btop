@@ -34,6 +34,8 @@ tab-size = 4
 #include <chrono>
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
+	#include <mach-o/dyld.h>
+	#include <limits.h>
 #endif
 
 #include <btop_shared.hpp>
@@ -699,9 +701,16 @@ int main(int argc, char **argv) {
 		}
 	}
 	//? Try to find global btop theme path relative to binary path
-#if defined(__linux__)
+#ifdef __linux__
 	{ 	std::error_code ec;
 		Global::self_path = fs::read_symlink("/proc/self/exe", ec).remove_filename();
+	}
+#elif __APPLE__
+	{
+		char buf [PATH_MAX];
+		uint32_t bufsize = PATH_MAX;
+		if(!_NSGetExecutablePath(buf, &bufsize))
+			Global::self_path = fs::path(buf).remove_filename();
 	}
 #endif
 	if (std::error_code ec; not Global::self_path.empty()) {

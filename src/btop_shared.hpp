@@ -160,6 +160,7 @@ namespace Mem {
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
+
 }
 
 namespace Net {

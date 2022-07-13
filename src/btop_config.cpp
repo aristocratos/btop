@@ -155,6 +155,8 @@ namespace Config {
 
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
+		{"zfs_hide_datasets",		"#* Setting this to True will hide all datasets, and only show ZFS pools. (IO stats will be calculated per-pool)"},
+
 		{"disk_free_priv",		"#* Set to true to show available disk space for privileged users."},
 
 		{"show_io_stat", 		"#* Toggles if io activity % (disk busy time) should be shown in regular disk usage view."},
@@ -241,6 +243,7 @@ namespace Config {
 		{"show_disks", true},
 		{"only_physical", true},
 		{"use_fstab", true},
+		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},
 		{"io_mode", false},
 		{"base_10_sizes", false},
