@@ -817,7 +817,7 @@ namespace Mem {
 			const string graphics = (use_graphs ? mem_graphs.at(name)(mem.percent.at(name), redraw or data_same) : mem_meters.at(name)(mem.percent.at(name).back()));
 			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
-					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + trans(humanized)
+					+ Mv::to(y+1+cy, x+cx + mem_width - 8 - humanized.size()) + "      " + humanized
 					+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(mem.percent.at(name).back()) + "%", 4);
 				cy += (graph_height == 0 ? 2 : graph_height + 1);
 			}
