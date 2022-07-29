@@ -1117,6 +1117,7 @@ namespace Proc {
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& mem_bytes = Config::getB("proc_mem_bytes");
 		auto& vim_keys = Config::getB("vim_keys");
+		auto& show_graphs = Config::getB("proc_cpu_graphs");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
@@ -1144,6 +1145,10 @@ namespace Proc {
 			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33));
 			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - 33 : -1);
 			tree_size = width - user_size - thread_size - 23;
+			if (not show_graphs) {
+				cmd_size += 5;
+				tree_size += 5;
+			}
 
 			//? Detailed box
 			if (show_detailed) {
@@ -1294,7 +1299,7 @@ namespace Proc {
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
-					+ rjust("Cpu%", 10) + Fx::ub;
+					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
 		}
 		//* End of redraw block
 
@@ -1359,8 +1364,8 @@ namespace Proc {
 			}
 
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
-			const bool has_graph = p_counters.contains(p.pid);
-			if ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph)) {
+			const bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
+			if (show_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
 				if (not has_graph) {
 					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
 					p_counters[p.pid] = 0;
@@ -1452,7 +1457,7 @@ namespace Proc {
 			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
-				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5
+				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
