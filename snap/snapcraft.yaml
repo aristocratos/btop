@@ -40,6 +40,11 @@ apps:
       - network-observe
       - home
       - removable-media
+      - desktop
+      - desktop-legacy
+      - x11
+      - wayland
+      - unity7
 
 parts:
   btop:
