@@ -4,7 +4,6 @@ summary: Resource monitor that shows usage and stats
 description: |
   Resource monitor that shows usage and stats for processor, memory, disks, network and processes.
   C++ version and continuation of bashtop and bpytop.
-
 license: Apache-2.0
 
 base: core20
@@ -14,10 +13,7 @@ compression: lzo
 
 architectures:
   - build-on: amd64
-  - build-on: arm64
-  - build-on: armhf
-  - build-on: ppc64el
-  - build-on: s390x
+    run-on: [all]
 
 package-repositories:
  - type: apt
@@ -26,6 +22,8 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
+    extensions:
+      - gnome-3-38 
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
