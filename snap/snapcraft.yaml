@@ -25,7 +25,7 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
-    desktop: usr/local/bin/btop.desktop
+    desktop: btop.desktop
     extensions:
       - gnome-3-38 
     environment:
