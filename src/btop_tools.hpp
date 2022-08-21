@@ -21,16 +21,24 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <array>
-#include <regex>
 #include <atomic>
+#include <regex>
 #include <filesystem>
 #include <ranges>
 #include <chrono>
 #include <thread>
 #include <tuple>
 #include <pthread.h>
+#include <limits.h>
+#ifndef HOST_NAME_MAX
+	#ifdef __APPLE__
+		#define HOST_NAME_MAX 255
+	#else
+		#define HOST_NAME_MAX 64
+	#endif
+#endif
 
-using std::string, std::vector, std::atomic, std::to_string, std::regex, std::tuple, std::array;
+using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
 
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -58,13 +66,14 @@ namespace Fx {
 	extern string reset;
 
 	//* Regex for matching color, style and cursor move escape sequences
-	const regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
+	const std::regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
 
 	//* Regex for matching only color and style escape sequences
-	const regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
+	const std::regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
 	//* Return a string with all colors and text styling removed
-	inline string uncolor(const string& s) { return regex_replace(s, color_regex, ""); }
+	inline string uncolor(const string& s) { return std::regex_replace(s, color_regex, ""); }
+	// string uncolor(const string& s);
 
 }
 
@@ -107,14 +116,14 @@ namespace Term {
 	const string clear_end = Fx::e + "0J";
 	const string clear_begin = Fx::e + "1J";
 	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //? Enable reporting of mouse position on click and release
-	const string mouse_off = Fx::e + "?1002l";
+	const string mouse_off = Fx::e + "?1002l" + Fx::e + "?1015l" + Fx::e + "?1006l";
 	const string mouse_direct_on = Fx::e + "?1003h"; //? Enable reporting of mouse position at any movement
 	const string mouse_direct_off = Fx::e + "?1003l";
 	const string sync_start = Fx::e + "?2026h"; //? Start of terminal synchronized output
 	const string sync_end = Fx::e + "?2026l"; //? End of terminal synchronized output
 
 	//* Returns true if terminal has been resized and updates width and height
-	bool refresh();
+	bool refresh(bool only_check=false);
 
 	//* Returns an array with the lowest possible width, height with current box config
 	auto get_min_size(const string& boxes) -> array<int, 2>;
@@ -130,12 +139,13 @@ namespace Term {
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
-	extern atomic<int> active_locks;
 
-	//* Return number of UTF8 characters in a string (wide=true counts UTF-8 characters with a width > 1 as 2 characters)
+	size_t wide_ulen(const string& str);
+	size_t wide_ulen(const std::wstring& w_str);
+
+	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
 	inline size_t ulen(const string& str, const bool wide=false) {
-		return 	std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; })
-				+ (wide ? std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) > 0xef); }) : 0);
+		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
@@ -175,6 +185,16 @@ namespace Tools {
 	template <typename T>
 	inline bool s_contains(const string& str, const T& find_val) {
 		return str.find(find_val) != string::npos;
+	}
+
+	//* Check if string <str> contains string <find_val>, while ignoring case
+	inline bool s_contains_ic(const string& str, const string& find_val) {
+        auto it = std::search(
+            str.begin(), str.end(),
+            find_val.begin(), find_val.end(),
+            [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+        );
+		return it != str.end();
 	}
 
 	//* Return index of <find_val> from vector <vec>, returns size of <vec> if <find_val> is not present
@@ -269,20 +289,28 @@ namespace Tools {
 	string hostname();
 	string username();
 
-#if __GNUC__ < 11
-	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { while (atom.load() == old) sleep_ms(1); }
-	inline void atomic_notify(const atomic<bool>& atom) noexcept { (void)atom; }
-#else
-	inline void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept { atom.wait(old); }
-	inline void atomic_notify(const atomic<bool>& atom) noexcept { atom.notify_all(); }
-#endif
+	static inline void busy_wait (void) {
+	#if defined __i386__ || defined __x86_64__
+		__builtin_ia32_pause();
+	#elif defined __ia64__
+		__asm volatile("hint @pause" : : : "memory");
+	#elif defined __sparc__ && (defined __arch64__ || defined __sparc_v9__)
+		__asm volatile("membar #LoadLoad" : : : "memory");
+	#else
+		__asm volatile("" : : : "memory");
+	#endif
+	}
 
-	//* Waits for atomic<bool> to be false and sets it to true on construct, sets to false and notifies on destruct
+	void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept;
+
+	void atomic_wait_for(const atomic<bool>& atom, const bool old=true, const uint64_t wait_ms=0) noexcept;
+
+	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
 		bool not_true = false;
 	public:
-		atomic_lock(atomic<bool>& atom);
+		atomic_lock(atomic<bool>& atom, bool wait=false);
 		~atomic_lock();
 	};
 

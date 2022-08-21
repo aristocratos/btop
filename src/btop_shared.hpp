@@ -27,11 +27,14 @@ tab-size = 4
 #include <array>
 #include <ifaddrs.h>
 #include <tuple>
+#include <unistd.h>
 
 using std::string, std::vector, std::deque, robin_hood::unordered_flat_map, std::atomic, std::array, std::tuple;
 
 void term_resize(bool force=false);
 void banner_gen();
+
+extern void clean_quit(int sig);
 
 namespace Global {
 	extern const vector<array<string, 2>> Banner_src;
@@ -43,6 +46,7 @@ namespace Global {
 	extern atomic<bool> resized;
 	extern string overlay;
 	extern string clock;
+	extern uid_t real_uid, set_uid;
 }
 
 namespace Runner {
@@ -70,8 +74,6 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
-	extern int totalMem_len;
-	extern uint64_t totalMem;
 }
 
 
@@ -129,6 +131,7 @@ namespace Mem {
 	struct disk_info {
 		std::filesystem::path dev;
 		string name;
+		string fstype = "";
 		std::filesystem::path stat = "";
 		int64_t total = 0, used = 0, free = 0;
 		int used_percent = 0, free_percent = 0;
@@ -149,11 +152,15 @@ namespace Mem {
 		vector<string> disks_order;
 	};
 
+	//?* Get total system memory
+	uint64_t get_totalMem();
+
 	//* Collect mem & disks stats
 	auto collect(const bool no_update=false) -> mem_info&;
 
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
+
 }
 
 namespace Net {
@@ -166,7 +173,7 @@ namespace Net {
 	extern unordered_flat_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed = 0, top = 0, total = 0, last = 0, offset = 0;
+		uint64_t speed = 0, top = 0, total = 0, last = 0, offset = 0, rollover = 0;
 	};
 
 	struct net_info {
@@ -193,7 +200,7 @@ namespace Proc {
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
-	extern int selected_pid, start, selected, collapse, expand;
+	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth;
 	extern string selected_name;
 
 	//? Contains the valid sorting options for processes
@@ -262,4 +269,18 @@ namespace Proc {
 
 	//* Draw contents of proc box using <plist> as data source
 	string draw(const vector<proc_info>& plist, const bool force_redraw=false, const bool data_same=false);
+
+	struct tree_proc {
+		std::reference_wrapper<proc_info> entry;
+		vector<tree_proc> children;
+	};
+
+	//* Sort vector of proc_info's
+	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, const bool reverse, const bool tree = false);
+
+	//* Recursive sort of process tree
+	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, const bool reverse, int& c_index, const int index_max, const bool collapsed = false);
+
+	//* Generate process tree list
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false);
 }

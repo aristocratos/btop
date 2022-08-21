@@ -5,16 +5,19 @@
 </a>
 
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
+![OSX](https://img.shields.io/badge/-OSX-black?logo=apple)
+![FreeBSD](https://img.shields.io/badge/-FreeBSD-red?logo=freebsd)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
-![btop_version](https://img.shields.io/github/v/tag/aristocratos/btop?label=version)
+![latest_release](https://img.shields.io/github/v/tag/aristocratos/btop?label=release)
 [![Donate](https://img.shields.io/badge/-Donate-yellow?logo=paypal)](https://paypal.me/aristocratos)
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
+[![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
+[![Continuous Build MacOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
+
 ## Index
-
-
 
 * [News](#news)
 * [Documents](#documents)
@@ -25,15 +28,67 @@
 * [Prerequisites](#prerequisites) (Read this if you are having issues!)
 * [Screenshots](#screenshots)
 * [Keybindings](#help-menu)
-* [Installation](#installation)
-* [Manual compilation](#compilation)
-* [Install the snap](#install-the-snap)
+* [Installation Linux/OSX](#installation)
+* [Compilation Linux](#compilation-linux)
+* [Compilation OSX](#compilation-osx)
+* [Compilation FreeBSD](#compilation-freebsd)
+* [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
 ## News
 
-### Under development
+##### 16 January 2022
+
+Release v1.2.0 with FreeBSD support. No release binaries for FreeBSD provided as of yet.
+
+Again a big thanks to [@joske](https://github.com/joske) for his porting efforts!
+
+Since compatibility with Linux, MacOS and FreeBSD are done, the focus going forward will be on new features like GPU monitoring.
+
+##### 13 November 2021
+
+Release v1.1.0 with OSX support. Binaries in [continuous-build-macos](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml) are only x86 for now.
+Macos binaries + installer are included for both x86 and ARM64 (Apple Silicon) in the releases.
+
+Big thank you to [@joske](https://github.com/joske) who wrote the vast majority of the implementation!
+
+<details>
+<summary>More...</summary>
+
+##### 30 October 2021
+
+Work on the OSX and FreeBSD branches, both initiated and mostly worked on by [@joske](https://github.com/joske), will likely be completed in the coming weeks.
+The OSX branch has some memory leaks that needs to be sorted out and both have some issues with the processes cpu usage calculation and other smaller issues that needs fixing.
+
+If you want to help out, test for bugs/fix bugs or just try out the branches:
+
+**OSX**
+```bash
+# Install and use Homebrew or MacPorts package managers for easy dependency installation
+brew install coreutils make gcc@11
+git clone https://github.com/aristocratos/btop.git
+cd btop
+git checkout OSX
+gmake
+```
+
+**FreeBSD**
+```bash
+sudo pkg install gmake gcc11 coreutils git
+git clone https://github.com/aristocratos/btop.git
+cd btop
+git checkout freebsd
+gmake
+```
+
+Note that GNU make (`gmake`) is recommended but not required for OSX but it is required on FreeBSD.
+
+
+##### 6 October 2021
+
+OsX development have been started by [@joske](https://github.com/joske), big thanks :)
+See branch [OSX](https://github.com/aristocratos/btop/tree/OSX) for current progress.
 
 ##### 18 September 2021
 
@@ -58,6 +113,8 @@ Windows support is not in the plans as of now, but if anyone else wants to take 
 
 This project is gonna take some time until it has complete feature parity with bpytop, since all system information gathering will have to be written from scratch without any external libraries.
 And will need some help in the form of code contributions to get complete support for BSD and OSX.
+
+</details>
 
 ## Documents
 
@@ -114,7 +171,7 @@ Any support is greatly appreciated!
 
 For best experience, a terminal with support for:
 
-* 24-bit truecolor ([See list of terminals with truecolor support](https://gist.github.com/XVilka/8346728))
+* 24-bit truecolor ([See list of terminals with truecolor support](https://github.com//termstandard/colors))
 * 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" arguments.
 * 16 color TTY mode will be activated if a real tty device is detected. Can be forced with "-t/--tty_on" arguments.
 * Wide characters (Are sometimes problematic in web-based terminals)
@@ -167,9 +224,11 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Installation
 
-**Binary release (statically compiled, for kernel 3.2.0 and newer)**
+**Binaries for Linux are statically compiled with musl and works on kernel 2.6.39 and newer**
 
-1. **Download btop-(VERSION)-(PLATFORM)-(ARCH).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
+1. **Download btop-(VERSION)-(ARCH)-(PLATFORM).tbz from [latest release](https://github.com/aristocratos/btop/releases/latest) and unpack to a new folder**
+
+   **Notice! Use x86_64 for 64-bit x86 systems, i486 and i686 are 32-bit!**
 
 2. **Install (from created folder)**
 
@@ -207,17 +266,37 @@ Also needs a UTF8 locale and a font that covers:
    make help
    ```
 
-## Compilation
+**Binary release (from native os repo)**
+
+* **openSUSE**
+  * **Tumbleweed:**
+    ```bash
+    sudo zypper in btop
+    ```
+  * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
+
+
+**Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
+
+* **[Homebrew](https://formulae.brew.sh/formula/btop)**
+  ```bash
+  brew install btop
+  ```
+
+## Compilation Linux
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
+   For a `cmake` based build alternative see the [fork](https://github.com/jan-guenter/btop/tree/main) by @jan-guenter
+
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
+
+   Use gcc-10 g++-10 if gcc-11 isn't available
 
    ``` bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
-   # use gcc-10 g++-10 if gcc-11 isn't available
    ```
 
 2. **Clone repository**
@@ -231,13 +310,20 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `STATIC=true` to `make` command for static compilation.
 
+   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
+
    Append `QUIET=true` for less verbose output.
 
-   Notice! Manually set `$ARCH` variable if cross-compiling
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 
-   For example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   If `g++` is linked to an older version of gcc on your system specify the correct version by appending `CXX=g++-10` or `CXX=g++-11`.
 
    ``` bash
    make
@@ -245,9 +331,11 @@ Also needs a UTF8 locale and a font that covers:
 
 4. **Install**
 
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
    ``` bash
-   # use "make install PREFIX=/target/dir" to set target, default: /usr/local
-   # only use "sudo" when installing to a NON user owned directory
    sudo make install
    ```
 
@@ -255,9 +343,11 @@ Also needs a UTF8 locale and a font that covers:
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `root`
+
    ``` bash
-   # run after make install and use same PREFIX if any was used at install
-   # set SU_USER and SU_GROUP to select user and group, default is root:root
    sudo make setuid
    ```
 
@@ -285,7 +375,177 @@ Also needs a UTF8 locale and a font that covers:
    make help
    ```
 
-## Install the snap
+## Compilation OSX
+
+   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+
+   The makefile also needs GNU coreutils and `sed`.
+
+   Install and use Homebrew or MacPorts package managers for easy dependency installation
+
+1. **Install dependencies (example for Homebrew)**
+
+   ``` bash
+   brew install coreutils make gcc@11
+   ```
+
+2. **Clone repository**
+
+   ``` bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   Append `STATIC=true` to `make` command for static compilation (only libgcc and libstdc++ will be static!).
+
+   Append `QUIET=true` for less verbose output.
+
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
+
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   ``` bash
+   gmake
+   ```
+
+4. **Install**
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+   ``` bash
+   sudo gmake install
+   ```
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+   ``` bash
+   sudo gmake setuid
+   ```
+
+* **Uninstall**
+
+   ``` bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
+   ```
+
+## Compilation FreeBSD
+
+   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+
+   Note that GNU make (`gmake`) is required to compile on FreeBSD.
+
+1. **Install dependencies**
+
+   ``` bash
+   sudo pkg install gmake gcc11 coreutils git
+   ```
+
+2. **Clone repository**
+
+   ``` bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   Append `STATIC=true` to `make` command for static compilation.
+
+   Append `QUIET=true` for less verbose output.
+
+   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
+
+   Append `ARCH=<architecture>` to manually set the target architecture.
+   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
+
+   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
+
+   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   ``` bash
+   gmake
+   ```
+
+4. **Install**
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+   ``` bash
+   sudo gmake install
+   ```
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+   ``` bash
+   sudo gmake setuid
+   ```
+
+* **Uninstall**
+
+   ``` bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
+   ```
+
+## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
  * **Install the snap**
@@ -297,7 +557,7 @@ Also needs a UTF8 locale and a font that covers:
    ```
    sudo snap install btop --edge
    ```
-   
+
  * **Connect the interface**
 
     ```bash
@@ -310,17 +570,17 @@ Also needs a UTF8 locale and a font that covers:
 All options changeable from within UI.
 Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
 
-#### btop.cfg: (auto generated if not found)
+#### btop.conf: (auto generated if not found)
 
 ```bash
-#? Config file for btop v. 0.1.0
+#? Config file for btop v. 1.2.2
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
 color_theme = "Default"
 
 #* If the theme set background should be shown, set to False if you want terminal background transparency.
-theme_background = False
+theme_background = True
 
 #* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false.
 truecolor = True
@@ -330,10 +590,14 @@ truecolor = True
 force_tty = False
 
 #* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.
-#* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positons, G=graph symbol to use for box.
-#* Use withespace " " as seprator between different presets.
+#* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positions, G=graph symbol to use for box.
+#* Use withespace " " as separator between different presets.
 #* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
 presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
+
+#* Set to True to enable "h,j,k,l,g,G" keys for directional control in lists.
+#* Conflicting keys for h:"help" and k:"kill" is accessible while holding shift.
+vim_keys = False
 
 #* Rounded corners on boxes, is ignored if TTY mode is ON.
 rounded_corners = True
@@ -358,10 +622,10 @@ graph_symbol_net = "default"
 graph_symbol_proc = "default"
 
 #* Manually set which boxes to show. Available values are "cpu mem net proc", separate values with whitespace.
-shown_boxes = "cpu mem net proc"
+shown_boxes = "proc cpu mem net"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
-update_ms = 2000
+update_ms = 1500
 
 #* Processes sorting, "pid" "program" "arguments" "threads" "user" "memory" "cpu lazy" "cpu responsive",
 #* "cpu lazy" sorts top process over time (easier to follow), "cpu responsive" updates top process directly.
@@ -429,6 +693,9 @@ cpu_core_map = ""
 #* Which temperature scale to use, available values: "celsius", "fahrenheit", "kelvin" and "rankine".
 temp_scale = "celsius"
 
+#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024.
+base_10_sizes = False
+
 #* Show CPU frequency.
 show_cpu_freq = True
 
@@ -467,6 +734,9 @@ only_physical = True
 #* Read disks list from /etc/fstab. This also disables only_physical.
 use_fstab = False
 
+#* Set to true to show available disk space for privileged users.
+disk_free_priv = False
+
 #* Toggles if io activity % (disk busy time) should be shown in regular disk usage view.
 show_io_stat = True
 
@@ -496,6 +766,9 @@ net_iface = "br0"
 
 #* Show battery stats in top right if battery is present.
 show_battery = True
+
+#* Which battery to use if multiple are present. "Auto" for auto detection.
+selected_battery = "Auto"
 
 #* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.

@@ -111,7 +111,7 @@ namespace Menu {
 		{"4", "Toggle PROC box."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
-		{"F1, h", "Shows this window."},
+		{"F1, ?, h", "Shows this window."},
 		{"ctrl + z", "Sleep program and put in background."},
 		{"q, ctrl + c", "Quits program."},
 		{"+, -", "Add/Subtract 100ms to/from update timer."},
@@ -126,7 +126,7 @@ namespace Menu {
 		{"z", "Toggle totals reset for current network device"},
 		{"a", "Toggle auto scaling for the network graphs."},
 		{"y", "Toggle synced scaling mode for network graphs."},
-		{"f", "To enter a process filter."},
+		{"f, /", "To enter a process filter."},
 		{"delete", "Clear any entered filter."},
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
@@ -177,6 +177,15 @@ namespace Menu {
 				"Will force 16-color mode and TTY theme,",
 				"set all graph symbols to \"tty\" and swap",
 				"out other non tty friendly symbols."},
+			{"vim_keys",
+				"Enable vim keys.",
+				"Set to True to enable \"h,j,k,l\" keys for",
+				"directional control in lists.",
+				"",
+				"Conflicting keys for",
+				"h (help) and k (kill)",
+				"is accessible while holding shift."},
+
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -185,10 +194,10 @@ namespace Menu {
 				"Max 9 presets.",
 				"",
 				"Format: \"box_name:P:G,box_name:P:G\"",
-				"P=(0 or 1) for alternate positons.",
+				"P=(0 or 1) for alternate positions.",
 				"G=graph symbol to use for box.",
 				"",
-				"Use withespace \" \" as seprator between",
+				"Use withespace \" \" as separator between",
 				"different presets.",
 				"",
 				"Example:",
@@ -197,7 +206,7 @@ namespace Menu {
 				"Manually set which boxes to show.",
 				"",
 				"Available values are \"cpu mem net proc\".",
-				"Seperate values with whitespace.",
+				"Separate values with whitespace.",
 				"",
 				"Toggle between presets with key \"p\"."},
 			{"update_ms",
@@ -248,6 +257,14 @@ namespace Menu {
 				"\"%H\" = 24h hour, \"%I\" = 12h hour",
 				"\"%M\" = minute, \"%S\" = second",
 				"\"%d\" = day, \"%m\" = month, \"%y\" = year"},
+			{"base_10_sizes",
+				"Use base 10 for bits and bytes sizes.",
+				"",
+				"Uses KB = 1000 instead of KiB = 1024,",
+				"MB = 1000KB instead of MiB = 1024KiB,",
+				"and so on.",
+				"",
+				"True or False."},
 			{"background_update",
 				"Update main ui when menus are showing.",
 				"",
@@ -261,6 +278,13 @@ namespace Menu {
 				"",
 				"Show battery stats in the top right corner",
 				"if a battery is present."},
+			{"selected_battery",
+				"Select battery.",
+				"",
+				"Which battery to use if multiple are present.",
+				"Can be both batteries and UPS.",
+				"",
+				"\"Auto\" for auto detection."},
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
@@ -419,7 +443,7 @@ namespace Menu {
 				"equals 100 percent in the io graphs.",
 				"(100 MiB/s by default).",
 				"",
-				"Format: \"device:speed\" seperate disks with",
+				"Format: \"device:speed\" separate disks with",
 				"whitespace \" \".",
 				"",
 				"Example: \"/dev/sda:100, /dev/sdb:20\"."},
@@ -440,12 +464,28 @@ namespace Menu {
 				"",
 				"True or False."},
 			{"use_fstab",
-				"Read disks list from /etc/fstab.",
-				"(Has no effect on macOS X)",
+				"(Linux) Read disks list from /etc/fstab.",
 				"",
 				"This also disables only_physical.",
 				"",
 				"True or False."},
+			{"zfs_hide_datasets",
+				"(Linux) Hide ZFS datasets in disks list.",
+				"",
+				"Setting this to True will hide all datasets,",
+				"and only show ZFS pools.",
+				"",
+				"(IO stats will be calculated per-pool)",
+				"",
+				"True or False."},
+			{"disk_free_priv",
+				"(Linux) Type of available disk space.",
+				"",
+				"Set to true to show how much disk space is",
+				"available for privileged users.",
+				"",
+				"Set to false to show available for normal",
+				"users."},
 			{"disks_filter",
 				"Optional filter for shown disks.",
 				"",
@@ -459,6 +499,15 @@ namespace Menu {
 				"",
 				"Example:",
 				"\"exclude=/boot /home/user\""},
+			{"zfs_arc_cached",
+				"(Linux) Count ZFS ARC as cached memory.",
+				"",
+				"Add ZFS ARC used to cached memory and",
+				"ZFS ARC available to available memory.",
+				"These are otherwise reported by the Linux",
+				"kernel as used memory.",
+				"",
+				"True or False."},
 		},
 		{
 			{"graph_symbol_net",
@@ -470,13 +519,13 @@ namespace Menu {
 			{"net_download",
 				"Fixed network graph download value.",
 				"",
-				"Value in Mebibytes, default \"100\".",
+				"Value in Mebibits, default \"100\".",
 				"",
 				"Can be toggled with auto button."},
 			{"net_upload",
 				"Fixed network graph upload value.",
 				"",
-				"Value in Mebibytes, default \"100\".",
+				"Value in Mebibits, default \"100\".",
 				"",
 				"Can be toggled with auto button."},
 			{"net_auto",
@@ -519,10 +568,10 @@ namespace Menu {
 				"Possible values:",
 				"\"pid\", \"program\", \"arguments\", \"threads\",",
 				"\"user\", \"memory\", \"cpu lazy\" and",
-				"\"cpu responsive\".",
+				"\"cpu direct\".",
 				"",
 				"\"cpu lazy\" updates top process over time.",
-				"\"cpu responsive\" updates top process",
+				"\"cpu direct\" updates top process",
 				"directly."},
 			{"proc_reversed",
 				"Reverse processes sorting order.",
@@ -558,6 +607,15 @@ namespace Menu {
 				" ",
 				"Will show percentage of total memory",
 				"if False."},
+			{"proc_cpu_graphs",
+				"Show cpu graph for each process.",
+				"",
+				"True or False"},
+            {"proc_filter_kernel",
+                "(Linux) Filter kernel processes from output.",
+                "",
+                "Set to 'True' to filter out internal",
+                "processes started by the Linux kernel."},
 		}
 	};
 
@@ -581,7 +639,7 @@ namespace Menu {
 
 		box_contents = Draw::createBox(x, y, width, height, Theme::c("hi_fg"), true, title) + Mv::d(1);
 		for (const auto& line : content) {
-			box_contents += Mv::save + Mv::r(width / 2 - Fx::uncolor(line).size() / 2 - 1) + line + Mv::restore + Mv::d(1);
+			box_contents += Mv::save + Mv::r(max((size_t)0, (width / 2) - (Fx::uncolor(line).size() / 2) - 1)) + line + Mv::restore + Mv::d(1);
 		}
 	}
 
@@ -663,7 +721,7 @@ namespace Menu {
 		if (redraw) {
 			x = Term::width/2 - 40;
 			y = Term::height/2 - 9;
-			bg = Draw::createBox(x + 2, y, 78, 18, Theme::c("hi_fg"), true, "signals");
+			bg = Draw::createBox(x + 2, y, 78, 19, Theme::c("hi_fg"), true, "signals");
 			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
 		}
@@ -695,7 +753,7 @@ namespace Menu {
 		else if (key == "backspace" and selected_signal != -1) {
 			selected_signal = (selected_signal < 10 ? -1 : selected_signal / 10);
 		}
-		else if (key == "up" and selected_signal != 16) {
+		else if (is_in(key, "up", "k") and selected_signal != 16) {
 			if (selected_signal == 1) selected_signal = 31;
 			else if (selected_signal < 6) selected_signal += 25;
 			else {
@@ -704,7 +762,7 @@ namespace Menu {
 				if (selected_signal <= 16 and offset) selected_signal--;
 			}
 		}
-		else if (key == "down") {
+		else if (is_in(key, "down", "j")) {
 			if (selected_signal == 31) selected_signal = 1;
 			else if (selected_signal < 1 or selected_signal == 16) selected_signal = 1;
 			else if (selected_signal > 26) selected_signal -= 25;
@@ -715,11 +773,11 @@ namespace Menu {
 				if (selected_signal > 31) selected_signal = 31;
 			}
 		}
-		else if (key == "left" and selected_signal > 0 and selected_signal != 16) {
+		else if (is_in(key, "left", "h") and selected_signal > 0 and selected_signal != 16) {
 			if (--selected_signal < 1) selected_signal = 31;
 			else if (selected_signal == 16) selected_signal--;
 		}
-		else if (key == "right" and selected_signal <= 31 and selected_signal != 16) {
+		else if (is_in(key, "right", "l") and selected_signal <= 31 and selected_signal != 16) {
 			if (++selected_signal > 31) selected_signal = 1;
 			else if (selected_signal == 16) selected_signal++;
 		}
@@ -745,11 +803,12 @@ namespace Menu {
 			}
 
 			cy++;
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ENTER", 38) + Theme::c("main_fg") + Fx::ub + " | To send signal.";
-			mouse_mappings["enter"] = {cy, x, 1, 78};
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "↑ ↓ ← →", 38, true) + Theme::c("main_fg") + Fx::ub + " | To choose signal.";
-			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ESC or \"q\"", 38) + Theme::c("main_fg") + Fx::ub + " | To abort.";
-			mouse_mappings["escape"] = {cy, x, 1, 78};
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "↑ ↓ ← →", 33, true) + Theme::c("main_fg") + Fx::ub + " | To choose signal.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("0-9", 33) + Theme::c("main_fg") + Fx::ub + " | Enter manually.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ENTER", 33) + Theme::c("main_fg") + Fx::ub + " | To send signal.";
+			mouse_mappings["enter"] = {cy, x, 1, 73};
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ESC or \"q\"", 33) + Theme::c("main_fg") + Fx::ub + " | To abort.";
+			mouse_mappings["escape"] = {cy, x, 1, 73};
 
 			out += Fx::reset;
 		}
@@ -876,10 +935,7 @@ namespace Menu {
 				};
 			}
 		}
-		else if (key == "q") {
-			exit(0);
-		}
-		else if (is_in(key, "escape", "m", "mouse_click")) {
+		else if (is_in(key, "escape", "q", "m", "mouse_click")) {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
@@ -900,13 +956,13 @@ namespace Menu {
 					currentMenu = Menus::Help;
 					return Switch;
 				case Quit:
-					exit(0);
+					clean_quit(0);
 			}
 		}
-		else if (is_in(key, "down", "tab", "mouse_scroll_down")) {
+		else if (is_in(key, "down", "tab", "mouse_scroll_down", "j")) {
 			if (++selected > 2) selected = 0;
 		}
-		else if (is_in(key, "up", "shift_tab", "mouse_scroll_up")) {
+		else if (is_in(key, "up", "shift_tab", "mouse_scroll_up", "k")) {
 			if (--selected < 0) selected = 2;
 		}
 		else {
@@ -953,9 +1009,11 @@ namespace Menu {
 			{"graph_symbol_proc", std::cref(Config::valid_graph_symbols_def)},
 			{"cpu_graph_upper", std::cref(Cpu::available_fields)},
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
-			{"cpu_sensor", std::cref(Cpu::available_sensors)}
+			{"cpu_sensor", std::cref(Cpu::available_sensors)},
+			{"selected_battery", std::cref(Config::available_batteries)},
 		};
 		auto& tty_mode = Config::getB("tty_mode");
+		auto& vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();
@@ -1054,14 +1112,14 @@ namespace Menu {
 		else if (is_in(key, "escape", "q", "o", "backspace")) {
 			return Closed;
 		}
-		else if (is_in(key, "down", "mouse_scroll_down")) {
+		else if (is_in(key, "down", "mouse_scroll_down") or (vim_keys and key == "j")) {
 			if (++selected > select_max or selected >= item_height) {
 				if (page < pages - 1) page++;
 				else if (pages > 1) page = 0;
 				selected = 0;
 			}
 		}
-		else if (is_in(key, "up", "mouse_scroll_up")) {
+		else if (is_in(key, "up", "mouse_scroll_up") or (vim_keys and key == "k")) {
 			if (--selected < 0) {
 				if (page > 0) page--;
 				else if (pages > 1) page = pages - 1;
@@ -1089,12 +1147,12 @@ namespace Menu {
 			selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
-		else if (is_in(key, "left", "right")) {
+		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
 			const auto& option = categories[selected_cat][item_height * page + selected][0];
 			if (selPred.test(isInt)) {
 				const int mod = (option == "update_ms" ? 100 : 1);
 				long value = Config::getI(option);
-				if (key == "right") value += mod;
+				if (key == "right" or (vim_keys and key == "l")) value += mod;
 				else value -= mod;
 
 				if (Config::intValid(option, to_string(value)))
@@ -1119,13 +1177,16 @@ namespace Menu {
 				else if (option == "background_update") {
 					Runner::pause_output = false;
 				}
+				else if (option == "base_10_sizes") {
+					recollect = true;
+				}
 			}
 			else if (selPred.test(isBrowseable)) {
 				auto& optList = optionsList.at(option).get();
 				int i = v_index(optList, Config::getS(option));
 
-				if (key == "right" and ++i >= (int)optList.size()) i = 0;
-				else if (key == "left" and --i < 0) i = optList.size() - 1;
+				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
+				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
 				Config::set(option, optList.at(i));
 
 				if (option == "color_theme")

@@ -1,0 +1,113 @@
+name: Continuous Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build.yml'
+
+jobs:
+  static-build:
+    continue-on-error: true
+    strategy:
+      matrix:
+        toolchain:
+          - aarch64-linux-musl
+          - aarch64_be-linux-musl
+          - arm-linux-musleabi
+          - arm-linux-musleabihf
+          - armeb-linux-musleabi
+          - armeb-linux-musleabihf
+          - armel-linux-musleabi
+          - armel-linux-musleabihf
+          - armv5l-linux-musleabi
+          - armv5l-linux-musleabihf
+          - armv6-linux-musleabi
+          - armv6-linux-musleabihf
+          - armv7l-linux-musleabihf
+          - armv7m-linux-musleabi
+          - armv7r-linux-musleabihf
+          - i486-linux-musl
+          - i686-linux-musl
+          - m68k-linux-musl
+          - mips-linux-musl
+          - mips-linux-musln32sf
+          - mips-linux-muslsf
+          - mips64-linux-musl
+          - mips64-linux-musln32
+          - mips64-linux-musln32sf
+          - mips64el-linux-musl
+          - mips64el-linux-musln32
+          - mips64el-linux-musln32sf
+          - mipsel-linux-musl
+          - mipsel-linux-musln32
+          - mipsel-linux-musln32sf
+          - mipsel-linux-muslsf
+          - powerpc-linux-musl
+          - powerpc-linux-muslsf
+          - powerpc64-linux-musl
+          - powerpc64le-linux-musl
+          - powerpcle-linux-musl
+          - powerpcle-linux-muslsf
+          - riscv32-linux-musl
+          - riscv64-linux-musl
+          - s390x-linux-musl
+          - x86_64-linux-musl
+          - x86_64-linux-muslx32
+
+    # - or1k-linux-musl
+    # - sh2-linux-musl
+    # - sh2-linux-muslfdpic
+    # - sh2eb-linux-musl
+    # - sh2eb-linux-muslfdpic
+    # - sh4-linux-musl
+    # - sh4eb-linux-musl
+
+    runs-on: ubuntu-latest
+    container: muslcc/x86_64:${{ matrix.toolchain }}
+
+    steps:
+      - name: Install build tools
+        run: apk add --no-cache coreutils git make tar zstd
+
+      - name: Fix - Unsafe repository stop
+        run: git config --global --add safe.directory /__w/btop/btop
+
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Fix - Stopping at filesystem boundary
+        run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
+
+      - name: Build
+        run: make STATIC=true STRIP=true
+
+      - name: Make executable
+        run: chmod +x bin/*
+
+      - name: Set up directories
+        run: |
+          mkdir .artifacts
+          mkdir .package
+
+      - name: Create binary atrifacts
+        run: |
+          TOOLCHAIN=${{ matrix.toolchain }}
+          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
+          FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
+          cp bin/btop .artifacts/$FILENAME
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: btop-${{ matrix.toolchain }}
+          path: '.artifacts/**'

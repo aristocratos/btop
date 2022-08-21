@@ -7,6 +7,10 @@ assignees: aristocratos
 
 ---
 
+**Read the README.md and search for similar issues before posting a bug report!**
+
+Any bug that can be solved by just reading the [prerequisites](https://github.com/aristocratos/btop#prerequisites) section of the README will likely be ignored.
+
 **Describe the bug**
 
 [A clear and concise description of what the bug is.]
@@ -24,7 +28,7 @@ assignees: aristocratos
 [If applicable, add screenshots to help explain your problem.]
 
 **Info (please complete the following information):**
- - btop++ version: `bpytop -v`
+ - btop++ version: `btop -v`
  - Binary: [self compiled or static binary from release]
  - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
@@ -38,16 +42,18 @@ assignees: aristocratos
 
 contents of `~/.config/btop/btop.log`
 
-(try running btop with `--debug` flag if error.log is empty)
+(try running btop with `--debug` flag if btop.log is empty)
 
 **GDB Backtrace**
 
 If btop++ is crashing at start the following steps could be helpful:
 
-1. run `gdb btop`
+(Extra helpful if compiled with `make OPTFLAGS="-O0 -g"`)
 
-2. `r` to run, wait for crash and press enter
+1. run (linux): `gdb btop` (macos): `lldb btop`
 
-3. `bt` to get backtrace
+2. `r` to run, wait for crash and press enter if prompted, CTRL+L to clear screen if needed.
+
+3. (gdb): `thread apply all bt` (lldb): `bt all` to get backtrace for all threads
 
 4. Copy and paste the backtrace here:

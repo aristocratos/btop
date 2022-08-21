@@ -23,15 +23,17 @@ tab-size = 4
 #include <sstream>
 #include <iomanip>
 #include <utility>
+#include <ranges>
 #include <robin_hood.h>
+#include <widechar_width.hpp>
 
 #include <unistd.h>
-#include <limits.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
+#include <btop_config.hpp>
 
 using std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
 namespace fs = std::filesystem;
@@ -46,7 +48,6 @@ namespace Term {
 	atomic<int> width = 0;
 	atomic<int> height = 0;
 	string current_tty;
-	char* custombuf;
 
 	namespace {
 		struct termios initial_settings;
@@ -73,12 +74,14 @@ namespace Term {
 		}
 	}
 
-	bool refresh() {
+	bool refresh(bool only_check) {
 		struct winsize w;
 		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) return false;
 		if (width != w.ws_col or height != w.ws_row) {
-			width = w.ws_col;
-			height = w.ws_row;
+			if (not only_check) {
+				width = w.ws_col;
+				height = w.ws_row;
+			}
 			return true;
 		}
 		return false;
@@ -120,9 +123,6 @@ namespace Term {
 				linebuffered(false);
 				refresh();
 
-				//? Set 1MB buffer for cout
-				std::cout.rdbuf()->pubsetbuf(custombuf, 1048576);
-
 				cout << alt_screen << hide_cursor << mouse_on << flush;
 				Global::resized = false;
 			}
@@ -141,21 +141,85 @@ namespace Term {
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
+// ! Dsiabled due to issue when compiling with musl, reverted back to using regex
+// namespace Fx {
+// 	string uncolor(const string& s) {
+// 		string out = s;
+// 		for (size_t offset = 0, start_pos = 0, end_pos = 0;;) {
+// 			start_pos = (offset == 0) ? out.find('\x1b') : offset;
+// 			if (start_pos == string::npos)
+// 				break;
+// 			offset = start_pos + 1;
+// 			end_pos = out.find('m', offset);
+// 			if (end_pos == string::npos)
+// 				break;
+// 			else if (auto next_pos = out.find('\x1b', offset); not isdigit(out[end_pos - 1]) or end_pos > next_pos) {
+// 			 	offset = next_pos;
+// 				continue;
+// 			}
+
+// 			out.erase(start_pos, (end_pos - start_pos)+1);
+// 			offset = 0;
+// 		}
+// 		out.shrink_to_fit();
+// 		return out;
+// 	}
+// }
+
 namespace Tools {
 
-	atomic<int> active_locks (0);
+	size_t wide_ulen(const string& str) {
+		unsigned int chars = 0;
+		try {
+			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+
+			for (auto c : w_str) {
+				chars += utf8::wcwidth(c);
+			}
+		}
+		catch (...) {
+			return ulen(str);
+		}
+
+		return chars;
+	}
+
+	size_t wide_ulen(const std::wstring& w_str) {
+		unsigned int chars = 0;
+
+		for (auto c : w_str) {
+			chars += utf8::wcwidth(c);
+		}
+
+		return chars;
+	}
 
 	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty()) return "";
-		for (size_t x = 0, i = 0; i < str.size(); i++) {
-			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) x += 2;
-			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
-			if (x >= len + 1) {
-				str.resize(i);
-				str.shrink_to_fit();
-				break;
+		if (wide) {
+			try {
+				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+				while (wide_ulen(w_str) > len)
+					w_str.pop_back();
+				string n_str = conv.to_bytes(w_str);
+				return n_str;
+			}
+			catch (...) {
+				return uresize(str, len, false);
 			}
 		}
+		else {
+			for (size_t x = 0, i = 0; i < str.size(); i++) {
+				if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
+				if (x >= len + 1) {
+					str.resize(i);
+					break;
+				}
+			}
+		}
+		str.shrink_to_fit();
 		return str;
 	}
 
@@ -271,28 +335,45 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
-		static const array<string, 11> Units_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
-		static const array<string, 11> Units_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
-		const auto& units = (bit) ? Units_bit : Units_byte;
+		const bool mega = Config::getB("base_10_sizes");
+		static const array<string, 11> mebiUnits_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
+		static const array<string, 11> mebiUnits_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
+		static const array<string, 11> megaUnits_bit = {"bit", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb", "Zb", "Yb", "Bb", "Gb"};
+		static const array<string, 11> megaUnits_byte = {"Byte", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "BB", "GB"};
+		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
 		value *= 100 * mult;
 
-		while (value >= 102400) {
-			value >>= 10;
-			if (value < 100) {
-				out = to_string(value);
-				break;
+		if (mega) {
+			while (value >= 100000) {
+				value /= 1000;
+				if (value < 100) {
+					out = to_string(value);
+					break;
+				}
+				start++;
 			}
-			start++;
+		}
+		else {
+			while (value >= 102400) {
+				value >>= 10;
+				if (value < 100) {
+					out = to_string(value);
+					break;
+				}
+				start++;
+			}
 		}
 		if (out.empty()) {
 			out = to_string(value);
-			if (out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
+			if (not mega and out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
 			else if (out.size() == 3 and start > 0) out.insert(1, ".");
 			else if (out.size() >= 2) out.resize(out.size() - 2);
 		}
 		if (shorten) {
-			if (out.find('.') != string::npos) out = to_string((int)round(stof(out)));
+			auto f_pos = out.find('.');
+			if (f_pos == 1 and out.size() > 3) out = to_string(round(stof(out) * 10) / 10).substr(0,3);
+			else if (f_pos != string::npos) out = to_string((int)round(stof(out)));
 			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
 			out.push_back(units[start][0]);
 		}
@@ -319,15 +400,22 @@ namespace Tools {
 		return ss.str();
 	}
 
-	atomic_lock::atomic_lock(atomic<bool>& atom) : atom(atom) {
-		active_locks++;
-		while (not this->atom.compare_exchange_strong(this->not_true, true));
+	void atomic_wait(const atomic<bool>& atom, const bool old) noexcept {
+		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
+	}
+
+	void atomic_wait_for(const atomic<bool>& atom, const bool old, const uint64_t wait_ms) noexcept {
+		const uint64_t start_time = time_ms();
+		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
+	}
+
+	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
+		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
+		else this->atom.store(true);
 	}
 
 	atomic_lock::~atomic_lock() {
-		active_locks--;
 		this->atom.store(false);
-		atomic_notify(this->atom);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
@@ -338,7 +426,8 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			throw std::runtime_error("readfile() : Exception when reading " + (string)path + " : " + e.what());
+			Logger::error("readfile() : Exception when reading " + (string)path + " : " + e.what());
+			return fallback;
 		}
 		return (out.empty() ? fallback : out);
 	}
@@ -371,14 +460,24 @@ namespace Tools {
 
 namespace Logger {
 	using namespace Tools;
-	namespace {
-		std::atomic<bool> busy (false);
-		bool first = true;
-		const string tdf = "%Y/%m/%d (%T) | ";
-	}
+	std::atomic<bool> busy (false);
+	bool first = true;
+	const string tdf = "%Y/%m/%d (%T) | ";
 
 	size_t loglevel;
 	fs::path logfile;
+
+	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
+	class lose_priv {
+		int status = -1;
+	public:
+		lose_priv() {
+			if (geteuid() != Global::real_uid) this->status = seteuid(Global::real_uid);
+		}
+		~lose_priv() {
+			if (status == 0) status = seteuid(Global::set_uid);
+		}
+	};
 
 	void set(const string& level) {
 		loglevel = v_index(log_levels, level);
@@ -386,7 +485,8 @@ namespace Logger {
 
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
-		atomic_lock lck(busy);
+		atomic_lock lck(busy, true);
+		lose_priv neutered{};
 		std::error_code ec;
 		try {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {

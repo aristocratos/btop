@@ -19,6 +19,8 @@ tab-size = 4
 #include <iostream>
 #include <ranges>
 #include <vector>
+#include <thread>
+#include <mutex>
 
 #include <btop_input.hpp>
 #include <btop_tools.hpp>
@@ -72,20 +74,74 @@ namespace Input {
 	};
 
 	std::atomic<bool> interrupt (false);
+	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
 	unordered_flat_map<string, Mouse_loc> mouse_mappings;
 
 	deque<string> history(50, "");
 	string old_filter;
 
+	struct InputThr {
+		InputThr() : thr(run, this) {
+		}
+
+		static void run(InputThr* that) {
+			that->runImpl();
+		}
+
+		void runImpl() {
+			char ch = 0;
+
+			// TODO(pg83): read whole buffer
+			while (cin.get(ch)) {
+				std::lock_guard<std::mutex> g(lock);
+				current.push_back(ch);
+				if (current.size() > 100) {
+					current.clear();
+				}
+			}
+		}
+
+		size_t avail() {
+			std::lock_guard<std::mutex> g(lock);
+
+			return current.size();
+		}
+
+		std::string get() {
+			std::string res;
+
+			{
+				std::lock_guard<std::mutex> g(lock);
+
+				res.swap(current);
+			}
+
+			return res;
+		}
+
+		static InputThr& instance() {
+			// intentional memory leak, to simplify shutdown process
+			static InputThr* input = new InputThr();
+
+			return *input;
+		}
+
+		std::string current;
+		// TODO(pg83): use std::conditional_variable instead of sleep
+		std::mutex lock;
+		std::thread thr;
+	};
+
 	bool poll(int timeout) {
-		if (timeout < 1) return cin.rdbuf()->in_avail() > 0;
+		atomic_lock lck(polling);
+		if (timeout < 1) return InputThr::instance().avail() > 0;
 		while (timeout > 0) {
 			if (interrupt) {
 				interrupt = false;
 				return false;
 			}
-			if (cin.rdbuf()->in_avail() > 0) return true;
+			if (InputThr::instance().avail() > 0) return true;
 			sleep_ms(timeout < 10 ? timeout : 10);
 			timeout -= 10;
 		}
@@ -93,9 +149,7 @@ namespace Input {
 	}
 
 	string get() {
-		string key;
-		while (cin.rdbuf()->in_avail() > 0 and key.size() < 100) key += cin.get();
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(cin.rdbuf()->in_avail());
+		string key = InputThr::instance().get();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
 			if (key.substr(0, 2) == Fx::e) {
@@ -105,14 +159,14 @@ namespace Input {
 			if (key.starts_with("[<")) {
 				std::string_view key_view = key;
 				string mouse_event;
-				if (key_view.starts_with("[<0;") and key_view.ends_with('M')) {
+				if (key_view.starts_with("[<0;") and key_view.find('M') != std::string_view::npos) {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-					mouse_event = "mouse_release";
-					key_view.remove_prefix(4);
-				}
+				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+				// 	mouse_event = "mouse_release";
+				// 	key_view.remove_prefix(4);
+				// }
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
@@ -168,32 +222,34 @@ namespace Input {
 	}
 
 	string wait() {
-		while (cin.rdbuf()->in_avail() < 1) {
+		while (InputThr::instance().avail() < 1) {
 			sleep_ms(10);
 		}
 		return get();
 	}
 
 	void clear() {
-		if (cin.rdbuf()->in_avail() > 0) cin.ignore(SSmax);
+		// do not need it, actually
 	}
 
 	void process(const string& key) {
 		if (key.empty()) return;
 		try {
 			auto& filtering = Config::getB("proc_filtering");
-
+			auto& vim_keys = Config::getB("vim_keys");
+			auto help_key = (vim_keys ? "H" : "h");
+			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
 			if (not filtering) {
 				bool keep_going = false;
 				if (str_to_lower(key) == "q") {
-					exit(0);
+					clean_quit(0);
 				}
 				else if (is_in(key, "escape", "m")) {
 					Menu::show(Menu::Menus::Main);
 					return;
 				}
-				else if (is_in(key, "F1", "h")) {
+				else if (is_in(key, "F1", "?", help_key)) {
 					Menu::show(Menu::Menus::Help);
 					return;
 				}
@@ -235,11 +291,15 @@ namespace Input {
 				bool no_update = true;
 				bool redraw = true;
 				if (filtering) {
-					if (key == "enter") {
+					if (key == "enter" or key == "down") {
 						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-						old_filter.clear();
-					}
+                        old_filter.clear();
+                        if(key == "down"){
+                            process("down");
+                            return;
+                        }
+                    }
 					else if (key == "escape" or key == "mouse_click") {
 						Config::set("proc_filter", old_filter);
 						Config::set("proc_filtering", false);
@@ -252,19 +312,19 @@ namespace Input {
 					else
 						return;
 				}
-				else if (key == "left") {
+				else if (key == "left" or (vim_keys and key == "h")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
 					if (--cur_i < 0)
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "right") {
+				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
 					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 				}
-				else if (key == "f") {
+				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
 					Proc::filter = { Config::getS("proc_filter") };
 					old_filter = Proc::filter.text;
@@ -294,7 +354,16 @@ namespace Input {
 								const auto& current_selection = Config::getI("proc_selected");
 								if (current_selection == line - y - 1) {
 									redraw = true;
-									goto proc_mouse_enter;
+									if (Config::getB("proc_tree")) {
+										const int x_pos = col - Proc::x;
+										const int offset = Config::getI("selected_depth") * 3;
+										if (x_pos > offset and x_pos < 4 + offset) {
+											process("space");
+											return;
+										}
+									}
+									process("enter");
+									return;
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
@@ -320,7 +389,6 @@ namespace Input {
 						keep_going = true;
 				}
 				else if (key == "enter") {
-					proc_mouse_enter:
 					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
 						return;
 					}
@@ -344,7 +412,7 @@ namespace Input {
 					if (key == "-" or key == "space") Proc::collapse = pid;
 					no_update = false;
 				}
-				else if (is_in(key, "t", "k") and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 					Menu::show(Menu::Menus::SignalSend, (key == "t" ? SIGTERM : SIGKILL));
@@ -356,7 +424,7 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
-				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end")) {
+				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G"))) {
 					proc_mouse_scroll:
 					redraw = false;
 					auto old_selected = Config::getI("proc_selected");
@@ -463,8 +531,8 @@ namespace Input {
 						ndev.stat.at("upload").offset = 0;
 					}
 					else {
-						ndev.stat.at("download").offset = ndev.stat.at("download").last;
-						ndev.stat.at("upload").offset = ndev.stat.at("upload").last;
+						ndev.stat.at("download").offset = ndev.stat.at("download").last + ndev.stat.at("download").rollover;
+						ndev.stat.at("upload").offset = ndev.stat.at("upload").last + ndev.stat.at("upload").rollover;
 					}
 					no_update = false;
 				}

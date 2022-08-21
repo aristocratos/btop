@@ -50,9 +50,12 @@ namespace Config {
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
-								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positons, G=graph symbol to use for box.\n"
-								"#* Use withespace \" \" as seprator between different presets.\n"
+								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
+								"#* Use withespace \" \" as separator between different presets.\n"
 								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
+
+		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
+								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
@@ -74,8 +77,8 @@ namespace Config {
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
-		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu responsive\",\n"
-								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu responsive\" updates top process directly."},
+		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\",\n"
+								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu direct\" updates top process directly."},
 
 		{"proc_reversed",		"#* Reverse sorting order, True or False."},
 
@@ -89,9 +92,13 @@ namespace Config {
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
+		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
+
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
+
+        {"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
@@ -120,6 +127,8 @@ namespace Config {
 
 		{"temp_scale", 			"#* Which temperature scale to use, available values: \"celsius\", \"fahrenheit\", \"kelvin\" and \"rankine\"."},
 
+		{"base_10_sizes",		"#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024."},
+
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
 
 		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable.\n"
@@ -136,6 +145,8 @@ namespace Config {
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
+		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
+
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
 
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
@@ -145,6 +156,10 @@ namespace Config {
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
 
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
+
+		{"zfs_hide_datasets",		"#* Setting this to True will hide all datasets, and only show ZFS pools. (IO stats will be calculated per-pool)"},
+
+		{"disk_free_priv",		"#* Set to true to show available disk space for privileged users."},
 
 		{"show_io_stat", 		"#* Toggles if io activity % (disk busy time) should be shown in regular disk usage view."},
 
@@ -167,6 +182,8 @@ namespace Config {
 
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
+		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
+
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
 	};
@@ -184,6 +201,7 @@ namespace Config {
 		{"cpu_graph_upper", "total"},
 		{"cpu_graph_lower", "total"},
 		{"cpu_sensor", "Auto"},
+		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
 		{"temp_scale", "celsius"},
 		{"clock_format", "%X"},
@@ -206,10 +224,12 @@ namespace Config {
 		{"proc_tree", false},
 		{"proc_colors", true},
 		{"proc_gradient", true},
-		{"proc_per_core", true},
+		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
+		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
+        {"proc_filter_kernel", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
@@ -220,18 +240,23 @@ namespace Config {
 		{"background_update", true},
 		{"mem_graphs", true},
 		{"mem_below_net", false},
+		{"zfs_arc_cached", true},
 		{"show_swap", true},
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"only_physical", true},
 		{"use_fstab", true},
+		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},
 		{"io_mode", false},
+		{"base_10_sizes", false},
 		{"io_graph_combined", false},
 		{"net_auto", true},
-		{"net_sync", false},
+		{"net_sync", true},
 		{"show_battery", true},
+		{"vim_keys", false},
 		{"tty_mode", false},
+		{"disk_free_priv", false},
 		{"force_tty", false},
 		{"lowcolor", false},
 		{"show_detailed", false},
@@ -245,6 +270,7 @@ namespace Config {
 		{"net_upload", 100},
 		{"detailed_pid", 0},
 		{"selected_pid", 0},
+		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
@@ -252,7 +278,7 @@ namespace Config {
 	unordered_flat_map<string, int> intsTmp;
 
 	bool _locked(const string& name) {
-		atomic_wait(writelock);
+		atomic_wait(writelock, true);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
 		return locked.load();
@@ -260,6 +286,8 @@ namespace Config {
 
 	fs::path conf_dir;
 	fs::path conf_file;
+
+	vector<string> available_batteries = {"Auto"};
 
 	vector<string> current_boxes;
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
@@ -444,13 +472,14 @@ namespace Config {
 	void unlock() {
 		if (not locked) return;
 		atomic_wait(Runner::active);
-		atomic_lock lck(writelock);
+		atomic_lock lck(writelock, true);
 		try {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;
 				strings.at("selected_name") = Proc::selected_name;
 				ints.at("proc_start") = Proc::start;
 				ints.at("proc_selected") = Proc::selected;
+				ints.at("selected_depth") = Proc::selected_depth;
 			}
 
 			for (auto& item : stringsTmp) {
@@ -470,7 +499,7 @@ namespace Config {
 		}
 		catch (const std::exception& e) {
 			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
-			exit(1);
+			clean_quit(1);
 		}
 
 		locked = false;
@@ -521,9 +550,7 @@ namespace Config {
 			vector<string> valid_names;
 			for (auto &n : descriptions)
 				valid_names.push_back(n[0]);
-			string v_string;
-			getline(cread, v_string, '\n');
-			if (not s_contains(v_string, Global::Version))
+			if (string v_string; cread.peek() != '#' or (getline(cread, v_string, '\n') and not s_contains(v_string, Global::Version)))
 				write_new = true;
 			while (not cread.eof()) {
 				cread >> std::ws;
@@ -580,6 +607,7 @@ namespace Config {
 	void write() {
 		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
+		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version;

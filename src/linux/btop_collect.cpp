@@ -16,16 +16,20 @@ indent = tab
 tab-size = 4
 */
 
+#include <robin_hood.h>
 #include <fstream>
 #include <ranges>
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <regex>
 #include <sys/statvfs.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+
+#if !(defined(STATIC_BUILD) && defined(__GLIBC__))
+	#include <pwd.h>
+#endif
 
 #include <btop_shared.hpp>
 #include <btop_config.hpp>
@@ -78,9 +82,7 @@ namespace Mem {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	uint64_t totalMem;
 	long pageSize, clkTck, coreCount;
-	int totalMem_len;
 
 	void init() {
 
@@ -110,16 +112,6 @@ namespace Shared {
 			clkTck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
-
-		ifstream meminfo(Shared::procPath / "meminfo");
-		if (meminfo.good()) {
-			meminfo.ignore(SSmax, ':');
-			meminfo >> totalMem;
-			totalMem_len = to_string(totalMem).size();
-			totalMem <<= 10;
-		}
-		if (not meminfo.good() or totalMem == 0)
-			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
 
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
@@ -225,9 +217,9 @@ namespace Cpu {
 					name += n + ' ';
 				}
 				name.pop_back();
-				for (const auto& reg : {regex("Processor"), regex("CPU"), regex("\\(R\\)"), regex("\\(TM\\)"), regex("Intel"),
-										regex("AMD"), regex("Core"), regex("\\d?\\.?\\d+[mMgG][hH][zZ]")}) {
-					name = std::regex_replace(name, reg, "");
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+					name = s_replace(name, replace, "");
+					name = s_replace(name, "  ", " ");
 				}
 				name = trim(name);
 			}
@@ -249,20 +241,36 @@ namespace Cpu {
 					if (s_contains(add_path, "coretemp"))
 						got_coretemp = true;
 
-					if (fs::exists(add_path / "temp1_input")) {
-						search_paths.push_back(add_path);
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						if (string(file.path().filename()) == "device") {
+							for (const auto & dev_file : fs::directory_iterator(file.path())) {
+								string dev_filename = dev_file.path().filename();
+								if (dev_filename.starts_with("temp") and dev_filename.ends_with("_input")) {
+									search_paths.push_back(file.path());
+									break;
+								}
+							}
+						}
+
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input")) {
+							search_paths.push_back(add_path);
+							break;
+						}
 					}
-					else if (fs::exists(add_path / "device/temp1_input"))
-						search_paths.push_back(add_path / "device");
 				}
 			}
 			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 					fs::path add_path = fs::canonical(d.path());
 
-					if (fs::exists(d.path() / "temp1_input") and not v_contains(search_paths, add_path)) {
-						search_paths.push_back(add_path);
-						got_coretemp = true;
+					for (const auto & file : fs::directory_iterator(add_path)) {
+						string filename = file.path().filename();
+						if (filename.starts_with("temp") and filename.ends_with("_input") and not v_contains(search_paths, add_path)) {
+								search_paths.push_back(add_path);
+								got_coretemp = true;
+								break;
+						}
 					}
 				}
 			}
@@ -270,9 +278,17 @@ namespace Cpu {
 			if (not search_paths.empty()) {
 				for (const auto& path : search_paths) {
 					const string pname = readfile(path / "name", path.filename());
-					for (int i = 1; fs::exists(path / string("temp" + to_string(i) + "_input")); i++) {
-						const string basepath = path / string("temp" + to_string(i) + "_");
-						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(i));
+					for (const auto & file : fs::directory_iterator(path)) {
+						const string file_suffix = "input";
+						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						string file_path = file.path();
+
+						if (!s_contains(file_path, file_suffix)) {
+							continue;
+						}
+
+						const string basepath = file_path.erase(file_path.find(file_suffix), file_suffix.length());
+						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
 						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
 						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
@@ -318,10 +334,19 @@ namespace Cpu {
 		}
 		catch (...) {}
 
-		if (not got_coretemp or core_sensors.empty()) cpu_temp_only = true;
+		if (not got_coretemp or core_sensors.empty()) {
+			cpu_temp_only = true;
+		}
+		else {
+			rng::sort(core_sensors, rng::less{});
+			rng::stable_sort(core_sensors, [](const auto& a, const auto& b){
+				return a.size() < b.size();
+			});
+		}
+
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
-				if (s_contains(str_to_lower(name), "cpu")) {
+				if (s_contains(str_to_lower(name), "cpu") or s_contains(str_to_lower(name), "k10temp")) {
 					cpu_sensor = name;
 					break;
 				}
@@ -476,61 +501,104 @@ namespace Cpu {
 		return core_map;
 	}
 
+	struct battery {
+		fs::path base_dir, energy_now, energy_full, power_now, status, online;
+		string device_type;
+		bool use_energy = true;
+	};
+
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
-		static fs::path bat_dir, energy_now_path, energy_full_path, power_now_path, status_path, online_path;
-		static bool use_energy = true;
+		static string auto_sel;
+		static unordered_flat_map<string, battery> batteries;
 
 		//? Get paths to needed files and check for valid values on first run
-		if (bat_dir.empty() and has_battery) {
-			if (fs::exists("/sys/class/power_supply")) {
-				for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
-					if (const string dir_name = d.path().filename(); d.is_directory() and (dir_name.starts_with("BAT") or s_contains(str_to_lower(dir_name), "battery"))) {
-						bat_dir = d.path();
-						break;
+		if (batteries.empty() and has_battery) {
+			try {
+				if (fs::exists("/sys/class/power_supply")) {
+					for (const auto& d : fs::directory_iterator("/sys/class/power_supply")) {
+						//? Only consider online power supplies of type Battery or UPS
+						//? see kernel docs for details on the file structure and contents
+						//? https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-power
+						battery new_bat;
+						fs::path bat_dir;
+						try {
+							if (not d.is_directory()
+								or not fs::exists(d.path() / "type")
+								or not fs::exists(d.path() / "present")
+								or stoi(readfile(d.path() / "present")) != 1)
+								continue;
+							string dev_type = readfile(d.path() / "type");
+							if (is_in(dev_type, "Battery", "UPS")) {
+								bat_dir = d.path();
+								new_bat.base_dir = d.path();
+								new_bat.device_type = dev_type;
+							}
+						} catch (...) {
+							//? skip power supplies not conforming to the kernel standard
+							continue;
+						}
+
+						if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
+						else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
+						else new_bat.use_energy = false;
+
+						if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
+						else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
+						else new_bat.use_energy = false;
+
+						if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
+							continue;
+						}
+
+						if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
+						else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+
+						if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
+						else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
+
+						batteries[bat_dir.filename()] = new_bat;
+						Config::available_batteries.push_back(bat_dir.filename());
 					}
 				}
 			}
-			if (bat_dir.empty()) {
+			catch (...) {
+				batteries.clear();
+			}
+			if (batteries.empty()) {
 				has_battery = false;
 				return {0, 0, ""};
 			}
-			else {
-				if (fs::exists(bat_dir / "energy_now")) energy_now_path = bat_dir / "energy_now";
-				else if (fs::exists(bat_dir / "charge_now")) energy_now_path = bat_dir / "charge_now";
-				else use_energy = false;
-
-				if (fs::exists(bat_dir / "energy_full")) energy_full_path = bat_dir / "energy_full";
-				else if (fs::exists(bat_dir / "charge_full")) energy_full_path = bat_dir / "charge_full";
-				else use_energy = false;
-
-				if (not use_energy and not fs::exists(bat_dir / "capacity")) {
-					has_battery = false;
-					return {0, 0, ""};
-				}
-
-				if (fs::exists(bat_dir / "power_now")) power_now_path = bat_dir / "power_now";
-				else if (fs::exists(bat_dir / "current_now")) power_now_path = bat_dir / "current_now";
-
-				if (fs::exists(bat_dir / "AC0/online")) online_path = bat_dir / "AC0/online";
-				else if (fs::exists(bat_dir / "AC/online")) online_path = bat_dir / "AC/online";
-			}
 		}
+
+		auto& battery_sel = Config::getS("selected_battery");
+
+		if (auto_sel.empty()) {
+			for (auto& [name, bat] : batteries) {
+				if (bat.device_type == "Battery") {
+					auto_sel = name;
+					break;
+				}
+			}
+			if (auto_sel.empty()) auto_sel = batteries.begin()->first;
+		}
+
+		auto& b = (battery_sel != "Auto" and batteries.contains(battery_sel) ? batteries.at(battery_sel) : batteries.at(auto_sel));
 
 		int percent = -1;
 		long seconds = -1;
 
 		//? Try to get battery percentage
-		if (use_energy) {
+		if (b.use_energy) {
 			try {
-				percent = round(100.0 * stoll(readfile(energy_now_path, "-1")) / stoll(readfile(energy_full_path, "1")));
+				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
 		if (percent < 0) {
 			try {
-				percent = stoll(readfile(bat_dir / "capacity", "-1"));
+				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
@@ -541,9 +609,9 @@ namespace Cpu {
 		}
 
 		//? Get charging/discharging status
-		string status = str_to_lower(readfile(bat_dir / "status", "unknown"));
-		if (status == "unknown" and not online_path.empty()) {
-			const auto online = readfile(online_path, "0");
+		string status = str_to_lower(readfile(b.base_dir / "status", "unknown"));
+		if (status == "unknown" and not b.online.empty()) {
+			const auto online = readfile(b.online, "0");
 			if (online == "1" and percent < 100) status = "charging";
 			else if (online == "1") status = "full";
 			else status = "discharging";
@@ -551,16 +619,16 @@ namespace Cpu {
 
 		//? Get seconds to empty
 		if (not is_in(status, "charging", "full")) {
-			if (use_energy and not power_now_path.empty()) {
+			if (b.use_energy and not b.power_now.empty()) {
 				try {
-					seconds = round((double)stoll(readfile(energy_now_path, "0")) / stoll(readfile(power_now_path, "1")) * 3600);
+					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
-			if (seconds < 0 and fs::exists(bat_dir / "time_to_empty")) {
+			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
 				try {
-					seconds = stoll(readfile(bat_dir / "time_to_empty", "0")) * 60;
+					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
@@ -670,23 +738,62 @@ namespace Mem {
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
+	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
+
+	//?* Find the filepath to the specified ZFS object's stat file
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets);
+
+	//?* Collect total ZFS pool io stats
+	bool zfs_collect_pool_total_stats(struct disk_info &disk);
 
 	mem_info current_mem {};
+
+	uint64_t get_totalMem() {
+		ifstream meminfo(Shared::procPath / "meminfo");
+		int64_t totalMem;
+		if (meminfo.good()) {
+			meminfo.ignore(SSmax, ':');
+			meminfo >> totalMem;
+			totalMem <<= 10;
+		}
+		if (not meminfo.good() or totalMem == 0)
+			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
+
+		return totalMem;
+	}
 
 	auto collect(const bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 		auto& show_swap = Config::getB("show_swap");
 		auto& swap_disk = Config::getB("swap_disk");
 		auto& show_disks = Config::getB("show_disks");
+		auto& zfs_arc_cached = Config::getB("zfs_arc_cached");
+		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 
 		mem.stats.at("swap_total") = 0;
+
+		//? Read ZFS ARC info from /proc/spl/kstat/zfs/arcstats
+		uint64_t arc_size = 0;
+		if (zfs_arc_cached) {
+			ifstream arcstats(Shared::procPath / "spl/kstat/zfs/arcstats");
+			if (arcstats.good()) {
+				std::string line;
+				while (std::getline(arcstats, line)) {
+					std::smatch match;
+					if (std::regex_match(line, match, zfs_size_regex) && match.size() == 2) {
+						arc_size = stoull(match.str(1));
+					}
+				}
+			}
+			arcstats.close();
+		}
 
 		//? Read memory info from /proc/meminfo
 		ifstream meminfo(Shared::procPath / "meminfo");
 		if (meminfo.good()) {
 			bool got_avail = false;
-			for (string label; meminfo >> label;) {
+			for (string label; meminfo.peek() != 'D' and meminfo >> label;) {
 				if (label == "MemFree:") {
 					meminfo >> mem.stats.at("free");
 					mem.stats.at("free") <<= 10;
@@ -713,7 +820,11 @@ namespace Mem {
 				meminfo.ignore(SSmax, '\n');
 			}
 			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
-			mem.stats.at("used") = Shared::totalMem - mem.stats.at("available");
+			if (zfs_arc_cached) {
+				mem.stats.at("cached") += arc_size;
+				mem.stats.at("available") += arc_size;
+			}
+			mem.stats.at("used") = totalMem - mem.stats.at("available");
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
 		}
 		else
@@ -723,7 +834,7 @@ namespace Mem {
 
 		//? Calculate percentages
 		for (const auto& name : mem_names) {
-			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
+			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 		}
 
@@ -740,11 +851,13 @@ namespace Mem {
 		//? Get disks stats
 		if (show_disks) {
 			double uptime = system_uptime();
+			auto free_priv = Config::getB("disk_free_priv");
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
 				auto& use_fstab = Config::getB("use_fstab");
 				auto& only_physical = Config::getB("only_physical");
+				auto& zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
@@ -783,7 +896,12 @@ namespace Mem {
 						for (string instr; diskread >> instr;) {
 							if (not instr.starts_with('#')) {
 								diskread >> instr;
-								if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#ifdef SNAPPED
+									if (instr == "/") fstab.push_back("/mnt");
+									else if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#else
+									if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
+								#endif
 							}
 							diskread.ignore(SSmax, '\n');
 						}
@@ -802,6 +920,9 @@ namespace Mem {
 					while (not diskread.eof()) {
 						std::error_code ec;
 						diskread >> dev >> mountpoint >> fstype;
+						diskread.ignore(SSmax, '\n');
+
+						if (v_contains(found, mountpoint)) continue;
 
 						//? Match filter if not empty
 						if (not filter.empty()) {
@@ -810,29 +931,55 @@ namespace Mem {
 								continue;
 						}
 
+						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
+						size_t zfs_dataset_name_start = 0;
+						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
+
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))
 						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
 							found.push_back(mountpoint);
 							if (not v_contains(last_found, mountpoint)) redraw = true;
 
-							//? Save mountpoint, name, dev path and path to /sys/block stat file
+							//? Save mountpoint, name, fstype, dev path and path to /sys/block stat file
 							if (not disks.contains(mountpoint)) {
-								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename(), fstype};
 								if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
+								#ifdef SNAPPED
+									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
+								#endif
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 								string devname = disks.at(mountpoint).dev.filename();
+								int c = 0;
 								while (devname.size() >= 2) {
 									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
-										disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
+											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+										else
+											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										break;
+									//? Set ZFS stat filepath
+									} else if (fstype == "zfs") {
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+										if (disks.at(mountpoint).stat.empty()) {
+											Logger::debug("Failed to get ZFS stat file for device " + dev);
+										}
 										break;
 									}
 									devname.resize(devname.size() - 1);
+									c++;
 								}
 							}
 
+							//? If zfs_hide_datasets option was switched, refresh stat filepath
+							if (fstype == "zfs" && ((zfs_hide_datasets && !is_directory(disks.at(mountpoint).stat))
+								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
+								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+								if (disks.at(mountpoint).stat.empty()) {
+									Logger::debug("Failed to get ZFS stat file for device " + dev);
+								}
+							}
 						}
-						diskread.ignore(SSmax, '\n');
 					}
 					//? Remove disks no longer mounted or filtered out
 					if (swap_disk and has_swap) found.push_back("swap");
@@ -852,13 +999,13 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto& [mountpoint, disk] : disks) {
 					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
-					struct statvfs vfs;
-					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+					struct statvfs64 vfs;
+					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
 						continue;
 					}
 					disk.total = vfs.f_blocks * vfs.f_frsize;
-					disk.free = vfs.f_bfree * vfs.f_frsize;
+					disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
 					disk.used = disk.total - disk.free;
 					disk.used_percent = round((double)disk.used * 100 / disk.total);
 					disk.free_percent = 100 - disk.used_percent;
@@ -866,10 +1013,14 @@ namespace Mem {
 
 				//? Setup disks order in UI and add swap if enabled
 				mem.disks_order.clear();
-				if (disks.contains("/")) mem.disks_order.push_back("/");
+				#ifdef SNAPPED
+					if (disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+				#else
+					if (disks.contains("/")) mem.disks_order.push_back("/");
+				#endif
 				if (swap_disk and has_swap) {
 					mem.disks_order.push_back("swap");
-					if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
+					if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
 					disks.at("swap").total = mem.stats.at("swap_total");
 					disks.at("swap").used = mem.stats.at("swap_used");
 					disks.at("swap").free = mem.stats.at("swap_free");
@@ -877,42 +1028,93 @@ namespace Mem {
 					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 				}
 				for (const auto& name : last_found)
-					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+					#ifdef SNAPPED
+						if (not is_in(name, "/mnt", "swap")) mem.disks_order.push_back(name);
+					#else
+						if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+					#endif
 
 				//? Get disks IO
-				int64_t sectors_read, sectors_write, io_ticks;
+				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
+					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
+						disk_ios++;
+						continue;
+					}
 					diskread.open(disk.stat);
 					if (diskread.good()) {
 						disk_ios++;
-						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> sectors_read;
-						if (disk.io_read.empty())
-							disk.io_read.push_back(0);
-						else
-							disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
-						disk.old_io.at(0) = sectors_read;
-						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+						//? ZFS Pool Support
+						if (disk.fstype == "zfs") {
+							// skip first three lines
+							for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> io_ticks;
 
-						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> sectors_write;
-						if (disk.io_write.empty())
-							disk.io_write.push_back(0);
-						else
-							disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
-						disk.old_io.at(1) = sectors_write;
-						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> sectors_write; // nbytes written
+							if (disk.io_write.empty())
+								disk.io_write.push_back(0);
+							else
+								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1))));
+							disk.old_io.at(1) = sectors_write;
+							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
-						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-						diskread >> io_ticks;
-						if (disk.io_activity.empty())
-							disk.io_activity.push_back(0);
-						else
-							disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
-						disk.old_io.at(2) = io_ticks;
-						while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> io_ticks_temp;
+							io_ticks += io_ticks_temp;
+
+							// skip characters until '4' is reached, indicating data type 4, next value will be out target
+							diskread.ignore(numeric_limits<streamsize>::max(), '4');
+							diskread >> sectors_read; // nbytes read
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+							if (disk.io_activity.empty())
+								disk.io_activity.push_back(0);
+							else
+								disk.io_activity.push_back(max((int64_t)0, (io_ticks - disk.old_io.at(2))));
+							disk.old_io.at(2) = io_ticks;
+							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+						} else {
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> sectors_read;
+							if (disk.io_read.empty())
+								disk.io_read.push_back(0);
+							else
+								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
+							disk.old_io.at(0) = sectors_read;
+							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+							for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> sectors_write;
+							if (disk.io_write.empty())
+								disk.io_write.push_back(0);
+							else
+								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
+							disk.old_io.at(1) = sectors_write;
+							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+							diskread >> io_ticks;
+							if (disk.io_activity.empty())
+								disk.io_activity.push_back(0);
+							else
+								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+							disk.old_io.at(2) = io_ticks;
+							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+						}
+					} else {
+						Logger::debug("Error in Mem::collect() : when opening " + (string)disk.stat);
 					}
 					diskread.close();
 				}
@@ -924,6 +1126,129 @@ namespace Mem {
 		}
 
 		return mem;
+	}
+
+	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets) {
+		fs::path zfs_pool_stat_path;
+		if (zfs_hide_datasets) {
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
+			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
+				return zfs_pool_stat_path;
+			} else {
+				Logger::debug("Cant access folder: " + zfs_pool_stat_path.string());
+				return "";
+			}
+		}
+
+		ifstream filestream;
+		string filename;
+		string name_compare;
+
+		if (dataset_name_start != std::string::npos) { // device is a dataset
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name.substr(0, dataset_name_start);
+		} else { // device is a pool
+			zfs_pool_stat_path = Shared::procPath / "spl/kstat/zfs" / device_name;
+		}
+
+		// looking through all files that start with 'objset' to find the one containing `device_name` object stats
+		for (const auto& file: fs::directory_iterator(zfs_pool_stat_path)) {
+			filename = file.path().filename();
+			if (filename.starts_with("objset")) {
+				filestream.open(file.path());
+				if (filestream.good()) {
+					// skip first two lines
+					for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
+					// skip characters until '7' is reached, indicating data type 7, next value will be object name
+					filestream.ignore(numeric_limits<streamsize>::max(), '7');
+					filestream >> name_compare;
+					if (name_compare == device_name) {
+						filestream.close();
+						if (access(file.path().c_str(), R_OK) == 0) {
+							return file.path();
+						} else {
+							Logger::debug("Can't access file: " + file.path().string());
+							return "";
+						}
+					}
+				}
+				filestream.close();
+			}
+		}
+
+		Logger::debug("Could not read directory: " + zfs_pool_stat_path.string());
+		return "";
+	}
+
+	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
+		ifstream diskread;
+
+		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0, objects_read = 0;
+
+		// looking through all files that start with 'objset'
+		for (const auto& file: fs::directory_iterator(disk.stat)) {
+			if ((file.path().filename()).string().starts_with("objset")) {
+				diskread.open(file.path());
+				if (diskread.good()) {
+					try {
+						// skip first three lines
+						for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_write;
+						bytes_write_total += bytes_write;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+						io_ticks_total += io_ticks;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> bytes_read;
+						bytes_read_total += bytes_read;
+					} catch (const std::exception& e) {
+						continue;
+					}
+
+					// increment read objects counter if no errors were encountered
+					objects_read++;
+				} else {
+					Logger::debug("Could not read file: " + file.path().string());
+				}
+				diskread.close();
+			}
+		}
+
+		// if for some reason no objects were read
+		if (objects_read == 0) return false;
+
+		if (disk.io_write.empty())
+			disk.io_write.push_back(0);
+		else
+			disk.io_write.push_back(max((int64_t)0, (bytes_write_total - disk.old_io.at(1))));
+		disk.old_io.at(1) = bytes_write_total;
+		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+		if (disk.io_read.empty())
+			disk.io_read.push_back(0);
+		else
+			disk.io_read.push_back(max((int64_t)0, (bytes_read_total - disk.old_io.at(0))));
+		disk.old_io.at(0) = bytes_read_total;
+		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+		if (disk.io_activity.empty())
+			disk.io_activity.push_back(0);
+		else
+			disk.io_activity.push_back(max((int64_t)0, (io_ticks_total - disk.old_io.at(2))));
+		disk.old_io.at(2) = io_ticks_total;
+		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+
+		return true;
 	}
 
 }
@@ -1004,13 +1329,24 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					const uint64_t val = max((uint64_t)stoul(readfile(sys_file, "0")), saved_stat.last);
+					uint64_t val = 0;
+					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
+					catch (const std::invalid_argument&) {}
+					catch (const std::out_of_range&) {}
 
 					//? Update speed, total and top values
+					if (val < saved_stat.last) {
+						saved_stat.rollover += saved_stat.last;
+						saved_stat.last = 0;
+					}
+					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+						saved_stat.rollover = 0;
+						saved_stat.last = 0;
+					}
 					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
-					if (saved_stat.offset > val) saved_stat.offset = 0;
-					saved_stat.total = val - saved_stat.offset;
+					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
+					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
 					saved_stat.last = val;
 
 					//? Add values to graph
@@ -1019,6 +1355,7 @@ namespace Net {
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
+						if (net_sync and saved_stat.speed < net.at(iface).stat.at(dir == "download" ? "upload" : "download").speed) continue;
 						if (saved_stat.speed > graph_max[dir]) {
 							++max_count[dir][0];
 							if (max_count[dir][1] > 0) --max_count[dir][1];
@@ -1124,69 +1461,8 @@ namespace Proc {
 	int filter_found = 0;
 
 	detail_container detailed;
-
-	//* Generate process tree list
-	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<std::reference_wrapper<proc_info>>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found=false, const bool no_update=false, const bool should_filter=false) {
-		auto cur_pos = out_procs.size();
-		bool filtering = false;
-
-		//? If filtering, include children of matching processes
-		if (not found and (should_filter or not filter.empty())) {
-			if (not s_contains(std::to_string(cur_proc.pid), filter)
-			and not s_contains(cur_proc.name, filter)
-			and not s_contains(cur_proc.cmd, filter)
-			and not s_contains(cur_proc.user, filter)) {
-				filtering = true;
-				cur_proc.filtered = true;
-				filter_found++;
-			}
-			else {
-				found = true;
-				cur_depth = 0;
-			}
-		}
-		else if (cur_proc.filtered) cur_proc.filtered = false;
-
-		//? Set tree index position for process if not filtered out or currently in a collapsed sub-tree
-		if (not collapsed and not filtering) {
-			out_procs.push_back(std::ref(cur_proc));
-			cur_proc.tree_index = out_procs.size() - 1;
-			//? Try to find name of the binary file and append to program name if not the same
-			if (cur_proc.short_cmd.empty() and not cur_proc.cmd.empty()) {
-				std::string_view cmd_view = cur_proc.cmd;
-				cmd_view = cmd_view.substr((size_t)0, min(cmd_view.find(' '), cmd_view.size()));
-				cmd_view = cmd_view.substr(min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
-				cur_proc.short_cmd = (string)cmd_view;
-			}
-		}
-		else {
-			cur_proc.tree_index = in_procs.size();
-		}
-
-		//? Recursive iteration over all children
-		int children = 0;
-		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
-			if (not no_update and not filtering and (collapsed or cur_proc.collapsed)) {
-				out_procs.back().get().cpu_p += p.cpu_p;
-				out_procs.back().get().mem += p.mem;
-				out_procs.back().get().threads += p.threads;
-				filter_found++;
-			}
-			if (collapsed and not filtering) {
-				cur_proc.filtered = true;
-			}
-			else children++;
-			_tree_gen(p, in_procs, out_procs, cur_depth + 1, (collapsed ? true : cur_proc.collapsed), filter, found, no_update, should_filter);
-		}
-		if (collapsed or filtering) return;
-
-		//? Add tree terminator symbol if it's the last child in a sub-tree
-		if (out_procs.size() > cur_pos + 1 and not out_procs.back().get().prefix.ends_with("]─"))
-			out_procs.back().get().prefix.replace(out_procs.back().get().prefix.size() - 8, 8, " └─ ");
-
-		//? Add collapse/expand symbols if process have any children
-		out_procs.at(cur_pos).get().prefix = " │ "s * cur_depth + (children > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
-	}
+	constexpr size_t KTHREADD = 2;
+	static robin_hood::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
@@ -1253,7 +1529,7 @@ namespace Proc {
 			detailed.memory = floating_humanizer(detailed.entry.mem);
 		}
 		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
-			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Shared::totalMem);
+			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
 			redraw = true;
 		}
 
@@ -1291,6 +1567,7 @@ namespace Proc {
 		const auto& reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
 		const auto& per_core = Config::getB("proc_per_core");
+		const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
 		const auto& tree = Config::getB("proc_tree");
 		const auto& show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
@@ -1305,10 +1582,14 @@ namespace Proc {
 		string long_string;
 		string short_str;
 
+		static vector<size_t> found;
+
 		const double uptime = system_uptime();
 
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
+
+		static size_t proc_clear_count = 0;
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -1317,6 +1598,19 @@ namespace Proc {
 		//* ---------------------------------------------Collection start----------------------------------------------
 		else {
 			should_filter = true;
+			found.clear();
+
+			//? First make sure kernel proc cache is cleared.
+			if (should_filter_kernel and ++proc_clear_count >= 256) {
+				//? Clearing the cache is used in the event of a pid wrap around.
+				//? In that event processes that acquire old kernel pids would also be filtered out so we need to manually clean the cache every now and then.
+				kernels_procs.clear();
+				kernels_procs.emplace(KTHREADD);
+				proc_clear_count = 0;
+			}
+
+			auto totalMem = Mem::get_totalMem();
+			int totalMem_len = to_string(totalMem >> 10).size();
 
 			//? Update uid_user map if /etc/passwd changed since last run
 			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
@@ -1325,7 +1619,7 @@ namespace Proc {
 				uid_user.clear();
 				pread.open(Shared::passwd_path);
 				if (pread.good()) {
-					while (not pread.eof()) {
+					while (pread.good()) {
 						getline(pread, r_user, ':');
 						pread.ignore(SSmax, ':');
 						getline(pread, r_uid, ':');
@@ -1350,7 +1644,6 @@ namespace Proc {
 			pread.close();
 
 			//? Iterate over all pids in /proc
-			vector<size_t> found;
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 				if (Runner::stopping)
 					return current_procs;
@@ -1360,6 +1653,11 @@ namespace Proc {
 				if (not isdigit(pid_str[0])) continue;
 
 				const size_t pid = stoul(pid_str);
+
+				if (should_filter_kernel and kernels_procs.contains(pid)) {
+					continue;
+				}
+
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1385,7 +1683,13 @@ namespace Proc {
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
-					while(getline(pread, long_string, '\0')) new_proc.cmd += long_string + ' ';
+					while(getline(pread, long_string, '\0')) {
+						new_proc.cmd += long_string + ' ';
+						if (new_proc.cmd.size() > 1000) {
+							new_proc.cmd.resize(1000);
+							break;
+						}
+					}
 					pread.close();
 					if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 
@@ -1393,7 +1697,7 @@ namespace Proc {
 					if (not pread.good()) continue;
 					string uid;
 					string line;
-					while (not pread.eof()) {
+					while (pread.good()) {
 						getline(pread, line, ':');
 						if (line == "Uid") {
 							pread.ignore();
@@ -1404,7 +1708,26 @@ namespace Proc {
 						}
 					}
 					pread.close();
-					new_proc.user = (uid_user.contains(uid)) ? uid_user.at(uid) : uid;
+					if (uid_user.contains(uid)) {
+						new_proc.user = uid_user.at(uid);
+					}
+					else {
+					#if !(defined(STATIC_BUILD) && defined(__GLIBC__))
+						try {
+							struct passwd* udet;
+							udet = getpwuid(stoi(uid));
+							if (udet != NULL and udet->pw_name != NULL) {
+								new_proc.user = string(udet->pw_name);
+							}
+							else {
+								new_proc.user = uid;
+							}
+						}
+						catch (...) { new_proc.user = uid; }
+					#else
+						new_proc.user = uid;
+					#endif
+					}
 				}
 
 				//? Parse /proc/[pid]/stat
@@ -1417,9 +1740,9 @@ namespace Proc {
 				uint64_t cpu_t = 0;
 				try {
 					for (;;) {
-						while (++x < next_x + offset) pread.ignore(SSmax, ' ');
-						getline(pread, short_str, ' ');
+						while (pread.good() and ++x < next_x + offset) pread.ignore(SSmax, ' ');
 						if (not pread.good()) break;
+						else getline(pread, short_str, ' ');
 
 						switch (x-offset) {
 							case 3: //? Process state
@@ -1454,8 +1777,8 @@ namespace Proc {
 								next_x = 24;
 								continue;
 							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-								if (cmp_greater(short_str.size(), Shared::totalMem_len))
-									new_proc.mem = Shared::totalMem;
+								if (cmp_greater(short_str.size(), totalMem_len))
+									new_proc.mem = totalMem;
 								else
 									new_proc.mem = stoull(short_str) * Shared::pageSize;
 						}
@@ -1468,10 +1791,15 @@ namespace Proc {
 
 				pread.close();
 
+				if (should_filter_kernel and new_proc.ppid == KTHREADD) {
+					kernels_procs.emplace(new_proc.pid);
+					found.pop_back();
+				}
+
 				if (x-offset < 24) continue;
 
 				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
-				if (new_proc.mem >= Shared::totalMem) {
+				if (new_proc.mem >= totalMem) {
 					pread.open(d.path() / "statm");
 					if (not pread.good()) continue;
 					pread.ignore(SSmax, ' ');
@@ -1494,7 +1822,7 @@ namespace Proc {
 				}
 			}
 
-			//? Clear dead processes from current_procs
+			//? Clear dead processes from current_procs and remove kernel processes if enabled
 			auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
 			current_procs.erase(eraser.begin(), eraser.end());
 
@@ -1511,47 +1839,15 @@ namespace Proc {
 		}
 		//* ---------------------------------------------Collection done-----------------------------------------------
 
-		//* Sort processes
-		if (sorted_change or not no_update) {
-			switch (v_index(sort_vector, sorting)) {
-					case 0: rng::sort(current_procs, rng::greater{}, &proc_info::pid); 		break;
-					case 1: rng::sort(current_procs, rng::greater{}, &proc_info::name);		break;
-					case 2: rng::sort(current_procs, rng::greater{}, &proc_info::cmd); 		break;
-					case 3: rng::sort(current_procs, rng::greater{}, &proc_info::threads); 	break;
-					case 4: rng::sort(current_procs, rng::greater{}, &proc_info::user); 	break;
-					case 5: rng::sort(current_procs, rng::greater{}, &proc_info::mem); 		break;
-					case 6: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_p);   	break;
-					case 7: rng::sort(current_procs, rng::greater{}, &proc_info::cpu_c);   	break;
-			}
-			if (reverse) rng::reverse(current_procs);
-
-			//* When sorting with "cpu lazy" push processes over threshold cpu usage to the front regardless of cumulative usage
-			if (not tree and not reverse and sorting == "cpu lazy") {
-				double max = 10.0, target = 30.0;
-				for (size_t i = 0, x = 0, offset = 0; i < current_procs.size(); i++) {
-					if (i <= 5 and current_procs.at(i).cpu_p > max)
-						max = current_procs.at(i).cpu_p;
-					else if (i == 6)
-						target = (max > 30.0) ? max : 10.0;
-					if (i == offset and current_procs.at(i).cpu_p > 30.0)
-						offset++;
-					else if (current_procs.at(i).cpu_p > target) {
-						rotate(current_procs.begin() + offset, current_procs.begin() + i, current_procs.begin() + i + 1);
-						if (++x > 10) break;
-					}
-				}
-			}
-		}
-
 		//* Match filter if defined
 		if (should_filter) {
 			filter_found = 0;
 			for (auto& p : current_procs) {
 				if (not tree and not filter.empty()) {
-						if (not s_contains(to_string(p.pid), filter)
-						and not s_contains(p.name, filter)
-						and not s_contains(p.cmd, filter)
-						and not s_contains(p.user, filter)) {
+						if (not s_contains_ic(to_string(p.pid), filter)
+						and not s_contains_ic(p.name, filter)
+						and not s_contains_ic(p.cmd, filter)
+						and not s_contains_ic(p.user, filter)) {
 							p.filtered = true;
 							filter_found++;
 							}
@@ -1565,8 +1861,14 @@ namespace Proc {
 			}
 		}
 
+		//* Sort processes
+		if (sorted_change or not no_update) {
+			proc_sorter(current_procs, sorting, reverse, tree);
+		}
+
 		//* Generate tree view if enabled
 		if (tree and (not no_update or should_filter or sorted_change)) {
+			bool locate_selection = false;
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
@@ -1579,26 +1881,49 @@ namespace Proc {
 					else if (expand > -1) {
 						collapser->collapsed = false;
 					}
+					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
 				}
 				collapse = expand = -1;
 			}
 			if (should_filter or not filter.empty()) filter_found = 0;
 
-			vector<std::reference_wrapper<proc_info>> tree_procs;
+			vector<tree_proc> tree_procs;
 			tree_procs.reserve(current_procs.size());
 
+			for (auto& p : current_procs) {
+				if (not v_contains(found, p.ppid)) p.ppid = 0;
+			}
+
 			//? Stable sort to retain selected sorting among processes with the same parent
-			rng::stable_sort(current_procs, rng::less{}, &proc_info::ppid);
+			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
 			}
 
-			//? Final sort based on tree index
-			rng::sort(current_procs, rng::less{}, &proc_info::tree_index);
-			if (reverse) rng::reverse(current_procs);
+			//? Recursive sort over tree structure to account for collapsed processes in the tree
+			int index = 0;
+			tree_sort(tree_procs, sorting, reverse, index, current_procs.size());
 
+			//? Add tree begin symbol to first item if childless
+			if (tree_procs.front().children.empty())
+				tree_procs.front().entry.get().prefix.replace(tree_procs.front().entry.get().prefix.size() - 8, 8, " ┌─ ");
+
+			//? Add tree terminator symbol to last item if childless
+			if (tree_procs.back().children.empty())
+				tree_procs.back().entry.get().prefix.replace(tree_procs.back().entry.get().prefix.size() - 8, 8, " └─ ");
+
+			//? Final sort based on tree index
+			rng::sort(current_procs, rng::less{}, & proc_info::tree_index);
+
+			//? Move current selection/view to the selected process when collapsing/expanding in the tree
+			if (locate_selection) {
+				int loc = rng::find(current_procs, Proc::selected_pid, &proc_info::pid)->tree_index;
+				if (Config::ints.at("proc_start") >= loc or Config::ints.at("proc_start") <= loc - Proc::select_max)
+					Config::ints.at("proc_start") = max(0, loc - 1);
+				Config::ints.at("proc_selected") = loc - Config::ints.at("proc_start") + 1;
+			}
 		}
 
 		numpids = (int)current_procs.size() - filter_found;
