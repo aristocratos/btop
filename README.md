@@ -274,6 +274,15 @@ Also needs a UTF8 locale and a font that covers:
     sudo zypper in btop
     ```
   * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
+* **Fedora**
+    ```bash
+    sudo dnf install btop
+	```
+* **RHEL/AlmaLinux 8+**
+    ```bash
+    sudo dnf install epel-release
+	sudo dnf install btop
+	```
 
 
 **Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
