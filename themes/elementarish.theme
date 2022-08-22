@@ -1,0 +1,82 @@
+# Theme: Elementarish
+# (inspired by Elementary OS)
+# By: Dennis Mayr
+
+# Main bg
+theme[main_bg]="#2b2b2b"
+
+# Main text color
+theme[main_fg]="#eee8d5"
+
+# Title color for boxes
+theme[title]="#eee8d5"
+
+# Higlight color for keyboard shortcuts
+theme[hi_fg]="#dc322f"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#268bd2"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#eee8d5"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#586e75"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#268bd2"
+
+# Cpu box outline color
+theme[cpu_box]="#586e75"
+
+# Memory/disks box outline color
+theme[mem_box]="#586e75"
+
+# Net up/down box outline color
+theme[net_box]="#586e75"
+
+# Processes box outline color
+theme[proc_box]="#586e75"
+
+# Box divider line and small boxes line color
+theme[div_line]="#586e75"
+
+# Temperature graph colors
+theme[temp_start]="#859900"
+theme[temp_mid]="#b58901"
+theme[temp_end]="#dc322f"
+
+# CPU graph colors
+theme[cpu_start]="#859900"
+theme[cpu_mid]="#b58901"
+theme[cpu_end]="#dc322f"
+
+# Mem/Disk free meter
+theme[free_start]="#268bd2"
+theme[free_mid]="#6c71c4"
+theme[free_end]="#2a9d95"
+
+# Mem/Disk cached meter
+theme[cached_start]="#268bd2"
+theme[cached_mid]="#6c71c4"
+theme[cached_end]="#dc322f"
+
+# Mem/Disk available meter
+theme[available_start]="#268bd2"
+theme[available_mid]="#6c71c4"
+theme[available_end]="#dc322f"
+
+# Mem/Disk used meter
+theme[used_start]="#859900"
+theme[used_mid]="#b58901"
+theme[used_end]="#dc322f"
+
+# Download graph colors
+theme[download_start]="#268bd2"
+theme[download_mid]="#6c71c4"
+theme[download_end]="#dc322f"
+
+# Upload graph colors
+theme[upload_start]="#268bd2"
+theme[upload_mid]="#6c71c4"
+theme[upload_end]="#dc322f"
