@@ -25,8 +25,6 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
-#    extensions:
-#      - gnome-3-38 
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -39,11 +37,6 @@ apps:
       - network-observe
       - home
       - removable-media
-#      - desktop
-#      - desktop-legacy
-#      - x11
-#      - wayland
-#      - unity7
 
 parts:
   btop:
