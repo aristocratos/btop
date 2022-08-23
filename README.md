@@ -561,20 +561,28 @@ Also needs a UTF8 locale and a font that covers:
 ## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 
+### Note: there are now two snaps available: `btop` and `btop-desktop`. The desktop version is much larger and includes the desktop entries needed to allow for launching `btop` with a click.
+
  * **Install the snap**
 
     ```bash
     sudo snap install btop
+    or
+    sudo snap install btop-desktop
     ```
  * **Install the latest snap from the edge channel**
    ```
    sudo snap install btop --edge
+   or
+   sudo snap install btop-desktop --edge
    ```
 
  * **Connect the interface**
 
     ```bash
 	sudo snap connect btop:removable-media
+	or 
+	sudo snap connect btop-desktop:removable-media
 	```
 
 

@@ -15,6 +15,8 @@ architectures:
   - build-on: amd64
   - build-on: arm64
   - build-on: armhf
+  - build-on: ppc64el
+  - build-on: s390x
 
 package-repositories:
  - type: apt
@@ -23,8 +25,6 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
-    extensions:
-      - gnome-3-38 
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -37,11 +37,6 @@ apps:
       - network-observe
       - home
       - removable-media
-      - desktop
-      - desktop-legacy
-      - x11
-      - wayland
-      - unity7
 
 parts:
   btop:
