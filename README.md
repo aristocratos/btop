@@ -283,6 +283,10 @@ Also needs a UTF8 locale and a font that covers:
     sudo dnf install epel-release
 	sudo dnf install btop
 	```
+* **FreeBSD**
+	```sh
+	pkg install btop
+	```
 
 
 **Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
