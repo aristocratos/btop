@@ -38,6 +38,12 @@
 
 ## News
 
+##### 28 August 2022
+
+[![btop4win](https://github.com/aristocratos/btop4win/raw/master/Img/logo.png)](https://github.com/aristocratos/btop4win)
+
+First release of btop4win available at https://github.com/aristocratos/btop4win
+
 ##### 16 January 2022
 
 Release v1.2.0 with FreeBSD support. No release binaries for FreeBSD provided as of yet.
