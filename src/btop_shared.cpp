@@ -106,9 +106,9 @@ namespace Proc {
 		//? If filtering, include children of matching processes
 		if (not found and (should_filter or not filter.empty())) {
 			if (not s_contains(std::to_string(cur_proc.pid), filter)
-			and not s_contains(cur_proc.name, filter)
-			and not s_contains(cur_proc.cmd, filter)
-			and not s_contains(cur_proc.user, filter)) {
+			and not s_contains_ic(cur_proc.name, filter)
+			and not s_contains_ic(cur_proc.cmd, filter)
+			and not s_contains_ic(cur_proc.user, filter)) {
 				filtering = true;
 				cur_proc.filtered = true;
 				filter_found++;
