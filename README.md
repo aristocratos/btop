@@ -5,7 +5,7 @@
 </a>
 
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
-![OSX](https://img.shields.io/badge/-OSX-black?logo=apple)
+![macOS](https://img.shields.io/badge/-OSX-black?logo=apple)
 ![FreeBSD](https://img.shields.io/badge/-FreeBSD-red?logo=freebsd)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
@@ -15,7 +15,7 @@
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
 [![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
-[![Continuous Build MacOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
+[![Continuous Build macOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
 
 ## Index
 
@@ -50,12 +50,12 @@ Release v1.2.0 with FreeBSD support. No release binaries for FreeBSD provided as
 
 Again a big thanks to [@joske](https://github.com/joske) for his porting efforts!
 
-Since compatibility with Linux, MacOS and FreeBSD are done, the focus going forward will be on new features like GPU monitoring.
+Since compatibility with Linux, macOS and FreeBSD are done, the focus going forward will be on new features like GPU monitoring.
 
 ##### 13 November 2021
 
 Release v1.1.0 with OSX support. Binaries in [continuous-build-macos](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml) are only x86 for now.
-Macos binaries + installer are included for both x86 and ARM64 (Apple Silicon) in the releases.
+macOS binaries + installer are included for both x86 and ARM64 (Apple Silicon) in the releases.
 
 Big thank you to [@joske](https://github.com/joske) who wrote the vast majority of the implementation!
 
