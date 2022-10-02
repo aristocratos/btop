@@ -1907,11 +1907,11 @@ namespace Proc {
 			tree_sort(tree_procs, sorting, reverse, index, current_procs.size());
 
 			//? Add tree begin symbol to first item if childless
-			if (tree_procs.front().children.empty())
+			if (tree_procs.size() > 0 and tree_procs.front().children.empty() and tree_procs.front().entry.get().prefix.size() >= 8)
 				tree_procs.front().entry.get().prefix.replace(tree_procs.front().entry.get().prefix.size() - 8, 8, " ┌─ ");
 
 			//? Add tree terminator symbol to last item if childless
-			if (tree_procs.back().children.empty())
+			if (tree_procs.size() > 0 and tree_procs.back().children.empty() and tree_procs.back().entry.get().prefix.size() >= 8)
 				tree_procs.back().entry.get().prefix.replace(tree_procs.back().entry.get().prefix.size() - 8, 8, " └─ ");
 
 			//? Final sort based on tree index

@@ -140,12 +140,10 @@ namespace Proc {
 		}
 
 		//? Recursive iteration over all children
-		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
 			if (collapsed and not filtering) {
 				cur_proc.filtered = true;
 			}
-			children++;
 
 			_tree_gen(p, in_procs, out_procs.back().children, cur_depth + 1, (collapsed or cur_proc.collapsed), filter, found, no_update, should_filter);
 
@@ -164,11 +162,12 @@ namespace Proc {
 		}
 
 		//? Add tree terminator symbol if it's the last child in a sub-tree
-		if (children > 0 and out_procs.back().children.back().entry.get().prefix.size() >= 8 and not out_procs.back().children.back().entry.get().prefix.ends_with("]─"))
+		if (out_procs.back().children.size() > 0 and out_procs.back().children.back().entry.get().prefix.size() >= 8 and not out_procs.back().children.back().entry.get().prefix.ends_with("]─"))
 			out_procs.back().children.back().entry.get().prefix.replace(out_procs.back().children.back().entry.get().prefix.size() - 8, 8, " └─ ");
 
 		//? Add collapse/expand symbols if process have any children
-		out_procs.at(cur_pos).entry.get().prefix = " │ "s * cur_depth + (children > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
+		out_procs.at(cur_pos).entry.get().prefix = " │ "s * cur_depth + (out_procs.at(cur_pos).children.size() > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
+
 	}
 
 }
