@@ -35,7 +35,15 @@ tab-size = 4
 #include <btop_tools.hpp>
 #include <btop_config.hpp>
 
-using std::string_view, std::max, std::floor, std::to_string, std::cin, std::cout, std::flush, robin_hood::unordered_flat_map;
+using std::cin;
+using std::cout;
+using std::floor;
+using std::flush;
+using std::max;
+using std::string_view;
+using std::to_string;
+using robin_hood::unordered_flat_map;
+
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -44,9 +52,9 @@ namespace rng = std::ranges;
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
 
-	atomic<bool> initialized = false;
-	atomic<int> width = 0;
-	atomic<int> height = 0;
+    atomic<bool> initialized{}; // defaults to false
+    atomic<int> width{};        // defaults to 0
+    atomic<int> height{};       // defaults to 0
 	string current_tty;
 
 	namespace {
@@ -110,7 +118,7 @@ namespace Term {
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
-				current_tty = (ttyname(STDIN_FILENO) != NULL ? (string)ttyname(STDIN_FILENO) : "unknown");
+                current_tty = (ttyname(STDIN_FILENO) != NULL ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
 
 				//? Disable stream sync
 				cin.sync_with_stdio(false);
@@ -253,14 +261,18 @@ namespace Tools {
 
 	string ltrim(const string& str, const string& t_str) {
 		string_view str_v = str;
-		while (str_v.starts_with(t_str)) str_v.remove_prefix(t_str.size());
-		return (string)str_v;
+        while (str_v.starts_with(t_str))
+            str_v.remove_prefix(t_str.size());
+
+        return string{str_v};
 	}
 
 	string rtrim(const string& str, const string& t_str) {
 		string_view str_v = str;
-		while (str_v.ends_with(t_str)) str_v.remove_suffix(t_str.size());
-		return (string)str_v;
+        while (str_v.ends_with(t_str))
+            str_v.remove_suffix(t_str.size());
+
+        return string{str_v};
 	}
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
@@ -318,7 +330,7 @@ namespace Tools {
 			newstr.append(Mv::r(x));
 			oldstr.remove_prefix(pos + x);
 		}
-		return (newstr.empty()) ? str : newstr + (string)oldstr;
+        return (newstr.empty()) ? str : newstr + string{oldstr};
 	}
 
 	string sec_to_dhms(size_t seconds, bool no_days, bool no_seconds) {
@@ -447,7 +459,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
-		return (string)host;
+        return string{host};
 	}
 
 	string username() {
@@ -497,14 +509,17 @@ namespace Logger {
 			}
 			if (not ec) {
 				std::ofstream lwrite(logfile, std::ios::app);
-				if (first) { first = false; lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";}
+                if (first) {
+                    first = false;
+                    lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
+                }
 				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
 			}
 			else logfile.clear();
 		}
 		catch (const std::exception& e) {
 			logfile.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + (string)e.what());
+            throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
 		}
 	}
 }

@@ -18,16 +18,17 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include <algorithm>        // for std::ranges::count_if
 #include <array>
 #include <atomic>
-#include <regex>
+#include <chrono>
 #include <filesystem>
 #include <ranges>
-#include <chrono>
+#include <regex>
+#include <string>
 #include <thread>
 #include <tuple>
+#include <vector>
 #include <pthread.h>
 #include <limits.h>
 #ifndef HOST_NAME_MAX
@@ -38,7 +39,12 @@ tab-size = 4
 	#endif
 #endif
 
-using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
+using std::array;
+using std::atomic;
+using std::string;
+using std::to_string;
+using std::tuple;
+using std::vector;
 
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -80,19 +86,19 @@ namespace Fx {
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-	inline string to(const int& line, const int& col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
+    inline string to(int line, int col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
 
 	//* Move cursor right <x> columns
-	inline string r(const int& x) { return Fx::e + to_string(x) + 'C'; }
+    inline string r(int x) { return Fx::e + to_string(x) + 'C'; }
 
 	//* Move cursor left <x> columns
-	inline string l(const int& x) { return Fx::e + to_string(x) + 'D'; }
+    inline string l(int x) { return Fx::e + to_string(x) + 'D'; }
 
 	//* Move cursor up x lines
-	inline string u(const int& x) { return Fx::e + to_string(x) + 'A'; }
+    inline string u(int x) { return Fx::e + to_string(x) + 'A'; }
 
 	//* Move cursor down x lines
-	inline string d(const int& x) { return Fx::e + to_string(x) + 'B'; }
+    inline string d(int x) { return Fx::e + to_string(x) + 'B'; }
 
 	//* Save cursor position
 	const string save = Fx::e + "s";
@@ -254,10 +260,14 @@ namespace Tools {
 	auto ssplit(const string& str, const char& delim = ' ') -> vector<string>;
 
 	//* Put current thread to sleep for <ms> milliseconds
-	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+    inline void sleep_ms(const size_t& ms) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    }
 
 	//* Put current thread to sleep for <micros> microseconds
-	inline void sleep_micros(const size_t& micros) { std::this_thread::sleep_for(std::chrono::microseconds(micros)); }
+    inline void sleep_micros(const size_t& micros) {
+        std::this_thread::sleep_for(std::chrono::microseconds(micros));
+    }
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
 	string ljust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
@@ -308,7 +318,7 @@ namespace Tools {
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
-		bool not_true = false;
+        bool not_true{}; // defaults to false
 	public:
 		atomic_lock(atomic<bool>& atom, bool wait=false);
 		~atomic_lock();
