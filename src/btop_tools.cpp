@@ -44,6 +44,8 @@ using std::string_view;
 using std::to_string;
 using robin_hood::unordered_flat_map;
 
+using namespace std::literals; // to use operator""s
+
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
@@ -348,10 +350,33 @@ namespace Tools {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
 		const bool mega = Config::getB("base_10_sizes");
-		static const array<string, 11> mebiUnits_bit = {"bit", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib", "Zib", "Yib", "Bib", "GEb"};
-		static const array<string, 11> mebiUnits_byte = {"Byte", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "BiB", "GEB"};
-		static const array<string, 11> megaUnits_bit = {"bit", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb", "Zb", "Yb", "Bb", "Gb"};
-		static const array<string, 11> megaUnits_byte = {"Byte", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "BB", "GB"};
+
+        // taking advantage of type deduction for array creation (since C++17)
+        // combined with string literals (operator""s)
+        static const array mebiUnits_bit {
+            "bit"s, "Kib"s, "Mib"s,
+            "Gib"s, "Tib"s, "Pib"s,
+            "Eib"s, "Zib"s, "Yib"s,
+            "Bib"s, "GEb"s
+        };
+        static const array mebiUnits_byte {
+            "Byte"s, "KiB"s, "MiB"s,
+            "GiB"s, "TiB"s, "PiB"s,
+            "EiB"s, "ZiB"s, "YiB"s,
+            "BiB"s, "GEB"s
+        };
+        static const array megaUnits_bit {
+            "bit"s, "Kb"s, "Mb"s,
+            "Gb"s, "Tb"s, "Pb"s,
+            "Eb"s, "Zb"s, "Yb"s,
+            "Bb"s, "Gb"s
+        };
+        static const array megaUnits_byte {
+            "Byte"s, "KB"s, "MB"s,
+            "GB"s, "TB"s, "PB"s,
+            "EB"s, "ZB"s, "YB"s,
+            "BB"s, "GB"s
+        };
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
 		value *= 100 * mult;
