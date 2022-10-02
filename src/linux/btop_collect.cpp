@@ -653,68 +653,90 @@ namespace Cpu {
 			cread.close();
 
 			//? Get cpu total times for all cores from /proc/stat
+			string cpu_name;
 			cread.open(Shared::procPath / "stat");
-			for (int i = 0; cread.good() and cread.peek() == 'c'; i++) {
-				cread.ignore(SSmax, ' ');
+			int i = 0;
+			for (; i <= Shared::coreCount; i++) {
 
-				//? Expected on kernel 2.6.3> : 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
-				vector<long long> times;
-				long long total_sum = 0;
-
-				for (uint64_t val; cread >> val; total_sum += val) {
-					times.push_back(val);
+				//? Make sure to add zero value for missing core values if at end of file
+				if ((not cread.good() or cread.peek() != 'c') and i < Shared::coreCount) {
+					if (i == 0) throw std::runtime_error("Failed to parse /proc/stat");
+					else cpu.core_percent.at(i-1).push_back(0);
 				}
-				cread.clear();
-				if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
+				else {
+					if (i == 0) cread.ignore(SSmax, ' ');
+					else {
+						cread >> cpu_name;
+						int cpuNum = std::stoi(cpu_name.substr(3));
+						if (cpuNum > Shared::coreCount - 1) throw std::runtime_error("Mismatch betweeen /proc/stat core count and previously detected core count");
+						//? Add zero value for core if core number is missing from /proc/stat
+						while (i - 1 < cpuNum) {
+							cpu.core_percent.at(i-1).push_back(0);
+							if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
+							i++;
+						}
+					}
 
-				//? Subtract fields 8-9 and any future unknown fields
-				const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
+					//? Expected on kernel 2.6.3> : 0=user, 1=nice, 2=system, 3=idle, 4=iowait, 5=irq, 6=softirq, 7=steal, 8=guest, 9=guest_nice
+					vector<long long> times;
+					long long total_sum = 0;
 
-				//? Add iowait field if present
-				const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
+					for (uint64_t val; cread >> val; total_sum += val) {
+						times.push_back(val);
+					}
+					cread.clear();
+					if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
 
-				//? Calculate values for totals from first line of stat
-				if (i == 0) {
-					const long long calc_totals = max(1ll, totals - cpu_old.at("totals"));
-					const long long calc_idles = max(1ll, idles - cpu_old.at("idles"));
-					cpu_old.at("totals") = totals;
-					cpu_old.at("idles") = idles;
+					//? Subtract fields 8-9 and any future unknown fields
+					const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
 
-					//? Total usage of cpu
-					cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+					//? Add iowait field if present
+					const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
 
-					//? Reduce size if there are more values than needed for graph
-					while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
+					//? Calculate values for totals from first line of stat
+					if (i == 0) {
+						const long long calc_totals = max(1ll, totals - cpu_old.at("totals"));
+						const long long calc_idles = max(1ll, idles - cpu_old.at("idles"));
+						cpu_old.at("totals") = totals;
+						cpu_old.at("idles") = idles;
 
-					//? Populate cpu.cpu_percent with all fields from stat
-					for (int ii = 0; const auto& val : times) {
-						cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
-						cpu_old.at(time_names.at(ii)) = val;
+						//? Total usage of cpu
+						cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 
 						//? Reduce size if there are more values than needed for graph
-						while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+						while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
-						if (++ii == 10) break;
+						//? Populate cpu.cpu_percent with all fields from stat
+						for (int ii = 0; const auto& val : times) {
+							cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+							cpu_old.at(time_names.at(ii)) = val;
+
+							//? Reduce size if there are more values than needed for graph
+							while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+
+							if (++ii == 10) break;
+						}
+						continue;
+					}
+					//? Calculate cpu total for each core
+					else {
+						if (i > Shared::coreCount) break;
+						const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
+						const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
+						core_old_totals.at(i-1) = totals;
+						core_old_idles.at(i-1) = idles;
+
+						cpu.core_percent.at(i-1).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
 					}
 				}
-				//? Calculate cpu total for each core
-				else {
-					if (i > Shared::coreCount) break;
-					const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
-					const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
-					core_old_totals.at(i-1) = totals;
-					core_old_idles.at(i-1) = idles;
 
-					cpu.core_percent.at(i-1).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
-
-					//? Reduce size if there are more values than needed for graph
-					if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
-
-				}
+				//? Reduce size if there are more values than needed for graph
+				if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
 			}
+
+			if (i < Shared::coreCount + 1) throw std::runtime_error("Failed to parse /proc/stat");
 		}
 		catch (const std::exception& e) {
-			Logger::debug("get_cpuHz() : " + (string)e.what());
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
 			else throw std::runtime_error("collect() : " + (string)e.what());
 		}
