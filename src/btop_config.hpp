@@ -23,7 +23,9 @@ tab-size = 4
 #include <robin_hood.h>
 #include <filesystem>
 
-using std::string, std::vector, robin_hood::unordered_flat_map;
+using std::string;
+using std::vector;
+using robin_hood::unordered_flat_map;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {

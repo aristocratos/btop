@@ -26,9 +26,14 @@ tab-size = 4
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 
-using std::array, std::atomic, std::string_view, std::string_literals::operator""s;
+using std::array;
+using std::atomic;
+using std::string_view;
+
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
+
+using namespace std::literals;
 using namespace Tools;
 
 //* Functions and variables for reading and writing the btop config file
@@ -378,7 +383,7 @@ namespace Config {
 			return false;
 		}
 		catch (const std::exception& e) {
-			validError = (string)e.what();
+            validError = string{e.what()};
 			return false;
 		}
 
@@ -498,7 +503,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
+            Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
 			clean_quit(1);
 		}
 

@@ -24,7 +24,12 @@ tab-size = 4
 #include <robin_hood.h>
 #include <deque>
 
-using robin_hood::unordered_flat_map, std::array, std::string, std::atomic, std::deque;
+using robin_hood::unordered_flat_map;
+using std::array;
+using std::atomic;
+using std::deque;
+using std::string;
+
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
 	cin.tie(NULL);
