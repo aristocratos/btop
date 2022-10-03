@@ -95,7 +95,7 @@ namespace Shared {
 		if (passwd_path.empty())
 			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
 
-		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		coreCount = sysconf(_SC_NPROCESSORS_CONF);
 		if (coreCount < 1) {
 			coreCount = 1;
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
