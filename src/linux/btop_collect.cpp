@@ -35,12 +35,22 @@ tab-size = 4
 #include <btop_config.hpp>
 #include <btop_tools.hpp>
 
-using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
-using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
+using std::clamp;
+using std::cmp_equal;
+using std::cmp_greater;
+using std::cmp_less;
+using std::ifstream;
+using std::max;
+using std::min;
+using std::numeric_limits;
+using std::round;
+using std::streamsize;
+
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
-using namespace Tools;
 
+using namespace Tools;
+using namespace std::literals; // for operator""s
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Cpu {
@@ -50,7 +60,8 @@ namespace Cpu {
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
-	bool got_sensors = false, cpu_temp_only = false;
+    bool got_sensors{};     // defaults to false
+    bool cpu_temp_only{};   // defaults to false
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -64,9 +75,9 @@ namespace Cpu {
 	struct Sensor {
 		fs::path path;
 		string label;
-		int64_t temp = 0;
-		int64_t high = 0;
-		int64_t crit = 0;
+        int64_t temp{}; // defaults to 0
+        int64_t high{}; // defaults to 0
+        int64_t crit{}; // defaults to 0
 	};
 
 	unordered_flat_map<string, Sensor> found_sensors;
@@ -144,7 +155,10 @@ namespace Cpu {
 	bool has_battery = true;
 	tuple<int, long, string> current_bat;
 
-	const array<string, 10> time_names = {"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
+    const array time_names {
+        "user"s, "nice"s, "system"s, "idle"s, "iowait"s,
+        "irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
+    };
 
 	unordered_flat_map<string, long long> cpu_old = {
 			{"totals", 0},
@@ -387,11 +401,14 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		static int failed = 0;
-		if (failed > 4) return ""s;
+        static int failed{}; // defaults to 0
+
+        if (failed > 4)
+            return ""s;
+
 		string cpuhz;
 		try {
-			double hz = 0.0;
+            double hz{}; // defaults to 0.0
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
 			if (not freq_path.empty()) {
 				hz = stod(readfile(freq_path, "0.0")) / 1000;
@@ -416,7 +433,8 @@ namespace Cpu {
 				}
 			}
 
-			if (hz <= 1 or hz >= 1000000) throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
+            if (hz <= 1 or hz >= 1000000)
+                throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
 			if (hz >= 1000) {
 				if (hz >= 10000) cpuhz = to_string((int)round(hz / 1000)); // Future proof until we reach THz speeds :)
@@ -428,9 +446,10 @@ namespace Cpu {
 
 		}
 		catch (const std::exception& e) {
-			if (++failed < 5) return ""s;
+            if (++failed < 5)
+                return ""s;
 			else {
-				Logger::warning("get_cpuHZ() : " + (string)e.what());
+                Logger::warning("get_cpuHZ() : " + string{e.what()});
 				return ""s;
 			}
 		}
@@ -445,7 +464,9 @@ namespace Cpu {
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
-			int cpu, core, n = 0;
+            int cpu{};  // defaults to 0
+            int core{}; // defaults to 0
+            int n{};    // defaults to 0
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -737,8 +758,9 @@ namespace Cpu {
 			if (i < Shared::coreCount + 1) throw std::runtime_error("Failed to parse /proc/stat");
 		}
 		catch (const std::exception& e) {
+            Logger::debug("get_cpuHz() : " + string{e.what()});
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
-			else throw std::runtime_error("collect() : " + (string)e.what());
+            else throw std::runtime_error("collect() : " + string{e.what()});
 		}
 
 		if (Config::getB("show_cpu_freq"))
@@ -755,10 +777,10 @@ namespace Cpu {
 }
 
 namespace Mem {
-	bool has_swap = false;
+    bool has_swap{}; // defaults to false
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
-	int disk_ios = 0;
+    int disk_ios{}; // defaults to 0
 	vector<string> last_found;
 	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
@@ -1136,14 +1158,14 @@ namespace Mem {
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						}
 					} else {
-						Logger::debug("Error in Mem::collect() : when opening " + (string)disk.stat);
+                        Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
 					}
 					diskread.close();
 				}
 				old_uptime = uptime;
 			}
 			catch (const std::exception& e) {
-				Logger::warning("Error in Mem::collect() : " + (string)e.what());
+                Logger::warning("Error in Mem::collect() : " + string{e.what()});
 			}
 		}
 
@@ -1204,7 +1226,13 @@ namespace Mem {
 	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
 		ifstream diskread;
 
-		int64_t bytes_read, bytes_write, io_ticks, bytes_read_total = 0, bytes_write_total = 0, io_ticks_total = 0, objects_read = 0;
+        int64_t bytes_read;
+        int64_t bytes_write;
+        int64_t io_ticks;
+        int64_t bytes_read_total{};     // defaults to 0
+        int64_t bytes_write_total{};    // defaults to 0
+        int64_t io_ticks_total{};       // defaults to 0
+        int64_t objects_read{};         // defaults to 0
 
 		// looking through all files that start with 'objset'
 		for (const auto& file: fs::directory_iterator(disk.stat)) {
@@ -1280,11 +1308,11 @@ namespace Net {
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
-	int errors = 0;
+    int errors{}; // defaults to 0
 	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
 	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
-	bool rescale = true;
-	uint64_t timestamp = 0;
+    bool rescale{true};
+    uint64_t timestamp{}; // defaults to 0
 
 	//* RAII wrapper for getifaddrs
 	class getifaddr_wrapper {
@@ -1318,7 +1346,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
+            for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == NULL) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto& iface = ifa->ifa_name;
@@ -1351,7 +1379,7 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					uint64_t val = 0;
+                    uint64_t val{}; // defaults to 0
 					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
@@ -1472,15 +1500,15 @@ namespace Proc {
 	unordered_flat_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
-	bool current_rev = false;
+    bool current_rev{}; // defaults to false
 
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
 	int collapse = -1, expand = -1;
-	uint64_t old_cputimes = 0;
-	atomic<int> numpids = 0;
-	int filter_found = 0;
+    uint64_t old_cputimes{};    // defaults to 0
+    atomic<int> numpids{};      // defaults to 0
+    int filter_found{};         // defaults to 0
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
@@ -1611,7 +1639,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		static size_t proc_clear_count = 0;
+        static size_t proc_clear_count{}; // defaults to 0
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -1669,6 +1697,7 @@ namespace Proc {
 			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
 				if (Runner::stopping)
 					return current_procs;
+
 				if (pread.is_open()) pread.close();
 
 				const string pid_str = d.path().filename();
@@ -1684,7 +1713,7 @@ namespace Proc {
 
 				//? Check if pid already exists in current_procs
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-				bool no_cache = false;
+                bool no_cache{}; // defaults to false
 				if (find_old == current_procs.end()) {
 					current_procs.push_back({pid});
 					find_old = current_procs.end() - 1;
@@ -1967,6 +1996,6 @@ namespace Tools {
 			catch (const std::invalid_argument&) {}
 			catch (const std::out_of_range&) {}
 		}
-		throw std::runtime_error("Failed get uptime from from " + (string)Shared::procPath + "/uptime");
+        throw std::runtime_error("Failed get uptime from from " + string{Shared::procPath} + "/uptime");
 	}
 }

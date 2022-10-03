@@ -25,7 +25,10 @@ tab-size = 4
 
 #include <btop_input.hpp>
 
-using std::string, std::atomic, std::vector, std::bitset;
+using std::atomic;
+using std::bitset;
+using std::string;
+using std::vector;
 
 namespace Menu {
 
@@ -43,7 +46,12 @@ namespace Menu {
 	//? Strings in content vector is not checked for box width overflow
 	class msgBox {
 		string box_contents, button_left, button_right;
-		int height = 0, width = 0, boxtype = 0, selected = 0, x = 0, y = 0;
+        int height{};       // defaults to 0
+        int width{};        // defaults to 0
+        int boxtype{};      // defaults to 0
+        int selected{};     // defaults to 0
+        int x{};            // defaults to 0
+        int y{};            // defaults to 0
 	public:
 		enum BoxTypes { OK, YES_NO, NO_YES };
 		enum msgReturn {

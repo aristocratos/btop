@@ -54,3 +54,13 @@ btop
 
 #do not ignore .github directory
 !.github
+
+# Ignore files created by Qt Creator
+*.config
+*.creator
+*.creator.user
+*.creator.user.*
+*.cflags
+*.cxxflags
+*.files
+*.includes

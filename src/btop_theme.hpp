@@ -18,12 +18,16 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <robin_hood.h>
 #include <array>
 #include <filesystem>
+#include <string>
+#include <vector>
+#include <robin_hood.h>
 
-using std::string, robin_hood::unordered_flat_map, std::array;
+using std::array;
+using std::string;
+using std::vector;
+using robin_hood::unordered_flat_map;
 
 namespace Theme {
 	extern std::filesystem::path theme_dir;

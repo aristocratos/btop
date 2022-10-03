@@ -29,11 +29,21 @@ tab-size = 4
 #include <btop_input.hpp>
 #include <btop_menu.hpp>
 
-
-using 	std::round, std::views::iota, std::string_literals::operator""s, std::clamp, std::array, std::floor, std::max, std::min,
-		std::to_string, std::cmp_equal, std::cmp_less, std::cmp_greater, std::cmp_less_equal;
+using std::array;
+using std::clamp;
+using std::cmp_equal;
+using std::cmp_greater;
+using std::cmp_less;
+using std::cmp_less_equal;
+using std::floor;
+using std::max;
+using std::min;
+using std::round;
+using std::to_string;
+using std::views::iota;
 
 using namespace Tools;
+using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
 
 namespace Symbols {
@@ -207,7 +217,7 @@ namespace Draw {
 				return first + Fx::bl + "█" + Fx::ubl + uresize(text.substr(pos), limit - ulen(first));
 			}
 			catch (const std::exception& e) {
-				Logger::error("In TextEdit::operator() : " + (string)e.what());
+                Logger::error("In TextEdit::operator() : " + string{e.what()});
 			}
 		}
 		return text.substr(0, pos) + Fx::bl + "█" + Fx::ubl + text.substr(pos);
@@ -217,7 +227,9 @@ namespace Draw {
 		this->text.clear();
 	}
 
-	string createBox(const int x, const int y, const int width, const int height, string line_color, const bool fill, const string title, const string title2, const int num) {
+    string createBox(const int x, const int y, const int width,
+                     const int height, string line_color, const bool fill,
+                     const string title, const string title2, const int num) {
 		string out;
 		if (line_color.empty()) line_color = Theme::c("div_line");
 		const auto& tty_mode = Config::getB("tty_mode");
@@ -273,8 +285,9 @@ namespace Draw {
 			{"/host", Tools::hostname()},
 			{"/uptime", ""}
 		};
-		static time_t c_time = 0;
-		static size_t clock_len = 0;
+
+        static time_t c_time{};     // defaults to 0
+        static size_t clock_len{};  // defaults to 0
 		static string clock_str;
 
 		if (auto n_time = time(NULL); not force and n_time == c_time)
@@ -327,7 +340,8 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-	Meter::Meter(const int width, const string& color_gradient, const bool invert) : width(width), color_gradient(color_gradient), invert(invert) {}
+    Meter::Meter(const int width, const string& color_gradient, const bool invert)
+        : width(width), color_gradient(color_gradient), invert(invert) {}
 
 	string Meter::operator()(int value) {
 		if (width < 1) return "";
@@ -419,8 +433,11 @@ namespace Draw {
 
 	Graph::Graph() {}
 
-	Graph::Graph(int width, int height, const string& color_gradient, const deque<long long>& data, const string& symbol, bool invert, bool no_zero, long long max_value, long long offset)
-	: width(width), height(height), color_gradient(color_gradient), invert(invert), no_zero(no_zero), offset(offset) {
+    Graph::Graph(int width, int height, const string& color_gradient,
+                 const deque<long long>& data, const string& symbol,
+                 bool invert, bool no_zero, long long max_value, long long offset)
+    : width(width), height(height), color_gradient(color_gradient),
+      invert(invert), no_zero(no_zero), offset(offset) {
 		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
 		else this->symbol = Config::getS("graph_symbol");
@@ -500,7 +517,9 @@ namespace Cpu {
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
-		if (cpu.cpu_percent.at("total").empty() or cpu.core_percent.at(0).empty() or (show_temps and cpu.temp.at(0).empty())) return "";
+        if (cpu.cpu_percent.at("total").empty()
+            or cpu.core_percent.at(0).empty()
+            or (show_temps and cpu.temp.at(0).empty())) return "";
 		string out;
 		out.reserve(width * height);
 
@@ -527,20 +546,30 @@ namespace Cpu {
 			//? Graphs & meters
 			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", cpu.cpu_percent.at(graph_up_field), graph_symbol, false, true};
 			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11), "cpu"};
-			if (not single_graph)
-				graph_lower = Draw::Graph{x + width - b_width - 3, graph_low_height, "cpu", cpu.cpu_percent.at(graph_lo_field), graph_symbol, Config::getB("cpu_invert_lower"), true};
+            if (not single_graph) {
+                graph_lower = Draw::Graph{
+                    x + width - b_width - 3,
+                    graph_low_height, "cpu",
+                    cpu.cpu_percent.at(graph_lo_field),
+                    graph_symbol,
+                    Config::getB("cpu_invert_lower"), true
+                };
+            }
+
 			if (mid_line) {
 				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
 					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
 					+ Mv::to(y + graph_up_height + 1, x + ((width - b_width) / 2) - ((graph_up_field.size() + graph_lo_field.size()) / 2) - 4)
 					+ Theme::c("main_fg") + graph_up_field + Mv::r(1) + "▲▼" + Mv::r(1) + graph_lo_field;
 			}
+
 			if (b_column_size > 0 or extra_width > 0) {
 				core_graphs.clear();
 				for (const auto& core_data : cpu.core_percent) {
 					core_graphs.emplace_back(5 * b_column_size + extra_width, 1, "cpu", core_data, graph_symbol);
 				}
 			}
+
 			if (show_temps) {
 				temp_graphs.clear();
 				temp_graphs.emplace_back(5, 1, "temp", cpu.temp.at(0), graph_symbol, false, false, cpu.temp_max, -23);
@@ -554,8 +583,8 @@ namespace Cpu {
 
 		//? Draw battery if enabled and present
 		if (Config::getB("show_battery") and has_battery) {
-			static int old_percent = 0;
-			static long old_seconds = 0;
+            static int old_percent{};   // defaults to = 0
+            static long old_seconds{};  // defaults to = 0
 			static string old_status;
 			static Draw::Meter bat_meter {10, "cpu", true};
 			static const unordered_flat_map<string, string> bat_symbols = {
@@ -626,7 +655,7 @@ namespace Cpu {
 		}
 		out += Theme::c("div_line") + Symbols::v_line;
 
-		} catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + (string)e.what()); }
+        } catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + string{e.what()}); }
 
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
@@ -671,8 +700,6 @@ namespace Cpu {
 			}
 			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_pre + lavg;
 		}
-
-
 
 		redraw = false;
 		return out + Fx::reset;
@@ -771,11 +798,20 @@ namespace Mem {
 							if (io_graph_combined) {
 								deque<long long> combined(disk.io_read.size(), 0);
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
-								io_graphs[name] = Draw::Graph{disks_width - (io_mode ? 0 : 6), disks_io_h, "available", combined, graph_symbol, false, true, speed};
+                                io_graphs[name] = Draw::Graph{
+                                    disks_width - (io_mode ? 0 : 6),
+                                    disks_io_h, "available", combined,
+                                    graph_symbol, false, true, speed};
 							}
 							else {
-								io_graphs[name + "_read"] = Draw::Graph{disks_width, half_height, "free", disk.io_read, graph_symbol, false, true, speed};
-								io_graphs[name + "_write"] = Draw::Graph{disks_width, disks_io_h - half_height, "used", disk.io_write, graph_symbol, true, true, speed};
+                                io_graphs[name + "_read"] = Draw::Graph{
+                                    disks_width, half_height, "free",
+                                    disk.io_read, graph_symbol, false,
+                                    true, speed};
+                                io_graphs[name + "_write"] = Draw::Graph{
+                                    disks_width, disks_io_h - half_height,
+                                    "used", disk.io_write, graph_symbol,
+                                    true, true, speed};
 							}
 						}
 					}
@@ -924,8 +960,6 @@ namespace Mem {
 			if (cy < height - 2) out += Mv::to(y+1+cy, x+1+cx) + divider;
 		}
 
-
-
 		redraw = false;
 		return out + Fx::reset;
 	}
@@ -969,8 +1003,13 @@ namespace Net {
 			graphs.clear();
 			if (net.bandwidth.at("download").empty() or net.bandwidth.at("upload").empty())
 				return out + Fx::reset;
-			graphs["download"] = Draw::Graph{width - b_width - 2, u_graph_height, "download", net.bandwidth.at("download"), graph_symbol, false, true, down_max};
-			graphs["upload"] = Draw::Graph{width - b_width - 2, d_graph_height, "upload", net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
+            graphs["download"] = Draw::Graph{
+                width - b_width - 2, u_graph_height, "download",
+                net.bandwidth.at("download"), graph_symbol,
+                false, true, down_max};
+            graphs["upload"] = Draw::Graph{
+                width - b_width - 2, d_graph_height, "upload",
+                net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
 
 			//? Interface selector and buttons
 
@@ -1019,7 +1058,6 @@ namespace Net {
 				cy += (b_height > 6 and b_height % 2 ? 2 : 1);
 			}
 		}
-
 
 		redraw = false;
 		return out + Fx::reset;

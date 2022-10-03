@@ -30,8 +30,11 @@ tab-size = 4
 #include <btop_draw.hpp>
 #include <signal.h>
 
-using std::cin, std::vector, std::string_literals::operator""s;
+using std::cin;
+using std::vector;
+
 using namespace Tools;
+using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
 
 namespace Input {
@@ -545,9 +548,8 @@ namespace Input {
 			}
 		}
 
-
 		catch (const std::exception& e) {
-			throw std::runtime_error("Input::process(\"" + key + "\") : " + (string)e.what());
+            throw std::runtime_error("Input::process(\"" + key + "\") : " + string{e.what()});
 		}
 	}
 
