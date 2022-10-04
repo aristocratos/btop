@@ -232,8 +232,8 @@ namespace Draw {
                      const string title, const string title2, const int num) {
 		string out;
 		if (line_color.empty()) line_color = Theme::c("div_line");
-        const auto tty_mode = Config::getB("tty_mode");
-        const auto rounded = Config::getB("rounded_corners");
+        auto tty_mode = Config::getB("tty_mode");
+        auto rounded = Config::getB("rounded_corners");
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
@@ -300,7 +300,7 @@ namespace Draw {
 		}
 
 		auto& out = Global::clock;
-		const auto& cpu_bottom = Config::getB("cpu_bottom");
+        auto cpu_bottom = Config::getB("cpu_bottom");
 		const auto& x = Cpu::x;
 		const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
 		const auto& width = Cpu::width;
@@ -503,9 +503,9 @@ namespace Cpu {
 	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		const bool show_temps = (Config::getB("check_temp") and got_sensors);
+        bool show_temps = (Config::getB("check_temp") and got_sensors);
         auto single_graph = Config::getB("cpu_single_graph");
-		const bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+        bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		auto& graph_up_field = Config::getS("cpu_graph_upper");
 		auto& graph_lo_field = Config::getS("cpu_graph_lower");
@@ -1590,7 +1590,7 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			const bool show_temp = (Config::getB("check_temp") and got_sensors);
+            bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 			x = 1;

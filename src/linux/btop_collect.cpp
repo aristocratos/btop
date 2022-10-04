@@ -1614,12 +1614,12 @@ namespace Proc {
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info>& {
 		const auto& sorting = Config::getS("proc_sorting");
-		const auto& reverse = Config::getB("proc_reversed");
+        auto reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
-		const auto& per_core = Config::getB("proc_per_core");
-		const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
-		const auto& tree = Config::getB("proc_tree");
-		const auto& show_detailed = Config::getB("show_detailed");
+        auto per_core = Config::getB("proc_per_core");
+        auto should_filter_kernel = Config::getB("proc_filter_kernel");
+        auto tree = Config::getB("proc_tree");
+        auto show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
