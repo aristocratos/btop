@@ -437,7 +437,7 @@ namespace Cpu {
 		return {percent, seconds, status};
 	}
 
-	auto collect(const bool no_update) -> cpu_info & {
+    auto collect(bool no_update) -> cpu_info & {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
 			return current_cpu;
 		auto &cpu = current_cpu;
@@ -662,7 +662,7 @@ namespace Mem {
 		}
 	}
 
-	auto collect(const bool no_update) -> mem_info & {
+    auto collect(bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
@@ -670,7 +670,7 @@ namespace Mem {
         auto show_disks = Config::getB("show_disks");
         auto swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
-		static const bool snapped = (getenv("BTOP_SNAPPED") != NULL);
+        static bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
@@ -842,7 +842,7 @@ namespace Net {
 		auto operator()() -> struct ifaddrs * { return ifaddr; }
 	};
 
-	auto collect(const bool no_update) -> net_info & {
+    auto collect(bool no_update) -> net_info & {
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
         auto net_sync = Config::getB("net_sync");
@@ -1106,7 +1106,7 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	auto collect(const bool no_update) -> vector<proc_info> & {
+    auto collect(bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
         auto reverse = Config::getB("proc_reversed");
 		const auto &filter = Config::getS("proc_filter");
@@ -1116,7 +1116,7 @@ namespace Proc {
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
-		const bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+        bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		if (sorted_change) {
 			current_sort = sorting;
 			current_rev = reverse;

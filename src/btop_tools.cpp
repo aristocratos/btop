@@ -98,10 +98,10 @@ namespace Term {
 	}
 
 	auto get_min_size(const string& boxes) -> array<int, 2> {
-		const bool cpu = boxes.find("cpu") != string::npos;
-		const bool mem = boxes.find("mem") != string::npos;
-		const bool net = boxes.find("net") != string::npos;
-		const bool proc = boxes.find("proc") != string::npos;
+        bool cpu = boxes.find("cpu") != string::npos;
+        bool mem = boxes.find("mem") != string::npos;
+        bool net = boxes.find("net") != string::npos;
+        bool proc = boxes.find("proc") != string::npos;
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
@@ -205,8 +205,10 @@ namespace Tools {
 		return chars;
 	}
 
-	string uresize(string str, const size_t len, const bool wide) {
-		if (len < 1 or str.empty()) return "";
+    string uresize(string str, const size_t len, bool wide) {
+        if (len < 1 or str.empty())
+            return "";
+
 		if (wide) {
 			try {
 				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
@@ -233,8 +235,10 @@ namespace Tools {
 		return str;
 	}
 
-	string luresize(string str, const size_t len, const bool wide) {
-		if (len < 1 or str.empty()) return "";
+    string luresize(string str, const size_t len, bool wide) {
+        if (len < 1 or str.empty())
+            return "";
+
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
 			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
 				x += 2;
@@ -484,7 +488,7 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
+        if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
 	}
 
@@ -546,10 +550,14 @@ namespace Logger {
 		int status = -1;
 	public:
 		lose_priv() {
-			if (geteuid() != Global::real_uid) this->status = seteuid(Global::real_uid);
+            if (geteuid() != Global::real_uid) {
+                this->status = seteuid(Global::real_uid);
+            }
 		}
 		~lose_priv() {
-			if (status == 0) status = seteuid(Global::set_uid);
+            if (status == 0) {
+                status = seteuid(Global::set_uid);
+            }
 		}
 	};
 
@@ -566,8 +574,12 @@ namespace Logger {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 				auto old_log = logfile;
 				old_log += ".1";
-				if (fs::exists(old_log)) fs::remove(old_log, ec);
-				if (not ec) fs::rename(logfile, old_log, ec);
+
+                if (fs::exists(old_log))
+                    fs::remove(old_log, ec);
+
+                if (not ec)
+                    fs::rename(logfile, old_log, ec);
 			}
 			if (not ec) {
 				std::ofstream lwrite(logfile, std::ios::app);

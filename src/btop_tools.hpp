@@ -155,10 +155,10 @@ namespace Tools {
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
-	string uresize(const string str, const size_t len, const bool wide=false);
+    string uresize(const string str, const size_t len, bool wide = false);
 
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
-	string luresize(const string str, const size_t len, const bool wide=false);
+    string luresize(const string str, const size_t len, bool wide = false);
 
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
@@ -288,7 +288,7 @@ namespace Tools {
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
 	//* short=True always returns 0 decimals and shortens unit to 1 character
-    string floating_humanizer(uint64_t value, bool shorten = false, size_t start=0, bool bit = false, bool per_second = false);
+    string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
