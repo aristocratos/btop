@@ -288,41 +288,56 @@ namespace Tools {
 		return out;
 	}
 
-	string ljust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; }
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            }
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
-	string rjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string rjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; };
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            };
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
 	}
 
-	string cjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string cjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; }
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            }
 			return string(max((int)ceil((double)(x - str.size()) / 2), 0), ' ') + str + string(max((int)floor((double)(x - str.size()) / 2), 0), ' ');
 		}
 	}
 
 	string trans(const string& str) {
-		string_view oldstr = str;
+        string_view oldstr{str};
 		string newstr;
 		newstr.reserve(str.size());
 		for (size_t pos; (pos = oldstr.find(' ')) != string::npos;) {
@@ -346,7 +361,7 @@ namespace Tools {
 		return out;
 	}
 
-	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
+    string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
         bool mega = Config::getB("base_10_sizes");
@@ -403,15 +418,29 @@ namespace Tools {
 		}
 		if (out.empty()) {
 			out = to_string(value);
-			if (not mega and out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
-			else if (out.size() == 3 and start > 0) out.insert(1, ".");
-			else if (out.size() >= 2) out.resize(out.size() - 2);
+            if (not mega and out.size() == 4 and start > 0) {
+                out.pop_back();
+                out.insert(2, ".");
+            }
+            else if (out.size() == 3 and start > 0) {
+                out.insert(1, ".");
+            }
+            else if (out.size() >= 2) {
+                out.resize(out.size() - 2);
+            }
 		}
 		if (shorten) {
 			auto f_pos = out.find('.');
-			if (f_pos == 1 and out.size() > 3) out = to_string(round(stof(out) * 10) / 10).substr(0,3);
-			else if (f_pos != string::npos) out = to_string((int)round(stof(out)));
-			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
+            if (f_pos == 1 and out.size() > 3) {
+                out = to_string(round(stof(out) * 10) / 10).substr(0,3);
+            }
+            else if (f_pos != string::npos) {
+                out = to_string((int)round(stof(out)));
+            }
+            if (out.size() > 3) {
+                out = to_string((int)(out[0] - '0') + 1);
+                start++;
+            }
 			out.push_back(units[start][0]);
 		}
 		else out += " " + units[start];
@@ -421,11 +450,19 @@ namespace Tools {
 	}
 
 	std::string operator*(const string& str, int64_t n) {
-		if (n < 1 or str.empty()) return "";
-		else if(n == 1) return str;
+        if (n < 1 or str.empty()) {
+            return "";
+        }
+        else if (n == 1) {
+            return str;
+        }
+
 		string new_str;
 		new_str.reserve(str.size() * n);
-		for (; n > 0; n--) new_str.append(str);
+
+        for (; n > 0; n--)
+            new_str.append(str);
+
 		return new_str;
 	}
 
@@ -437,11 +474,11 @@ namespace Tools {
 		return ss.str();
 	}
 
-	void atomic_wait(const atomic<bool>& atom, const bool old) noexcept {
+    void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
 		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
 	}
 
-	void atomic_wait_for(const atomic<bool>& atom, const bool old, const uint64_t wait_ms) noexcept {
+    void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
 		const uint64_t start_time = time_ms();
 		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
@@ -463,7 +500,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + (string)path + " : " + e.what());
+            Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
