@@ -808,10 +808,10 @@ namespace Mem {
 
 	auto collect(const bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
-		auto& show_swap = Config::getB("show_swap");
-		auto& swap_disk = Config::getB("swap_disk");
-		auto& show_disks = Config::getB("show_disks");
-		auto& zfs_arc_cached = Config::getB("zfs_arc_cached");
+        auto show_swap = Config::getB("show_swap");
+        auto swap_disk = Config::getB("swap_disk");
+        auto show_disks = Config::getB("show_disks");
+        auto zfs_arc_cached = Config::getB("zfs_arc_cached");
 		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 
@@ -899,9 +899,9 @@ namespace Mem {
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
-				auto& use_fstab = Config::getB("use_fstab");
-				auto& only_physical = Config::getB("only_physical");
-				auto& zfs_hide_datasets = Config::getB("zfs_hide_datasets");
+                auto use_fstab = Config::getB("use_fstab");
+                auto only_physical = Config::getB("only_physical");
+                auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
@@ -1327,8 +1327,8 @@ namespace Net {
 	auto collect(const bool no_update) -> net_info& {
 		auto& net = current_net;
 		auto& config_iface = Config::getS("net_iface");
-		auto& net_sync = Config::getB("net_sync");
-		auto& net_auto = Config::getB("net_auto");
+        auto net_sync = Config::getB("net_sync");
+        auto net_auto = Config::getB("net_auto");
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
@@ -1614,12 +1614,12 @@ namespace Proc {
 	//* Collects and sorts process information from /proc
 	auto collect(const bool no_update) -> vector<proc_info>& {
 		const auto& sorting = Config::getS("proc_sorting");
-		const auto& reverse = Config::getB("proc_reversed");
+        auto reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
-		const auto& per_core = Config::getB("proc_per_core");
-		const auto& should_filter_kernel = Config::getB("proc_filter_kernel");
-		const auto& tree = Config::getB("proc_tree");
-		const auto& show_detailed = Config::getB("show_detailed");
+        auto per_core = Config::getB("proc_per_core");
+        auto should_filter_kernel = Config::getB("proc_filter_kernel");
+        auto tree = Config::getB("proc_tree");
+        auto show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;

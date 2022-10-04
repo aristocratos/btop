@@ -632,8 +632,8 @@ namespace Menu {
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
 	: width(width), boxtype(boxtype) {
-		const auto& tty_mode = Config::getB("tty_mode");
-		const auto& rounded = Config::getB("rounded_corners");
+        auto tty_mode = Config::getB("tty_mode");
+        auto rounded = Config::getB("rounded_corners");
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
@@ -722,7 +722,7 @@ namespace Menu {
 	};
 
 	int signalChoose(const string& key) {
-		auto& s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+        auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
         static int x{}; // defaults to 0
         static int y{}; // defaults to 0
         static int selected_signal = -1;
@@ -852,7 +852,7 @@ namespace Menu {
 	}
 
 	int signalSend(const string& key) {
-		auto& s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+        auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
 		if (s_pid == 0) return Closed;
 		if (redraw) {
 			atomic_wait(Runner::active);
@@ -929,7 +929,7 @@ namespace Menu {
         static int selected{};  // defaults to 0
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
-		auto& tty_mode = Config::getB("tty_mode");
+        auto tty_mode = Config::getB("tty_mode");
 		if (bg.empty()) selected = 0;
 		int retval = Changed;
 
@@ -1034,8 +1034,8 @@ namespace Menu {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 		};
-		auto& tty_mode = Config::getB("tty_mode");
-		auto& vim_keys = Config::getB("vim_keys");
+        auto tty_mode = Config::getB("tty_mode");
+        auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();

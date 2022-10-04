@@ -157,7 +157,7 @@ namespace Theme {
 		}
 	}
 
-	string hex_to_color(string hexa, const bool& t_to_256, const string& depth) {
+    string hex_to_color(string hexa, bool t_to_256, const string& depth) {
 		if (hexa.size() > 1) {
 			hexa.erase(0, 1);
             for (auto& c : hexa) {
@@ -196,7 +196,7 @@ namespace Theme {
 		return "";
 	}
 
-	string dec_to_color(int r, int g, int b, const bool& t_to_256, const string& depth) {
+    string dec_to_color(int r, int g, int b, bool t_to_256, const string& depth) {
 		string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 		r = std::clamp(r, 0, 255);
 		g = std::clamp(g, 0, 255);
@@ -234,7 +234,7 @@ namespace Theme {
 		void generateColors(const unordered_flat_map<string, string>& source) {
 			vector<string> t_rgb;
 			string depth;
-			const bool& t_to_256 = Config::getB("lowcolor");
+            bool t_to_256 = Config::getB("lowcolor");
 			colors.clear(); rgbs.clear();
 			for (const auto& [name, color] : Default_theme) {
 				if (name == "main_bg" and not Config::getB("theme_background")) {
@@ -297,7 +297,7 @@ namespace Theme {
 		//* Generate color gradients from two or three colors, 101 values indexed 0-100
 		void generateGradients() {
 			gradients.clear();
-			const bool& t_to_256 = Config::getB("lowcolor");
+            bool t_to_256 = Config::getB("lowcolor");
 
 			//? Insert values for processes greyscale gradient and processes color gradient
             rgbs.insert({

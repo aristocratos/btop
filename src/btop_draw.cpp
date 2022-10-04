@@ -106,8 +106,8 @@ namespace Draw {
 		if (redraw) banner.clear();
 		if (banner.empty()) {
 			string b_color, bg, fg, oc, letter;
-			auto& lowcolor = Config::getB("lowcolor");
-			auto& tty_mode = Config::getB("tty_mode");
+            auto lowcolor = Config::getB("lowcolor");
+            auto tty_mode = Config::getB("tty_mode");
 			for (size_t z = 0; const auto& line : Global::Banner_src) {
 				if (const auto w = ulen(line[1]); w > width) width = w;
 				if (tty_mode) {
@@ -232,8 +232,8 @@ namespace Draw {
                      const string title, const string title2, const int num) {
 		string out;
 		if (line_color.empty()) line_color = Theme::c("div_line");
-		const auto& tty_mode = Config::getB("tty_mode");
-		const auto& rounded = Config::getB("rounded_corners");
+        auto tty_mode = Config::getB("tty_mode");
+        auto rounded = Config::getB("rounded_corners");
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
@@ -300,7 +300,7 @@ namespace Draw {
 		}
 
 		auto& out = Global::clock;
-		const auto& cpu_bottom = Config::getB("cpu_bottom");
+        auto cpu_bottom = Config::getB("cpu_bottom");
 		const auto& x = Cpu::x;
 		const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
 		const auto& width = Cpu::width;
@@ -503,17 +503,17 @@ namespace Cpu {
 	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		const bool show_temps = (Config::getB("check_temp") and got_sensors);
-		auto& single_graph = Config::getB("cpu_single_graph");
-		const bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+        bool show_temps = (Config::getB("check_temp") and got_sensors);
+        auto single_graph = Config::getB("cpu_single_graph");
+        bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		auto& graph_up_field = Config::getS("cpu_graph_upper");
 		auto& graph_lo_field = Config::getS("cpu_graph_lower");
-		auto& tty_mode = Config::getB("tty_mode");
+        auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& temp_scale = Config::getS("temp_scale");
-		auto& cpu_bottom = Config::getB("cpu_bottom");
+        auto cpu_bottom = Config::getB("cpu_bottom");
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
@@ -725,14 +725,14 @@ namespace Mem {
 	string draw(const mem_info& mem, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		auto& show_swap = Config::getB("show_swap");
-		auto& swap_disk = Config::getB("swap_disk");
-		auto& show_disks = Config::getB("show_disks");
-		auto& show_io_stat = Config::getB("show_io_stat");
-		auto& io_mode = Config::getB("io_mode");
-		auto& io_graph_combined = Config::getB("io_graph_combined");
-		auto& use_graphs = Config::getB("mem_graphs");
-		auto& tty_mode = Config::getB("tty_mode");
+        auto show_swap = Config::getB("show_swap");
+        auto swap_disk = Config::getB("swap_disk");
+        auto show_disks = Config::getB("show_disks");
+        auto show_io_stat = Config::getB("show_io_stat");
+        auto io_mode = Config::getB("io_mode");
+        auto io_graph_combined = Config::getB("io_graph_combined");
+        auto use_graphs = Config::getB("mem_graphs");
+        auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto totalMem = Mem::get_totalMem();
@@ -979,9 +979,9 @@ namespace Net {
 	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		auto& net_sync = Config::getB("net_sync");
-		auto& net_auto = Config::getB("net_auto");
-		auto& tty_mode = Config::getB("tty_mode");
+        auto net_sync = Config::getB("net_sync");
+        auto net_auto = Config::getB("net_auto");
+        auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
 		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
 		if (old_ip != ip_addr) {
@@ -1090,7 +1090,7 @@ namespace Proc {
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
 		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
-		auto& vim_keys = Config::getB("vim_keys");
+        auto vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
 		if ((cmd_key == "up" or (vim_keys and cmd_key == "k")) and selected > 0) {
@@ -1147,16 +1147,16 @@ namespace Proc {
 
 	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
-		auto& proc_tree = Config::getB("proc_tree");
+        auto proc_tree = Config::getB("proc_tree");
 		const bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
 		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
-		auto& proc_colors = Config::getB("proc_colors");
-		auto& tty_mode = Config::getB("tty_mode");
+        auto proc_colors = Config::getB("proc_colors");
+        auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-		auto& mem_bytes = Config::getB("proc_mem_bytes");
-		auto& vim_keys = Config::getB("vim_keys");
-		auto& show_graphs = Config::getB("proc_cpu_graphs");
+        auto mem_bytes = Config::getB("proc_mem_bytes");
+        auto vim_keys = Config::getB("vim_keys");
+        auto show_graphs = Config::getB("proc_cpu_graphs");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
@@ -1263,7 +1263,7 @@ namespace Proc {
 			}
 
 			//? Filter
-			auto& filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
+            auto filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
 			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
@@ -1557,10 +1557,10 @@ namespace Draw {
 	void calcSizes() {
 		atomic_wait(Runner::active);
 		Config::unlock();
-		auto& boxes = Config::getS("shown_boxes");
-		auto& cpu_bottom = Config::getB("cpu_bottom");
-		auto& mem_below_net = Config::getB("mem_below_net");
-		auto& proc_left = Config::getB("proc_left");
+        auto boxes = Config::getS("shown_boxes");
+        auto cpu_bottom = Config::getB("cpu_bottom");
+        auto mem_below_net = Config::getB("mem_below_net");
+        auto proc_left = Config::getB("proc_left");
 
 		Cpu::box.clear();
 		Mem::box.clear();
@@ -1590,7 +1590,7 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			const bool show_temp = (Config::getB("check_temp") and got_sensors);
+            bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 			x = 1;
@@ -1629,9 +1629,9 @@ namespace Draw {
 		//* Calculate and draw mem box outlines
 		if (Mem::shown) {
 			using namespace Mem;
-			auto& show_disks = Config::getB("show_disks");
-			auto& swap_disk = Config::getB("swap_disk");
-			auto& mem_graphs = Config::getB("mem_graphs");
+            auto show_disks = Config::getB("show_disks");
+            auto swap_disk = Config::getB("swap_disk");
+            auto mem_graphs = Config::getB("mem_graphs");
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
