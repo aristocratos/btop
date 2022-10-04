@@ -228,10 +228,13 @@ namespace Draw {
 	}
 
     string createBox(const int x, const int y, const int width,
-                     const int height, string line_color, const bool fill,
+                     const int height, string line_color, bool fill,
                      const string title, const string title2, const int num) {
 		string out;
-		if (line_color.empty()) line_color = Theme::c("div_line");
+
+        if (line_color.empty())
+            line_color = Theme::c("div_line");
+
         auto tty_mode = Config::getB("tty_mode");
         auto rounded = Config::getB("rounded_corners");
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
@@ -243,12 +246,12 @@ namespace Draw {
 		out = Fx::reset + line_color;
 
 		//? Draw horizontal lines
-		for (const int& hpos : {y, y + height - 1}) {
+        for (const int& hpos : {y, y + height - 1}) {
 			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (const int& hpos : iota(y + 1, y + height - 1)) {
+        for (const int& hpos : iota(y + 1, y + height - 1)) {
 			out += Mv::to(hpos, x) + Symbols::v_line
 				+  ((fill) ? string(width - 2, ' ') : Mv::r(width - 2))
 				+  Symbols::v_line;
