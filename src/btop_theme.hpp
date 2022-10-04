@@ -40,13 +40,13 @@ namespace Theme {
 	//* Args	hexa: ["#000000"-"#ffffff"] for color, ["#00"-"#ff"] for greyscale
 	//*			t_to_256: [true|false] convert 24bit value to 256 color value
 	//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-	string hex_to_color(string hexa, const bool& t_to_256=false, const string& depth="fg");
+    string hex_to_color(string hexa, bool t_to_256=false, const string& depth="fg");
 
 	//* Generate escape sequence for 24-bit or 256 color and return as a string
 	//* Args	r: [0-255], g: [0-255], b: [0-255]
 	//*			t_to_256: [true|false] convert 24bit value to 256 color value
 	//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
-	string dec_to_color(int r, int g, int b, const bool& t_to_256=false, const string& depth="fg");
+    string dec_to_color(int r, int g, int b, bool t_to_256=false, const string& depth="fg");
 
 	//* Update list of paths for available themes
 	void updateThemes();
