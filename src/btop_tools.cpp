@@ -262,7 +262,7 @@ namespace Tools {
 	}
 
 	string ltrim(const string& str, const string& t_str) {
-		string_view str_v = str;
+        string_view str_v{str};
         while (str_v.starts_with(t_str))
             str_v.remove_prefix(t_str.size());
 
@@ -270,7 +270,7 @@ namespace Tools {
 	}
 
 	string rtrim(const string& str, const string& t_str) {
-		string_view str_v = str;
+        string_view str_v{str};
         while (str_v.ends_with(t_str))
             str_v.remove_suffix(t_str.size());
 
