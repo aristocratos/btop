@@ -929,7 +929,7 @@ namespace Menu {
         static int selected{};  // defaults to 0
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
-		auto& tty_mode = Config::getB("tty_mode");
+        auto tty_mode = Config::getB("tty_mode");
 		if (bg.empty()) selected = 0;
 		int retval = Changed;
 
@@ -1034,8 +1034,8 @@ namespace Menu {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 		};
-		auto& tty_mode = Config::getB("tty_mode");
-		auto& vim_keys = Config::getB("vim_keys");
+        auto tty_mode = Config::getB("tty_mode");
+        auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();

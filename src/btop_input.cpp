@@ -238,8 +238,8 @@ namespace Input {
 	void process(const string& key) {
 		if (key.empty()) return;
 		try {
-			auto& filtering = Config::getB("proc_filtering");
-			auto& vim_keys = Config::getB("vim_keys");
+            auto filtering = Config::getB("proc_filtering");
+            auto vim_keys = Config::getB("vim_keys");
 			auto help_key = (vim_keys ? "H" : "h");
 			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
