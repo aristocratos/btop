@@ -680,7 +680,7 @@ namespace Cpu {
 			for (; i <= Shared::coreCount; i++) {
 
 				//? Make sure to add zero value for missing core values if at end of file
-				if ((not cread.good() or cread.peek() != 'c') and i < Shared::coreCount) {
+				if ((not cread.good() or cread.peek() != 'c') and i <= Shared::coreCount) {
 					if (i == 0) throw std::runtime_error("Failed to parse /proc/stat");
 					else cpu.core_percent.at(i-1).push_back(0);
 				}
@@ -758,9 +758,9 @@ namespace Cpu {
 			if (i < Shared::coreCount + 1) throw std::runtime_error("Failed to parse /proc/stat");
 		}
 		catch (const std::exception& e) {
-            Logger::debug("get_cpuHz() : " + string{e.what()});
+            Logger::debug("Cpu::collect() : " + string{e.what()});
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
-            else throw std::runtime_error("collect() : " + string{e.what()});
+            else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
 		}
 
 		if (Config::getB("show_cpu_freq"))
