@@ -604,7 +604,7 @@ namespace Runner {
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
-	void run(const string& box, const bool no_update, const bool force_redraw) {
+    void run(const string& box, bool no_update, bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
 		if (active) {
 			Logger::error("Stall in Runner thread, restarting!");

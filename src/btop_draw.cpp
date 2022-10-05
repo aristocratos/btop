@@ -228,10 +228,13 @@ namespace Draw {
 	}
 
     string createBox(const int x, const int y, const int width,
-                     const int height, string line_color, const bool fill,
+                     const int height, string line_color, bool fill,
                      const string title, const string title2, const int num) {
 		string out;
-		if (line_color.empty()) line_color = Theme::c("div_line");
+
+        if (line_color.empty())
+            line_color = Theme::c("div_line");
+
         auto tty_mode = Config::getB("tty_mode");
         auto rounded = Config::getB("rounded_corners");
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
@@ -243,12 +246,12 @@ namespace Draw {
 		out = Fx::reset + line_color;
 
 		//? Draw horizontal lines
-		for (const int& hpos : {y, y + height - 1}) {
+        for (const int& hpos : {y, y + height - 1}) {
 			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (const int& hpos : iota(y + 1, y + height - 1)) {
+        for (const int& hpos : iota(y + 1, y + height - 1)) {
 			out += Mv::to(hpos, x) + Symbols::v_line
 				+  ((fill) ? string(width - 2, ' ') : Mv::r(width - 2))
 				+  Symbols::v_line;
@@ -340,7 +343,7 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-    Meter::Meter(const int width, const string& color_gradient, const bool invert)
+    Meter::Meter(const int width, const string& color_gradient, bool invert)
         : width(width), color_gradient(color_gradient), invert(invert) {}
 
 	string Meter::operator()(int value) {
@@ -363,7 +366,7 @@ namespace Draw {
 
 	//* Graph class ------------------------------------------------------------------------------------------------------------>
 	void Graph::_create(const deque<long long>& data, int data_offset) {
-		const bool mult = (data.size() - data_offset > 1);
+        bool mult = (data.size() - data_offset > 1);
 		const auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
 		array<int, 2> result;
 		const float mod = (height == 1) ? 0.3 : 0.1;
@@ -461,7 +464,7 @@ namespace Draw {
 		this->_create(data, data_offset);
 	}
 
-	string& Graph::operator()(const deque<long long>& data, const bool data_same) {
+    string& Graph::operator()(const deque<long long>& data, bool data_same) {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
@@ -500,7 +503,7 @@ namespace Cpu {
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 
-	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
+    string draw(const cpu_info& cpu, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
         bool show_temps = (Config::getB("check_temp") and got_sensors);
@@ -722,7 +725,7 @@ namespace Mem {
 	unordered_flat_map<string, Draw::Meter> disk_meters_free;
 	unordered_flat_map<string, Draw::Graph> io_graphs;
 
-	string draw(const mem_info& mem, const bool force_redraw, const bool data_same) {
+    string draw(const mem_info& mem, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
         auto show_swap = Config::getB("show_swap");
@@ -881,7 +884,7 @@ namespace Mem {
 		if (show_disks) {
 			const auto& disks = mem.disks;
 			cx = mem_width; cy = 0;
-			const bool big_disk = disks_width >= 25;
+            bool big_disk = disks_width >= 25;
 			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
 			const string hu_div = Theme::c("div_line") + Symbols::h_line + Theme::c("main_fg");
 			if (io_mode) {
@@ -976,7 +979,7 @@ namespace Net {
 	unordered_flat_map<string, Draw::Graph> graphs;
 	string box;
 
-	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
+    string draw(const net_info& net, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
         auto net_sync = Config::getB("net_sync");
@@ -1145,11 +1148,11 @@ namespace Proc {
 		return (not changed ? -1 : selected);
 	}
 
-	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
+    string draw(const vector<proc_info>& plist, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
         auto proc_tree = Config::getB("proc_tree");
-		const bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
-		const bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
+        bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
+        bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
         auto proc_colors = Config::getB("proc_colors");
         auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
@@ -1191,7 +1194,7 @@ namespace Proc {
 
 			//? Detailed box
 			if (show_detailed) {
-				const bool alive = detailed.status != "Dead";
+                bool alive = detailed.status != "Dead";
 				dgraph_x = x;
 				dgraph_width = max(width / 3, width - 121);
 				d_width = width - dgraph_width - 1;
@@ -1344,7 +1347,7 @@ namespace Proc {
 
 		//? Draw details box if shown
 		if (show_detailed) {
-			const bool alive = detailed.status != "Dead";
+            bool alive = detailed.status != "Dead";
 			const int item_fit = floor((double)(d_width - 2) / 10);
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
@@ -1403,7 +1406,7 @@ namespace Proc {
 			}
 
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
-			const bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
+            bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
 			if (show_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
 				if (not has_graph) {
 					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};

@@ -150,15 +150,15 @@ namespace Tools {
 	size_t wide_ulen(const std::wstring& w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-	inline size_t ulen(const string& str, const bool wide=false) {
+    inline size_t ulen(const string& str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
-	string uresize(const string str, const size_t len, const bool wide=false);
+    string uresize(const string str, const size_t len, bool wide = false);
 
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
-	string luresize(const string str, const size_t len, const bool wide=false);
+    string luresize(const string str, const size_t len, bool wide = false);
 
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
@@ -270,25 +270,25 @@ namespace Tools {
     }
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string ljust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+    string ljust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string rjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+    string rjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Center justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string cjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+    string cjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Replace whitespaces " " with escape code for move right
 	string trans(const string& str);
 
 	//* Convert seconds to format "<days>d <hours>:<minutes>:<seconds>" and return string
-	string sec_to_dhms(size_t seconds, bool no_days=false, bool no_seconds=false);
+    string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
 
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
 	//* short=True always returns 0 decimals and shortens unit to 1 character
-	string floating_humanizer(uint64_t value, const bool shorten=false, size_t start=0, const bool bit=false, const bool per_second=false);
+    string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
@@ -311,21 +311,21 @@ namespace Tools {
 	#endif
 	}
 
-	void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept;
+    void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
 
-	void atomic_wait_for(const atomic<bool>& atom, const bool old=true, const uint64_t wait_ms=0) noexcept;
+    void atomic_wait_for(const atomic<bool>& atom, bool old = true, const uint64_t wait_ms = 0) noexcept;
 
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
         bool not_true{}; // defaults to false
 	public:
-		atomic_lock(atomic<bool>& atom, bool wait=false);
+        atomic_lock(atomic<bool>& atom, bool wait = false);
 		~atomic_lock();
 	};
 
 	//* Read a complete file and return as a string
-	string readfile(const std::filesystem::path& path, const string& fallback="");
+    string readfile(const std::filesystem::path& path, const string& fallback = "");
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;

@@ -98,10 +98,10 @@ namespace Term {
 	}
 
 	auto get_min_size(const string& boxes) -> array<int, 2> {
-		const bool cpu = boxes.find("cpu") != string::npos;
-		const bool mem = boxes.find("mem") != string::npos;
-		const bool net = boxes.find("net") != string::npos;
-		const bool proc = boxes.find("proc") != string::npos;
+        bool cpu = boxes.find("cpu") != string::npos;
+        bool mem = boxes.find("mem") != string::npos;
+        bool net = boxes.find("net") != string::npos;
+        bool proc = boxes.find("proc") != string::npos;
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
@@ -205,8 +205,10 @@ namespace Tools {
 		return chars;
 	}
 
-	string uresize(string str, const size_t len, const bool wide) {
-		if (len < 1 or str.empty()) return "";
+    string uresize(string str, const size_t len, bool wide) {
+        if (len < 1 or str.empty())
+            return "";
+
 		if (wide) {
 			try {
 				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
@@ -233,8 +235,10 @@ namespace Tools {
 		return str;
 	}
 
-	string luresize(string str, const size_t len, const bool wide) {
-		if (len < 1 or str.empty()) return "";
+    string luresize(string str, const size_t len, bool wide) {
+        if (len < 1 or str.empty())
+            return "";
+
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
 			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
 				x += 2;
@@ -262,7 +266,7 @@ namespace Tools {
 	}
 
 	string ltrim(const string& str, const string& t_str) {
-		string_view str_v = str;
+        string_view str_v{str};
         while (str_v.starts_with(t_str))
             str_v.remove_prefix(t_str.size());
 
@@ -270,7 +274,7 @@ namespace Tools {
 	}
 
 	string rtrim(const string& str, const string& t_str) {
-		string_view str_v = str;
+        string_view str_v{str};
         while (str_v.ends_with(t_str))
             str_v.remove_suffix(t_str.size());
 
@@ -288,41 +292,56 @@ namespace Tools {
 		return out;
 	}
 
-	string ljust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; }
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            }
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
-	string rjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string rjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; };
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            };
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
 	}
 
-	string cjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
+    string cjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-			if (limit and ulen(str, wide) > x) return uresize(str, x, wide);
+            if (limit and ulen(str, wide) > x)
+                return uresize(str, x, wide);
+
 			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
 		}
 		else {
-			if (limit and str.size() > x) { str.resize(x); return str; }
+            if (limit and str.size() > x) {
+                str.resize(x);
+                return str;
+            }
 			return string(max((int)ceil((double)(x - str.size()) / 2), 0), ' ') + str + string(max((int)floor((double)(x - str.size()) / 2), 0), ' ');
 		}
 	}
 
 	string trans(const string& str) {
-		string_view oldstr = str;
+        string_view oldstr{str};
 		string newstr;
 		newstr.reserve(str.size());
 		for (size_t pos; (pos = oldstr.find(' ')) != string::npos;) {
@@ -346,7 +365,7 @@ namespace Tools {
 		return out;
 	}
 
-	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
+    string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
         bool mega = Config::getB("base_10_sizes");
@@ -403,15 +422,29 @@ namespace Tools {
 		}
 		if (out.empty()) {
 			out = to_string(value);
-			if (not mega and out.size() == 4 and start > 0) { out.pop_back(); out.insert(2, ".");}
-			else if (out.size() == 3 and start > 0) out.insert(1, ".");
-			else if (out.size() >= 2) out.resize(out.size() - 2);
+            if (not mega and out.size() == 4 and start > 0) {
+                out.pop_back();
+                out.insert(2, ".");
+            }
+            else if (out.size() == 3 and start > 0) {
+                out.insert(1, ".");
+            }
+            else if (out.size() >= 2) {
+                out.resize(out.size() - 2);
+            }
 		}
 		if (shorten) {
 			auto f_pos = out.find('.');
-			if (f_pos == 1 and out.size() > 3) out = to_string(round(stof(out) * 10) / 10).substr(0,3);
-			else if (f_pos != string::npos) out = to_string((int)round(stof(out)));
-			if (out.size() > 3) { out = to_string((int)(out[0] - '0') + 1); start++;}
+            if (f_pos == 1 and out.size() > 3) {
+                out = to_string(round(stof(out) * 10) / 10).substr(0,3);
+            }
+            else if (f_pos != string::npos) {
+                out = to_string((int)round(stof(out)));
+            }
+            if (out.size() > 3) {
+                out = to_string((int)(out[0] - '0') + 1);
+                start++;
+            }
 			out.push_back(units[start][0]);
 		}
 		else out += " " + units[start];
@@ -421,11 +454,19 @@ namespace Tools {
 	}
 
 	std::string operator*(const string& str, int64_t n) {
-		if (n < 1 or str.empty()) return "";
-		else if(n == 1) return str;
+        if (n < 1 or str.empty()) {
+            return "";
+        }
+        else if (n == 1) {
+            return str;
+        }
+
 		string new_str;
 		new_str.reserve(str.size() * n);
-		for (; n > 0; n--) new_str.append(str);
+
+        for (; n > 0; n--)
+            new_str.append(str);
+
 		return new_str;
 	}
 
@@ -437,17 +478,17 @@ namespace Tools {
 		return ss.str();
 	}
 
-	void atomic_wait(const atomic<bool>& atom, const bool old) noexcept {
+    void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
 		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
 	}
 
-	void atomic_wait_for(const atomic<bool>& atom, const bool old, const uint64_t wait_ms) noexcept {
+    void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
 		const uint64_t start_time = time_ms();
 		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
+        if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
 	}
 
@@ -463,7 +504,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + (string)path + " : " + e.what());
+            Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -509,10 +550,14 @@ namespace Logger {
 		int status = -1;
 	public:
 		lose_priv() {
-			if (geteuid() != Global::real_uid) this->status = seteuid(Global::real_uid);
+            if (geteuid() != Global::real_uid) {
+                this->status = seteuid(Global::real_uid);
+            }
 		}
 		~lose_priv() {
-			if (status == 0) status = seteuid(Global::set_uid);
+            if (status == 0) {
+                status = seteuid(Global::set_uid);
+            }
 		}
 	};
 
@@ -529,8 +574,12 @@ namespace Logger {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 				auto old_log = logfile;
 				old_log += ".1";
-				if (fs::exists(old_log)) fs::remove(old_log, ec);
-				if (not ec) fs::rename(logfile, old_log, ec);
+
+                if (fs::exists(old_log))
+                    fs::remove(old_log, ec);
+
+                if (not ec)
+                    fs::rename(logfile, old_log, ec);
 			}
 			if (not ec) {
 				std::ofstream lwrite(logfile, std::ios::app);

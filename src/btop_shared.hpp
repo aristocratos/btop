@@ -67,7 +67,7 @@ namespace Runner {
 	extern bool pause_output;
 	extern string debug_bg;
 
-	void run(const string& box="", const bool no_update=false, const bool force_redraw=false);
+    void run(const string& box="", bool no_update = false, bool force_redraw = false);
 	void stop();
 
 }
@@ -115,10 +115,10 @@ namespace Cpu {
 	};
 
 	//* Collect cpu stats and temperatures
-	auto collect(const bool no_update=false) -> cpu_info&;
+    auto collect(bool no_update = false) -> cpu_info&;
 
 	//* Draw contents of cpu box using <cpu> as source
-	string draw(const cpu_info& cpu, const bool force_redraw=false, const bool data_same=false);
+    string draw(const cpu_info& cpu, bool force_redraw = false, bool data_same = false);
 
 	//* Parse /proc/cpu info for mapping of core ids
 	auto get_core_mapping() -> unordered_flat_map<int, int>;
@@ -168,10 +168,10 @@ namespace Mem {
 	uint64_t get_totalMem();
 
 	//* Collect mem & disks stats
-	auto collect(const bool no_update=false) -> mem_info&;
+    auto collect(bool no_update = false) -> mem_info&;
 
 	//* Draw contents of mem box using <mem> as source
-	string draw(const mem_info& mem, const bool force_redraw=false, const bool data_same=false);
+    string draw(const mem_info& mem, bool force_redraw = false, bool data_same = false);
 
 }
 
@@ -204,10 +204,10 @@ namespace Net {
 	extern unordered_flat_map<string, net_info> current_net;
 
 	//* Collect net upload/download stats
-	auto collect(const bool no_update=false) -> net_info&;
+    auto collect(bool no_update=false) -> net_info&;
 
 	//* Draw contents of net box using <net> as source
-	string draw(const net_info& net, const bool force_redraw=false, const bool data_same=false);
+    string draw(const net_info& net, bool force_redraw = false, bool data_same = false);
 }
 
 namespace Proc {
@@ -287,13 +287,13 @@ namespace Proc {
 	extern detail_container detailed;
 
 	//* Collect and sort process information from /proc
-	auto collect(const bool no_update=false) -> vector<proc_info>&;
+    auto collect(bool no_update = false) -> vector<proc_info>&;
 
 	//* Update current selection and view, returns -1 if no change otherwise the current selection
 	int selection(const string& cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
-	string draw(const vector<proc_info>& plist, const bool force_redraw=false, const bool data_same=false);
+    string draw(const vector<proc_info>& plist, bool force_redraw = false, bool data_same = false);
 
 	struct tree_proc {
 		std::reference_wrapper<proc_info> entry;
@@ -301,15 +301,14 @@ namespace Proc {
 	};
 
 	//* Sort vector of proc_info's
-    void proc_sorter(vector<proc_info>& proc_vec, const string& sorting,
-        const bool reverse, const bool tree = false);
+    void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
 
 	//* Recursive sort of process tree
     void tree_sort(vector<tree_proc>& proc_vec, const string& sorting,
-        const bool reverse, int& c_index, const int index_max, const bool collapsed = false);
+                   bool reverse, int& c_index, const int index_max, bool collapsed = false);
 
 	//* Generate process tree list
     void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
-        int cur_depth, const bool collapsed, const string& filter,
-        bool found=false, const bool no_update=false, const bool should_filter=false);
+                   int cur_depth, bool collapsed, const string& filter,
+                   bool found = false, bool no_update = false, bool should_filter = false);
 }
