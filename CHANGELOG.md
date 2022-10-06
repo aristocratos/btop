@@ -1,3 +1,19 @@
+## v1.2.10
+
+* Fixed: Process tree filtering not case insensitive
+
+* Added: Paper theme, by @s6muel
+
+* Fixed: Extra checks to avoid crash on trying to replace empty strings in tree mode
+
+* Fixed: Crashing when cores are offline
+
+* Fixed: Cpu::collect() core count counter...
+
+* Changed: Using sysconf(_SC_NPROCESSORS_CONF) for number of cores instead of sysconf(_SC_NPROCESSORS_ONLN)
+
+* Maintenance: Code cleanup, by @stefanos82
+
 ## v1.2.9
 
 * Fixed: Memory values not clearing properly when not in graph mode in mem box
