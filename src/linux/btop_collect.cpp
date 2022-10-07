@@ -135,6 +135,7 @@ namespace Shared {
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 		Cpu::collect();
+		if (Runner::coreNum_reset) Runner::coreNum_reset = false;
 		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty()) Cpu::available_fields.push_back(field);
 		}
@@ -681,22 +682,37 @@ namespace Cpu {
 			string cpu_name;
 			cread.open(Shared::procPath / "stat");
 			int i = 0;
-			for (; i <= Shared::coreCount; i++) {
-
+			int target = Shared::coreCount;
+			for (; i <= target or (cread.good() and cread.peek() == 'c'); i++) {
 				//? Make sure to add zero value for missing core values if at end of file
-				if ((not cread.good() or cread.peek() != 'c') and i <= Shared::coreCount) {
+				if ((not cread.good() or cread.peek() != 'c') and i <= target) {
 					if (i == 0) throw std::runtime_error("Failed to parse /proc/stat");
-					else cpu.core_percent.at(i-1).push_back(0);
+					else {
+						//? Fix container sizes if new cores are detected
+						while (cmp_less(cpu.core_percent.size(), i)) {
+							core_old_totals.push_back(0);
+							core_old_idles.push_back(0);
+							cpu.core_percent.push_back({});
+						}
+						cpu.core_percent.at(i-1).push_back(0);
+					}
 				}
 				else {
 					if (i == 0) cread.ignore(SSmax, ' ');
 					else {
 						cread >> cpu_name;
 						int cpuNum = std::stoi(cpu_name.substr(3));
-						if (cpuNum > Shared::coreCount - 1) throw std::runtime_error("Mismatch betweeen /proc/stat core count and previously detected core count");
+						if (cpuNum >= target - 1) target = cpuNum + (cread.peek() == 'c' ? 2 : 1);
+
 						//? Add zero value for core if core number is missing from /proc/stat
 						while (i - 1 < cpuNum) {
-							cpu.core_percent.at(i-1).push_back(0);
+							//? Fix container sizes if new cores are detected
+							while (cmp_less(cpu.core_percent.size(), i)) {
+								core_old_totals.push_back(0);
+								core_old_idles.push_back(0);
+								cpu.core_percent.push_back({});
+							}
+							cpu.core_percent[i-1].push_back(0);
 							if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
 							i++;
 						}
@@ -745,7 +761,12 @@ namespace Cpu {
 					}
 					//? Calculate cpu total for each core
 					else {
-						if (i > Shared::coreCount) break;
+						//? Fix container sizes if new cores are detected
+						while (cmp_less(cpu.core_percent.size(), i)) {
+							core_old_totals.push_back(0);
+							core_old_idles.push_back(0);
+							cpu.core_percent.push_back({});
+						}
 						const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
 						const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
 						core_old_totals.at(i-1) = totals;
@@ -759,7 +780,14 @@ namespace Cpu {
 				if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
 			}
 
-			if (i < Shared::coreCount + 1) throw std::runtime_error("Failed to parse /proc/stat");
+			//? Notify main thread to redraw screen if we found more cores than previously detected
+			if (cmp_greater(cpu.core_percent.size(), Shared::coreCount)) {
+				Logger::debug("Changing CPU max corecount from " + to_string(Shared::coreCount) + " to " + to_string(cpu.core_percent.size()) + ".");
+				Runner::coreNum_reset = true;
+				Shared::coreCount = cpu.core_percent.size();
+				while (cmp_less(current_cpu.temp.size(), cpu.core_percent.size() + 1)) current_cpu.temp.push_back({0});
+			}
+
 		}
 		catch (const std::exception& e) {
             Logger::debug("Cpu::collect() : " + string{e.what()});
@@ -1329,6 +1357,7 @@ namespace Net {
 	};
 
     auto collect(bool no_update) -> net_info& {
+		if (Runner::stopping) return empty_net;
 		auto& net = current_net;
 		auto& config_iface = Config::getS("net_iface");
         auto net_sync = Config::getB("net_sync");
@@ -1617,6 +1646,7 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc
     auto collect(bool no_update) -> vector<proc_info>& {
+		if (Runner::stopping) return current_procs;
 		const auto& sorting = Config::getS("proc_sorting");
         auto reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");

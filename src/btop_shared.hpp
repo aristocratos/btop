@@ -63,6 +63,7 @@ namespace Runner {
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
 	extern atomic<bool> redraw;
+	extern atomic<bool> coreNum_reset;
 	extern pthread_t runner_id;
 	extern bool pause_output;
 	extern string debug_bg;

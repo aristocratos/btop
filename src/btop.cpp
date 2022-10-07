@@ -318,6 +318,7 @@ namespace Runner {
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
+	atomic<bool> coreNum_reset (false);
 
 	//* Setup semaphore for triggering thread to do work
 #if __GNUC__ < 11
@@ -474,6 +475,14 @@ namespace Runner {
 
 						//? Start collect
 						auto cpu = Cpu::collect(conf.no_update);
+
+						if (coreNum_reset) {
+							coreNum_reset = false;
+							Cpu::core_mapping = Cpu::get_core_mapping();
+							Global::resized = true;
+							Input::interrupt = true;
+							continue;
+						}
 
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
