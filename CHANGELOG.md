@@ -1,3 +1,7 @@
+## v1.2.11
+
+* Fixed: Number of cores wrongly detected for Ryzen in rare cases.
+
 ## v1.2.10
 
 * Fixed: Process tree filtering not case insensitive
