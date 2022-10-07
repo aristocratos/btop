@@ -1,3 +1,7 @@
+## v1.2.12
+
+* Added: Dynamic updating of max number of CPU cores.
+
 ## v1.2.11
 
 * Fixed: Number of cores wrongly detected for Ryzen in rare cases.
