@@ -327,7 +327,9 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `STATIC=true` to `make` command for static compilation.
+   Append `VERBOSE=true` to display full compiler/linker commands.
+
+   Append `STATIC=true` for static compilation.
 
    Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
 
@@ -417,7 +419,9 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `STATIC=true` to `make` command for static compilation (only libgcc and libstdc++ will be static!).
+   Append `VERBOSE=true` to display full compiler/linker commands.
+   
+   Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
 
    Append `QUIET=true` for less verbose output.
 
@@ -501,7 +505,7 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `STATIC=true` to `make` command for static compilation.
+   Append `VERBOSE=true` to display full compiler/linker commands.
 
    Append `QUIET=true` for less verbose output.
 
