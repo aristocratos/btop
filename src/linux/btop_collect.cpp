@@ -26,7 +26,6 @@ tab-size = 4
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
-#include <thread>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
@@ -107,7 +106,7 @@ namespace Shared {
 		if (passwd_path.empty())
 			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
 
-		coreCount = std::thread::hardware_concurrency();
+		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
 		if (coreCount < 1) {
 			coreCount = sysconf(_SC_NPROCESSORS_CONF);
 			if (coreCount < 1) {
