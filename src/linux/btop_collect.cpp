@@ -925,6 +925,7 @@ namespace Mem {
 
 		//? Get disks stats
 		if (show_disks) {
+			static vector<string> ignore_list;
 			double uptime = system_uptime();
 			auto free_priv = Config::getB("disk_free_priv");
 			try {
@@ -997,7 +998,7 @@ namespace Mem {
 						diskread >> dev >> mountpoint >> fstype;
 						diskread.ignore(SSmax, '\n');
 
-						if (v_contains(found, mountpoint)) continue;
+						if (v_contains(ignore_list, mountpoint) or v_contains(found, mountpoint)) continue;
 
 						//? Match filter if not empty
 						if (not filter.empty()) {
@@ -1056,6 +1057,7 @@ namespace Mem {
 							}
 						}
 					}
+
 					//? Remove disks no longer mounted or filtered out
 					if (swap_disk and has_swap) found.push_back("swap");
 					for (auto it = disks.begin(); it != disks.end();) {
@@ -1072,11 +1074,14 @@ namespace Mem {
 				diskread.close();
 
 				//? Get disk/partition stats
+				bool new_ignored = false;
 				for (auto& [mountpoint, disk] : disks) {
-					if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
+					if (std::error_code ec; not fs::exists(mountpoint, ec) or v_contains(ignore_list, mountpoint)) continue;
 					struct statvfs64 vfs;
 					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
-						Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+						Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs64 error code: " + to_string(errno) + ". Ignoring...");
+						ignore_list.push_back(mountpoint);
+						new_ignored = true;
 						continue;
 					}
 					disk.total = vfs.f_blocks * vfs.f_frsize;
@@ -1084,6 +1089,16 @@ namespace Mem {
 					disk.used = disk.total - disk.free;
 					disk.used_percent = round((double)disk.used * 100 / disk.total);
 					disk.free_percent = 100 - disk.used_percent;
+				}
+
+				//? Remove any problematic disks added to the ignore_list
+				if (new_ignored) {
+					for (auto it = disks.begin(); it != disks.end();) {
+						if (v_contains(ignore_list, it->first))
+							it = disks.erase(it);
+						else
+							it++;
+					}
 				}
 
 				//? Setup disks order in UI and add swap if enabled
