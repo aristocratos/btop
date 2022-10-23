@@ -15,10 +15,8 @@ on:
       - '.github/workflows/*'
 
 jobs:
-  build-osx:
-
+  build-macos11:
     runs-on: macos-11
-
     steps:
       - uses: actions/checkout@v3
       - name: Compile
@@ -30,5 +28,21 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: btop-x86_64-macos-BigSur
+          name: btop-x86_64-macos11-BigSur
+          path: 'bin/*'
+      
+  build-macos12:
+    runs-on: macos-12
+    steps:
+      - uses: actions/checkout@v3
+      - name: Compile
+        run: |
+          make CXX=g++-11 ARCH=x86_64 STATIC=true STRIP=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop bin/btop-x86_64-Monterey-$GIT_HASH
+          ls -alh bin
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-macos12-Monterey
           path: 'bin/*'
