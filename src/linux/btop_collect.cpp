@@ -667,6 +667,9 @@ namespace Cpu {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
 
+		if (Config::getB("show_cpu_freq"))
+			cpuHz = get_cpuHz();
+
 		ifstream cread;
 
 		try {
@@ -793,9 +796,6 @@ namespace Cpu {
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
             else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
 		}
-
-		if (Config::getB("show_cpu_freq"))
-			cpuHz = get_cpuHz();
 
 		if (Config::getB("check_temp") and got_sensors)
 			update_sensors();
