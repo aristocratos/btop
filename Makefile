@@ -63,7 +63,9 @@ else
 endif
 
 #? Compiler and Linker
-ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
+	CXX := g++-12
+else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
 	CXX := g++-11
 else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
 	CXX := g++11
