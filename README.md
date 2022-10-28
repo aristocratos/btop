@@ -399,6 +399,8 @@ Also needs a UTF8 locale and a font that covers:
 ## Compilation macOS OSX
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   
+   GCC 12 needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
    The makefile also needs GNU coreutils and `sed`.
 
