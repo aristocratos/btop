@@ -409,7 +409,7 @@ Also needs a UTF8 locale and a font that covers:
 1. **Install dependencies (example for Homebrew)**
 
    ``` bash
-   brew install coreutils make gcc@11
+   brew install coreutils make gcc@12
    ```
 
 2. **Clone repository**
