@@ -1473,9 +1473,12 @@ namespace Proc {
 					out += c_color + uresize(p.name, width_left - 1) + end + ' ';
 					width_left -= (ulen(p.name) + 1);
 				}
-				if (width_left > 40 or (width_left > 7 and p.short_cmd != p.name)) {
-					out += g_color + '(' + uresize(width_left > 40 ? p.cmd : p.short_cmd, width_left - 3, p_wide_cmd[p.pid]) + ") ";
-					width_left -= (ulen(p.short_cmd, true) + 3);
+				if (width_left > 7) {
+					const string& cmd = width_left > 40 ? p.cmd : p.short_cmd;
+					if (not cmd.empty() and cmd != p.name) {
+						out += g_color + '(' + uresize(cmd, width_left - 3, p_wide_cmd[p.pid]) + ") ";
+						width_left -= (ulen(cmd, true) + 3);
+					}
 				}
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
 			}
