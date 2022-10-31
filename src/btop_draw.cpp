@@ -1474,7 +1474,7 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7) {
-					const string& cmd = width_left > 40 ? p.cmd : p.short_cmd;
+					const string& cmd = width_left > 40 ? rtrim(p.cmd) : p.short_cmd;
 					if (not cmd.empty() and cmd != p.name) {
 						out += g_color + '(' + uresize(cmd, width_left - 3, p_wide_cmd[p.pid]) + ") ";
 						width_left -= (ulen(cmd, true) + 3);
