@@ -1391,11 +1391,7 @@ namespace Net {
 			}
 			int family = 0;
 			static_assert(INET6_ADDRSTRLEN >= INET_ADDRSTRLEN); // 46 >= 16, compile-time assurance.
-#if defined(IPBUFFER_MAXSIZE)
-#error Overwriting a previous macro with the same name: IPBUFFER_MAXSIZE, this means you likely need to rename this one here!
-#else
-#define IPBUFFER_MAXSIZE (INET6_ADDRSTRLEN) // manually using the known biggest value, guarded by the above static_assert
-#endif
+			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
 			string ipv4, ipv6;
@@ -1442,11 +1438,6 @@ namespace Net {
 					}
 				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
 			}
-#if defined(IPBUFFER_MAXSIZE)
-#undef IPBUFFER_MAXSIZE
-#else
-#error whoa, the programmer forgot something, eg. was this renamed?
-#endif
 
 			//? Get total recieved and transmitted bytes + device address if no ip was found
 			for (const auto& iface : interfaces) {
