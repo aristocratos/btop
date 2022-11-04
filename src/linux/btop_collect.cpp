@@ -26,6 +26,8 @@ tab-size = 4
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <arpa/inet.h> // for inet_ntop()
+
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
@@ -1388,7 +1390,9 @@ namespace Net {
 				return empty_net;
 			}
 			int family = 0;
-			char ip[NI_MAXHOST];
+			static_assert(INET6_ADDRSTRLEN >= INET_ADDRSTRLEN); // 46 >= 16, compile-time assurance.
+			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
+			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
 			string ipv4, ipv6;
 
@@ -1410,17 +1414,28 @@ namespace Net {
 					net[iface].ipv6.clear();
 				}
 
+
 				//? Get IPv4 address
 				if (family == AF_INET) {
-					if (net[iface].ipv4.empty() and 
-						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv4 = ip;
+					if (net[iface].ipv4.empty()) {
+						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
+							net[iface].ipv4 = ip;
+						} else {
+							int errsv = errno;
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+						}
+					}
 				}
 				//? Get IPv6 address
 				else if (family == AF_INET6) {
-					if (net[iface].ipv6.empty() and 
-						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv6 = ip;
+					if (net[iface].ipv6.empty()) {
+						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
+							net[iface].ipv6 = ip;
+						} else {
+							int errsv = errno;
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+						}
+					}
 				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
 			}
 
