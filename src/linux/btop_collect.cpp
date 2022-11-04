@@ -1393,27 +1393,35 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-            for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
+			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == NULL) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto& iface = ifa->ifa_name;
-
-				//? Get IPv4 address
-				if (family == AF_INET) {
-					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv4 = ip;
-				}
-				//? Get IPv6 address
-				else if (family == AF_INET6) {
-					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv6 = ip;
-				}
 
 				//? Update available interfaces vector and get status of interface
 				if (not v_contains(interfaces, iface)) {
 					interfaces.push_back(iface);
 					net[iface].connected = (ifa->ifa_flags & IFF_RUNNING);
+
+					// An interface can have more than one IP of the same family associated with it,
+					// but we pick only the first one to show in the NET box.
+					// Note: Interfaces without any IPv4 and IPv6 set are still valid and monitorable!
+					net[iface].ipv4.clear();
+					net[iface].ipv6.clear();
 				}
+
+				//? Get IPv4 address
+				if (family == AF_INET) {
+					if (net[iface].ipv4.empty() and 
+						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv4 = ip;
+				}
+				//? Get IPv6 address
+				else if (family == AF_INET6) {
+					if (net[iface].ipv6.empty() and 
+						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv6 = ip;
+				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
 			}
 
 			//? Get total recieved and transmitted bytes + device address if no ip was found
