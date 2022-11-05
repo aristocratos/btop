@@ -1744,6 +1744,7 @@ namespace Proc {
 						getline(pread, r_user, ':');
 						pread.ignore(SSmax, ':');
 						getline(pread, r_uid, ':');
+						if (uid_user.contains(r_uid)) break;
 						uid_user[r_uid] = r_user;
 						pread.ignore(SSmax, '\n');
 					}
