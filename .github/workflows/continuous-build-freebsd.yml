@@ -38,8 +38,11 @@ jobs:
             pkg install -y gmake gcc11 coreutils git
           run: |
             gmake
+            GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+            mv bin/btop bin/btop-$GIT_HASH
+            ls -alh bin
       - uses: actions/upload-artifact@v3
         with:
           name: btop-x86_64-FreeBSD-13.1
-          path: 'bin/btop'
+          path: 'bin/*'
       
