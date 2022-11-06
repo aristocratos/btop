@@ -866,7 +866,7 @@ namespace Net {
 							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
 						}
 					}
-				}
+				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
 			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
