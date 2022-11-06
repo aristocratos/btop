@@ -14,6 +14,16 @@ on:
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build.yml'
 
 jobs:
   static-build:
