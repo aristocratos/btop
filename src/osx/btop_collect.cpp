@@ -19,7 +19,6 @@ tab-size = 4
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
-#include <ifaddrs.h>
 #include <libproc.h>
 #include <mach/mach.h>
 #include <mach/mach_host.h>
@@ -28,7 +27,12 @@ tab-size = 4
 #include <mach/processor_info.h>
 #include <mach/vm_statistics.h>
 #include <mach/mach_time.h>
+// BUGS
+//     If both <net/if.h> and <ifaddrs.h> are being included, <net/if.h> must be
+//     included before <ifaddrs.h>.
+// from: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/getifaddrs.3.html
 #include <net/if.h>
+#include <ifaddrs.h>
 #include <net/if_dl.h>
 #include <netdb.h>
 #include <netinet/tcp_fsm.h>
@@ -868,21 +872,27 @@ namespace Net {
 				if (ifa->ifa_addr == NULL) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto &iface = ifa->ifa_name;
-				//? Get IPv4 address
-				if (family == AF_INET) {
-					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv4 = ip;
-				}
-				//? Get IPv6 address
-				else if (family == AF_INET6) {
-					if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
-						net[iface].ipv6 = ip;
-				}
-
 				//? Update available interfaces vector and get status of interface
 				if (not v_contains(interfaces, iface)) {
 					interfaces.push_back(iface);
 					net[iface].connected = (ifa->ifa_flags & IFF_RUNNING);
+					// An interface can have more than one IP of the same family associated with it,
+					// but we pick only the first one to show in the NET box.
+					// Note: Interfaces without any IPv4 and IPv6 set are still valid and monitorable!
+					net[iface].ipv4.clear();
+					net[iface].ipv6.clear();
+				}
+				//? Get IPv4 address
+				if (family == AF_INET) {
+					if (net[iface].ipv4.empty() and
+						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv4 = ip;
+				}
+				//? Get IPv6 address
+				else if (family == AF_INET6) {
+					if (net[iface].ipv6.empty() and
+						getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == 0)
+						net[iface].ipv6 = ip;
 				}
 			}
 
