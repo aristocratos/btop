@@ -47,12 +47,7 @@ jobs:
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
-      
-      - name: Install GCC12 and check Xcode version
-        run: |
-          brew install gcc@12
-          xcodebuild --version
+          xcode-version: latest-stable            
 
       - uses: actions/checkout@v3      
       - name: Compile
