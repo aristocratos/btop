@@ -1884,7 +1884,7 @@ namespace Proc {
 								next_x = 19;
 								continue;
 							case 19: //? Nice value
-								new_proc.p_nice = stoull(short_str);
+								new_proc.p_nice = stoll(short_str);
 								continue;
 							case 20: //? Number of threads
 								new_proc.threads = stoull(short_str);

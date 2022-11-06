@@ -262,7 +262,7 @@ namespace Proc {
         double cpu_p{};         // defaults to = 0.0
         double cpu_c{};         // defaults to = 0.0
 		char state = '0';
-        uint64_t p_nice{};      // defaults to 0
+        int64_t p_nice{};      // defaults to 0
         uint64_t ppid{};        // defaults to 0
         uint64_t cpu_s{};       // defaults to 0
         uint64_t cpu_t{};       // defaults to 0
