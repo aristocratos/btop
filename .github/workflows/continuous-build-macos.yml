@@ -45,10 +45,14 @@ jobs:
   build-macos12:
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v3
+      - name: Install GCC12
+        run: |
+          brew install gcc@12
+
+      - uses: actions/checkout@v3      
       - name: Compile
         run: |
-          make CXX=g++-11 ARCH=x86_64 STATIC=true STRIP=true
+          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-Monterey-$GIT_HASH
           ls -alh bin
