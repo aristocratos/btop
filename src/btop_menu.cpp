@@ -207,7 +207,7 @@ namespace Menu {
 				"P=(0 or 1) for alternate positions.",
 				"G=graph symbol to use for box.",
 				"",
-				"Use withespace \" \" as separator between",
+				"Use whitespace \" \" as separator between",
 				"different presets.",
 				"",
 				"Example:",
