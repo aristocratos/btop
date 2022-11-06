@@ -34,6 +34,7 @@ jobs:
         uses: vmactions/freebsd-vm@v0
         with:
           release: 13.1
+          usesh: true
           prepare: |
             pkg install -y gmake gcc11 coreutils git
           run: |
