@@ -37,6 +37,7 @@ jobs:
           usesh: true
           prepare: |
             pkg install -y gmake gcc11 coreutils git
+            git config --global --add safe.directory /Users/runner/work/btop/btop
           run: |
             gmake
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
