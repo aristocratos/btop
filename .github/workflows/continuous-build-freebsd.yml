@@ -1,0 +1,45 @@
+name: Continuous Build FreeBSD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/osx/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-freebsd.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/osx/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-freebsd.yml'
+
+jobs:
+  build-freebsd:
+    runs-on: macos-12
+    steps:
+      - uses: actions/checkout@v3
+      - name: Compile
+        uses: vmactions/freebsd-vm@v0
+        with:
+          release: 13.1
+          prepare: |
+            pkg install -y gmake gcc11 coreutils git
+          run: |
+            gmake
+      - uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-FreeBSD-13.1
+          path: 'bin/btop'
+      
