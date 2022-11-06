@@ -12,7 +12,17 @@ on:
       - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/*'
+      - '.github/workflows/continuous-build-macos.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-macos.yml'
 
 jobs:
   build-macos11:
