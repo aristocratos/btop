@@ -901,7 +901,8 @@ namespace Mem {
 				mem.stats.at("cached") += arc_size;
 				mem.stats.at("available") += arc_size;
 			}
-			mem.stats.at("used") = totalMem - mem.stats.at("available");
+			mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
+			if (mem.stats.at("used"))
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
 		}
 		else
