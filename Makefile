@@ -200,7 +200,9 @@ help:
 
 #? Make the Directories
 directories:
+	@$(VERBOSE) || printf "mkdir -p $(TARGETDIR)\n"
 	@mkdir -p $(TARGETDIR)
+	@$(VERBOSE) || printf "mkdir -p $(BUILDDIR)/$(PLATFORM_DIR)\n"
 	@mkdir -p $(BUILDDIR)/$(PLATFORM_DIR)
 
 #? Clean only Objects
