@@ -353,3 +353,4 @@ namespace Logger {
 	inline void debug(const string msg) { log_write(4, msg); }
 }
 
+int copy_to_clipboard(const std::string& msg);

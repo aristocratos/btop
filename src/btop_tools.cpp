@@ -597,3 +597,13 @@ namespace Logger {
 		}
 	}
 }
+
+int copy_to_clipboard(const std::string& msg) {
+#ifdef __APPLE__
+	char buf[ARG_MAX];
+	snprintf(buf, ARG_MAX, "echo \"%s\" | pbcopy", msg.c_str());
+	return system(buf);
+#elif // __APPLE__
+	return 0;
+#endif // __APPLE__
+}

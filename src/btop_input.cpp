@@ -400,6 +400,7 @@ namespace Input {
 						Config::set("proc_last_selected", Config::getI("proc_selected"));
 						Config::set("proc_selected", 0);
 						Config::set("show_detailed", true);
+						process("copyout-shellcmd");
 					}
 					else if (Config::getB("show_detailed")) {
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
@@ -436,6 +437,10 @@ namespace Input {
 						return;
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
+				} else if (is_in(key, "copyout-shellcmd", "v")) {
+					auto procs = Proc::collect(false);
+					auto p_info = rng::find(procs, Config::getI("selected_pid"), &Proc::proc_info::pid);
+					copy_to_clipboard(p_info->cmd);
 				}
 				else keep_going = true;
 
