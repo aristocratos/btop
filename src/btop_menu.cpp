@@ -141,6 +141,7 @@ namespace Menu {
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
 		{"e", "Toggle processes tree view."},
+		{"v", "Copy the select process' command line to clipboard."},
 		{"Selected +, -", "Expand/collapse the selected process in tree view."},
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
