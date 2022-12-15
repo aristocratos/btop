@@ -259,7 +259,7 @@ uninstall:
 
 #? Link
 .ONESHELL:
-btop: $(OBJECTS)
+btop: $(OBJECTS) | directories
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
@@ -270,7 +270,7 @@ btop: $(OBJECTS)
 
 #? Compile
 .ONESHELL:
-$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT)
+$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | directories
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
