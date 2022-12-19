@@ -355,3 +355,4 @@ namespace Logger {
 
 std::string get_cmd_line(size_t pid);
 int copy_to_clipboard(const std::string& msg);
+extern bool pcopy(const char *buf);

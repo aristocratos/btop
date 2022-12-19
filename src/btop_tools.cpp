@@ -607,25 +607,7 @@ std::string get_cmd_line(size_t pid) {
 int copy_to_clipboard(const std::string& msg) {
 	// TODO(..): Implement FreeBSD and Linux
 #ifdef __APPLE__
-	// Store the process' command line to a text file
-	const auto tmp_fname = "/tmp/btop.proc-cmdline.txt"; // TODO(..): Move to a header file
-	std::ofstream fp(tmp_fname, std::ofstream::trunc);
-	fp << msg;
-	fp.close();
-
-	// TODO(..): Explore an API-driven option not to invoke a shell command
-	// (1) Use Swift/Objective C++ binding and call NSPasteboard. Enhance Makefile to support.
-	//     See https://developer.apple.com/documentation/appkit/nspasteboard?language=objc
-	// (2) Explore to use QClipboard but be mindful on dependency
-	//     See https://doc.qt.io/qt-6/qclipboard.html
-	const auto argmax = Shared::arg_max;
-	#pragma GCC diagnostic push // Alternative to this is to use ARG_MAX directly from limits.h
-	#pragma GCC diagnostic ignored "-Wvla"
-	char buf[argmax];
-	#pragma GCC diagnostic pop
-	// Use file redirect. Do not expose the process's command line to the shell level for security concern.
-	snprintf(buf, argmax, "LANG=en_EN.UTF-8 pbcopy < %s", tmp_fname); // TODO(..): Upgrade to std::format
-	return system(buf);
+	return pcopy(msg.c_str());
 #elif // __APPLE__
 	return 0;
 #endif // __APPLE__
