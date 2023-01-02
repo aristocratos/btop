@@ -49,6 +49,7 @@ stage/
 build
 bin
 btop
+cmake-*
 .*/
 
 
