@@ -282,9 +282,13 @@ namespace Tools {
         return string{str_v};
 	}
 
+#   ifdef __clang__
+#       define split lazy_split
+#   endif
+
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
 		vector<string> out;
-		for (const auto& s : str 	| rng::views::lazy_split(delim)
+        for (const auto& s : str 	| rng::views::split(delim)
 									| rng::views::transform([](auto &&rng) {
 										return string_view(&*rng.begin(), rng::distance(rng));
 		})) {
@@ -292,6 +296,10 @@ namespace Tools {
 		}
 		return out;
 	}
+
+#   ifdef __clang__
+#       undef split
+#   endif
 
     string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
