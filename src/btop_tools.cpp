@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <cmath>
+#include <codecvt>
 #include <iostream>
 #include <fstream>
 #include <ctime>
@@ -283,7 +284,7 @@ namespace Tools {
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
 		vector<string> out;
-		for (const auto& s : str 	| rng::views::split(delim)
+		for (const auto& s : str 	| rng::views::lazy_split(delim)
 									| rng::views::transform([](auto &&rng) {
 										return string_view(&*rng.begin(), rng::distance(rng));
 		})) {
