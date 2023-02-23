@@ -583,8 +583,8 @@ namespace Mem {
 			if (f()) {
 				char buf[512];
 				size_t len = 512;
+				uint64_t nread = 0, nwritten = 0;
 				while (not std::feof(f())) {
-					uint64_t nread = 0, nwritten = 0;
 					if (fgets(buf, len, f())) {
 						char *name = std::strtok(buf, ": \n");
 						char *value = std::strtok(NULL, ": \n");
