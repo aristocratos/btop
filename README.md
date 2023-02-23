@@ -753,6 +753,9 @@ mem_graphs = True
 #* Show mem box below net box instead of above.
 mem_below_net = False
 
+#* Count ZFS ARC in cached and available memory.
+zfs_arc_cached = True
+
 #* If swap memory should be shown in memory box.
 show_swap = True
 

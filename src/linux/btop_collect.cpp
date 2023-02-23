@@ -815,7 +815,6 @@ namespace Mem {
 	fs::file_time_type fstab_time;
     int disk_ios{}; // defaults to 0
 	vector<string> last_found;
-	const std::regex zfs_size_regex("^size\\s+\\d\\s+(\\d+)");
 
 	//?* Find the filepath to the specified ZFS object's stat file
 	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets);
@@ -851,15 +850,17 @@ namespace Mem {
 		mem.stats.at("swap_total") = 0;
 
 		//? Read ZFS ARC info from /proc/spl/kstat/zfs/arcstats
-		uint64_t arc_size = 0;
+		uint64_t arc_size = 0, arc_min_size = 0;
 		if (zfs_arc_cached) {
 			ifstream arcstats(Shared::procPath / "spl/kstat/zfs/arcstats");
 			if (arcstats.good()) {
-				std::string line;
-				while (std::getline(arcstats, line)) {
-					std::smatch match;
-					if (std::regex_match(line, match, zfs_size_regex) && match.size() == 2) {
-						arc_size = stoull(match.str(1));
+				for (string label; arcstats >> label;) {
+					if (label == "c_min") {
+						arcstats >> arc_min_size >> arc_min_size; // double read skips type column
+					}
+					else if (label == "size") {
+						arcstats >> arc_size >> arc_size;
+						break;
 					}
 				}
 			}
@@ -899,7 +900,9 @@ namespace Mem {
 			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
 			if (zfs_arc_cached) {
 				mem.stats.at("cached") += arc_size;
-				mem.stats.at("available") += arc_size;
+				// The ARC will not shrink below arc_min_size, so that memory is not available
+				if (arc_size > arc_min_size)
+					mem.stats.at("available") += arc_size - arc_min_size;
 			}
 			mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
 
