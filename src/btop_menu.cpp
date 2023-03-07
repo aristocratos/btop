@@ -1326,11 +1326,11 @@ namespace Menu {
 			optionsMenu("");
 		}
 		if (screen_redraw) {
-			auto overlay_bkp = move(Global::overlay);
-			auto clock_bkp = move(Global::clock);
+			auto overlay_bkp = std::move(Global::overlay);
+			auto clock_bkp = std::move(Global::clock);
 			Draw::calcSizes();
-			Global::overlay = move(overlay_bkp);
-			Global::clock = move(clock_bkp);
+			Global::overlay = std::move(overlay_bkp);
+			Global::clock = std::move(clock_bkp);
 			recollect = true;
 		}
 		if (recollect) {
