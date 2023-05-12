@@ -97,13 +97,13 @@ namespace Mem {
 namespace Gpu {
 	gpu_info current_gpu;
 	unsigned int device_count;
-	nvmlDevice_t device;
 
 	//? NVIDIA data collection
 	namespace Nvml {
 		bool initialized = false;
 		bool init();
 		bool shutdown();
+		nvmlDevice_t device;
 	}
 }
 
@@ -2087,7 +2087,7 @@ namespace Tools {
 			catch (const std::invalid_argument&) {}
 			catch (const std::out_of_range&) {}
 		}
-        throw std::runtime_error("Failed get uptime from from " + string{Shared::procPath} + "/uptime");
+        throw std::runtime_error("Failed get uptime from " + string{Shared::procPath} + "/uptime");
 	}
 }
 
@@ -2105,17 +2105,26 @@ namespace Gpu {
 
 			result = nvmlDeviceGetCount(&device_count);
     		if (result != NVML_SUCCESS) {
-    			Logger::error(std::string("Failed to get NVML device count: ") + nvmlErrorString(result));
+    			Logger::error(std::string("NVML: Failed to get device count: ") + nvmlErrorString(result));
     			return false;
     		}
 
     		result = nvmlDeviceGetHandleByIndex(0, &device); // TODO: multi-GPU support
         	if (result != NVML_SUCCESS) {
-    			Logger::error(std::string("Failed to get NVML device handle: ") + nvmlErrorString(result));
+    			Logger::error(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
     			return false;
         	}
 
 			initialized = true;
+
+			//? Get temp_max
+			unsigned int temp_max;
+    		result = nvmlDeviceGetTemperatureThreshold(device, NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
+        	if (result != NVML_SUCCESS) {
+    			Logger::error(std::string("NVML: Failed to get maximum GPU temperature: ") + nvmlErrorString(result));
+    			return false;
+        	}
+			current_gpu.temp_max = (long long)temp_max;
 			return true;
 		}
 		bool shutdown() {
@@ -2127,10 +2136,59 @@ namespace Gpu {
 			} else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
 			return !initialized;
 		}
+		bool collect(gpu_info& gpu) {
+			if (!initialized) return false;
+
+			//? Get GPU utilization
+			nvmlUtilization_t utilization;
+			nvmlReturn_t result = nvmlDeviceGetUtilizationRates(device, &utilization);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get GPU utilization: ") + nvmlErrorString(result));
+				return false;
+    		}
+			gpu.gpu_percent.push_back((long long)utilization.gpu);
+			//? Reduce size if there are more values than needed for graph
+			while (cmp_greater(gpu.gpu_percent.size(), width * 2)) gpu.gpu_percent.pop_front();
+    		
+    		//? GPU temp
+    		if (Config::getB("check_temp")) {
+				unsigned int temp;
+				nvmlReturn_t result = nvmlDeviceGetTemperature(device, NVML_TEMPERATURE_GPU, &temp);
+    			if (result != NVML_SUCCESS) {
+					Logger::error(std::string("NVML: Failed to get GPU temperature: ") + nvmlErrorString(result));
+					return false;
+    			}
+				gpu.temp.push_back((long long)temp);
+				//? Reduce size if there are more values than needed for graph
+				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+			}
+
+			//? Memory info
+			nvmlMemory_t memory;
+			result = nvmlDeviceGetMemoryInfo(device, &memory);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get VRAM info: ") + nvmlErrorString(result));
+				return false;
+			}
+
+			gpu.mem_total = memory.total;
+			gpu.mem_stats.at("used") = memory.used;
+			gpu.mem_stats.at("free") = memory.free;
+
+			auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
+			gpu.mem_percent.at("used").push_back(used_percent);
+			gpu.mem_percent.at("free").push_back(100-used_percent);
+
+			//? Reduce size if there are more values than needed for graphs
+			while (cmp_greater(gpu.mem_percent.at("used").size(), width/2)) gpu.mem_percent.at("used").pop_front();
+			while (cmp_greater(gpu.mem_percent.at("free").size(), width/2)) gpu.mem_percent.at("free").pop_front();
+
+			return true;
+		}
     }
 	// TODO: AMD
 	// TODO: Intel
-	
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> gpu_info& {
 		if (Runner::stopping or (no_update and not current_gpu.gpu_percent.empty())) return current_gpu;
@@ -2139,25 +2197,7 @@ namespace Gpu {
 		//if (Config::getB("show_gpu_freq"))
 		// TODO	gpuHz = get_gpuHz();
 
-		//? Get GPU utilization
-		if (Nvml::initialized) {
-			nvmlUtilization_t utilization;
-			nvmlReturn_t result = nvmlDeviceGetUtilizationRates(device, &utilization);
-    		if (result != NVML_SUCCESS) {
-    			throw std::runtime_error(std::string("Failed to get GPU utilization: ") + nvmlErrorString(result));
-    		}
-
-			//? Total usage of gpu
-			gpu.gpu_percent.push_back((long long)utilization.gpu);
-
-			//? Reduce size if there are more values than needed for graph
-			while (cmp_greater(gpu.gpu_percent.size(), width * 2)) gpu.gpu_percent.pop_front();
-    	}
-
-		/*if (Config::getB("check_temp")) {
-
-		}
-		*/
+		Nvml::collect(gpu);
 
 		return gpu;
 	}

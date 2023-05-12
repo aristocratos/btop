@@ -1585,12 +1585,18 @@ namespace Gpu {
 	bool shown = true, redraw = true, mid_line = false;
 	int graph_height;
 	Draw::Graph graph_upper;
+	Draw::Graph temp_graph;
+	Draw::Meter gpu_meter;
+	Draw::Meter mem_meter;
+	unordered_flat_map<string, Draw::Graph> mem_graphs;
 	string box;
 
     string draw(const gpu_info& gpu, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
+        bool show_temps = (Config::getB("check_temp"));
         auto tty_mode = Config::getB("tty_mode");
+		auto& temp_scale = Config::getS("temp_scale");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu")); // TODO graph_symbol_gpu
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		string out;
@@ -1599,29 +1605,53 @@ namespace Gpu {
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
 			out += box;
-			graph_height = height-2;
-	 		//out += Gpu::Nvml::initialized ? "NVML initialized" : "NVML not initialized";
-			graph_upper = Draw::Graph{x + width - b_width - 3, graph_height, "cpu", gpu.gpu_percent, graph_symbol, false, true}; // TODO cpu -> gpu
+
+			graph_upper = Draw::Graph{x + width - b_width - 3, height-2, "cpu", gpu.gpu_percent, graph_symbol, false, true}; // TODO cpu -> gpu
+			gpu_meter = Draw::Meter{b_width - (show_temps ? 27 : 11), "cpu"};
+			temp_graph = Draw::Graph{9, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
+
+			mem_meter = Draw::Meter{b_width - 27, "used"};
+			for (const auto& name : mem_names) {
+				mem_graphs[name] = Draw::Graph{b_width/2 - (name == "used" ? 1 : 2), 3, name, gpu.mem_percent.at(name), graph_symbol};
+			}
 		}
 		//out += "  " + std::to_string(gpu.gpu_percent.back()) + "%";
 
+		//? Core text and graphs
 		try {
-		//? Gpu graphs
-		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw));
-		//if (not single_graph)
-		//	out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
+			//? Gpu graph & meter
+			out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw));
+			out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(gpu.gpu_percent.back())
+				+ Theme::g("cpu").at(gpu.gpu_percent.back()) + rjust(to_string(gpu.gpu_percent.back()), 4) + Theme::c("main_fg") + '%';
 
-		/*out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
-			+ Theme::g("cpu").at(clamp(cpu.cpu_percent.at("total").back(), 0ll, 100ll)) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
-		if (show_temps) {
-			const auto [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
-			const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
-			if (b_column_size > 1 or b_columns > 1)
+			//? Temperature graph
+			if (show_temps) {
+				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
+				const auto& temp_color = Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll));
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
-					+ temp_graphs.at(0)(cpu.temp.at(0), data_same or redraw);
-			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
-		}*/
-		out += Theme::c("div_line") + Symbols::v_line;
+					+ temp_graph(gpu.temp, data_same or redraw);
+				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			}
+			out += Theme::c("div_line") + Symbols::v_line;
+
+			//? Memory usage meter
+			out += Mv::to(b_y + 2, b_x + 1) + Theme::c("main_fg") + Fx::b + "MEM " + mem_meter(gpu.mem_percent.at("used").back())
+				+ Theme::g("used").at(gpu.mem_percent.at("used").back()) + rjust(to_string(gpu.mem_percent.at("used").back()), 4) + Theme::c("main_fg") + '%'
+				+ Fx::b + " Total:" + rjust(floating_humanizer(gpu.mem_total), 9);
+
+			//? Memory usage graphs
+			out += Mv::to(b_y + 4, b_x + 1);
+			for (const auto& name : mem_names) {
+				out += mem_graphs[name](gpu.mem_percent.at(name), (data_same or redraw)) + Mv::u(2) + Mv::r(1);
+			}
+
+			//? Memory usage borders // TODO, there's gotta be a more elegant way to do this...
+			out += Mv::to(b_y + 3, b_x) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "Used:" + Theme::c("div_line") 
+				+ Symbols::h_line*(b_width/2-15) + Theme::c("title") + floating_humanizer(gpu.mem_stats.at("used")) + Theme::c("div_line") + Symbols::h_line;
+			out += Symbols::div_up + Symbols::h_line + Theme::c("title") + "Free:" + Theme::c("div_line")
+				+ Symbols::h_line*(b_width/2-17) + Theme::c("title") + floating_humanizer(gpu.mem_stats.at("free")) + Theme::c("div_line") + Symbols::h_line + Symbols::div_right;
+			out += Mv::to(b_y + 7, b_x) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line*(b_width/2-1) + (Mv::u(1) + Symbols::v_line + Mv::l(1))*3
+				+ Mv::d(3) + Symbols::div_down + Symbols::h_line*(b_width/2-2) + Symbols::div_right;
 
         } catch (const std::exception& e) { 
         	throw std::runtime_error("graphs: " + string{e.what()});
@@ -1804,9 +1834,16 @@ namespace Draw {
 			using namespace Gpu;
 			width = Term::width;
 			height = Term::height;
-			x = 1;
-			y = 1;
+			x = 1; y = 1;
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "gpu", "", 5); // TODO gpu_box
+
+			b_width = width/2; // TODO
+			b_height = height-2;
+
+			b_x = x + width - b_width - 1;
+			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
+
+			box += createBox(b_x, b_y, b_width, b_height, "", false, "test");
 		}
 	}
 }

@@ -119,6 +119,7 @@ namespace Menu {
 		{"2", "Toggle MEM box."},
 		{"3", "Toggle NET box."},
 		{"4", "Toggle PROC box."},
+		{"5", "Toggle GPU box."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},

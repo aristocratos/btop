@@ -319,15 +319,20 @@ namespace Gpu {
 	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
 
+  const array mem_names { "used"s, "free"s };
+
 	struct gpu_info {
 		deque<long long> gpu_percent = {};
-		//deque<long long> temp;
-		//long long temp_max = 0;
-		//array<float, 3> load_avg;
+		deque<long long> temp;
+		long long temp_max = 0;
+		unordered_flat_map<string, long long> mem_stats = {{"used", 0}, {"free", 0}};
+		unordered_flat_map<string, deque<long long>> mem_percent = {{"used", {}}, {"free", {}}};
+		long long mem_total = 0;
 	};
 
 	namespace Nvml {
 		extern bool initialized;
+		extern bool shutdown();
 	}
 
 	//* Collect gpu stats and temperatures

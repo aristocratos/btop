@@ -261,6 +261,8 @@ void clean_quit(int sig) {
 	#endif
 	}
 
+	Gpu::Nvml::shutdown();
+
 	Config::write();
 
 	if (Term::initialized) {
