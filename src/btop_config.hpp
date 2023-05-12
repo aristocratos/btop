@@ -42,7 +42,7 @@ namespace Config {
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
-	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc", "gpu" };
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
 
 	extern vector<string> current_boxes;

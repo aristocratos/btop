@@ -28,6 +28,7 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
+#include <nvml.h>
 
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
@@ -93,6 +94,19 @@ namespace Mem {
 	double old_uptime;
 }
 
+namespace Gpu {
+	gpu_info current_gpu;
+	unsigned int device_count;
+	nvmlDevice_t device;
+
+	//? NVIDIA data collection
+	namespace Nvml {
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+	}
+}
+
 namespace Shared {
 
 	fs::path procPath, passwd_path;
@@ -151,6 +165,9 @@ namespace Shared {
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
+
+		//? Init for namespace Gpu
+		Gpu::Nvml::init();
 
 	}
 
@@ -2071,5 +2088,77 @@ namespace Tools {
 			catch (const std::out_of_range&) {}
 		}
         throw std::runtime_error("Failed get uptime from from " + string{Shared::procPath} + "/uptime");
+	}
+}
+
+namespace Gpu {
+    //? NVIDIA
+    namespace Nvml {
+		bool init() {
+			if (initialized) {return false;}
+
+			nvmlReturn_t result = nvmlInit();
+    		if (result != NVML_SUCCESS) {
+    			Logger::warning(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
+    			return false;
+    		}
+
+			result = nvmlDeviceGetCount(&device_count);
+    		if (result != NVML_SUCCESS) {
+    			Logger::error(std::string("Failed to get NVML device count: ") + nvmlErrorString(result));
+    			return false;
+    		}
+
+    		result = nvmlDeviceGetHandleByIndex(0, &device); // TODO: multi-GPU support
+        	if (result != NVML_SUCCESS) {
+    			Logger::error(std::string("Failed to get NVML device handle: ") + nvmlErrorString(result));
+    			return false;
+        	}
+
+			initialized = true;
+			return true;
+		}
+		bool shutdown() {
+			if (!initialized) {return false;}
+
+			nvmlReturn_t result = nvmlShutdown();
+    		if (NVML_SUCCESS == result) {
+				initialized = true;
+			} else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
+			return !initialized;
+		}
+    }
+	// TODO: AMD
+	// TODO: Intel
+	
+	//? Collect data from GPU-specific libraries
+	auto collect(bool no_update) -> gpu_info& {
+		if (Runner::stopping or (no_update and not current_gpu.gpu_percent.empty())) return current_gpu;
+		auto& gpu = current_gpu;
+
+		//if (Config::getB("show_gpu_freq"))
+		// TODO	gpuHz = get_gpuHz();
+
+		//? Get GPU utilization
+		if (Nvml::initialized) {
+			nvmlUtilization_t utilization;
+			nvmlReturn_t result = nvmlDeviceGetUtilizationRates(device, &utilization);
+    		if (result != NVML_SUCCESS) {
+    			throw std::runtime_error(std::string("Failed to get GPU utilization: ") + nvmlErrorString(result));
+    		}
+
+			//? Total usage of gpu
+			gpu.gpu_percent.push_back((long long)utilization.gpu);
+
+			//? Reduce size if there are more values than needed for graph
+			while (cmp_greater(gpu.gpu_percent.size(), width * 2)) gpu.gpu_percent.pop_front();
+    	}
+
+		/*if (Config::getB("check_temp")) {
+
+		}
+		*/
+
+		return gpu;
 	}
 }

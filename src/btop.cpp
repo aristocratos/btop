@@ -187,7 +187,7 @@ void term_resize(bool force) {
 	}
 	else return;
 
-	static const array<string, 4> all_boxes = {"cpu", "mem", "net", "proc"};
+	static const array<string, 5> all_boxes = {"cpu", "mem", "net", "proc", "gpu"};
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
 	Term::refresh();
@@ -583,6 +583,27 @@ namespace Runner {
                         throw std::runtime_error("Proc:: -> " + string{e.what()});
 					}
 				}
+
+				//? GPU
+				if (v_contains(conf.boxes, "gpu")) {
+					try {
+						if (Global::debug) debug_timer("gpu", collect_begin);
+
+						//? Start collect
+						auto gpu = Gpu::collect(conf.no_update);
+
+						if (Global::debug) debug_timer("gpu", draw_begin);
+
+						//? Draw box
+						if (not pause_output) output += Gpu::draw(gpu, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("gpu", draw_done);
+					}
+					catch (const std::exception& e) {
+                        throw std::runtime_error("Gpu:: -> " + string{e.what()});
+					}
+				}
+
 			}
 			catch (const std::exception& e) {
                 Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
@@ -613,8 +634,9 @@ namespace Runner {
 						"{mv3}{hiFg}2 {mainFg}| Show MEM box"
 						"{mv4}{hiFg}3 {mainFg}| Show NET box"
 						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
-						"{mv6}{hiFg}esc {mainFg}| Show menu"
-						"{mv7}{hiFg}q {mainFg}| Quit",
+						"{mv6}{hiFg}5 {mainFg}| Show GPU box"
+						"{mv7}{hiFg}esc {mainFg}| Show menu"
+						"{mv8}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
 						"titleFg"_a = Theme::c("title"), "b"_a = Fx::b, "hiFg"_a = Theme::c("hi_fg"), "mainFg"_a = Theme::c("main_fg"),
 						"mv1"_a = Mv::to(y+6, x),
@@ -622,8 +644,9 @@ namespace Runner {
 						"mv3"_a = Mv::to(y+9, x),
 						"mv4"_a = Mv::to(y+10, x),
 						"mv5"_a = Mv::to(y+11, x),
-						"mv6"_a = Mv::to(y+12, x-2),
-						"mv7"_a = Mv::to(y+13, x)
+						"mv6"_a = Mv::to(y+12, x),
+						"mv7"_a = Mv::to(y+13, x-2),
+						"mv8"_a = Mv::to(y+14, x)
 					);
 				}
 				output += empty_bg;
@@ -637,7 +660,7 @@ namespace Runner {
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
-				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
+				for (const string name : {"cpu", "mem", "net", "proc", "gpu", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;

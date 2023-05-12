@@ -78,7 +78,7 @@ namespace Config {
 
 		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
+		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc gpu\", separate values with whitespace."},
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
@@ -316,7 +316,7 @@ namespace Config {
 					validError = "Malformatted preset in config value presets!";
 					return false;
 				}
-				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc")) {
+				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc", "gpu")) {
 					validError = "Invalid box name in config value presets!";
 					return false;
 				}

@@ -260,10 +260,10 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (is_in(key, "1", "2", "3", "4", "5")) {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
+					static const array<string, 5> boxes = {"cpu", "mem", "net", "proc", "gpu"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
 					Draw::calcSizes();
 					Runner::run("all", false, true);

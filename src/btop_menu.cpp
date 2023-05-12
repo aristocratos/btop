@@ -1263,7 +1263,7 @@ namespace Menu {
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
-			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
+			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc", "gpu"}) {
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')

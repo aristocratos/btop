@@ -164,8 +164,10 @@ override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
-override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
-override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
+GPUCXXFLAGS      := -I/opt/cuda/include # TODO: there has to be a better way to link NVML than hardcoded dirs
+GPULDFLAGS    := -L/usr/lib64 -lnvidia-ml
+override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPUCXXFLAGS)
+override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPULDFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR)
 SU_USER				:= root
 
@@ -202,16 +204,18 @@ all: $(PRE) directories btop
 
 info:
 	@printf " $(BANNER)\n"
-	@printf "\033[1;92mPLATFORM   \033[1;93m?| \033[0m$(PLATFORM)\n"
-	@printf "\033[1;96mARCH       \033[1;93m?| \033[0m$(ARCH)\n"
-	@printf "\033[1;93mCXX        \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS    \033[1;94m:| \033[0m$(THREADS)\n"
-	@printf "\033[1;92mREQFLAGS   \033[1;91m!| \033[0m$(REQFLAGS)\n"
-	@printf "\033[1;91mWARNFLAGS  \033[1;94m:| \033[0m$(WARNFLAGS)\n"
-	@printf "\033[1;94mOPTFLAGS   \033[1;94m:| \033[0m$(OPTFLAGS)\n"
-	@printf "\033[1;93mLDCXXFLAGS \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
-	@printf "\033[1;95mCXXFLAGS   \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
-	@printf "\033[1;95mLDFLAGS    \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
+	@printf "\033[1;92mPLATFORM     \033[1;93m?| \033[0m$(PLATFORM)\n"
+	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
+	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
+	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
+	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
+	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
+	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
+	@printf "\033[1;93mLDCXXFLAGS   \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
+	@printf "\033[1;92mGPUCXXFLAGS  \033[1;94m:| \033[0m$(GPUCXXFLAGS)\n"
+	@printf "\033[1;92mGPULDFLAGS   \033[1;94m:| \033[0m$(GPULDFLAGS)\n"
+	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
+	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
 
 info-quiet:
 	@sleep 0.1 2>/dev/null || true

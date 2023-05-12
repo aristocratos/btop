@@ -313,3 +313,26 @@ namespace Proc {
                    int cur_depth, bool collapsed, const string& filter,
                    bool found = false, bool no_update = false, bool should_filter = false);
 }
+
+namespace Gpu {
+	extern string box;
+	extern int x, y, width, height, min_width, min_height;
+	extern bool shown, redraw;
+
+	struct gpu_info {
+		deque<long long> gpu_percent = {};
+		//deque<long long> temp;
+		//long long temp_max = 0;
+		//array<float, 3> load_avg;
+	};
+
+	namespace Nvml {
+		extern bool initialized;
+	}
+
+	//* Collect gpu stats and temperatures
+    auto collect(bool no_update = false) -> gpu_info&;
+
+	//* Draw contents of gpu box using <gpu> as source
+  	string draw(const gpu_info& gpu, bool force_redraw, bool data_same);
+}

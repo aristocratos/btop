@@ -28,6 +28,7 @@ tab-size = 4
 #include <btop_tools.hpp>
 #include <btop_input.hpp>
 #include <btop_menu.hpp>
+#include <stdexcept>
 
 using std::array;
 using std::clamp;
@@ -1575,6 +1576,62 @@ namespace Proc {
 
 }
 
+namespace Gpu {
+	int width_p = 100, height_p = 32;
+	int min_width = 60, min_height = 8;
+	int x = 1, y = 1, width = 20, height;
+	int b_columns, b_column_size;
+	int b_x, b_y, b_width, b_height;
+	bool shown = true, redraw = true, mid_line = false;
+	int graph_height;
+	Draw::Graph graph_upper;
+	string box;
+
+    string draw(const gpu_info& gpu, bool force_redraw, bool data_same) {
+		if (Runner::stopping) return "";
+		if (force_redraw) redraw = true;
+        auto tty_mode = Config::getB("tty_mode");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu")); // TODO graph_symbol_gpu
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
+		string out;
+		out.reserve(width * height);
+
+		//* Redraw elements not needed to be updated every cycle
+		if (redraw) {
+			out += box;
+			graph_height = height-2;
+	 		//out += Gpu::Nvml::initialized ? "NVML initialized" : "NVML not initialized";
+			graph_upper = Draw::Graph{x + width - b_width - 3, graph_height, "cpu", gpu.gpu_percent, graph_symbol, false, true}; // TODO cpu -> gpu
+		}
+		//out += "  " + std::to_string(gpu.gpu_percent.back()) + "%";
+
+		try {
+		//? Gpu graphs
+		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw));
+		//if (not single_graph)
+		//	out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
+
+		/*out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
+			+ Theme::g("cpu").at(clamp(cpu.cpu_percent.at("total").back(), 0ll, 100ll)) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
+		if (show_temps) {
+			const auto [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
+			const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
+			if (b_column_size > 1 or b_columns > 1)
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+					+ temp_graphs.at(0)(cpu.temp.at(0), data_same or redraw);
+			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+		}*/
+		out += Theme::c("div_line") + Symbols::v_line;
+
+        } catch (const std::exception& e) { 
+        	throw std::runtime_error("graphs: " + string{e.what()});
+        }
+
+		redraw = false;
+		return out + Fx::reset;
+	}
+}
+
 namespace Draw {
 	void calcSizes() {
 		atomic_wait(Runner::active);
@@ -1588,6 +1645,7 @@ namespace Draw {
 		Mem::box.clear();
 		Net::box.clear();
 		Proc::box.clear();
+		Gpu::box.clear();
 		Global::clock.clear();
 		Global::overlay.clear();
 		Runner::pause_output = false;
@@ -1598,16 +1656,17 @@ namespace Draw {
 
 		Input::mouse_mappings.clear();
 
-		Cpu::x = Mem::x = Net::x = Proc::x = 1;
-		Cpu::y = Mem::y = Net::y = Proc::y = 1;
-		Cpu::width = Mem::width = Net::width = Proc::width = 0;
-		Cpu::height = Mem::height = Net::height = Proc::height = 0;
-		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
+		Cpu::x = Mem::x = Net::x = Proc::y = Gpu::x = 1;
+		Cpu::y = Mem::y = Net::y = Proc::y = Gpu::y = 1;
+		Cpu::width = Mem::width = Net::width = Proc::width = Gpu::width = 0;
+		Cpu::height = Mem::height = Net::height = Proc::height = Gpu::height = 0;
+		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = Gpu::redraw = true;
 
 		Cpu::shown = s_contains(boxes, "cpu");
 		Mem::shown = s_contains(boxes, "mem");
 		Net::shown = s_contains(boxes, "net");
 		Proc::shown = s_contains(boxes, "proc");
+		Gpu::shown = s_contains(boxes, "gpu");
 
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
@@ -1738,6 +1797,16 @@ namespace Draw {
 			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
 			select_max = height - 3;
 			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+		}
+
+		//* Calculate and draw gpu box outlines
+		if (Gpu::shown) {
+			using namespace Gpu;
+			width = Term::width;
+			height = Term::height;
+			x = 1;
+			y = 1;
+			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "gpu", "", 5); // TODO gpu_box
 		}
 	}
 }
