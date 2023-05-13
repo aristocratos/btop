@@ -1586,9 +1586,10 @@ namespace Gpu {
 	int graph_height;
 	Draw::Graph graph_upper;
 	Draw::Graph temp_graph;
+	Draw::Graph mem_used_graph;
+	Draw::Graph mem_util_graph;
 	Draw::Meter gpu_meter;
-	Draw::Meter mem_meter;
-	unordered_flat_map<string, Draw::Graph> mem_graphs;
+	Draw::Meter pwr_meter;
 	string box;
 
     string draw(const gpu_info& gpu, bool force_redraw, bool data_same) {
@@ -1607,51 +1608,73 @@ namespace Gpu {
 			out += box;
 
 			graph_upper = Draw::Graph{x + width - b_width - 3, height-2, "cpu", gpu.gpu_percent, graph_symbol, false, true}; // TODO cpu -> gpu
-			gpu_meter = Draw::Meter{b_width - (show_temps ? 27 : 11), "cpu"};
-			temp_graph = Draw::Graph{9, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
+			gpu_meter = Draw::Meter{b_width - (show_temps ? 24 : 11), "cpu"};
+			temp_graph = Draw::Graph{6, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
 
-			mem_meter = Draw::Meter{b_width - 27, "used"};
-			for (const auto& name : mem_names) {
-				mem_graphs[name] = Draw::Graph{b_width/2 - (name == "used" ? 1 : 2), 3, name, gpu.mem_percent.at(name), graph_symbol};
-			}
+			pwr_meter = Draw::Meter{b_width - 24, "cached"};
+
+			mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% I/O
+			mem_used_graph = Draw::Graph{b_width/2 - 2, 4, "used", gpu.mem_used_percent, graph_symbol};
 		}
-		//out += "  " + std::to_string(gpu.gpu_percent.back()) + "%";
 
 		//? Core text and graphs
 		try {
-			//? Gpu graph & meter
+			//? Gpu graph, clock speed & meter
 			out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw));
+
+			if (Config::getB("show_cpu_freq")) { // TODO show_gpu_freq
+				string clock_speed_string = to_string(gpu.gpu_clock_speed);
+				out += Mv::to(b_y, b_x + b_width - 12) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
+					+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " Mhz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
+			}
+
 			out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(gpu.gpu_percent.back())
 				+ Theme::g("cpu").at(gpu.gpu_percent.back()) + rjust(to_string(gpu.gpu_percent.back()), 4) + Theme::c("main_fg") + '%';
 
 			//? Temperature graph
 			if (show_temps) {
 				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
-				const auto& temp_color = Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll));
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
 					+ temp_graph(gpu.temp, data_same or redraw);
 				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			//? Memory usage meter
-			out += Mv::to(b_y + 2, b_x + 1) + Theme::c("main_fg") + Fx::b + "MEM " + mem_meter(gpu.mem_percent.at("used").back())
-				+ Theme::g("used").at(gpu.mem_percent.at("used").back()) + rjust(to_string(gpu.mem_percent.at("used").back()), 4) + Theme::c("main_fg") + '%'
-				+ Fx::b + " Total:" + rjust(floating_humanizer(gpu.mem_total), 9);
+			//? Power usage meter, power state
+			out += Mv::to(b_y + 2, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(gpu.pwr_percent.back())
+				+ Theme::g("cached").at(gpu.pwr_percent.back()) + rjust(to_string(gpu.pwr_usage/1000), 4) + Theme::c("main_fg") + 'W'
+				+ " P-state: " + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(gpu.pwr_state) + to_string(gpu.pwr_state);
 
-			//? Memory usage graphs
-			out += Mv::to(b_y + 4, b_x + 1);
-			for (const auto& name : mem_names) {
-				out += mem_graphs[name](gpu.mem_percent.at(name), (data_same or redraw)) + Mv::u(2) + Mv::r(1);
+			//? Memory section header & clock speed
+			string used_memory_string = floating_humanizer(gpu.mem_used);
+			out += Mv::to(b_y + 3, b_x) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line + Symbols::title_left + Fx::b + Theme::c("title") + "vram"
+				+ Theme::c("div_line") + Fx::ub + Symbols::title_right + Symbols::h_line*(b_width/2-8) + Symbols::div_up + Symbols::h_line
+				+ Theme::c("title") + "Used:" + Theme::c("div_line") + Symbols::h_line*(b_width/2-9-used_memory_string.size()) + Theme::c("title") + used_memory_string + Theme::c("div_line") + Symbols::h_line + Symbols::div_right;
+			if (Config::getB("show_cpu_freq")) { // TODO show_gpu_freq
+				string clock_speed_string = to_string(gpu.mem_clock_speed);
+				out += Mv::to(b_y + 3, b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
+					+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " Mhz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 			}
 
-			//? Memory usage borders // TODO, there's gotta be a more elegant way to do this...
-			out += Mv::to(b_y + 3, b_x) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "Used:" + Theme::c("div_line") 
-				+ Symbols::h_line*(b_width/2-15) + Theme::c("title") + floating_humanizer(gpu.mem_stats.at("used")) + Theme::c("div_line") + Symbols::h_line;
-			out += Symbols::div_up + Symbols::h_line + Theme::c("title") + "Free:" + Theme::c("div_line")
-				+ Symbols::h_line*(b_width/2-17) + Theme::c("title") + floating_humanizer(gpu.mem_stats.at("free")) + Theme::c("div_line") + Symbols::h_line + Symbols::div_right;
-			out += Mv::to(b_y + 7, b_x) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line*(b_width/2-1) + (Mv::u(1) + Symbols::v_line + Mv::l(1))*3
-				+ Mv::d(3) + Symbols::div_down + Symbols::h_line*(b_width/2-2) + Symbols::div_right;
+			//? Memory usage borders
+			out += Mv::to(b_y + 5, b_x) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "I/O:" + Theme::c("div_line") + Symbols::h_line*(b_width/2-6)
+				+ Symbols::div_right + Mv::u(1)+Mv::l(1) + Symbols::v_line + Mv::l(1)+Mv::d(2) + (Symbols::v_line + Mv::l(1)+Mv::d(1))*2;
+
+			//? Total memory usage
+			out += Mv::to(b_y + 4, b_x + 2) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.mem_total), b_width/2-9) + Fx::ub;
+
+			//? Memory usage graphs & percentage
+			out += Mv::to(b_y+6, b_x+1) + Theme::c("inactive_fg") + mem_util_graph(gpu.mem_utilization_percent, (data_same or redraw))
+				+ Mv::u(3) + Mv::r(1) + mem_used_graph(gpu.mem_used_percent, (data_same or redraw));
+			out += Mv::to(b_y+6, b_x+1) + rjust(to_string(gpu.mem_utilization_percent.back()), 3) + '%' + Mv::u(2) + Mv::r(b_width/2-3) + rjust(to_string(gpu.mem_used_percent.back()), 3) + '%';
+
+			//? Processes section header
+			out += Mv::to(b_y+8, b_x) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line + Symbols::title_left + Theme::c("main_fg") + Fx::b + "gpu-proc" + Fx::ub + Theme::c("div_line")
+				+ Symbols::title_right + Symbols::h_line*(b_width/2-12) + Symbols::div_down + Symbols::h_line*(b_width/2-2) + Symbols::div_right;
+
+			//? PCIe link throughput
+			out += Mv::to(b_y + b_height - 1, b_x+2) + Symbols::title_left_down + Theme::c("main_fg") + "TX: " + floating_humanizer(gpu.pcie_tx, 0, 1, 0, 1) + Theme::c("div_line")
+				+ Symbols::title_right_down + Symbols::title_left_down + Theme::c("main_fg") + "RX: " + floating_humanizer(gpu.pcie_rx, 0, 1, 0, 1) + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*10;
 
         } catch (const std::exception& e) { 
         	throw std::runtime_error("graphs: " + string{e.what()});
@@ -1837,13 +1860,13 @@ namespace Draw {
 			x = 1; y = 1;
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "gpu", "", 5); // TODO gpu_box
 
-			b_width = width/2; // TODO
+			b_width = width/2 - width%2; // TODO
 			b_height = height-2;
 
 			b_x = x + width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
 
-			box += createBox(b_x, b_y, b_width, b_height, "", false, "test");
+			box += createBox(b_x, b_y, b_width, b_height, "", false, gpu_name);
 		}
 	}
 }

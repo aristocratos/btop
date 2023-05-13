@@ -97,6 +97,7 @@ namespace Mem {
 namespace Gpu {
 	gpu_info current_gpu;
 	unsigned int device_count;
+	string gpu_name;
 
 	//? NVIDIA data collection
 	namespace Nvml {
@@ -2093,7 +2094,7 @@ namespace Tools {
 
 namespace Gpu {
     //? NVIDIA
-    namespace Nvml {
+    namespace Nvml { // TODO: multi-GPU support
 		bool init() {
 			if (initialized) {return false;}
 
@@ -2103,13 +2104,17 @@ namespace Gpu {
     			return false;
     		}
 
-			result = nvmlDeviceGetCount(&device_count);
+			//? Device count
+			unsigned int nvml_count;
+			result = nvmlDeviceGetCount(&nvml_count);
     		if (result != NVML_SUCCESS) {
     			Logger::error(std::string("NVML: Failed to get device count: ") + nvmlErrorString(result));
     			return false;
     		}
+    		device_count += nvml_count;
 
-    		result = nvmlDeviceGetHandleByIndex(0, &device); // TODO: multi-GPU support
+			//? Device Handle
+    		result = nvmlDeviceGetHandleByIndex(0, &device);
         	if (result != NVML_SUCCESS) {
     			Logger::error(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
     			return false;
@@ -2117,16 +2122,30 @@ namespace Gpu {
 
 			initialized = true;
 
+			//? Device name
+			char name[NVML_DEVICE_NAME_BUFFER_SIZE];
+    		result = nvmlDeviceGetName(device, name, NVML_DEVICE_NAME_BUFFER_SIZE);
+        	if (result != NVML_SUCCESS) {
+    			Logger::error(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
+        	} else {gpu_name = string(name);}
+
+    		//? Power usage
+    		result = nvmlDeviceGetPowerManagementLimit(device, &current_gpu.pwr_max_usage);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get maximum GPU power draw, defaulting to 300W: ") + nvmlErrorString(result));
+    		}
+
 			//? Get temp_max
-			unsigned int temp_max;
+			unsigned int temp_max = 100;
     		result = nvmlDeviceGetTemperatureThreshold(device, NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
         	if (result != NVML_SUCCESS) {
-    			Logger::error(std::string("NVML: Failed to get maximum GPU temperature: ") + nvmlErrorString(result));
+    			Logger::error(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 100: ") + nvmlErrorString(result));
     			return false;
         	}
 			current_gpu.temp_max = (long long)temp_max;
 			return true;
 		}
+
 		bool shutdown() {
 			if (!initialized) {return false;}
 
@@ -2136,31 +2155,60 @@ namespace Gpu {
 			} else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
 			return !initialized;
 		}
+
 		bool collect(gpu_info& gpu) {
 			if (!initialized) return false;
 
-			//? Get GPU utilization
+			//? GPU & memory utilization
 			nvmlUtilization_t utilization;
 			nvmlReturn_t result = nvmlDeviceGetUtilizationRates(device, &utilization);
     		if (result != NVML_SUCCESS) {
 				Logger::error(std::string("NVML: Failed to get GPU utilization: ") + nvmlErrorString(result));
-				return false;
+    		} else {
+				gpu.gpu_percent.push_back((long long)utilization.gpu);
+				gpu.mem_utilization_percent.push_back((long long)utilization.memory);
+				//? Reduce size if there are more values than needed for graph
+				while (cmp_greater(gpu.gpu_percent.size(), width * 2)) gpu.gpu_percent.pop_front();
+				while (cmp_greater(gpu.mem_utilization_percent.size(), width)) gpu.mem_utilization_percent.pop_front();
     		}
-			gpu.gpu_percent.push_back((long long)utilization.gpu);
-			//? Reduce size if there are more values than needed for graph
-			while (cmp_greater(gpu.gpu_percent.size(), width * 2)) gpu.gpu_percent.pop_front();
-    		
-    		//? GPU temp
+
+			//? Clock speeds
+			result = nvmlDeviceGetClockInfo(device, NVML_CLOCK_GRAPHICS, &current_gpu.gpu_clock_speed);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get GPU clock speed: ") + nvmlErrorString(result));
+    		}
+			result = nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, &current_gpu.mem_clock_speed);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get VRAM clock speed: ") + nvmlErrorString(result));
+    		}
+
+    		//? Power usage & state
+    		result = nvmlDeviceGetPowerUsage(device, &current_gpu.pwr_usage);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get GPU power usage: ") + nvmlErrorString(result));
+    		} else {
+    			current_gpu.pwr_percent.push_back(clamp((long long)round((double)current_gpu.pwr_usage * 100.0 / (double)current_gpu.pwr_max_usage), 0ll, 100ll));
+    		}
+
+			nvmlPstates_t pState;
+    		result = nvmlDeviceGetPowerState(device, &pState);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get GPU power state: ") + nvmlErrorString(result));
+    		} else {
+    			current_gpu.pwr_state = static_cast<int>(pState);
+    		}
+
+    		//? GPU temperature
     		if (Config::getB("check_temp")) {
 				unsigned int temp;
 				nvmlReturn_t result = nvmlDeviceGetTemperature(device, NVML_TEMPERATURE_GPU, &temp);
     			if (result != NVML_SUCCESS) {
 					Logger::error(std::string("NVML: Failed to get GPU temperature: ") + nvmlErrorString(result));
-					return false;
-    			}
-				gpu.temp.push_back((long long)temp);
-				//? Reduce size if there are more values than needed for graph
-				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+    			} else {
+					gpu.temp.push_back((long long)temp);
+					//? Reduce size if there are more values than needed for graph
+					while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+				}
 			}
 
 			//? Memory info
@@ -2168,20 +2216,27 @@ namespace Gpu {
 			result = nvmlDeviceGetMemoryInfo(device, &memory);
     		if (result != NVML_SUCCESS) {
 				Logger::error(std::string("NVML: Failed to get VRAM info: ") + nvmlErrorString(result));
-				return false;
+			} else {
+				gpu.mem_total = memory.total;
+				gpu.mem_used = memory.used;
+				//gpu.mem_free = memory.free;
+
+				auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
+				gpu.mem_used_percent.push_back(used_percent);
+
+				//? Reduce size if there are more values than needed for graphs
+				while (cmp_greater(gpu.mem_used_percent.size(), width/2)) gpu.mem_used_percent.pop_front();
 			}
 
-			gpu.mem_total = memory.total;
-			gpu.mem_stats.at("used") = memory.used;
-			gpu.mem_stats.at("free") = memory.free;
-
-			auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
-			gpu.mem_percent.at("used").push_back(used_percent);
-			gpu.mem_percent.at("free").push_back(100-used_percent);
-
-			//? Reduce size if there are more values than needed for graphs
-			while (cmp_greater(gpu.mem_percent.at("used").size(), width/2)) gpu.mem_percent.at("used").pop_front();
-			while (cmp_greater(gpu.mem_percent.at("free").size(), width/2)) gpu.mem_percent.at("free").pop_front();
+			//? PCIe link speeds
+			result = nvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_TX_BYTES, &current_gpu.pcie_tx);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get PCIe TX throughput: ") + nvmlErrorString(result));
+    		}
+			result = nvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_RX_BYTES, &current_gpu.pcie_rx);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
+    		}
 
 			return true;
 		}

@@ -318,16 +318,31 @@ namespace Gpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
+	extern string gpu_name;
 
   const array mem_names { "used"s, "free"s };
 
 	struct gpu_info {
 		deque<long long> gpu_percent = {};
-		deque<long long> temp;
-		long long temp_max = 0;
-		unordered_flat_map<string, long long> mem_stats = {{"used", 0}, {"free", 0}};
-		unordered_flat_map<string, deque<long long>> mem_percent = {{"used", {}}, {"free", {}}};
+		unsigned int gpu_clock_speed = 0; // MHz
+
+		deque<long long> pwr_percent = {};
+		unsigned int pwr_usage = 0; // mW
+		unsigned int pwr_max_usage = 300000;
+		unsigned int pwr_state = 32;
+
+		deque<long long> temp = {};
+		long long temp_max = 100;
+
 		long long mem_total = 0;
+		long long mem_used = 0;
+		deque<long long> mem_used_percent = {};
+		long long mem_utilization = 0;
+		deque<long long> mem_utilization_percent = {};
+		unsigned int mem_clock_speed = 0; // MHz
+
+		unsigned int pcie_tx = 0; // KB/s
+		unsigned int pcie_rx = 0;
 	};
 
 	namespace Nvml {
