@@ -1735,7 +1735,7 @@ namespace Draw {
 
 		Input::mouse_mappings.clear();
 
-		Cpu::x = Gpu::x = Mem::x = Net::x = Proc::y = 1;
+		Cpu::x = Gpu::x = Mem::x = Net::x = Proc::x = 1;
 		Cpu::y = Gpu::y = Mem::y = Net::y = Proc::y = 1;
 		Cpu::width = Gpu::width = Mem::width = Net::width = Proc::width = 0;
 		Cpu::height = Gpu::height = Mem::height = Net::height = Proc::height = 0;
@@ -1752,7 +1752,7 @@ namespace Draw {
 			using namespace Cpu;
             bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
-			if (Gpu::shown && !(Mem::shown || Net::shown || Proc::shown)) {
+			if (Gpu::shown and !(Mem::shown or Net::shown or Proc::shown)) {
 				height = Term::height/2;
 			} else {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + Gpu::shown*5) / 100));
@@ -1826,7 +1826,7 @@ namespace Draw {
             auto mem_graphs = Config::getB("mem_graphs");
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown && Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::height;
+			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::height;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height + Gpu::height : 0);
