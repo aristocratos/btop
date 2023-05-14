@@ -103,15 +103,18 @@ namespace Term {
         bool mem = boxes.find("mem") != string::npos;
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
+        bool gpu = boxes.find("gpu") != string::npos;
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
 		width += (proc ? Proc::min_width : 0);
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
+		if (gpu and width < Gpu::min_width) width = Gpu::min_width;
 
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
+		if (gpu) height += Gpu::min_height;
 
 		return { width, height };
 	}

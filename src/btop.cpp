@@ -526,6 +526,26 @@ namespace Runner {
 					}
 				}
 
+				//? GPU
+				if (v_contains(conf.boxes, "gpu")) {
+					try {
+						if (Global::debug) debug_timer("gpu", collect_begin);
+
+						//? Start collect
+						auto gpu = Gpu::collect(conf.no_update);
+
+						if (Global::debug) debug_timer("gpu", draw_begin);
+
+						//? Draw box
+						if (not pause_output) output += Gpu::draw(gpu, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("gpu", draw_done);
+					}
+					catch (const std::exception& e) {
+                        throw std::runtime_error("Gpu:: -> " + string{e.what()});
+					}
+				}
+
 				//? MEM
 				if (v_contains(conf.boxes, "mem")) {
 					try {
@@ -583,26 +603,6 @@ namespace Runner {
 					}
 					catch (const std::exception& e) {
                         throw std::runtime_error("Proc:: -> " + string{e.what()});
-					}
-				}
-
-				//? GPU
-				if (v_contains(conf.boxes, "gpu")) {
-					try {
-						if (Global::debug) debug_timer("gpu", collect_begin);
-
-						//? Start collect
-						auto gpu = Gpu::collect(conf.no_update);
-
-						if (Global::debug) debug_timer("gpu", draw_begin);
-
-						//? Draw box
-						if (not pause_output) output += Gpu::draw(gpu, conf.force_redraw, conf.no_update);
-
-						if (Global::debug) debug_timer("gpu", draw_done);
-					}
-					catch (const std::exception& e) {
-                        throw std::runtime_error("Gpu:: -> " + string{e.what()});
 					}
 				}
 

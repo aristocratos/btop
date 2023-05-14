@@ -2238,6 +2238,17 @@ namespace Gpu {
 				Logger::error(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
     		}
 
+    		//? TODO: Processes using GPU
+    		/*unsigned int proc_info_len;
+    		nvmlProcessInfo_t* proc_info = 0;
+    		result = nvmlDeviceGetComputeRunningProcesses_v3(device, &proc_info_len, proc_info);
+    		if (result != NVML_SUCCESS) {
+				Logger::error(std::string("NVML: Failed to get compute processes: ") + nvmlErrorString(result));
+    		} else {
+    			for (unsigned int i = 0; i < proc_info_len; ++i)
+    				current_gpu.graphics_processes.push_back({proc_info[i].pid, proc_info[i].usedGpuMemory});
+    		}*/
+
 			return true;
 		}
     }

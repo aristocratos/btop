@@ -322,6 +322,13 @@ namespace Gpu {
 
   const array mem_names { "used"s, "free"s };
 
+	//* Container for process information
+	struct proc_info {
+    unsigned int pid;
+    unsigned long long mem;
+	};
+
+	//* Per-device container for GPU info
 	struct gpu_info {
 		deque<long long> gpu_percent = {};
 		unsigned int gpu_clock_speed = 0; // MHz
@@ -343,6 +350,9 @@ namespace Gpu {
 
 		unsigned int pcie_tx = 0; // KB/s
 		unsigned int pcie_rx = 0;
+
+		vector<proc_info> graphics_processes = {};
+		vector<proc_info> compute_processes = {};
 	};
 
 	namespace Nvml {
