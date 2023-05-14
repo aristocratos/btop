@@ -1742,7 +1742,7 @@ namespace Draw {
 		Cpu::redraw = Gpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
 
 		Cpu::shown = s_contains(boxes, "cpu");
-		Gpu::shown = s_contains(boxes, "gpu");
+		Gpu::shown = s_contains(boxes, "gpu") and Gpu::Nvml::initialized;
 		Mem::shown = s_contains(boxes, "mem");
 		Net::shown = s_contains(boxes, "net");
 		Proc::shown = s_contains(boxes, "proc");
