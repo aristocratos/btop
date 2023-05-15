@@ -745,7 +745,7 @@ namespace Gpu {
 	Draw::Meter pwr_meter;
 	string box;
 
-    string draw(const gpu_info& gpu, bool force_redraw, bool data_same) {
+    string draw(const vector<gpu_info>& gpus, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
         bool show_temps = (Config::getB("check_temp"));
@@ -757,6 +757,7 @@ namespace Gpu {
 		string out;
 		out.reserve(width * height);
 
+		auto gpu = gpus[0]; // TODO: mutli-gpu support
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
@@ -1796,6 +1797,7 @@ namespace Draw {
 			using namespace Gpu;
 			width = Term::width;
 			height = max(Gpu::min_height, Cpu::shown ? Cpu::height : (int)ceil((double)Term::height * (trim(boxes) == "gpu" ? 100 : height_p) / 100));
+			height += height+Cpu::height == Term::height-1;
 			x = 1; y = 1 + Cpu::shown*Cpu::height;
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "gpu", "", 5); // TODO gpu_box
 
@@ -1809,7 +1811,7 @@ namespace Draw {
 			b_x = x + width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)(b_height/*+bproc_height*/) / 2) + 1;
 
-			box += createBox(b_x, b_y, b_width, b_height, "", false, gpu_name);
+			box += createBox(b_x, b_y, b_width, b_height, "", false, gpu_names[0]);
 
 			//? TODO: Processes box
 			/*bproc_x = x + width - bproc_width - 1;

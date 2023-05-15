@@ -318,15 +318,15 @@ namespace Gpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
-	extern string gpu_name;
+	extern vector<string> gpu_names;
 
   const array mem_names { "used"s, "free"s };
 
-	//* Container for process information
-	struct proc_info {
+	//* Container for process information // TODO
+	/*struct proc_info {
     unsigned int pid;
     unsigned long long mem;
-	};
+	};*/
 
 	//* Per-device container for GPU info
 	struct gpu_info {
@@ -351,8 +351,8 @@ namespace Gpu {
 		unsigned int pcie_tx = 0; // KB/s
 		unsigned int pcie_rx = 0;
 
-		vector<proc_info> graphics_processes = {};
-		vector<proc_info> compute_processes = {};
+		// vector<proc_info> graphics_processes = {}; // TODO
+		// vector<proc_info> compute_processes = {};
 	};
 
 	namespace Nvml {
@@ -361,8 +361,8 @@ namespace Gpu {
 	}
 
 	//* Collect gpu stats and temperatures
-    auto collect(bool no_update = false) -> gpu_info&;
+    auto collect(bool no_update = false) -> vector<gpu_info>&;
 
-	//* Draw contents of gpu box using <gpu> as source
-  	string draw(const gpu_info& gpu, bool force_redraw, bool data_same);
+	//* Draw contents of gpu box using <gpus> as source
+  	string draw(const vector<gpu_info>& gpus, bool force_redraw, bool data_same);
 }
