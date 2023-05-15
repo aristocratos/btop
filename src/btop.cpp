@@ -262,6 +262,7 @@ void clean_quit(int sig) {
 	}
 
 	Gpu::Nvml::shutdown();
+	Gpu::Rsmi::shutdown();
 
 	Config::write();
 
@@ -537,7 +538,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("gpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output and Gpu::Nvml::initialized) output += Gpu::draw(gpus, conf.force_redraw, conf.no_update);
+						if (not pause_output and not Gpu::gpu_names.empty()) output += Gpu::draw(gpus, conf.force_redraw, conf.no_update);
 
 						if (Global::debug) debug_timer("gpu", draw_done);
 					}

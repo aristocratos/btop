@@ -103,7 +103,7 @@ namespace Term {
         bool mem = boxes.find("mem") != string::npos;
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
-        bool gpu = boxes.find("gpu") != string::npos and Gpu::Nvml::initialized;
+        bool gpu = boxes.find("gpu") != string::npos and not Gpu::gpu_names.empty();
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;

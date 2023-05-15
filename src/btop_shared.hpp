@@ -330,33 +330,34 @@ namespace Gpu {
 
 	//* Per-device container for GPU info
 	struct gpu_info {
-		deque<long long> gpu_percent = {};
+		deque<long long> gpu_percent = {0};
 		unsigned int gpu_clock_speed = 0; // MHz
 
-		deque<long long> pwr_percent = {};
-		unsigned int pwr_usage = 0; // mW
-		unsigned int pwr_max_usage = 300000;
-		unsigned int pwr_state = 32;
+		deque<long long> pwr_percent = {0};
+		long long pwr_usage = 0; // mW
+		long long pwr_max_usage = 255000;
+		long long pwr_state = 32;
 
-		deque<long long> temp = {};
-		long long temp_max = 100;
+		deque<long long> temp = {0};
+		long long temp_max = 110;
 
 		long long mem_total = 0;
 		long long mem_used = 0;
-		deque<long long> mem_used_percent = {};
-		long long mem_utilization = 0;
-		deque<long long> mem_utilization_percent = {};
-		unsigned int mem_clock_speed = 0; // MHz
+		deque<long long> mem_used_percent = {0};
+		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
+		long long mem_clock_speed = 0; // MHz
 
-		unsigned int pcie_tx = 0; // KB/s
-		unsigned int pcie_rx = 0;
+		long long pcie_tx = 0; // KB/s
+		long long pcie_rx = 0;
 
 		// vector<proc_info> graphics_processes = {}; // TODO
 		// vector<proc_info> compute_processes = {};
 	};
 
 	namespace Nvml {
-		extern bool initialized;
+		extern bool shutdown();
+	}
+	namespace Rsmi {
 		extern bool shutdown();
 	}
 

@@ -164,8 +164,8 @@ override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
-GPUCXXFLAGS      := -I/opt/cuda/include # TODO: there has to be a better way to link NVML than hardcoded dirs
-GPULDFLAGS    := -L/usr/lib64 -lnvidia-ml
+GPUCXXFLAGS      := -I/opt/cuda/include -I/opt/rocm/include # TODO: there has to be a better way to link these libs than hardcoded dirs
+GPULDFLAGS    := -L/opt/cuda/lib -L/opt/rocm/lib -lnvidia-ml -lrocm_smi64
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPUCXXFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPULDFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR)

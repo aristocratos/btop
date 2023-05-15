@@ -757,7 +757,7 @@ namespace Gpu {
 		string out;
 		out.reserve(width * height);
 
-		auto gpu = gpus[0]; // TODO: mutli-gpu support
+		auto gpu = gpus[0]; // TODO: multi-gpu support
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
@@ -781,7 +781,7 @@ namespace Gpu {
 
 			pwr_meter = Draw::Meter{b_width - 24, "cached"};
 
-			mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% I/O
+			mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% utilization
 			mem_used_graph = Draw::Graph{b_width/2 - 2, 4, "used", gpu.mem_used_percent, graph_symbol};
 		}
 
@@ -813,8 +813,9 @@ namespace Gpu {
 
 		//? Power usage meter, power state
 		out += Mv::to(b_y + 2, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(gpu.pwr_percent.back())
-			+ Theme::g("cached").at(gpu.pwr_percent.back()) + rjust(to_string(gpu.pwr_usage/1000), 4) + Theme::c("main_fg") + 'W'
-			+ " P-state: " + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(gpu.pwr_state) + to_string(gpu.pwr_state);
+			+ Theme::g("cached").at(gpu.pwr_percent.back()) + rjust(to_string(gpu.pwr_usage/1000), 4) + Theme::c("main_fg") + 'W';
+		if (gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
+			out += std::string(" P-state: ") + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(gpu.pwr_state) + to_string(gpu.pwr_state);
 
 		//? Memory section header & clock speed
 		string used_memory_string = floating_humanizer(gpu.mem_used);
@@ -828,7 +829,7 @@ namespace Gpu {
 		}
 
 		//? Memory usage borders
-		out += Mv::to(b_y + 5, b_x) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "I/O:" + Theme::c("div_line") + Symbols::h_line*(b_width/2-6)
+		out += Mv::to(b_y + 5, b_x) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "Utilization:" + Theme::c("div_line") + Symbols::h_line*(b_width/2-14)
 			+ Symbols::div_right + Mv::u(1)+Mv::l(1) + Symbols::v_line + Mv::l(1)+Mv::d(2) + (Symbols::v_line + Mv::l(1)+Mv::d(1))*2;
 
 		//? Total memory usage
@@ -1743,7 +1744,7 @@ namespace Draw {
 		Cpu::redraw = Gpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
 
 		Cpu::shown = s_contains(boxes, "cpu");
-		Gpu::shown = s_contains(boxes, "gpu") and Gpu::Nvml::initialized;
+		Gpu::shown = s_contains(boxes, "gpu") and not Gpu::gpu_names.empty();
 		Mem::shown = s_contains(boxes, "mem");
 		Net::shown = s_contains(boxes, "net");
 		Proc::shown = s_contains(boxes, "proc");
@@ -1753,7 +1754,7 @@ namespace Draw {
 			using namespace Cpu;
             bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
-			if (Gpu::shown and !(Mem::shown or Net::shown or Proc::shown)) {
+			if (Gpu::shown and not (Mem::shown or Net::shown or Proc::shown)) {
 				height = Term::height/2;
 			} else {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + Gpu::shown*5) / 100));
