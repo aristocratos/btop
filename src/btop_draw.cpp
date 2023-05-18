@@ -495,17 +495,21 @@ namespace Cpu {
 	int x = 1, y = 1, width = 20, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
-	int graph_up_height;
 	long unsigned int lavg_str_len = 0;
+	int graph_up_height, graph_low_height;
+	int graph_up_width, graph_low_width;
 	bool shown = true, redraw = true, mid_line = false;
 	string box;
-	Draw::Graph graph_upper;
-	Draw::Graph graph_lower;
+	vector<Draw::Graph> graphs_upper;
+	vector<Draw::Graph> graphs_lower;
 	Draw::Meter cpu_meter;
+	vector<Draw::Meter> gpu_meters;
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
+	vector<Draw::Graph> gpu_temp_graphs;
+	vector<Draw::Graph> gpu_mem_graphs;
 
-    string draw(const cpu_info& cpu, bool force_redraw, bool data_same) {
+    string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpus, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
         bool show_temps = (Config::getB("check_temp") and got_sensors);
@@ -531,8 +535,8 @@ namespace Cpu {
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
 			mid_line = (not single_graph and graph_up_field != graph_lo_field);
-			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0 ? 1 : 0));
-			const int graph_low_height = height - 2 - graph_up_height - (mid_line ? 1 : 0);
+			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0));
+			graph_low_height = height - 2 - graph_up_height - mid_line;
 			const int button_y = cpu_bottom ? y + height - 1 : y;
 			out += box;
 
@@ -549,17 +553,56 @@ namespace Cpu {
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
 
 			//? Graphs & meters
-			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", cpu.cpu_percent.at(graph_up_field), graph_symbol, false, true};
+			const int graph_default_width = x + width - b_width - 3;
+
+			auto init_graphs = [&](vector<Draw::Graph>& graphs, const int graph_height, int& graph_width, const string& graph_field, bool invert) {
+				if (graph_field == "gpu-totals") {
+					graphs.resize(gpus.size());
+					gpu_temp_graphs.resize(gpus.size());
+					gpu_mem_graphs.resize(gpus.size());
+					gpu_meters.resize(gpus.size());
+					graph_width = graph_default_width/(int)gpus.size() - (int)gpus.size() + 1 + graph_default_width%gpus.size();
+					for (unsigned long i = 0;;) {
+						auto& gpu = gpus[i]; auto& graph = graphs[i];
+
+						//? GPU graphs/meters
+						gpu_temp_graphs[i] = Draw::Graph{ 5, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
+						gpu_mem_graphs[i] = Draw::Graph{ 5, 1, "used", gpu.mem_used_percent, graph_symbol };
+						gpu_meters[i] = Draw::Meter{ b_width - 12 - (int)floating_humanizer(gpu.mem_total, true).size() - (show_temps ? 24 : 12) - (int)to_string(i).size(), "cpu" };
+						if (++i < gpus.size())
+							graph = Draw::Graph{graph_width, graph_height, "cpu", gpu.gpu_percent, graph_symbol, invert, true};
+						else {
+							graph = Draw::Graph{
+								graph_width + graph_default_width%graph_width - (int)gpus.size() + 1,
+								graph_height, "cpu", gpu.gpu_percent, graph_symbol, invert, true
+							};
+							break;
+						}
+					}
+				} else if (graph_field == "gpu-average") {
+					graphs.resize(1);
+					graph_width = graph_default_width;
+					graphs[0] = Draw::Graph{ graph_width, graph_height, "cpu", Gpu::average_gpu_percent, graph_symbol, invert, true };
+					gpu_temp_graphs.resize(gpus.size());
+					gpu_mem_graphs.resize(gpus.size());
+					gpu_meters.resize(gpus.size());
+					for (unsigned long i = 0; i < gpus.size(); ++i) {
+						gpu_temp_graphs[i] = Draw::Graph{ 5, 1, "temp", gpus[i].temp, graph_symbol, false, false, gpus[i].temp_max, -23 };
+						gpu_mem_graphs[i] = Draw::Graph{ 5, 1, "used", gpus[i].mem_used_percent, graph_symbol };
+						gpu_meters[i] = Draw::Meter{ b_width - 12 - (int)floating_humanizer(gpus[i].mem_total, true).size() - (show_temps ? 24 : 12) - (int)to_string(i).size(), "cpu" };
+					}
+				} else {
+					graphs.resize(1);
+					graph_width = graph_default_width;
+					graphs[0] = Draw::Graph{ graph_width, graph_height, "cpu", cpu.cpu_percent.at(graph_field), graph_symbol, invert, true };
+				}
+			};
+
+            init_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field, false);
+            if (not single_graph)
+            	init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
+
 			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11), "cpu"};
-            if (not single_graph) {
-                graph_lower = Draw::Graph{
-                    x + width - b_width - 3,
-                    graph_low_height, "cpu",
-                    cpu.cpu_percent.at(graph_lo_field),
-                    graph_symbol,
-                    Config::getB("cpu_invert_lower"), true
-                };
-            }
 
 			if (mid_line) {
 				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
@@ -627,10 +670,29 @@ namespace Cpu {
 		}
 
 		try {
-		//? Cpu graphs
-		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(cpu.cpu_percent.at(graph_up_field), (data_same or redraw));
-		if (not single_graph)
-			out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
+		//? Cpu/Gpu graphs
+		out += Fx::ub + Mv::to(y + 1, x + 1);
+		auto draw_graphs = [&](vector<Draw::Graph>& graphs, const int graph_height, const int graph_width, const string& graph_field) {
+			if (graph_field == "gpu-totals")
+				for (unsigned long i = 0;;) {
+					out += graphs[i](gpus[i].gpu_percent, (data_same or redraw));
+					if (gpus.size() > 1) {
+						auto i_str = to_string(i);
+						out += Mv::l(graph_width-1) + Mv::u(graph_height/2) + (graph_width > 5 ? "GPU " : "") + i_str
+							+ Mv::d(graph_height/2) + Mv::r(graph_width - 1 - (graph_width > 5)*4 - i_str.size());
+					}
+					if (++i < graphs.size())
+						out += Theme::c("div_line") + (Symbols::v_line + Mv::l(1) + Mv::u(1))*graph_height + Mv::r(1) + Mv::d(1);
+					else break;
+				}
+			else out += graphs[0]((graph_field == "gpu-average" ? Gpu::average_gpu_percent : cpu.cpu_percent.at(graph_field)), (data_same or redraw));
+		};
+
+		draw_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field);
+		if (not single_graph) {
+			out += Mv::to(y + graph_up_height + 1 + mid_line, x + 1);
+			draw_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field);
+		}
 
 		//? Uptime
 		if (Config::getB("show_uptime")) {
@@ -718,8 +780,25 @@ namespace Cpu {
 			} else {
 				lavg_str_len = lavg_str.length();
 			}
-			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
+			out += Mv::to(b_y + b_height - 2 - gpus.size(), b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
 		}
+
+		//? Gpu brief info
+		if (graph_lo_field.rfind("gpu-", 0) or graph_up_field.rfind("gpu-", 0))
+			for (unsigned long i = 0; i < gpus.size(); ++i) {
+				out += Mv::to(b_y + b_height - 1 - gpus.size() + i, b_x + 1)
+					+ Theme::c("main_fg") + Fx::b + "GPU " + to_string(i) + ' ' + gpu_meters[i](gpus[i].gpu_percent.back())
+					+ Theme::g("cpu").at(gpus[i].gpu_percent.back()) + rjust(to_string(gpus[i].gpu_percent.back()), 4) + Theme::c("main_fg") + '%';
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("used").at(gpus[i].mem_used_percent.back())
+					+ gpu_mem_graphs[i](gpus[i].mem_used_percent, data_same or redraw) + Theme::c("main_fg")
+					+ rjust(floating_humanizer(gpus[i].mem_used, true), 5) + Theme::c("inactive_fg") + '/' + Theme::c("main_fg") + floating_humanizer(gpus[i].mem_total, true);
+				if (show_temps) {
+					const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
+					out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
+						+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw)
+						+ rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				}
+			}
 
 		redraw = false;
 		return out + Fx::reset;
@@ -1752,18 +1831,25 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-            bool show_temp = (Config::getB("check_temp") and got_sensors);
+			const bool gpus_shown_in_cpu_panel = (
+				Config::getS("cpu_graph_lower") == "default"
+				or Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
+				or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0
+			);
+			const int gpus_height_offset = Gpu::gpu_names.size()*gpus_shown_in_cpu_panel;
+            const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			if (Gpu::shown and not (Mem::shown or Net::shown or Proc::shown)) {
 				height = Term::height/2;
 			} else {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + Gpu::shown*5) / 100));
 			}
+			if (height <= Term::height-2) height += gpus_height_offset;
 
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
-			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
+			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_height_offset*(height <= Term::height-2) - 5)));
 			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width = (21 + 12 * show_temp) * b_columns - (b_columns - 1);
@@ -1781,7 +1867,7 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
+			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + (int)gpus_height_offset - gpus_shown_in_cpu_panel);
 
 			b_x = x + width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;

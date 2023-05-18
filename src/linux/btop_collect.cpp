@@ -94,6 +94,7 @@ namespace Cpu {
 namespace Gpu {
 	vector<gpu_info> gpus;
 	vector<string> gpu_names;
+	deque<long long> average_gpu_percent = {};
 
 	//? NVIDIA data collection
 	namespace Nvml {
@@ -172,13 +173,24 @@ namespace Shared {
 		}
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
+		//? Init for namespace Gpu
+		Gpu::Nvml::init();
+		Gpu::Rsmi::init();
+		if (not Gpu::gpu_names.empty()) {
+			Cpu::available_fields.push_back("gpu-totals");
+			Cpu::available_fields.push_back("gpu-average");
+			if (Config::strings.at("cpu_graph_lower") == "default")
+				Config::strings.at("cpu_graph_lower") = "gpu-totals";
+		}
+
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
 
-		//? Init for namespace Gpu
-		Gpu::Nvml::init();
-		Gpu::Rsmi::init();
+		if (Config::strings.at("cpu_graph_upper") == "default")
+			Config::strings.at("cpu_graph_upper") = "total";
+		if (Config::strings.at("cpu_graph_lower") == "default")
+			Config::strings.at("cpu_graph_lower") = "total";
 	}
 }
 
@@ -870,7 +882,13 @@ namespace Gpu {
     				result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
         			if (result != NVML_SUCCESS)
     					Logger::error(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
-        			else gpu_names[i] = string(name);
+        			else {
+        				gpu_names[i] = string(name);
+        				for (const auto& brand : {"NVIDIA", "Nvidia", "AMD", "Amd", "Intel", "(R)", "(TM)"}) {
+							gpu_names[i] = s_replace(gpu_names[i], brand, "");
+						}
+						gpu_names[i] = trim(gpu_names[i]);
+        			}
 
     				//? Power usage
     				unsigned int max_power;
@@ -1150,18 +1168,28 @@ namespace Gpu {
 		Nvml::collect(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 
-		//* Trim vectors if there are more values than needed for graphs
+		//* Calculate average usage
+		long long avg = 0;
 		for (auto& gpu : gpus) {
-			//? GPU & memory utilization
-			while (cmp_greater(gpu.gpu_percent.size(),             width * 2)) gpu.gpu_percent.pop_front();
-			while (cmp_greater(gpu.mem_utilization_percent.size(), width))     gpu.mem_utilization_percent.pop_front();
-			//? Power usage
-			while (cmp_greater(gpu.pwr_percent.size(), width)) gpu.pwr_percent.pop_front();
-			//? Temperature
-			while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
-			//? Memory usage
-			while (cmp_greater(gpu.mem_used_percent.size(), width/2)) gpu.mem_used_percent.pop_front();
+			avg += gpu.gpu_percent.back();
+
+			//* Trim vectors if there are more values than needed for graphs
+			if (width != 0) {
+				//? GPU & memory utilization
+				while (cmp_greater(gpu.gpu_percent.size(),             width * 2)) gpu.gpu_percent.pop_front();
+				while (cmp_greater(gpu.mem_utilization_percent.size(), width))     gpu.mem_utilization_percent.pop_front();
+				//? Power usage
+				while (cmp_greater(gpu.pwr_percent.size(), width)) gpu.pwr_percent.pop_front();
+				//? Temperature
+				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+				//? Memory usage
+				while (cmp_greater(gpu.mem_used_percent.size(), width/2)) gpu.mem_used_percent.pop_front();
+			}
 		}
+		average_gpu_percent.push_back(avg / gpus.size());
+
+		if (width != 0)
+			while (cmp_greater(average_gpu_percent.size(), width * 2)) average_gpu_percent.pop_front();
 
 		return gpus;
 	}

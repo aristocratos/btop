@@ -499,6 +499,20 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
+				//? GPU data collection
+				vector<Gpu::gpu_info> gpus;
+				if (
+					v_contains(conf.boxes, "gpu")
+					or Config::getS("cpu_graph_lower") == "default"
+					or Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
+					or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0
+					or true
+				) {
+					if (Global::debug) debug_timer("gpu", collect_begin);
+					gpus = Gpu::collect(conf.no_update);
+				}
+				auto& gpus_ref = gpus;
+
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
 					try {
@@ -518,7 +532,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, conf.force_redraw, conf.no_update);
+						if (not pause_output) output += Cpu::draw(cpu, gpus_ref, conf.force_redraw, conf.no_update);
 
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
@@ -527,18 +541,15 @@ namespace Runner {
 					}
 				}
 
-				//? GPU
+				//? GPU // TODO detailed panel
 				if (v_contains(conf.boxes, "gpu")) {
 					try {
-						if (Global::debug) debug_timer("gpu", collect_begin);
-
-						//? Start collect
-						auto gpus = Gpu::collect(conf.no_update);
 
 						if (Global::debug) debug_timer("gpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output and not Gpu::gpu_names.empty()) output += Gpu::draw(gpus, conf.force_redraw, conf.no_update);
+						if (not pause_output and not Gpu::gpu_names.empty())
+							output += Gpu::draw(gpus_ref, conf.force_redraw, conf.no_update);
 
 						if (Global::debug) debug_timer("gpu", draw_done);
 					}

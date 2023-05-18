@@ -203,8 +203,8 @@ namespace Config {
 		{"graph_symbol_net", "default"},
 		{"graph_symbol_proc", "default"},
 		{"proc_sorting", "cpu lazy"},
-		{"cpu_graph_upper", "total"},
-		{"cpu_graph_lower", "total"},
+		{"cpu_graph_upper", "default"}, // set to "total" in btop_collect.cpp
+		{"cpu_graph_lower", "default"}, // set to "total" or "gpu-totals" in btop_collect.cpp
 		{"cpu_sensor", "Auto"},
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
