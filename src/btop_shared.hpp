@@ -87,9 +87,12 @@ namespace Shared {
 
 
 namespace Gpu {
-	extern string box;
-	extern int x, y, width, height, min_width, min_height;
-	extern bool shown, redraw;
+	extern vector<string> box;
+	extern int width, height, min_width, min_height;
+	extern vector<int> x_vec, y_vec;
+	extern vector<bool> redraw;
+	extern int shown;
+	extern vector<char> shown_panels;
 	extern vector<string> gpu_names;
 	extern deque<long long> average_gpu_percent;
 
@@ -138,7 +141,7 @@ namespace Gpu {
     auto collect(bool no_update = false) -> vector<gpu_info>&;
 
 	//* Draw contents of gpu box using <gpus> as source
-  	string draw(const vector<gpu_info>& gpus, bool force_redraw, bool data_same);
+  	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
 }
 
 namespace Cpu {

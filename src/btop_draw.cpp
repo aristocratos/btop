@@ -755,6 +755,7 @@ namespace Cpu {
 		}
 
 		//? Load average
+		bool show_gpu = (graph_lo_field.rfind("gpu-", 0) == 0) or (graph_up_field.rfind("gpu-", 0) == 0);
 		if (cy < b_height - 1 and cc <= b_columns) {
 			string lavg_pre;
 			int sep = 1;
@@ -780,25 +781,29 @@ namespace Cpu {
 			} else {
 				lavg_str_len = lavg_str.length();
 			}
-			out += Mv::to(b_y + b_height - 2 - gpus.size(), b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
+			out += Mv::to(b_y + b_height - 2 - show_gpu*(gpus.size() - Gpu::shown), b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
 		}
 
 		//? Gpu brief info
-		if (graph_lo_field.rfind("gpu-", 0) or graph_up_field.rfind("gpu-", 0))
+		if (show_gpu) {
+			auto shown_panels_count = 0u;
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
-				out += Mv::to(b_y + b_height - 1 - gpus.size() + i, b_x + 1)
-					+ Theme::c("main_fg") + Fx::b + "GPU " + to_string(i) + ' ' + gpu_meters[i](gpus[i].gpu_percent.back())
-					+ Theme::g("cpu").at(gpus[i].gpu_percent.back()) + rjust(to_string(gpus[i].gpu_percent.back()), 4) + Theme::c("main_fg") + '%';
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("used").at(gpus[i].mem_used_percent.back())
-					+ gpu_mem_graphs[i](gpus[i].mem_used_percent, data_same or redraw) + Theme::c("main_fg")
-					+ rjust(floating_humanizer(gpus[i].mem_used, true), 5) + Theme::c("inactive_fg") + '/' + Theme::c("main_fg") + floating_humanizer(gpus[i].mem_total, true);
-				if (show_temps) {
-					const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
-						+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw)
-						+ rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				if (not v_contains(Gpu::shown_panels, i)) {
+					out += Mv::to(b_y + b_height - 1 - gpus.size() + ++shown_panels_count - (Gpu::shown == 0), b_x + 1)
+						+ Theme::c("main_fg") + Fx::b + "GPU " + to_string(i) + ' ' + gpu_meters[i](gpus[i].gpu_percent.back())
+						+ Theme::g("cpu").at(gpus[i].gpu_percent.back()) + rjust(to_string(gpus[i].gpu_percent.back()), 4) + Theme::c("main_fg") + '%';
+					out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("used").at(gpus[i].mem_used_percent.back())
+						+ gpu_mem_graphs[i](gpus[i].mem_used_percent, data_same or redraw) + Theme::c("main_fg")
+						+ rjust(floating_humanizer(gpus[i].mem_used, true), 5) + Theme::c("inactive_fg") + '/' + Theme::c("main_fg") + floating_humanizer(gpus[i].mem_total, true);
+					if (show_temps) {
+						const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
+						out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
+							+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw)
+							+ rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+					}
 				}
 			}
+		}
 
 		redraw = false;
 		return out + Fx::reset;
@@ -809,24 +814,38 @@ namespace Cpu {
 namespace Gpu {
 	int width_p = 100, height_p = 32;
 	int min_width = 41, min_height = 9;
-	int x = 1, y = 1, width = 41, height;
-	int b_columns, b_column_size;
-	int b_x, b_y, b_width, b_height;
-	int bproc_x, bproc_y, bproc_width, bproc_height;
-	bool shown = true, redraw = true, mid_line = false;
+	int width = 41, height;
+	vector<int> x_vec = {}, y_vec = {};
+	int b_width, b_height;
+	vector<int> b_x_vec = {}, b_y_vec = {};
+	vector<bool> redraw = {}, mid_line = {};
+	int shown = 0;
+	vector<char> shown_panels = {};
 	int graph_up_height;
-	Draw::Graph graph_upper;
-	Draw::Graph graph_lower;
-	Draw::Graph temp_graph;
-	Draw::Graph mem_used_graph;
-	Draw::Graph mem_util_graph;
-	Draw::Meter gpu_meter;
-	Draw::Meter pwr_meter;
-	string box;
+	vector<Draw::Graph> graph_upper_vec = {}, graph_lower_vec = {};
+	vector<Draw::Graph> temp_graph_vec = {};
+	vector<Draw::Graph> mem_used_graph_vec = {}, mem_util_graph_vec = {};
+	vector<Draw::Meter> gpu_meter_vec = {};
+	vector<Draw::Meter> pwr_meter_vec = {};
+	vector<string> box = {};
 
-    string draw(const vector<gpu_info>& gpus, bool force_redraw, bool data_same) {
+    string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
-		if (force_redraw) redraw = true;
+
+		auto& b_x = b_x_vec[index];
+		auto& b_y = b_y_vec[index];
+		auto& x = x_vec[index];
+		auto& y = y_vec[index];
+
+		auto& graph_upper = graph_upper_vec[index];
+		auto& graph_lower = graph_lower_vec[index];
+		auto& temp_graph = temp_graph_vec[index];
+		auto& mem_used_graph = mem_used_graph_vec[index];
+		auto& mem_util_graph = mem_util_graph_vec[index];
+		auto& gpu_meter = gpu_meter_vec[index];
+		auto& pwr_meter = pwr_meter_vec[index];
+
+		if (force_redraw) redraw[index] = true;
         bool show_temps = (Config::getB("check_temp"));
         auto tty_mode = Config::getB("tty_mode");
 		auto& temp_scale = Config::getS("temp_scale");
@@ -836,13 +855,11 @@ namespace Gpu {
 		string out;
 		out.reserve(width * height);
 
-		auto gpu = gpus[0]; // TODO: multi-gpu support
-
 		//* Redraw elements not needed to be updated every cycle
-		if (redraw) {
+		if (redraw[index]) {
 			graph_up_height = single_graph ? height - 2 : ceil((double)(height - 2) / 2);
-			const int graph_low_height = height - 2 - graph_up_height - (mid_line ? 1 : 0);
-			out += box;
+			const int graph_low_height = height - 2 - graph_up_height - (mid_line[index] ? 1 : 0);
+			out += box[index];
 
 			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", gpu.gpu_percent, graph_symbol, false, true}; // TODO cpu -> gpu
             if (not single_graph) {
@@ -868,9 +885,9 @@ namespace Gpu {
 		//* General GPU info
 
 		//? Gpu graph, clock speed & meter
-		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw));
+		out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent, (data_same or redraw[index]));
 		if (not single_graph)
-			out += Mv::to(y + graph_up_height + 1 + mid_line, x + 1) + graph_lower(gpu.gpu_percent, (data_same or redraw));
+			out += Mv::to(y + graph_up_height + 1 + mid_line[index], x + 1) + graph_lower(gpu.gpu_percent, (data_same or redraw[index]));
 
 		if (Config::getB("show_cpu_freq")) { // TODO show_gpu_freq
 			string clock_speed_string = to_string(gpu.gpu_clock_speed);
@@ -885,7 +902,7 @@ namespace Gpu {
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
 			out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
-				+ temp_graph(gpu.temp, data_same or redraw);
+				+ temp_graph(gpu.temp, data_same or redraw[index]);
 			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 		}
 		out += Theme::c("div_line") + Symbols::v_line;
@@ -915,8 +932,8 @@ namespace Gpu {
 		out += Mv::to(b_y + 4, b_x + 2) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.mem_total), b_width/2-9) + Fx::ub;
 
 		//? Memory usage graphs & percentage
-		out += Mv::to(b_y+6, b_x+1) + Theme::c("inactive_fg") + mem_util_graph(gpu.mem_utilization_percent, (data_same or redraw))
-			+ Mv::u(3) + Mv::r(1) + mem_used_graph(gpu.mem_used_percent, (data_same or redraw));
+		out += Mv::to(b_y+6, b_x+1) + Theme::c("inactive_fg") + mem_util_graph(gpu.mem_utilization_percent, (data_same or redraw[index]))
+			+ Mv::u(3) + Mv::r(1) + mem_used_graph(gpu.mem_used_percent, (data_same or redraw[index]));
 		out += Mv::to(b_y+6, b_x+1) + rjust(to_string(gpu.mem_utilization_percent.back()), 3) + '%' + Mv::u(2) + Mv::r(b_width/2-3) + rjust(to_string(gpu.mem_used_percent.back()), 3) + '%';
 
 		//? Processes section header
@@ -932,13 +949,7 @@ namespace Gpu {
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + "RX:" + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*(b_width/2+b_width%2-9-rx_string.size())
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + rx_string + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::round_right_down;
 
-        //* GPU graphics process list
-        //! TODO
-
-        //* GPU compute process list
-		//! TODO
-
-		redraw = false;
+		redraw[index] = false;
 		return out + Fx::reset;
 	}
 }
@@ -1816,14 +1827,27 @@ namespace Draw {
 
 		Input::mouse_mappings.clear();
 
-		Cpu::x = Gpu::x = Mem::x = Net::x = Proc::x = 1;
-		Cpu::y = Gpu::y = Mem::y = Net::y = Proc::y = 1;
+		Cpu::x = Mem::x = Net::x = Proc::x = 1;
+		Cpu::y = Mem::y = Net::y = Proc::y = 1;
 		Cpu::width = Gpu::width = Mem::width = Net::width = Proc::width = 0;
-		Cpu::height = Gpu::height = Mem::height = Net::height = Proc::height = 0;
-		Cpu::redraw = Gpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
+		Cpu::height = Mem::height = Net::height = Proc::height = 0;
+		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
 
 		Cpu::shown = s_contains(boxes, "cpu");
-		Gpu::shown = s_contains(boxes, "gpu") and not Gpu::gpu_names.empty();
+		Gpu::shown_panels.clear();
+		if (not Gpu::gpu_names.empty()) {
+			std::istringstream iss(boxes, std::istringstream::in);
+			string current;
+			while (iss >> current)
+				if (   current == "gpu0"
+					or current == "gpu1"
+					or current == "gpu2"
+					or current == "gpu3"
+					or current == "gpu4"
+					or current == "gpu5"
+				) Gpu::shown_panels.push_back(current.back()-'0');
+		}
+		Gpu::shown = Gpu::shown_panels.size();
 		Mem::shown = s_contains(boxes, "mem");
 		Net::shown = s_contains(boxes, "net");
 		Proc::shown = s_contains(boxes, "proc");
@@ -1835,14 +1859,14 @@ namespace Draw {
 				Config::getS("cpu_graph_lower") == "default"
 				or Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
 				or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0
-			);
-			const int gpus_height_offset = Gpu::gpu_names.size()*gpus_shown_in_cpu_panel;
+			) and Gpu::gpu_names.size() != (unsigned long)Gpu::shown;
+			const int gpus_height_offset = (Gpu::gpu_names.size() - Gpu::shown)*gpus_shown_in_cpu_panel;
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
-			if (Gpu::shown and not (Mem::shown or Net::shown or Proc::shown)) {
+			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
 				height = Term::height/2;
 			} else {
-				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + Gpu::shown*5) / 100));
+				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
 			}
 			if (height <= Term::height-2) height += gpus_height_offset;
 
@@ -1880,31 +1904,36 @@ namespace Draw {
 		}
 
 		//* Calculate and draw gpu box outlines
-		if (Gpu::shown) {
+		if (Gpu::shown != 0) {
 			using namespace Gpu;
-			width = Term::width;
-			height = max(Gpu::min_height, Cpu::shown ? Cpu::height : (int)ceil((double)Term::height * (trim(boxes) == "gpu" ? 100 : height_p) / 100));
-			height += height+Cpu::height == Term::height-1;
-			x = 1; y = 1 + Cpu::shown*Cpu::height;
-			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "gpu", "", 5); // TODO gpu_box
+			x_vec.resize(shown); y_vec.resize(shown);
+			b_x_vec.resize(shown); b_y_vec.resize(shown);
+			box.resize(shown);
+			graph_upper_vec.resize(shown); graph_lower_vec.resize(shown);
+			temp_graph_vec.resize(shown);
+			mem_used_graph_vec.resize(shown); mem_util_graph_vec.resize(shown);
+			gpu_meter_vec.resize(shown);
+			pwr_meter_vec.resize(shown);
+			redraw.resize(shown);
+			mid_line.resize(shown);
+			for (auto i = 0; i < shown; ++i) {
+				redraw[i] = true;
 
-			b_height = 9;
-			b_width = clamp(width/2, min_width, b_height*6);
+				width = Term::width;
+				height = max(min_height, Cpu::shown ? Cpu::height : (int)ceil((double)Term::height * height_p / 100));
+				height += (height+Cpu::height == Term::height-1);
+				x_vec[i] = 1; y_vec[i] = 1 + i*height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
+				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
 
-			// bproc_width = b_width;
-			// bproc_height = height-11;
+				b_height = 9;
+				b_width = clamp(width/2, min_width, b_height*6);
 
-			//? Main statistics box
-			b_x = x + width - b_width - 1;
-			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)(b_height/*+bproc_height*/) / 2) + 1;
+				//? Main statistics box
+				b_x_vec[i] = x_vec[i] + width - b_width - 1;
+				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2) / 2) - ceil((double)(b_height) / 2) + 1;
 
-			box += createBox(b_x, b_y, b_width, b_height, "", false, gpu_names[0]);
-
-			//? TODO: Processes box
-			/*bproc_x = x + width - bproc_width - 1;
-			bproc_y = b_y + b_height;
-
-			box += createBox(bproc_x, bproc_y, bproc_width, bproc_height, "", false, "gpu-proc");*/
+				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height, "", false, gpu_names[shown_panels[i]].substr(0, b_width-5));
+			}
 		}
 
 		//* Calculate and draw mem box outlines
@@ -1915,12 +1944,12 @@ namespace Draw {
             auto mem_graphs = Config::getB("mem_graphs");
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::height;
+			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::height*Gpu::shown;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
-				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height + Gpu::height : 0);
+				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height + Gpu::height*Gpu::shown : 0);
 			else
-				y = cpu_bottom ? 1 : Cpu::height + Gpu::height + 1;
+				y = cpu_bottom ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
 
 			if (show_disks) {
 				mem_width = ceil((double)(width - 3) / 2);
@@ -1969,10 +1998,10 @@ namespace Draw {
 		if (Net::shown) {
 			using namespace Net;
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = Term::height - Cpu::height - Gpu::height - Mem::height;
+			height = Term::height - Cpu::height - Gpu::height*Gpu::shown - Mem::height;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
-				y = cpu_bottom ? 1 : Cpu::height + Gpu::height + 1;
+				y = cpu_bottom ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
 			else
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 
@@ -1991,9 +2020,9 @@ namespace Draw {
 		if (Proc::shown) {
 			using namespace Proc;
 			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
-			height = Term::height - Cpu::height - Gpu::height;
+			height = Term::height - Cpu::height - Gpu::height*Gpu::shown;
 			x = proc_left ? 1 : Term::width - width + 1;
-			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + Gpu::height + 1;
+			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
 			select_max = height - 3;
 			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
 		}
