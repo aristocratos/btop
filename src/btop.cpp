@@ -394,7 +394,9 @@ namespace Runner {
 
 	enum debug_actions {
 		collect_begin,
+		collect_done,
 		draw_begin,
+		draw_begin_only,
 		draw_done
 	};
 
@@ -429,6 +431,13 @@ namespace Runner {
 		switch (action) {
 			case collect_begin:
 				debug_times[name].at(collect) = time_micros();
+				return;
+			case collect_done:
+				debug_times[name].at(collect) = time_micros() - debug_times[name].at(collect);
+				debug_times["total"].at(collect) += debug_times[name].at(collect);
+				return;
+			case draw_begin_only:
+				debug_times[name].at(draw) = time_micros();
 				return;
 			case draw_begin:
 				debug_times[name].at(draw) = time_micros();
@@ -489,8 +498,6 @@ namespace Runner {
                 if (debug_bg.empty() or redraw)
                     Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
 
-
-
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
 			}
@@ -514,6 +521,7 @@ namespace Runner {
 				if (gpu_in_cpu_panel or not gpu_panels.empty()) {
 					if (Global::debug) debug_timer("gpu", collect_begin);
 					gpus = Gpu::collect(conf.no_update);
+					if (Global::debug) debug_timer("gpu", collect_done);
 				}
 				auto& gpus_ref = gpus;
 
@@ -548,7 +556,7 @@ namespace Runner {
 				//? GPU
 				if (not gpu_panels.empty() and not gpus_ref.empty()) {
 					try {
-						if (Global::debug) debug_timer("gpu", draw_begin);
+						if (Global::debug) debug_timer("gpu", draw_begin_only);
 
 						//? Draw box
 						if (not pause_output)
