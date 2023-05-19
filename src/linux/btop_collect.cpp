@@ -28,8 +28,12 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
-#include <nvml.h>
-#include <rocm_smi/rocm_smi.h>
+#if defined(GPU_NVIDIA)
+	#include <nvml.h>
+#endif
+#if defined(GPU_AMD)
+	#include <rocm_smi/rocm_smi.h>
+#endif
 
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
@@ -101,7 +105,9 @@ namespace Gpu {
 		bool initialized = false;
 		bool init();
 		bool shutdown();
+	#if defined(GPU_NVIDIA)
 		vector<nvmlDevice_t> devices;
+	#endif
 		unsigned int device_count = 0;
 	}
 
@@ -187,10 +193,12 @@ namespace Shared {
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
 
-		if (Config::strings.at("cpu_graph_upper") == "default")
+		if (Config::strings.at("cpu_graph_upper") == "default" or not v_contains(Cpu::available_fields, Config::strings.at("cpu_graph_upper")))
 			Config::strings.at("cpu_graph_upper") = "total";
-		if (Config::strings.at("cpu_graph_lower") == "default")
+		if (Config::strings.at("cpu_graph_lower") == "default" or not v_contains(Cpu::available_fields, Config::strings.at("cpu_graph_lower")))
 			Config::strings.at("cpu_graph_lower") = "total";
+
+		Logger::debug("Shared::init() : Initialized.");
 	}
 }
 
@@ -850,7 +858,7 @@ namespace Gpu {
     namespace Nvml {
 		bool init() {
 			if (initialized) return false;
-
+		#if defined(GPU_NVIDIA)
 			nvmlReturn_t result = nvmlInit();
     		if (result != NVML_SUCCESS) {
     			Logger::warning(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
@@ -908,21 +916,28 @@ namespace Gpu {
 
 				return true;
 			} else {initialized = true; shutdown(); return false;}
+		#else
+			return false;
+		#endif
 		}
 
 		bool shutdown() {
 			if (!initialized) return false;
-
+		#if defined(GPU_NVIDIA)
 			nvmlReturn_t result = nvmlShutdown();
     		if (NVML_SUCCESS == result)
 				initialized = false;
 			else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
 
 			return !initialized;
+		#else
+			return false;
+		#endif
 		}
 
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count
 			if (!initialized) return false;
+		#if defined(GPU_NVIDIA)
 			nvmlReturn_t result;
 
 			for (unsigned int i = 0; i < device_count; ++i) {
@@ -1012,6 +1027,10 @@ namespace Gpu {
     		}
 
 			return true;
+		#else
+			(void)gpus_slice;
+			return false;
+		#endif
 		}
     }
 
@@ -1019,6 +1038,7 @@ namespace Gpu {
 	namespace Rsmi {
 		bool init() {
 			if (initialized) return false;
+		#if defined(GPU_AMD)
 			rsmi_status_t result;
 
 			result = rsmi_init(0);
@@ -1062,20 +1082,27 @@ namespace Gpu {
 
 				return true;
 			} else {initialized = true; shutdown(); return false;}
+		#else
+			return false;
+		#endif
 		}
 
 		bool shutdown() {
 			if (!initialized) return false;
-
+		#if defined(GPU_AMD)
     		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS)
 				initialized = false;
 			else Logger::warning("Failed to shutdown ROCm SMI");
 
 			return true;
+		#else
+			return false;
+		#endif
 		}
 
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
 			if (!initialized) return false;
+		#if defined(GPU_AMD)
 			rsmi_status_t result;
 
 			for (uint32_t i = 0; i < device_count; ++i) {
@@ -1155,6 +1182,10 @@ namespace Gpu {
     		}
 
 			return true;
+		#else
+			(void)gpus_slice;
+			return false;
+		#endif
 		}
 	}
 
