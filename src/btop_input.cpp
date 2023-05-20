@@ -273,7 +273,7 @@ namespace Input {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
 					auto key_i = std::stoi(key);
-					if (key_i-4u >= Gpu::gpu_names.size()) return;
+					if (std::cmp_greater(key_i-4, Gpu::gpu_names.size())) return;
 					Config::toggle_box(std::string("gpu") + (char)((key_i == 0 ? 10 : (key_i-5)) + '0'));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
