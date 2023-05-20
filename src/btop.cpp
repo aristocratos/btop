@@ -496,7 +496,7 @@ namespace Runner {
 			//! DEBUG stats
 			if (Global::debug) {
                 if (debug_bg.empty() or redraw)
-                    Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
+                    Runner::debug_bg = Draw::createBox(2, 2, 33, 9, "", true, "μs");
 
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
@@ -660,7 +660,7 @@ namespace Runner {
 						"{mv3}{hiFg}2 {mainFg}| Show MEM box"
 						"{mv4}{hiFg}3 {mainFg}| Show NET box"
 						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
-						"{mv6}{hiFg}5 {mainFg}| Show GPU box"
+						"{mv6}{hiFg}5-0 {mainFg}| Show GPU boxes"
 						"{mv7}{hiFg}esc {mainFg}| Show menu"
 						"{mv8}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
@@ -670,7 +670,7 @@ namespace Runner {
 						"mv3"_a = Mv::to(y+9, x),
 						"mv4"_a = Mv::to(y+10, x),
 						"mv5"_a = Mv::to(y+11, x),
-						"mv6"_a = Mv::to(y+12, x),
+						"mv6"_a = Mv::to(y+12, x-2),
 						"mv7"_a = Mv::to(y+13, x-2),
 						"mv8"_a = Mv::to(y+14, x)
 					);
@@ -685,7 +685,10 @@ namespace Runner {
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
+<<<<<<< HEAD
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
+=======
+>>>>>>> 48c3392 (Merged changes from main)
 				for (const string name : {"cpu", "mem", "net", "proc", "gpu", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
