@@ -400,6 +400,14 @@ namespace Runner {
 	string debug_bg;
 	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
 
+	class MyNumPunct : public std::numpunct<char>
+	{
+	protected:
+		virtual char do_thousands_sep() const { return '\''; }
+		virtual std::string do_grouping() const { return "\03"; }
+	};
+
+
 	struct runner_conf {
 		vector<string> boxes;
 		bool no_update;
@@ -625,11 +633,12 @@ namespace Runner {
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
+				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;
-					output += format("{mvLD}{name:5.5} {collect:12d} {draw:12d}",
+					output += format(loc, "{mvLD}{name:5.5} {collect:12L} {draw:12L}",
 						"mvLD"_a = Mv::l(31) + Mv::d(1),
 						"name"_a = name,
 						"collect"_a = time_collect,
