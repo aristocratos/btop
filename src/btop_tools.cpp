@@ -24,13 +24,13 @@ tab-size = 4
 #include <iomanip>
 #include <utility>
 #include <ranges>
-#include <robin_hood.h>
-#include <widechar_width.hpp>
 
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
+#include "robin_hood.h"
+#include "widechar_width.hpp"
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
 #include <btop_config.hpp>
@@ -266,7 +266,7 @@ namespace Tools {
 	}
 
 	string ltrim(const string& str, const string& t_str) {
-        string_view str_v{str};
+        std::string_view str_v{str};
         while (str_v.starts_with(t_str))
             str_v.remove_prefix(t_str.size());
 
@@ -274,7 +274,7 @@ namespace Tools {
 	}
 
 	string rtrim(const string& str, const string& t_str) {
-        string_view str_v{str};
+        std::string_view str_v{str};
         while (str_v.ends_with(t_str))
             str_v.remove_suffix(t_str.size());
 
@@ -285,7 +285,7 @@ namespace Tools {
 		vector<string> out;
 		for (const auto& s : str 	| rng::views::split(delim)
 									| rng::views::transform([](auto &&rng) {
-										return string_view(&*rng.begin(), rng::distance(rng));
+										return std::string_view(&*rng.begin(), rng::distance(rng));
 		})) {
 			if (not s.empty()) out.emplace_back(s);
 		}
@@ -341,7 +341,7 @@ namespace Tools {
 	}
 
 	string trans(const string& str) {
-        string_view oldstr{str};
+        std::string_view oldstr{str};
 		string newstr;
 		newstr.reserve(str.size());
 		for (size_t pos; (pos = oldstr.find(' ')) != string::npos;) {

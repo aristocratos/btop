@@ -113,22 +113,23 @@ void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-			cout 	<< "usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
-					<< "optional arguments:\n"
-					<< "  -h, --help            show this help message and exit\n"
-					<< "  -v, --version         show version info and exit\n"
-					<< "  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
-					<< "  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
-					<< "  +t, --tty_off         force (OFF) tty mode\n"
-					<< "  -p, --preset <id>     start with preset, integer value between 0-9\n"
-					<< "  --utf-force           force start even if no UTF-8 locale was detected\n"
-					<< "  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
-					<< "                        and screen draw functions and sets loglevel to DEBUG\n"
-					<< endl;
+			println(
+					"usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
+					"optional arguments:\n"
+					"  -h, --help            show this help message and exit\n"
+					"  -v, --version         show version info and exit\n"
+					"  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color\n"
+					"  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
+					"  +t, --tty_off         force (OFF) tty mode\n"
+					"  -p, --preset <id>     start with preset, integer value between 0-9\n"
+					"  --utf-force           force start even if no UTF-8 locale was detected\n"
+					"  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
+					"                        and screen draw functions and sets loglevel to DEBUG"
+			);
 			exit(0);
 		}
 		else if (is_in(argument, "-v", "--version")) {
-			cout << "btop version: " << Global::Version << endl;
+			println("btop version: {}", Global::Version);
 			exit(0);
 		}
 		else if (is_in(argument, "-lc", "--low-color")) {
@@ -144,14 +145,14 @@ void argumentParser(const int& argc, char **argv) {
 		}
 		else if (is_in(argument, "-p", "--preset")) {
 			if (++i >= argc) {
-				cout << "ERROR: Preset option needs an argument." << endl;
+				println("ERROR: Preset option needs an argument.");
 				exit(1);
 			}
 			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
 				Global::arg_preset = std::clamp(stoi(val), 0, 9);
 			}
 			else {
-				cout << "ERROR: Preset option only accepts an integer value between 0-9." << endl;
+				println("ERROR: Preset option only accepts an integer value between 0-9.");
 				exit(1);
 			}
 		}
@@ -160,8 +161,8 @@ void argumentParser(const int& argc, char **argv) {
 		else if (argument == "--debug")
 			Global::debug = true;
 		else {
-			cout << " Unknown argument: " << argument << "\n" <<
-			" Use -h or --help for help." <<  endl;
+			println(" Unknown argument: {}\n"
+				" Use -h or --help for help.", argument);
 			exit(1);
 		}
 	}
@@ -189,17 +190,30 @@ void term_resize(bool force) {
 
 	auto boxes = Config::getS("shown_boxes");
 	auto min_size = Term::get_min_size(boxes);
+	auto minWidth = min_size.at(0), minHeight = min_size.at(1);
 
-	while (not force or (Term::width < min_size.at(0) or Term::height < min_size.at(1))) {
+	while (not force or (Term::width < minWidth or Term::height < minHeight)) {
 		sleep_ms(100);
-		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
-			cout << Term::clear << Global::bg_black << Global::fg_white << Mv::to((Term::height / 2) - 2, (Term::width / 2) - 11)
-				 << "Terminal size too small:" << Mv::to((Term::height / 2) - 1, (Term::width / 2) - 10)
-				 << " Width = " << (Term::width < min_size.at(1) ? Global::fg_red : Global::fg_green) << Term::width
-				 << Global::fg_white << " Height = " << (Term::height < min_size.at(0) ? Global::fg_red : Global::fg_green) << Term::height
-				 << Mv::to((Term::height / 2) + 1, (Term::width / 2) - 12) << Global::fg_white
-				 << "Needed for current config:" << Mv::to((Term::height / 2) + 2, (Term::width / 2) - 10)
-				 << "Width = " << min_size.at(0) << " Height = " << min_size.at(1) << flush;
+		if (Term::width < minWidth or Term::height < minHeight) {
+			int width = Term::width, height = Term::height;
+			cout << format("{clear}{bg_black}{fg_white}"
+					"{mv1}Terminal size too small:"
+					"{mv2} Width = {fg_width}{width} {fg_white}Height = {fg_height}{height}"
+					"{mv3}{fg_white}Needed for current config:"
+					"{mv4}Width = {minWidth} Height = {minHeight}",
+					"clear"_a = Term::clear, "bg_black"_a = Global::bg_black, "fg_white"_a = Global::fg_white,
+					"mv1"_a = Mv::to((height / 2) - 2, (width / 2) - 11),
+					"mv2"_a = Mv::to((height / 2) - 1, (width / 2) - 10),
+						"fg_width"_a = (width < minWidth ? Global::fg_red : Global::fg_green),
+						"width"_a = width,
+						"fg_height"_a = (height < minHeight ? Global::fg_red : Global::fg_green),
+						"height"_a = height,
+					"mv3"_a = Mv::to((height / 2) + 1, (width / 2) - 12),
+					"mv4"_a = Mv::to((height / 2) + 2, (width / 2) - 10),
+						"minWidth"_a = minWidth,
+						"minHeight"_a = minHeight
+			) << std::flush;
+
 			bool got_key = false;
 			for (; not Term::refresh() and not got_key; got_key = Input::poll(10));
 			if (got_key) {
@@ -213,6 +227,7 @@ void term_resize(bool force) {
 				}
 			}
 			min_size = Term::get_min_size(boxes);
+			minWidth = min_size.at(0), minHeight = min_size.at(1);
 		}
 		else if (not Term::refresh()) break;
 	}
@@ -251,7 +266,7 @@ void clean_quit(int sig) {
 	if (not Global::exit_error_msg.empty()) {
 		sig = 1;
 		Logger::error(Global::exit_error_msg);
-		std::cerr << Global::fg_red << "ERROR: " << Global::fg_white << Global::exit_error_msg << Fx::reset << endl;
+		println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
 	}
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
@@ -578,26 +593,46 @@ namespace Runner {
 				if (empty_bg.empty()) {
 					const int x = Term::width / 2 - 10, y = Term::height / 2 - 10;
 					output += Term::clear;
-					empty_bg += Draw::banner_gen(y, 0, true)
-						+ Mv::to(y+6, x) + Theme::c("title") + Fx::b + "No boxes shown!"
-						+ Mv::to(y+8, x) + Theme::c("hi_fg") + "1" + Theme::c("main_fg") + " | Show CPU box"
-						+ Mv::to(y+9, x) + Theme::c("hi_fg") + "2" + Theme::c("main_fg") + " | Show MEM box"
-						+ Mv::to(y+10, x) + Theme::c("hi_fg") + "3" + Theme::c("main_fg") + " | Show NET box"
-						+ Mv::to(y+11, x) + Theme::c("hi_fg") + "4" + Theme::c("main_fg") + " | Show PROC box"
-						+ Mv::to(y+12, x-2) + Theme::c("hi_fg") + "esc" + Theme::c("main_fg") + " | Show menu"
-						+ Mv::to(y+13, x) + Theme::c("hi_fg") + "q" + Theme::c("main_fg") + " | Quit";
+					empty_bg = format(
+						"{banner}"
+						"{mv1}{titleFg}{b}No boxes shown!"
+						"{mv2}{hiFg}1 {mainFg}| Show CPU box"
+						"{mv3}{hiFg}2 {mainFg}| Show MEM box"
+						"{mv4}{hiFg}3 {mainFg}| Show NET box"
+						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
+						"{mv6}{hiFg}esc {mainFg}| Show menu"
+						"{mv7}{hiFg}q {mainFg}| Quit",
+						"banner"_a = Draw::banner_gen(y, 0, true),
+						"titleFg"_a = Theme::c("title"), "b"_a = Fx::b, "hiFg"_a = Theme::c("hi_fg"), "mainFg"_a = Theme::c("main_fg"),
+						"mv1"_a = Mv::to(y+6, x),
+						"mv2"_a = Mv::to(y+8, x),
+						"mv3"_a = Mv::to(y+9, x),
+						"mv4"_a = Mv::to(y+10, x),
+						"mv5"_a = Mv::to(y+11, x),
+						"mv6"_a = Mv::to(y+12, x-2),
+						"mv7"_a = Mv::to(y+13, x)
+					);
 				}
 				output += empty_bg;
 			}
 
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
-				output += debug_bg + Theme::c("title") + Fx::b + ljust(" Box", 9) + ljust("Collect μs", 12, true) + ljust("Draw μs", 9, true) + Theme::c("main_fg") + Fx::ub;
+				output += format("{pre}{box:9.9}{collect:12.12}{draw:9.9}{post}",
+					"pre"_a = debug_bg + Theme::c("title") + Fx::b,
+					"box"_a = " Box", "collect"_a = "Collect μs", "draw"_a = "Draw μs",
+					"post"_a = Theme::c("main_fg") + Fx::ub
+				);
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;
-					output += Mv::l(29) + Mv::d(1) + ljust(name, 8) + ljust(to_string(time_collect), 12) + ljust(to_string(time_draw), 9);
+					output += format("{mvLD}{name:8.8}{collect:<12d}{draw:<9d}",
+						"mvLD"_a = Mv::l(29) + Mv::d(1),
+						"name"_a = name,
+						"collect"_a = time_collect,
+						"draw"_a = time_draw
+					);
 				}
 			}
 
@@ -714,13 +749,13 @@ int main(int argc, char **argv) {
 		}
 	}
 	if (Config::conf_dir.empty()) {
-		cout 	<< "WARNING: Could not get path user HOME folder.\n"
-				<< "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
+		println("WARNING: Could not get path user HOME folder.\n"
+				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
 	}
 	else {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			cout 	<< "WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
-					<< "Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this." << endl;
+			println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
+					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
 		}
 		else {
 			Config::conf_file = Config::conf_dir / "btop.conf";
