@@ -473,7 +473,9 @@ namespace Runner {
 			//! DEBUG stats
 			if (Global::debug) {
                 if (debug_bg.empty() or redraw)
-                    Runner::debug_bg = Draw::createBox(2, 2, 32, 8, "", true, "debug");
+                    Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
+
+
 
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
@@ -618,17 +620,17 @@ namespace Runner {
 
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
-				output += format("{pre}{box:9.9}{collect:12.12}{draw:9.9}{post}",
+				output += format("{pre}{box:5.5} {collect:>12.12} {draw:>12.12}{post}",
 					"pre"_a = debug_bg + Theme::c("title") + Fx::b,
-					"box"_a = " Box", "collect"_a = "Collect μs", "draw"_a = "Draw μs",
+					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;
-					output += format("{mvLD}{name:8.8}{collect:<12d}{draw:<9d}",
-						"mvLD"_a = Mv::l(29) + Mv::d(1),
+					output += format("{mvLD}{name:5.5} {collect:12d} {draw:12d}",
+						"mvLD"_a = Mv::l(31) + Mv::d(1),
 						"name"_a = name,
 						"collect"_a = time_collect,
 						"draw"_a = time_draw
