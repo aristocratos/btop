@@ -196,7 +196,7 @@ void term_resize(bool force) {
 		sleep_ms(100);
 		if (Term::width < minWidth or Term::height < minHeight) {
 			int width = Term::width, height = Term::height;
-			cout << format("{clear}{bg_black}{fg_white}"
+			cout << fmt::format("{clear}{bg_black}{fg_white}"
 					"{mv1}Terminal size too small:"
 					"{mv2} Width = {fg_width}{width} {fg_white}Height = {fg_height}{height}"
 					"{mv3}{fg_white}Needed for current config:"
@@ -603,7 +603,7 @@ namespace Runner {
 				if (empty_bg.empty()) {
 					const int x = Term::width / 2 - 10, y = Term::height / 2 - 10;
 					output += Term::clear;
-					empty_bg = format(
+					empty_bg = fmt::format(
 						"{banner}"
 						"{mv1}{titleFg}{b}No boxes shown!"
 						"{mv2}{hiFg}1 {mainFg}| Show CPU box"
@@ -628,7 +628,7 @@ namespace Runner {
 
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
-				output += format("{pre}{box:5.5} {collect:>12.12} {draw:>12.12}{post}",
+				output += fmt::format("{pre}{box:5.5} {collect:>12.12} {draw:>12.12}{post}",
 					"pre"_a = debug_bg + Theme::c("title") + Fx::b,
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
 					"post"_a = Theme::c("main_fg") + Fx::ub
@@ -638,7 +638,7 @@ namespace Runner {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;
-					output += format(loc, "{mvLD}{name:5.5} {collect:12L} {draw:12L}",
+					output += fmt::format(loc, "{mvLD}{name:5.5} {collect:12L} {draw:12L}",
 						"mvLD"_a = Mv::l(31) + Mv::d(1),
 						"name"_a = name,
 						"collect"_a = time_collect,
