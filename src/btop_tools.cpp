@@ -541,6 +541,74 @@ namespace Tools {
 		return (user != NULL ? user : "");
 	}
 
+	DebugTimer::DebugTimer(const string name, bool start, bool delayed_report) : name(name), delayed_report(delayed_report) {
+		if (start)
+			this->start();
+	}
+
+	DebugTimer::~DebugTimer() {
+		if (running)
+			this->stop(true);
+		this->force_report();
+	}
+
+	void DebugTimer::start() {
+		if (running) return;
+		running = true;
+		start_time = time_micros();
+	}
+
+	void DebugTimer::stop(bool report) {
+		if (not running) return;
+		running = false;
+		elapsed_time = time_micros() - start_time;
+		if (report) this->report();
+	}
+
+	void DebugTimer::reset(bool restart) {
+		running = false;
+		start_time = 0;
+		elapsed_time = 0;
+		if (restart) this->start();
+	}
+
+	void DebugTimer::stop_rename_reset(const string &new_name, bool report, bool restart) {
+		this->stop(report);
+		name = new_name;
+		this->reset(restart);
+	}
+
+	void DebugTimer::report() {
+		string report_line;
+		if (start_time == 0 and elapsed_time == 0)
+			report_line = format("DebugTimer::report() warning -> Timer [{}] has not been started!", name);
+		else if (running)
+			report_line = format(custom_locale, "Timer [{}] (running) currently at {:L} μs", name, time_micros() - start_time);
+		else
+			report_line = format(custom_locale, "Timer [{}] took {:L} μs", name, elapsed_time);
+
+		if (delayed_report)
+			report_buffer.emplace_back(report_line);
+		else
+			Logger::log_write(log_level, report_line);
+	}
+
+	void DebugTimer::force_report() {
+		if (report_buffer.empty()) return;
+		for (const auto& line : report_buffer)
+			Logger::log_write(log_level, line);
+		report_buffer.clear();
+	}
+
+	uint64_t DebugTimer::elapsed() {
+		if (running)
+			return time_micros() - start_time;
+		return elapsed_time;
+	}
+
+	bool DebugTimer::is_running() {
+		return running;
+	}
 }
 
 namespace Logger {
@@ -572,7 +640,7 @@ namespace Logger {
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(const size_t level, const string& msg) {
+	void log_write(const Level level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
 		atomic_lock lck(busy, true);
 		lose_priv neutered{};
