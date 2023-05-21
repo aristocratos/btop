@@ -581,11 +581,11 @@ namespace Tools {
 	void DebugTimer::report() {
 		string report_line;
 		if (start_time == 0 and elapsed_time == 0)
-			report_line = format("DebugTimer::report() warning -> Timer [{}] has not been started!", name);
+			report_line = fmt::format("DebugTimer::report() warning -> Timer [{}] has not been started!", name);
 		else if (running)
-			report_line = format(custom_locale, "Timer [{}] (running) currently at {:L} μs", name, time_micros() - start_time);
+			report_line = fmt::format(custom_locale, "Timer [{}] (running) currently at {:L} μs", name, time_micros() - start_time);
 		else
-			report_line = format(custom_locale, "Timer [{}] took {:L} μs", name, elapsed_time);
+			report_line = fmt::format(custom_locale, "Timer [{}] took {:L} μs", name, elapsed_time);
 
 		if (delayed_report)
 			report_buffer.emplace_back(report_line);
