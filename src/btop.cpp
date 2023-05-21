@@ -113,7 +113,7 @@ void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-			println(
+			fmt::println(
 					"usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
 					"optional arguments:\n"
 					"  -h, --help            show this help message and exit\n"
@@ -129,7 +129,7 @@ void argumentParser(const int& argc, char **argv) {
 			exit(0);
 		}
 		else if (is_in(argument, "-v", "--version")) {
-			println("btop version: {}", Global::Version);
+			fmt::println("btop version: {}", Global::Version);
 			exit(0);
 		}
 		else if (is_in(argument, "-lc", "--low-color")) {
@@ -145,14 +145,14 @@ void argumentParser(const int& argc, char **argv) {
 		}
 		else if (is_in(argument, "-p", "--preset")) {
 			if (++i >= argc) {
-				println("ERROR: Preset option needs an argument.");
+				fmt::println("ERROR: Preset option needs an argument.");
 				exit(1);
 			}
 			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
 				Global::arg_preset = std::clamp(stoi(val), 0, 9);
 			}
 			else {
-				println("ERROR: Preset option only accepts an integer value between 0-9.");
+				fmt::println("ERROR: Preset option only accepts an integer value between 0-9.");
 				exit(1);
 			}
 		}
@@ -161,7 +161,7 @@ void argumentParser(const int& argc, char **argv) {
 		else if (argument == "--debug")
 			Global::debug = true;
 		else {
-			println(" Unknown argument: {}\n"
+			fmt::println(" Unknown argument: {}\n"
 				" Use -h or --help for help.", argument);
 			exit(1);
 		}
@@ -266,7 +266,7 @@ void clean_quit(int sig) {
 	if (not Global::exit_error_msg.empty()) {
 		sig = 1;
 		Logger::error(Global::exit_error_msg);
-		println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
+		fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
 	}
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
@@ -760,12 +760,12 @@ int main(int argc, char **argv) {
 		}
 	}
 	if (Config::conf_dir.empty()) {
-		println("WARNING: Could not get path user HOME folder.\n"
+		fmt::println("WARNING: Could not get path user HOME folder.\n"
 				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
 	}
 	else {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
+			fmt::println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
 					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
 		}
 		else {
