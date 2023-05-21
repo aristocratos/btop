@@ -98,6 +98,7 @@ namespace Cpu {
 namespace Gpu {
 	vector<gpu_info> gpus;
 	vector<string> gpu_names;
+	vector<int> gpu_b_height_offsets;
 	deque<long long> average_gpu_percent = {};
 
 	//? NVIDIA data collection
@@ -189,6 +190,14 @@ namespace Shared {
 			Cpu::available_fields.push_back("gpu-average");
 			if (Config::strings.at("cpu_graph_lower") == "default")
 				Config::strings.at("cpu_graph_lower") = "gpu-totals";
+
+			using namespace Gpu;
+			gpu_b_height_offsets.resize(gpus.size());
+			for (ulong i = 0; i < gpu_b_height_offsets.size(); ++i)
+				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
+					   + gpus[i].supported_functions.pwr_usage
+					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
+						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
 		}
 
 		//? Init for namespace Mem
@@ -1121,7 +1130,7 @@ namespace Gpu {
 					int64_t temp_max;
     				result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_MAX, &temp_max);
         			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110");
+    					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
     				else gpus[offset].temp_max = (long long)temp_max;
 				}
 				initialized = true;

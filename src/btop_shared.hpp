@@ -94,6 +94,7 @@ namespace Gpu {
 	extern int shown;
 	extern vector<char> shown_panels;
 	extern vector<string> gpu_names;
+	extern vector<int> gpu_b_height_offsets;
 	extern deque<long long> average_gpu_percent;
 
   const array mem_names { "used"s, "free"s };
