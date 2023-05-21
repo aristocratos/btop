@@ -507,17 +507,15 @@ namespace Runner {
 			//* Run collection and draw functions for all boxes
 			try {
 				//? GPU data collection
-				vector<Gpu::gpu_info> gpus;
-				bool gpu_in_cpu_panel =
-					Config::getS("cpu_graph_lower") == "default"
-					or Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
-					or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0;
+				bool gpu_in_cpu_panel = Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
+									 or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0;
 
 				vector<unsigned int> gpu_panels = {};
 				for (auto& box : conf.boxes)
 					if (box.rfind("gpu", 0) == 0)
 						gpu_panels.push_back(box.back()-'0');
 
+				vector<Gpu::gpu_info> gpus;
 				if (gpu_in_cpu_panel or not gpu_panels.empty()) {
 					if (Global::debug) debug_timer("gpu", collect_begin);
 					gpus = Gpu::collect(conf.no_update);

@@ -104,15 +104,29 @@ namespace Gpu {
     unsigned long long mem;
 	};*/
 
+	//* Container for supported Gpu::*::collect() functions
+	struct gpu_info_supported {
+		bool gpu_utilization = true,
+		   	 mem_utilization = true,
+				 gpu_clock = true,
+				 mem_clock = true,
+				 pwr_usage = true,
+				 pwr_state = true,
+				 temp_info = true,
+				 mem_total = true,
+				 mem_used = true,
+				 pcie_txrx = true;
+	};
+
 	//* Per-device container for GPU info
 	struct gpu_info {
-		deque<long long> gpu_percent = {0};
-		unsigned int gpu_clock_speed = 0; // MHz
+		deque<long long> gpu_percent = {};
+		unsigned int gpu_clock_speed; // MHz
 
-		deque<long long> pwr_percent = {0};
-		long long pwr_usage = 0; // mW
+		deque<long long> pwr_percent = {};
+		long long pwr_usage; // mW
 		long long pwr_max_usage = 255000;
-		long long pwr_state = 32;
+		long long pwr_state;
 
 		deque<long long> temp = {0};
 		long long temp_max = 110;
@@ -125,6 +139,8 @@ namespace Gpu {
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;
+
+		gpu_info_supported supported_functions;
 
 		// vector<proc_info> graphics_processes = {}; // TODO
 		// vector<proc_info> compute_processes = {};
