@@ -840,7 +840,7 @@ namespace Cpu {
 
 namespace Gpu {
 	int width_p = 100, height_p = 32;
-	int min_width = 41, min_height = 9;
+	int min_width = 41, min_height = 11;
 	int width = 41, height;
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;
@@ -1975,7 +1975,7 @@ namespace Draw {
 				redraw[i] = true;
 
 				width = Term::width;
-				height = max(min_height, Cpu::shown ? Cpu::height : (int)ceil((double)Term::height * height_p / 100));
+				height = max(min_height, Cpu::shown ? Cpu::height : (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
 				height += (height+Cpu::height == Term::height-1);
 				x_vec[i] = 1; y_vec[i] = 1 + i*height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
 				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
