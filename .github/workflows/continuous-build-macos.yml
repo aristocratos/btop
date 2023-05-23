@@ -30,6 +30,9 @@ jobs:
     runs-on: macos-11
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
       - name: Compile
         run: |
           make CXX=g++-11 ARCH=x86_64 STATIC=true STRIP=true
@@ -49,7 +52,10 @@ jobs:
         with:
           xcode-version: latest-stable            
 
-      - uses: actions/checkout@v3      
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      
       - name: Compile
         run: |
           make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true

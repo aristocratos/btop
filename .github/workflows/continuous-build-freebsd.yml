@@ -30,6 +30,9 @@ jobs:
     runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
       - name: Compile
         uses: vmactions/freebsd-vm@v0
         with:
@@ -43,8 +46,8 @@ jobs:
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-$GIT_HASH
             ls -alh bin
+
       - uses: actions/upload-artifact@v3
         with:
           name: btop-x86_64-FreeBSD-13.1
           path: 'bin/*'
-      
