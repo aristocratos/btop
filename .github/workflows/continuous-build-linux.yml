@@ -94,6 +94,8 @@ jobs:
 
       - name: Checkout source
         uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Fix - Stopping at filesystem boundary
         run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]

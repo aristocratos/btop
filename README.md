@@ -74,7 +74,7 @@ If you want to help out, test for bugs/fix bugs or just try out the branches:
 ```bash
 # Install and use Homebrew or MacPorts package managers for easy dependency installation
 brew install coreutils make gcc@11
-git clone https://github.com/aristocratos/btop.git
+git clone --recursive https://github.com/aristocratos/btop.git
 cd btop
 git checkout OSX
 gmake
@@ -83,7 +83,7 @@ gmake
 **FreeBSD**
 ```bash
 sudo pkg install gmake gcc11 coreutils git
-git clone https://github.com/aristocratos/btop.git
+git clone --recursive https://github.com/aristocratos/btop.git
 cd btop
 git checkout freebsd
 gmake
@@ -241,7 +241,7 @@ Also needs a UTF8 locale and a font that covers:
 
    * **Run install.sh or:**
 
-   ``` bash
+   ```bash
    # use "make install PREFIX=/target/dir" to set target, default: /usr/local
    # only use "sudo" when installing to a NON user owned directory
    sudo make install
@@ -253,7 +253,7 @@ Also needs a UTF8 locale and a font that covers:
 
    * **Run setuid.sh or:**
 
-   ``` bash
+   ```bash
    # run after make install and use same PREFIX if any was used at install
    # set SU_USER and SU_GROUP to select user and group, default is root:root
    sudo make setuid
@@ -263,7 +263,7 @@ Also needs a UTF8 locale and a font that covers:
 
   * **Run uninstall.sh or:**
 
-   ``` bash
+   ```bash
    sudo make uninstall
    ```
 
@@ -315,14 +315,14 @@ Also needs a UTF8 locale and a font that covers:
 
    Use gcc-10 g++-10 if gcc-11 isn't available
 
-   ``` bash
+   ```bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
    ```
 
 2. **Clone repository**
 
-   ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   ```bash
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -347,7 +347,7 @@ Also needs a UTF8 locale and a font that covers:
 
    If `g++` is linked to an older version of gcc on your system specify the correct version by appending `CXX=g++-10` or `CXX=g++-11`.
 
-   ``` bash
+   ```bash
    make
    ```
 
@@ -357,7 +357,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-   ``` bash
+   ```bash
    sudo make install
    ```
 
@@ -369,13 +369,13 @@ Also needs a UTF8 locale and a font that covers:
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `root`
 
-   ``` bash
+   ```bash
    sudo make setuid
    ```
 
 * **Uninstall**
 
-   ``` bash
+   ```bash
    sudo make uninstall
    ```
 
@@ -409,14 +409,14 @@ Also needs a UTF8 locale and a font that covers:
 
 1. **Install dependencies (example for Homebrew)**
 
-   ``` bash
+   ```bash
    brew install coreutils make gcc@12
    ```
 
 2. **Clone repository**
 
-   ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   ```bash
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -437,7 +437,7 @@ Also needs a UTF8 locale and a font that covers:
 
    For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
-   ``` bash
+   ```bash
    gmake
    ```
 
@@ -447,7 +447,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-   ``` bash
+   ```bash
    sudo gmake install
    ```
 
@@ -459,13 +459,13 @@ Also needs a UTF8 locale and a font that covers:
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
 
-   ``` bash
+   ```bash
    sudo gmake setuid
    ```
 
 * **Uninstall**
 
-   ``` bash
+   ```bash
    sudo gmake uninstall
    ```
 
@@ -495,14 +495,14 @@ Also needs a UTF8 locale and a font that covers:
 
 1. **Install dependencies**
 
-   ``` bash
+   ```bash
    sudo pkg install gmake gcc11 coreutils git
    ```
 
 2. **Clone repository**
 
-   ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   ```bash
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -521,7 +521,7 @@ Also needs a UTF8 locale and a font that covers:
 
    For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
-   ``` bash
+   ```bash
    gmake
    ```
 
@@ -531,7 +531,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-   ``` bash
+   ```bash
    sudo gmake install
    ```
 
@@ -543,13 +543,13 @@ Also needs a UTF8 locale and a font that covers:
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
 
-   ``` bash
+   ```bash
    sudo gmake setuid
    ```
 
 * **Uninstall**
 
-   ``` bash
+   ```bash
    sudo gmake uninstall
    ```
 
