@@ -74,7 +74,7 @@ If you want to help out, test for bugs/fix bugs or just try out the branches:
 ```bash
 # Install and use Homebrew or MacPorts package managers for easy dependency installation
 brew install coreutils make gcc@11
-git clone https://github.com/aristocratos/btop.git
+git clone --recursive https://github.com/aristocratos/btop.git
 cd btop
 git checkout OSX
 gmake
@@ -83,7 +83,7 @@ gmake
 **FreeBSD**
 ```bash
 sudo pkg install gmake gcc11 coreutils git
-git clone https://github.com/aristocratos/btop.git
+git clone --recursive https://github.com/aristocratos/btop.git
 cd btop
 git checkout freebsd
 gmake
@@ -322,7 +322,7 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -416,7 +416,7 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -502,7 +502,7 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ``` bash
-   git clone https://github.com/aristocratos/btop.git
+   git clone --recursive https://github.com/aristocratos/btop.git
    cd btop
    ```
 
