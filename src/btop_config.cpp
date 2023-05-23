@@ -332,7 +332,7 @@ namespace Config {
 			new_presets.push_back(preset);
 		}
 
-		preset_list = move(new_presets);
+		preset_list = std::move(new_presets);
 		return true;
 	}
 
@@ -515,7 +515,7 @@ namespace Config {
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
 		}
-		current_boxes = move(new_boxes);
+		current_boxes = std::move(new_boxes);
 		return true;
 	}
 
