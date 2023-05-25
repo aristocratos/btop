@@ -703,7 +703,7 @@ namespace Cpu {
 				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
 			}
 
-			string lavg_str = Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_pre + lavg;
+			string lavg_str = lavg_pre + lavg;
 			// if previous load average string is longer than current
 			// then right pad the current string with spaces until
 			// the current string is the same length as the previous
@@ -717,7 +717,7 @@ namespace Cpu {
 			} else {
 				lavg_str_len = lavg_str.length();
 			}
-			out += lavg_str;
+			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
 		}
 
 		redraw = false;
