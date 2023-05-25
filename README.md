@@ -159,7 +159,7 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 
 Btop++ uses the same theme files as bpytop and bashtop (some color values missing in bashtop themes) .
 
-See [themes](https://github.com/aristocratos/btop/tree/master/themes) folder for available themes.
+See [themes](https://github.com/aristocratos/btop/tree/main/themes) folder for available themes.
 
 The `make install` command places the default themes in `[$PREFIX or /usr/local]/share/btop/themes`.
 User created themes should be placed in `$XDG_CONFIG_HOME/btop/themes` or `$HOME/.config/btop/themes`.
