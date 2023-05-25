@@ -495,6 +495,7 @@ namespace Cpu {
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
 	int graph_up_height;
+	long unsigned int lavg_str_len = 0;
 	bool shown = true, redraw = true, mid_line = false;
 	string box;
 	Draw::Graph graph_upper;
@@ -701,7 +702,22 @@ namespace Cpu {
 			for (const auto& val : cpu.load_avg) {
 				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
 			}
-			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_pre + lavg;
+
+			string lavg_str = lavg_pre + lavg;
+			// if previous load average string is longer than current
+			// then right pad the current string with spaces until
+			// the current string is the same length as the previous
+			// otherwise set the lavg_str_len.
+			//
+			// When a shorter string gets written, the remaining characters
+			// from the previous string get left behind.  This "erases" the
+			// leftover characters from the previous string.
+			if (lavg_str_len > lavg_str.length()) {
+				lavg_str += string(lavg_str_len - lavg_str.length(), ' ');
+			} else {
+				lavg_str_len = lavg_str.length();
+			}
+			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
 		}
 
 		redraw = false;
