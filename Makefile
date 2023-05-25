@@ -1,4 +1,4 @@
-#* Btop++ makefile v1.5
+#* Btop++ makefile v1.6
 
 BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.5\033[0m
 
@@ -39,6 +39,46 @@ endif
 
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
+#? Compiler and Linker
+ifeq ($(shell $(CXX) --version | grep clang >/dev/null 2>&1; echo $$?),0)
+	override CXX_IS_CLANG := true
+endif
+override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
+override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
+
+CLANG_WORKS = false
+GCC_WORKS = false
+
+#? Supported is Clang 16.0.0 and later
+ifeq ($(CXX_IS_CLANG),true)
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 16; echo $$?),0)
+		CLANG_WORKS := true
+	endif
+endif
+ifeq ($(CLANG_WORKS),false)
+	#? Try to find a newer GCC version
+	ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
+		CXX := g++-12
+	else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
+		CXX := g++-11
+	else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
+		CXX := g++11
+	else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
+		CXX := g++
+	endif
+	override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
+	override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
+		GCC_WORKS := true
+	endif
+endif
+
+ifeq ($(CLANG_WORKS),false)
+	ifeq ($(GCC_WORKS),false)
+$(error $(shell printf "\033[1;91mERROR: \033[97mCompiler too old. (Requires Clang 16.0.0, GCC 10.1.0)\033[0m"))
+	endif
+endif
+
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
 override TESTFLAGS := -fexceptions -fstack-clash-protection -fcf-protection
 ifneq ($(PLATFORM) $(ARCH),macos arm64)
@@ -46,7 +86,13 @@ ifneq ($(PLATFORM) $(ARCH),macos arm64)
 endif
 
 ifeq ($(STATIC),true)
-	override ADDFLAGS += -static-libgcc -static-libstdc++
+	ifeq ($(CXX_IS_CLANG),true)
+		ifeq ($(shell $(CXX) -print-target-triple | grep gnu >/dev/null; echo $$?),0)
+$(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link glibc\033[0m"))
+		endif
+	else
+		override ADDFLAGS += -static-libgcc -static-libstdc++
+	endif
 	ifneq ($(PLATFORM),macos)
 		override ADDFLAGS += -DSTATIC_BUILD -static -Wl,--fatal-warnings
 	endif
@@ -60,33 +106,6 @@ ifeq ($(VERBOSE),true)
 	override VERBOSE := false
 else
 	override VERBOSE := true
-endif
-
-#? Compiler and Linker
-ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
-	CXX := g++-12
-else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-	CXX := g++-11
-else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
-	CXX := g++11
-else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
-	CXX := g++
-endif
-override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-
-#? Try to make sure we are using GCC/G++ version 11 or later if not instructed to use g++-10
-ifeq ($(CXX),g++)
-	ifeq ($(shell g++ --version | grep clang >/dev/null 2>&1; echo $$?),0)
-		V_MAJOR := 0
-	else
-		V_MAJOR := $(shell echo $(CXX_VERSION) | cut -f1 -d".")
-	endif
-	ifneq ($(shell test $(V_MAJOR) -ge 11; echo $$?),0)
-		ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-			override CXX := g++-11
-			override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-		endif
-	endif
 endif
 
 #? Pull in platform specific source files and get thread count
@@ -115,6 +134,13 @@ ifeq ($(THREADS),1)
 	override THREADS := auto
 endif
 
+#? LTO command line
+ifeq ($(CLANG_WORKS),true)
+	LTO := thin
+else
+	LTO := $(THREADS)
+endif
+
 #? The Directories, Source, Includes, Objects and Binary
 SRCDIR		:= src
 INCDIRS		:= include $(wildcard lib/**/include)
@@ -130,7 +156,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(THREADS)
+OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
