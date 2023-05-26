@@ -733,7 +733,7 @@ namespace Cpu {
 					if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
 
 					//? Subtract fields 8-9 and any future unknown fields
-					const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0) : 0));
+					const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0ll) : 0));
 
 					//? Add iowait field if present
 					const long long idles = max(0ll, times.at(3) + (times.size() > 4 ? times.at(4) : 0));
@@ -1543,8 +1543,8 @@ namespace Net {
 			for (const auto& dir: {"download", "upload"}) {
 				for (const auto& sel : {0, 1}) {
 					if (rescale or max_count[dir][sel] >= 5) {
-						const uint64_t avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
-							? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0) / 5
+						const long long avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
+							? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
 							: net[selected_iface].stat[dir].speed);
 						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
