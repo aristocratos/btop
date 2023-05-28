@@ -290,6 +290,18 @@ Also needs a UTF8 locale and a font that covers:
     sudo dnf install epel-release
 	sudo dnf install btop
 	```
+* **Ubuntu**
+    ```bash
+    sudo apt install btop
+	```
+* **Arch Linux**
+    ```bash
+    sudo pacman -S btop
+	```
+* **Void Linux**
+    ```bash
+    sudo xbps-install btop
+	```
 * **FreeBSD**
 	```sh
 	pkg install btop
