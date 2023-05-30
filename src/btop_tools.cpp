@@ -103,7 +103,7 @@ namespace Term {
         bool mem = boxes.find("mem") != string::npos;
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
-        bool gpu = 0;
+        int gpu = 0;
         if (not Gpu::gpu_names.empty())
         	for (char i = '0'; i <= '5'; ++i)
         		gpu += (boxes.find(std::string("gpu") + i) != string::npos);
@@ -117,7 +117,7 @@ namespace Term {
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
-		if (gpu != 0) height += Gpu::min_height*gpu;
+		height += Gpu::min_height*gpu;
 
 		return { width, height };
 	}

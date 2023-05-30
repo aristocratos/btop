@@ -99,7 +99,12 @@ namespace Gpu {
 	vector<gpu_info> gpus;
 	vector<string> gpu_names;
 	vector<int> gpu_b_height_offsets;
-	deque<long long> average_gpu_percent = {};
+	unordered_flat_map<string, deque<long long>> shared_gpu_percent = {
+		{"gpu-average", {}},
+		{"gpu-vram-total", {}},
+		{"gpu-pwr-total", {}},
+	};
+	long long gpu_pwr_total_max;
 
 	//? NVIDIA data collection
 	namespace Nvml {
@@ -186,8 +191,10 @@ namespace Shared {
 		Gpu::Nvml::init();
 		Gpu::Rsmi::init();
 		if (not Gpu::gpu_names.empty()) {
-			Cpu::available_fields.push_back("gpu-totals");
-			Cpu::available_fields.push_back("gpu-average");
+			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
+				Cpu::available_fields.push_back(key);
+			for (auto const& [key, _] : Gpu::shared_gpu_percent)
+				Cpu::available_fields.push_back(key);
 			if (Config::strings.at("cpu_graph_lower") == "default")
 				Config::strings.at("cpu_graph_lower") = "gpu-totals";
 
@@ -890,45 +897,9 @@ namespace Gpu {
 				gpus.resize(device_count);
 				gpu_names.resize(device_count);
 
-				for (unsigned int i = 0; i < device_count; ++i) {
-					//? Device Handle
-    				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i*sizeof(nvmlDevice_t));
-        			if (result != NVML_SUCCESS) {
-    					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
-    					gpus[i].supported_functions = {false, false, false, false, false, false, false, false};
-    					continue;
-        			}
-
-					//? Device name
-					char name[NVML_DEVICE_NAME_BUFFER_SIZE];
-    				result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
-        			else {
-        				gpu_names[i] = string(name);
-        				for (const auto& brand : {"NVIDIA", "Nvidia", "AMD", "Amd", "Intel", "(R)", "(TM)"}) {
-							gpu_names[i] = s_replace(gpu_names[i], brand, "");
-						}
-						gpu_names[i] = trim(gpu_names[i]);
-        			}
-
-    				//? Power usage
-    				unsigned int max_power;
-    				result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
-    				if (result != NVML_SUCCESS)
-						Logger::warning(std::string("NVML: Failed to get maximum GPU power draw, defaulting to 225W: ") + nvmlErrorString(result));
-					else gpus[i].pwr_max_usage = max_power;
-
-					//? Get temp_max
-					unsigned int temp_max;
-    				result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
-        			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: ") + nvmlErrorString(result));
-    				else gpus[i].temp_max = (long long)temp_max;
-				}
 				initialized = true;
 
-				//? Check supported functions
+				//? Check supported functions & get maximums
 				Nvml::collect<1>(gpus.data());
 
 				return true;
@@ -956,9 +927,50 @@ namespace Gpu {
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count
 		#if defined(GPU_NVIDIA)
 			if (!initialized) return false;
+
 			nvmlReturn_t result;
 			// DebugTimer gpu_nvidia("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
+				if constexpr(is_init) {
+					//? Device Handle
+    				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
+        			if (result != NVML_SUCCESS) {
+    					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
+    					gpus[i].supported_functions = {false, false, false, false, false, false, false, false};
+    					continue;
+        			}
+
+					//? Device name
+					char name[NVML_DEVICE_NAME_BUFFER_SIZE];
+    				result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
+        			if (result != NVML_SUCCESS)
+    					Logger::warning(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
+        			else {
+        				gpu_names[i] = string(name);
+        				for (const auto& brand : {"NVIDIA", "Nvidia", "(R)", "(TM)"}) {
+							gpu_names[i] = s_replace(gpu_names[i], brand, "");
+						}
+						gpu_names[i] = trim(gpu_names[i]);
+        			}
+
+    				//? Power usage
+    				unsigned int max_power;
+    				result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
+    				if (result != NVML_SUCCESS)
+						Logger::warning(std::string("NVML: Failed to get maximum GPU power draw, defaulting to 225W: ") + nvmlErrorString(result));
+					else {
+						gpus[i].pwr_max_usage = max_power; // RSMI reports power in microWatts
+						gpu_pwr_total_max += max_power;
+					}
+
+					//? Get temp_max
+					unsigned int temp_max;
+    				result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
+        			if (result != NVML_SUCCESS)
+    					Logger::warning(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: ") + nvmlErrorString(result));
+    				else gpus[i].temp_max = (long long)temp_max;
+				}
+
 				//? GPU & memory utilization
 				if (gpus_slice[i].supported_functions.gpu_utilization) {
 					nvmlUtilization_t utilization;
@@ -968,7 +980,7 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
     				} else {
-						gpus_slice[i].gpu_percent.push_back((long long)utilization.gpu);
+						gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization.gpu);
 						gpus_slice[i].mem_utilization_percent.push_back((long long)utilization.memory);
     				}
 				}
@@ -1003,7 +1015,7 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
     				} else {
     					gpus_slice[i].pwr_usage = (long long)power;
-    					gpus_slice[i].pwr_percent.push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+    					gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
     				}
     			}
 
@@ -1044,7 +1056,7 @@ namespace Gpu {
 						//gpu.mem_free = memory.free;
 
 						auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
-						gpus_slice[i].mem_used_percent.push_back(used_percent);
+						gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(used_percent);
 					}
 				}
 
@@ -1109,33 +1121,9 @@ namespace Gpu {
 				gpus.resize(gpus.size() + device_count);
 				gpu_names.resize(gpus.size() + device_count);
 
-				for (unsigned int i = 0; i < device_count; ++i) {
-					auto offset = Nvml::device_count + i;
-
-					//? Device name
-					char name[NVML_DEVICE_NAME_BUFFER_SIZE]; // ROCm SMI does not provide a constant for this as far as I can tell, this should be good enough
-    				result = rsmi_dev_name_get(i, name, NVML_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[offset] = string(name);
-
-    				//? Power usage
-    				uint64_t max_power;
-    				result = rsmi_dev_power_cap_get(i, 0, &max_power);
-    				if (result != RSMI_STATUS_SUCCESS)
-						Logger::warning("ROCm SMI: Failed to get maximum GPU power draw, defaulting to 225W");
-					else gpus[offset].pwr_max_usage = (long long)(max_power/1000); // RSMI reports power in microWatts
-
-					//? Get temp_max
-					int64_t temp_max;
-    				result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_MAX, &temp_max);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
-    				else gpus[offset].temp_max = (long long)temp_max;
-				}
 				initialized = true;
 
-				//? Check supported functions
+				//? Check supported functions & get maximums
 				Rsmi::collect<1>(gpus.data() + Nvml::device_count);
 
 				return true;
@@ -1165,6 +1153,32 @@ namespace Gpu {
 			rsmi_status_t result;
 
 			for (uint32_t i = 0; i < device_count; ++i) {
+				if constexpr(is_init) {
+					//? Device name
+					char name[NVML_DEVICE_NAME_BUFFER_SIZE]; // ROCm SMI does not provide a constant for this as far as I can tell, this should be good enough
+    				result = rsmi_dev_name_get(i, name, NVML_DEVICE_NAME_BUFFER_SIZE);
+        			if (result != RSMI_STATUS_SUCCESS)
+    					Logger::warning("ROCm SMI: Failed to get device name");
+        			else gpu_names[Nvml::device_count + i] = string(name);
+
+    				//? Power usage
+    				uint64_t max_power;
+    				result = rsmi_dev_power_cap_get(i, 0, &max_power);
+    				if (result != RSMI_STATUS_SUCCESS)
+						Logger::warning("ROCm SMI: Failed to get maximum GPU power draw, defaulting to 225W");
+					else {
+						gpus_slice[i].pwr_max_usage = (long long)(max_power/1000); // RSMI reports power in microWatts
+						gpu_pwr_total_max += gpus_slice[i].pwr_max_usage;
+					}
+
+					//? Get temp_max
+					int64_t temp_max;
+    				result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_MAX, &temp_max);
+        			if (result != RSMI_STATUS_SUCCESS)
+    					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
+    				else gpus_slice[i].temp_max = (long long)temp_max;
+    			}
+
 				//? GPU utilization
 				if (gpus_slice[i].supported_functions.gpu_utilization) {
 					uint32_t utilization;
@@ -1172,7 +1186,7 @@ namespace Gpu {
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU utilization");
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
-    				} else gpus_slice[i].gpu_percent.push_back((long long)utilization);
+    				} else gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization);
 				}
 
 				//? Memory utilization
@@ -1211,7 +1225,7 @@ namespace Gpu {
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU power usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else gpus_slice[i].pwr_percent.push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+    				} else gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
 
 					if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
 				}
@@ -1247,7 +1261,7 @@ namespace Gpu {
 					} else {
 						gpus_slice[i].mem_used = used;
 						if (gpus_slice[i].supported_functions.mem_total)
-							gpus_slice[i].mem_used_percent.push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
+							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
 					}
 				}
 
@@ -1287,27 +1301,44 @@ namespace Gpu {
 
 		//* Calculate average usage
 		long long avg = 0;
+		long long mem_usage_total = 0;
+		long long mem_total = 0;
+		long long pwr_total = 0;
 		for (auto& gpu : gpus) {
 			if (gpu.supported_functions.gpu_utilization)
-				avg += gpu.gpu_percent.back();
+				avg += gpu.gpu_percent.at("gpu-totals").back();
+			if (gpu.supported_functions.mem_used)
+				mem_usage_total += gpu.mem_used;
+			if (gpu.supported_functions.mem_total)
+				mem_total += gpu.mem_total;
+			if (gpu.supported_functions.pwr_usage)
+				mem_total += gpu.pwr_usage;
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
 				//? GPU & memory utilization
-				while (cmp_greater(gpu.gpu_percent.size(),             width * 2)) gpu.gpu_percent.pop_front();
-				while (cmp_greater(gpu.mem_utilization_percent.size(), width))     gpu.mem_utilization_percent.pop_front();
+				while (cmp_greater(gpu.gpu_percent.at("gpu-totals").size(), width * 2)) gpu.gpu_percent.at("gpu-totals").pop_front();
+				while (cmp_greater(gpu.mem_utilization_percent.size(), width)) gpu.mem_utilization_percent.pop_front();
 				//? Power usage
-				while (cmp_greater(gpu.pwr_percent.size(), width)) gpu.pwr_percent.pop_front();
+				while (cmp_greater(gpu.gpu_percent.at("gpu-pwr-totals").size(), width)) gpu.gpu_percent.at("gpu-pwr-totals").pop_front();
 				//? Temperature
 				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
 				//? Memory usage
-				while (cmp_greater(gpu.mem_used_percent.size(), width/2)) gpu.mem_used_percent.pop_front();
+				while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width/2)) gpu.gpu_percent.at("gpu-vram-totals").pop_front();
 			}
 		}
-		average_gpu_percent.push_back(avg / gpus.size());
 
-		if (width != 0)
-			while (cmp_greater(average_gpu_percent.size(), width * 2)) average_gpu_percent.pop_front();
+		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
+		if (mem_total != 0)
+			shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
+		if (gpu_pwr_total_max != 0)
+			shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
+
+		if (width != 0) {
+			while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
+			while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) shared_gpu_percent.at("gpu-pwr-total").pop_front();
+			while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) shared_gpu_percent.at("gpu-vram-total").pop_front();
+		}
 
 		return gpus;
 	}

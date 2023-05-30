@@ -95,7 +95,9 @@ namespace Gpu {
 	extern vector<char> shown_panels;
 	extern vector<string> gpu_names;
 	extern vector<int> gpu_b_height_offsets;
-	extern deque<long long> average_gpu_percent;
+	extern long long gpu_pwr_total_max;
+
+	extern unordered_flat_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
   const array mem_names { "used"s, "free"s };
 
@@ -121,10 +123,13 @@ namespace Gpu {
 
 	//* Per-device container for GPU info
 	struct gpu_info {
-		deque<long long> gpu_percent = {};
+		unordered_flat_map<string, deque<long long>> gpu_percent = {
+			{"gpu-totals", {}},
+			{"gpu-vram-totals", {}},
+			{"gpu-pwr-totals", {}},
+		};
 		unsigned int gpu_clock_speed; // MHz
 
-		deque<long long> pwr_percent = {};
 		long long pwr_usage; // mW
 		long long pwr_max_usage = 255000;
 		long long pwr_state;
@@ -134,7 +139,6 @@ namespace Gpu {
 
 		long long mem_total = 0;
 		long long mem_used = 0;
-		deque<long long> mem_used_percent = {0};
 		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
 		long long mem_clock_speed = 0; // MHz
 
