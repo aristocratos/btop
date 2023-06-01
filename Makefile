@@ -120,15 +120,6 @@ ifeq ($(PLATFORM_LC),linux)
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
 	ifneq ($(NO_GPU),true)
-		ifeq ($(shell find /usr/local/cuda/include/ -type f -name nvml.h >/dev/null 2>&1; echo $$?),0)
-			GPUCXXFLAGS := -I/usr/local/cuda/include
-			GPULDFLAGS := -L/usr/local/cuda/lib -lnvidia-ml
-			override ADDFLAGS += -DGPU_NVIDIA
-		else ifeq ($(shell find /opt/cuda/include/ -type f -name nvml.h >/dev/null 2>&1; echo $$?),0)
-			GPUCXXFLAGS := -I/opt/cuda/include
-			GPULDFLAGS := -L/opt/cuda/lib -lnvidia-ml
-			override ADDFLAGS += -DGPU_NVIDIA
-		endif
 		ifeq ($(shell find /opt/rocm/include/rocm_smi/ -type f -name rocm_smi.h >/dev/null 2>&1; echo $$?),0)
 			GPUCXXFLAGS += -I/opt/rocm/include
 			GPULDFLAGS += -L/opt/rocm/lib -lrocm_smi64

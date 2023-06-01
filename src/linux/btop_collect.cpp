@@ -28,9 +28,7 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
-#if defined(GPU_NVIDIA)
-	#include <nvml.h>
-#endif
+#include <dlfcn.h>
 #if defined(GPU_AMD)
 	#include <rocm_smi/rocm_smi.h>
 #endif
@@ -108,13 +106,51 @@ namespace Gpu {
 
 	//? NVIDIA data collection
 	namespace Nvml {
+		// NVML defines, structs & typedefs
+		#define NVML_DEVICE_NAME_BUFFER_SIZE        64
+		#define NVML_SUCCESS                         0
+		#define NVML_TEMPERATURE_THRESHOLD_SHUTDOWN  0
+		#define NVML_CLOCK_GRAPHICS                  0
+		#define NVML_CLOCK_MEM                       2
+		#define NVML_TEMPERATURE_GPU                 0
+		#define NVML_PCIE_UTIL_TX_BYTES              0
+		#define NVML_PCIE_UTIL_RX_BYTES              1
+
+		typedef void* nvmlDevice_t; // we won't be accessing any of the underlying struct's properties, so this is fine
+		typedef int nvmlReturn_t, // enums are basically ints
+					nvmlTemperatureThresholds_t,
+					nvmlClockType_t,
+					nvmlPstates_t,
+					nvmlTemperatureSensors_t,
+					nvmlPcieUtilCounter_t;
+
+		struct nvmlUtilization_t {unsigned int gpu, memory;};
+		struct nvmlMemory_t {unsigned long long total, free, used;};
+
+		//? Function pointers
+		const char* (*nvmlErrorString)(nvmlReturn_t);
+		nvmlReturn_t (*nvmlInit)();
+		nvmlReturn_t (*nvmlShutdown)();
+		nvmlReturn_t (*nvmlDeviceGetCount)(unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetHandleByIndex)(unsigned int, nvmlDevice_t*);
+		nvmlReturn_t (*nvmlDeviceGetName)(nvmlDevice_t, char*, unsigned int);
+		nvmlReturn_t (*nvmlDeviceGetPowerManagementLimit)(nvmlDevice_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetTemperatureThreshold)(nvmlDevice_t, nvmlTemperatureThresholds_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetUtilizationRates)(nvmlDevice_t, nvmlUtilization_t*);
+		nvmlReturn_t (*nvmlDeviceGetClockInfo)(nvmlDevice_t, nvmlClockType_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetPowerUsage)(nvmlDevice_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetPowerState)(nvmlDevice_t, nvmlPstates_t*);
+		nvmlReturn_t (*nvmlDeviceGetTemperature)(nvmlDevice_t, nvmlTemperatureSensors_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetMemoryInfo)(nvmlDevice_t, nvmlMemory_t*);
+		nvmlReturn_t (*nvmlDeviceGetPcieThroughput)(nvmlDevice_t, nvmlPcieUtilCounter_t, unsigned int*);
+
+		//? Actual data
+		void* nvml_dl_handle;
 		bool initialized = false;
 		bool init();
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
-	#if defined(GPU_NVIDIA)
 		vector<nvmlDevice_t> devices;
-	#endif
 		unsigned int device_count = 0;
 	}
 
@@ -876,9 +912,45 @@ namespace Gpu {
     //? NVIDIA
     namespace Nvml {
 		bool init() {
-		#if defined(GPU_NVIDIA)
 			if (initialized) return false;
 
+			//? Dynamic loading & linking
+			nvml_dl_handle = dlopen("libnvidia-ml.so", RTLD_LAZY);
+			if (!nvml_dl_handle) {
+				Logger::info(std::string("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: ") + dlerror());
+				return false;
+			}
+
+			auto load_nvml_sym = [&](const char sym_name[]) {
+				auto sym = dlsym(nvml_dl_handle, sym_name);
+				auto err = dlerror();
+				if (err != NULL) {
+					Logger::error(string("NVML: Couldn't find function ") + sym_name + ": " + err);
+					return (void*)nullptr;
+				} else return sym;
+			};
+
+            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+
+		    LOAD_SYM(nvmlErrorString);
+		    LOAD_SYM(nvmlInit);
+		    LOAD_SYM(nvmlShutdown);
+		    LOAD_SYM(nvmlDeviceGetCount);
+		    LOAD_SYM(nvmlDeviceGetHandleByIndex);
+		    LOAD_SYM(nvmlDeviceGetName);
+		    LOAD_SYM(nvmlDeviceGetPowerManagementLimit);
+		    LOAD_SYM(nvmlDeviceGetTemperatureThreshold);
+		    LOAD_SYM(nvmlDeviceGetUtilizationRates);
+		    LOAD_SYM(nvmlDeviceGetClockInfo);
+		    LOAD_SYM(nvmlDeviceGetPowerUsage);
+		    LOAD_SYM(nvmlDeviceGetPowerState);
+		    LOAD_SYM(nvmlDeviceGetTemperature);
+		    LOAD_SYM(nvmlDeviceGetMemoryInfo);
+		    LOAD_SYM(nvmlDeviceGetPcieThroughput);
+
+            #undef LOAD_SYM
+
+			//? Function calls
 			nvmlReturn_t result = nvmlInit();
     		if (result != NVML_SUCCESS) {
     			Logger::warning(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
@@ -904,28 +976,21 @@ namespace Gpu {
 
 				return true;
 			} else {initialized = true; shutdown(); return false;}
-		#else
-			return false;
-		#endif
 		}
 
 		bool shutdown() {
-		#if defined(GPU_NVIDIA)
 			if (!initialized) return false;
 			nvmlReturn_t result = nvmlShutdown();
-    		if (NVML_SUCCESS == result)
+			if (NVML_SUCCESS == result) {
 				initialized = false;
-			else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
+				dlclose(nvml_dl_handle);
+			} else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
 
 			return !initialized;
-		#else
-			return false;
-		#endif
 		}
 
 		template <bool is_init> // collect<1> is called in Nvml::init(), and populates gpus.supported_functions
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count
-		#if defined(GPU_NVIDIA)
 			if (!initialized) return false;
 
 			nvmlReturn_t result;
@@ -1090,10 +1155,6 @@ namespace Gpu {
     		}
 
 			return true;
-		#else
-			(void)gpus_slice;
-			return false;
-		#endif
 		}
     }
 
