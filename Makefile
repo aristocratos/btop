@@ -120,11 +120,8 @@ ifeq ($(PLATFORM_LC),linux)
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
 	ifneq ($(NO_GPU),true)
-		ifeq ($(shell find /opt/rocm/include/rocm_smi/ -type f -name rocm_smi.h >/dev/null 2>&1; echo $$?),0)
-			GPUCXXFLAGS += -I/opt/rocm/include
-			GPULDFLAGS += -L/opt/rocm/lib -lrocm_smi64
-			override ADDFLAGS += -DGPU_AMD
-		endif
+		GPULDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a
+		override ADDFLAGS += -DGPU_AMD
 	endif
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
@@ -171,9 +168,7 @@ override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
-GPUCXXFLAGS      := -I/opt/cuda/include -I/opt/rocm/include # TODO: there has to be a better way to link these libs than hardcoded dirs
-GPULDFLAGS    := -L/opt/cuda/lib -L/opt/rocm/lib -lnvidia-ml -lrocm_smi64
-override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPUCXXFLAGS)
+override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPULDFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR)
 SU_USER				:= root
@@ -219,9 +214,8 @@ info:
 	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
 	@printf "\033[1;93mLDCXXFLAGS   \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
-	@printf "\033[1;92mGPUCXXFLAGS  \033[1;94m:| \033[0m$(GPUCXXFLAGS)\n"
 	@printf "\033[1;92mGPULDFLAGS   \033[1;94m:| \033[0m$(GPULDFLAGS)\n"
-	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) \$$(\033[92mGPUCXXFLAGS\033[37m) $(OLDCXX)\n"
+	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
 	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) \$$(\033[92mGPULDFLAGS\033[37m) $(OLDLD)\n"
 
 info-quiet:
@@ -302,9 +296,26 @@ uninstall:
 #? Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
+#? Compile rocm_smi
+ifneq ($(NO_GPU),true)
+.ONESHELL:
+rocm_smi:
+	@printf "\n\033[1;92mCompiling librocm_smi64.a\033[37m...\033[0m\n"
+	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
+	@mkdir lib/rocm_smi_lib/build
+	@cd lib/rocm_smi_lib/build
+	@cmake .. &>/dev/null
+	@make rocm_smi64 &>/dev/null
+	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o')
+	@printf "\n\033[1;92mlibrocm_smi64.a build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+else
+rocm_smi:
+	@true
+endif
+
 #? Link
 .ONESHELL:
-btop: $(OBJECTS) | directories
+btop: $(OBJECTS) | directories rocm_smi
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"

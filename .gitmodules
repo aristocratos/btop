@@ -1,3 +1,6 @@
 [submodule "lib/fmt"]
 	path = lib/fmt
 	url = https://github.com/fmtlib/fmt
+[submodule "lib/rocm_smi_lib"]
+	path = lib/rocm_smi_lib
+	url = https://github.com/RadeonOpenCompute/rocm_smi_lib
