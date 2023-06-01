@@ -313,13 +313,13 @@ rocm_smi:
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@mkdir -p lib/rocm_smi_lib/build
 	@cd lib/rocm_smi_lib/build
-	@$(QUIET) || printf "\033[1;97mRunning cmake...\033[0m\n"
+	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
 	@cmake .. $(SUPPRESS) || exit 1
 	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
 	@$(MAKE) $(SUPPRESS) || exit 1
 	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || exit 1
 	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
-	@printf "\033[1;92mlibrocm_smi64.a build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n\n"
+	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 else
 rocm_smi:
 	@true
