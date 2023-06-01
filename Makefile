@@ -12,10 +12,7 @@ else
 endif
 
 ifneq ($(QUIET),true)
-	override PRE := info info-quiet
 	override QUIET := false
-else
-	override PRE := info-quiet
 endif
 
 OLDCXX := $(CXXFLAGS)
@@ -201,9 +198,17 @@ endif
 
 P := %%
 
-#? Default Make
-all: $(PRE) directories btop
+ifeq ($(VERBOSE),true)
+	override SUPPRESS := 1>/dev/null
+else
+	override SUPPRESS :=
+endif
 
+#? Default Make
+.ONESHELL:
+all: | info rocm_smi info-quiet directories btop
+
+ifneq ($(QUIET),true)
 info:
 	@printf " $(BANNER)\n"
 	@printf "\033[1;92mPLATFORM     \033[1;93m?| \033[0m$(PLATFORM)\n"
@@ -217,9 +222,13 @@ info:
 	@printf "\033[1;92mGPULDFLAGS   \033[1;94m:| \033[0m$(GPULDFLAGS)\n"
 	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
 	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) \$$(\033[92mGPULDFLAGS\033[37m) $(OLDLD)\n"
+else
+info:
+	 @true
+endif
 
-info-quiet:
-	@sleep 0.1 2>/dev/null || true
+
+info-quiet: | info rocm_smi
 	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
 
 help:
@@ -300,14 +309,17 @@ uninstall:
 ifneq ($(NO_GPU),true)
 .ONESHELL:
 rocm_smi:
-	@printf "\n\033[1;92mCompiling librocm_smi64.a\033[37m...\033[0m\n"
+	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@mkdir lib/rocm_smi_lib/build
+	@mkdir -p lib/rocm_smi_lib/build
 	@cd lib/rocm_smi_lib/build
-	@cmake .. &>/dev/null
-	@make rocm_smi64 &>/dev/null
-	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o')
-	@printf "\n\033[1;92mlibrocm_smi64.a build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(QUIET) || printf "\033[1;97mRunning cmake...\033[0m\n"
+	@cmake .. $(SUPPRESS) || exit 1
+	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
+	@$(MAKE) $(SUPPRESS) || exit 1
+	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || exit 1
+	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
+	@printf "\033[1;92mlibrocm_smi64.a build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n\n"
 else
 rocm_smi:
 	@true
@@ -315,7 +327,7 @@ endif
 
 #? Link
 .ONESHELL:
-btop: $(OBJECTS) | directories rocm_smi
+btop: $(OBJECTS) | rocm_smi directories
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
@@ -326,7 +338,7 @@ btop: $(OBJECTS) | directories rocm_smi
 
 #? Compile
 .ONESHELL:
-$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | directories
+$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
