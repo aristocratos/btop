@@ -131,15 +131,6 @@ else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
 endif
 
-ifeq ($(RSMI_STATIC),true)
-ifeq ($(PLATFORM_LC),linux)
-	GPULDFLAGS := lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a
-	override ADDFLAGS += -DRSMI_STATIC
-else
-	override RSMI_STATIC = false
-endif
-endif
-
 #? Use all CPU cores (will only be set if using Make 4.3+)
 MAKEFLAGS := --jobs=$(THREADS)
 ifeq ($(THREADS),1)
@@ -171,7 +162,7 @@ WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
-override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS) $(GPULDFLAGS)
+override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR)
 SU_USER				:= root
 
@@ -224,9 +215,8 @@ info:
 	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
 	@printf "\033[1;93mLDCXXFLAGS   \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
-	@printf "\033[1;92mGPULDFLAGS   \033[1;94m:| \033[0m$(GPULDFLAGS)\n"
 	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
-	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) \$$(\033[92mGPULDFLAGS\033[37m) $(OLDLD)\n"
+	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
 else
 info:
 	 @true
@@ -311,7 +301,7 @@ uninstall:
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
 #? Compile rocm_smi
-ifeq ($(RSMI_STATIC),true)
+ifeq ($(RSMI_STATIC)$(PLATFORM_LC),truelinux)
 .ONESHELL:
 rocm_smi:
 	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
@@ -319,12 +309,14 @@ rocm_smi:
 	@mkdir -p lib/rocm_smi_lib/build
 	@cd lib/rocm_smi_lib/build
 	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
-	@cmake .. $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
+	@cmake .. $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
 	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
-	@$(MAKE) $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
-	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || { printf "\033[1;91mFailed to pack ROCm SMI into static library, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
+	@$(MAKE) $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
+	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || { printf "\033[1;91mFailed to pack ROCm SMI into static library, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
 	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
 	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(override LDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a)
+	@$(override ADDFLAGS += -DRSMI_STATIC)
 else
 rocm_smi:
 	@true
