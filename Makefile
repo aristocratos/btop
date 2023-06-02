@@ -315,8 +315,8 @@ rocm_smi:
 	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || { printf "\033[1;91mFailed to pack ROCm SMI into static library, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
 	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
 	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
-	@$(override LDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a)
-	@$(override ADDFLAGS += -DRSMI_STATIC)
+	@$(eval override LDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a -DRSMI_STATIC)
+	@$(eval override CXXFLAGS += -DRSMI_STATIC)
 else
 rocm_smi:
 	@true
