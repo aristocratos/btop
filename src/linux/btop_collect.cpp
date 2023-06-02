@@ -29,9 +29,7 @@ tab-size = 4
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
 #include <dlfcn.h>
-#if defined(GPU_AMD)
-	#include <rocm_smi/rocm_smi.h>
-#endif
+#include <rocm_smi/rocm_smi.h>
 
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
@@ -106,7 +104,7 @@ namespace Gpu {
 
 	//? NVIDIA data collection
 	namespace Nvml {
-		// NVML defines, structs & typedefs
+		//? NVML defines, structs & typedefs
 		#define NVML_DEVICE_NAME_BUFFER_SIZE        64
 		#define NVML_SUCCESS                         0
 		#define NVML_TEMPERATURE_THRESHOLD_SHUTDOWN  0
@@ -144,7 +142,7 @@ namespace Gpu {
 		nvmlReturn_t (*nvmlDeviceGetMemoryInfo)(nvmlDevice_t, nvmlMemory_t*);
 		nvmlReturn_t (*nvmlDeviceGetPcieThroughput)(nvmlDevice_t, nvmlPcieUtilCounter_t, unsigned int*);
 
-		//? Actual data
+		//? Data
 		void* nvml_dl_handle;
 		bool initialized = false;
 		bool init();
@@ -156,6 +154,25 @@ namespace Gpu {
 
 	//? AMD data collection
 	namespace Rsmi {
+	#if !defined(RSMI_STATIC)
+		//? Function pointers
+		rsmi_status_t (*rsmi_init)(uint64_t);
+		rsmi_status_t (*rsmi_shut_down)();
+		rsmi_status_t (*rsmi_num_monitor_devices)(uint32_t*);
+		rsmi_status_t (*rsmi_dev_name_get)(uint32_t, char*, size_t);
+		rsmi_status_t (*rsmi_dev_power_cap_get)(uint32_t, uint32_t, uint64_t*);
+		rsmi_status_t (*rsmi_dev_temp_metric_get)(uint32_t, uint32_t, rsmi_temperature_metric_t, int64_t*);
+		rsmi_status_t (*rsmi_dev_busy_percent_get)(uint32_t, uint32_t*);
+		rsmi_status_t (*rsmi_dev_memory_busy_percent_get)(uint32_t, uint32_t*);
+		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t*);
+		rsmi_status_t (*rsmi_dev_power_ave_get)(uint32_t, uint32_t, uint64_t*);
+		rsmi_status_t (*rsmi_dev_memory_total_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
+		rsmi_status_t (*rsmi_dev_memory_usage_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
+		rsmi_status_t (*rsmi_dev_pci_throughput_get)(uint32_t, uint64_t*, uint64_t*, uint64_t*);
+
+		//? Data
+		void* rsmi_dl_handle;
+	#endif
 		bool initialized = false;
 		bool init();
 		bool shutdown();
@@ -1161,11 +1178,49 @@ namespace Gpu {
 	//? AMD
 	namespace Rsmi {
 		bool init() {
-		#if defined(GPU_AMD)
 			if (initialized) return false;
-			rsmi_status_t result;
 
-			result = rsmi_init(0);
+			//? Dynamic loading & linking
+		#if !defined(RSMI_STATIC)
+			rsmi_dl_handle = dlopen("/opt/rocm/lib/librocm_smi64.so", RTLD_LAZY); // first try /lib and /usr/lib, then /opt/rocm/lib if that fails
+			if (dlerror() != NULL) {
+				rsmi_dl_handle = dlopen("librocm_smi64.so", RTLD_LAZY);
+				if (!rsmi_dl_handle) {
+					Logger::info(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
+					return false;
+				}
+			}
+
+			auto load_rsmi_sym = [&](const char sym_name[]) {
+				auto sym = dlsym(rsmi_dl_handle, sym_name);
+				auto err = dlerror();
+				if (err != NULL) {
+					Logger::error(string("ROCm SMI: Couldn't find function ") + sym_name + ": " + err);
+					return (void*)nullptr;
+				} else return sym;
+			};
+
+            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_rsmi_sym(#NAME)) == nullptr) return false
+
+		    LOAD_SYM(rsmi_init);
+		    LOAD_SYM(rsmi_shut_down);
+		    LOAD_SYM(rsmi_num_monitor_devices);
+		    LOAD_SYM(rsmi_dev_name_get);
+		    LOAD_SYM(rsmi_dev_power_cap_get);
+		    LOAD_SYM(rsmi_dev_temp_metric_get);
+		    LOAD_SYM(rsmi_dev_busy_percent_get);
+		    LOAD_SYM(rsmi_dev_memory_busy_percent_get);
+		    LOAD_SYM(rsmi_dev_gpu_clk_freq_get);
+		    LOAD_SYM(rsmi_dev_power_ave_get);
+		    LOAD_SYM(rsmi_dev_memory_total_get);
+		    LOAD_SYM(rsmi_dev_memory_usage_get);
+		    LOAD_SYM(rsmi_dev_pci_throughput_get);
+
+            #undef LOAD_SYM
+        #endif
+
+			//? Function calls
+			rsmi_status_t result = rsmi_init(0);
 			if (result != RSMI_STATUS_SUCCESS) {
 				Logger::debug("Failed to initialize ROCm SMI, AMD GPUs will not be detected");
 				return false;
@@ -1189,27 +1244,22 @@ namespace Gpu {
 
 				return true;
 			} else {initialized = true; shutdown(); return false;}
-		#else
-			return false;
-		#endif
 		}
 
 		bool shutdown() {
-		#if defined(GPU_AMD)
 			if (!initialized) return false;
-    		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS)
+    		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS) {
 				initialized = false;
-			else Logger::warning("Failed to shutdown ROCm SMI");
+			#if !defined(RSMI_STATIC)
+				dlclose(rsmi_dl_handle);
+			#endif
+			} else Logger::warning("Failed to shutdown ROCm SMI");
 
 			return true;
-		#else
-			return false;
-		#endif
 		}
 
 		template <bool is_init>
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
-		#if defined(GPU_AMD)
 			if (!initialized) return false;
 			rsmi_status_t result;
 
@@ -1341,10 +1391,6 @@ namespace Gpu {
     		}
 
 			return true;
-		#else
-			(void)gpus_slice;
-			return false;
-		#endif
 		}
 	}
 

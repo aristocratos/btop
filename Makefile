@@ -116,10 +116,6 @@ ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
-	ifneq ($(NO_GPU),true)
-		GPULDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a
-		override ADDFLAGS += -DGPU_AMD
-	endif
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
@@ -133,6 +129,15 @@ else ifeq ($(PLATFORM_LC),macos)
 	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
+endif
+
+ifeq ($(RSMI_STATIC),true)
+ifeq ($(PLATFORM_LC),linux)
+	GPULDFLAGS := lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a
+	override ADDFLAGS += -DRSMI_STATIC
+else
+	override RSMI_STATIC = false
+endif
 endif
 
 #? Use all CPU cores (will only be set if using Make 4.3+)
@@ -306,7 +311,7 @@ uninstall:
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
 #? Compile rocm_smi
-ifneq ($(NO_GPU),true)
+ifeq ($(RSMI_STATIC),true)
 .ONESHELL:
 rocm_smi:
 	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
@@ -314,10 +319,10 @@ rocm_smi:
 	@mkdir -p lib/rocm_smi_lib/build
 	@cd lib/rocm_smi_lib/build
 	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
-	@cmake .. $(SUPPRESS) || exit 1
+	@cmake .. $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
 	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
-	@$(MAKE) $(SUPPRESS) || exit 1
-	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || exit 1
+	@$(MAKE) $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
+	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || { printf "\033[1;91mFailed to pack ROCm SMI into static library, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; $(override RSMI_STATIC = false) $(LDFLAGS = $(filter-out $(GPULDFLAGS),$(LDFLAGS))) $(ADDFLAGS = $(filter-out -DRSMI_STATIC,$(ADDFLAGS))) exit 0; }
 	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
 	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 else
