@@ -612,7 +612,7 @@ namespace Cpu {
 					graphs.resize(1);
 					graph_width = graph_default_width;
 					graphs[0] = Draw::Graph{ graph_width, graph_height, "cpu", cpu.cpu_percent.at(graph_field), graph_symbol, invert, true };
-					if ((ulong)Gpu::shown < gpus.size()) {
+					if (std::cmp_less(Gpu::shown, gpus.size())) {
 						gpu_temp_graphs.resize(gpus.size());
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
