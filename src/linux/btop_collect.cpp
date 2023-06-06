@@ -1011,7 +1011,8 @@ namespace Gpu {
 			if (!initialized) return false;
 
 			nvmlReturn_t result;
-			// DebugTimer gpu_nvidia("Nvidia Total");
+			std::thread pcie_tx_thread, pcie_rx_thread;
+			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
 					//? Device Handle
@@ -1053,6 +1054,27 @@ namespace Gpu {
     				else gpus[i].temp_max = (long long)temp_max;
 				}
 
+				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
+				if (gpus_slice[i].supported_functions.pcie_txrx) {
+					pcie_tx_thread = std::thread([gpus_slice, i]() {
+						unsigned int tx;
+						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
+    					if (result != NVML_SUCCESS) {
+							Logger::warning(std::string("NVML: Failed to get PCIe TX throughput: ") + nvmlErrorString(result));
+							if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
+						} else gpus_slice[i].pcie_tx = (long long)tx;
+					});
+
+					pcie_rx_thread = std::thread([gpus_slice, i]() {
+						unsigned int rx;
+						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
+    					if (result != NVML_SUCCESS) {
+							Logger::warning(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
+						} else gpus_slice[i].pcie_rx = (long long)rx;
+					});
+				}
+
+				// DebugTimer nvTimer("Nv utilization");
 				//? GPU & memory utilization
 				if (gpus_slice[i].supported_functions.gpu_utilization) {
 					nvmlUtilization_t utilization;
@@ -1142,23 +1164,6 @@ namespace Gpu {
 					}
 				}
 
-				//nvTimer.stop_rename_reset("Nv pcie");
-				//? PCIe link speeds
-				if (gpus_slice[i].supported_functions.pcie_txrx) {
-					unsigned int tx,rx;
-					result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
-    				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get PCIe TX throughput: ") + nvmlErrorString(result));
-						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
-					} else gpus_slice[i].pcie_tx = (long long)tx;
-
-					result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
-    				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
-						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
-					} else gpus_slice[i].pcie_rx = (long long)rx;
-				}
-
     			//? TODO: Processes using GPU
     				/*unsigned int proc_info_len;
     				nvmlProcessInfo_t* proc_info = 0;
@@ -1169,6 +1174,10 @@ namespace Gpu {
     					for (unsigned int i = 0; i < proc_info_len; ++i)
     						gpus_slice[i].graphics_processes.push_back({proc_info[i].pid, proc_info[i].usedGpuMemory});
     				}*/
+
+				// nvTimer.stop_rename_reset("Nv pcie thread join");
+				//? Join PCIE TX/RX threads
+				pcie_tx_thread.join(); pcie_rx_thread.join();
     		}
 
 			return true;
