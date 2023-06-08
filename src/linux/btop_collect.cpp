@@ -1177,7 +1177,13 @@ namespace Gpu {
 
 				// nvTimer.stop_rename_reset("Nv pcie thread join");
 				//? Join PCIE TX/RX threads
-				pcie_tx_thread.join(); pcie_rx_thread.join();
+				if constexpr(is_init) { // there doesn't seem to be a better way to do this, but this should be fine considering it's just 2 lines
+					pcie_tx_thread.join();
+					pcie_rx_thread.join();
+				} else if (gpus_slice[i].supported_functions.pcie_txrx) {
+					pcie_tx_thread.join();
+					pcie_rx_thread.join();
+				}
     		}
 
 			return true;
