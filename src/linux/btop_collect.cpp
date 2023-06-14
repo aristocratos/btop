@@ -22,12 +22,14 @@ tab-size = 4
 #include <cmath>
 #include <unistd.h>
 #include <numeric>
-#include <sys/statvfs.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
 
+#define _LARGEFILE64_SOURCE 1
+#define __USE_LARGEFILE64   1
+#include <sys/statvfs.h>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
