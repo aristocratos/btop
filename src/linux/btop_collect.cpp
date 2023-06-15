@@ -1083,9 +1083,9 @@ namespace Mem {
 				bool new_ignored = false;
 				for (auto& [mountpoint, disk] : disks) {
 					if (std::error_code ec; not fs::exists(mountpoint, ec) or v_contains(ignore_list, mountpoint)) continue;
-					struct statvfs64 vfs;
-					if (statvfs64(mountpoint.c_str(), &vfs) < 0) {
-						Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs64 error code: " + to_string(errno) + ". Ignoring...");
+					struct statvfs vfs;
+					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+						Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(errno) + ". Ignoring...");
 						ignore_list.push_back(mountpoint);
 						new_ignored = true;
 						continue;

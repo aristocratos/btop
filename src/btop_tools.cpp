@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <cmath>
+#include <codecvt>
 #include <iostream>
 #include <fstream>
 #include <ctime>
@@ -151,7 +152,7 @@ namespace Term {
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
-// ! Dsiabled due to issue when compiling with musl, reverted back to using regex
+// ! Disabled due to issue when compiling with musl, reverted back to using regex
 // namespace Fx {
 // 	string uncolor(const string& s) {
 // 		string out = s;

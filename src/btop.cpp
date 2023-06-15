@@ -37,6 +37,11 @@ tab-size = 4
 	#include <mach-o/dyld.h>
 	#include <limits.h>
 #endif
+#if !defined(__clang__) && __GNUC__ < 11
+	#include <semaphore.h>
+#else
+	#include <semaphore>
+#endif
 
 #include <btop_shared.hpp>
 #include <btop_tools.hpp>
@@ -336,14 +341,12 @@ namespace Runner {
 	atomic<bool> coreNum_reset (false);
 
 	//* Setup semaphore for triggering thread to do work
-#if __GNUC__ < 11
-	#include <semaphore.h>
+#if !defined(__clang__) && __GNUC__ < 11
 	sem_t do_work;
 	inline void thread_sem_init() { sem_init(&do_work, 0, 0); }
 	inline void thread_wait() { sem_wait(&do_work); }
 	inline void thread_trigger() { sem_post(&do_work); }
 #else
-	#include <semaphore>
 	std::binary_semaphore do_work(0);
 	inline void thread_sem_init() { ; }
 	inline void thread_wait() { do_work.acquire(); }
@@ -654,7 +657,7 @@ namespace Runner {
 				<< Term::sync_end << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
-		pthread_exit(NULL);
+		return {};
 	}
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
