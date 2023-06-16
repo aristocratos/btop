@@ -29,7 +29,6 @@ tab-size = 4
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
 #include <dlfcn.h>
-#include <rocm_smi/rocm_smi.h>
 
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
@@ -155,6 +154,23 @@ namespace Gpu {
 	//? AMD data collection
 	namespace Rsmi {
 	#if !defined(RSMI_STATIC)
+		//? RSMI defines, structs & typedefs
+		#define RSMI_MAX_NUM_FREQUENCIES  32
+		#define RSMI_STATUS_SUCCESS        0
+		#define RSMI_MEM_TYPE_VRAM         0
+		#define RSMI_TEMP_CURRENT          0
+		#define RSMI_TEMP_TYPE_EDGE        0
+		#define RSMI_CLK_TYPE_MEM          4
+		#define RSMI_CLK_TYPE_SYS          0
+		#define RSMI_TEMP_MAX              1
+
+		typedef int rsmi_status_t,
+					rsmi_temperature_metric_t,
+					rsmi_clk_type_t,
+					rsmi_memory_type_t;
+
+		struct rsmi_frequencies_t {uint32_t num_supported, current, frequency[RSMI_MAX_NUM_FREQUENCIES];};
+
 		//? Function pointers
 		rsmi_status_t (*rsmi_init)(uint64_t);
 		rsmi_status_t (*rsmi_shut_down)();

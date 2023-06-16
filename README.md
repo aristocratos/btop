@@ -341,6 +341,13 @@ Also needs a UTF8 locale and a font that covers:
    Append `ARCH=<architecture>` to manually set the target architecture.
    If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
+   Append `RSMI_STATIC=true` to statically link the ROCm SMI library used for querying AMDGPU data.
+   For this to work, the `lib/rocm_smi_lib` directory must contain the RSMI source code, which can obtained using the following command:
+
+   ```bash
+   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
+   ```
+
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 
    For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
