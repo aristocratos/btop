@@ -183,6 +183,17 @@ namespace Shared {
 		Mem::get_zpools();
 	}
 
+	//* RAII wrapper for kvm_openfiles
+	class kvm_openfiles_wrapper {
+		kvm_t* kd = NULL;
+	public:
+		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
+			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
+		}
+		~kvm_openfiles_wrapper() { kvm_close(kd); }
+		auto operator()() -> kvm_t* { return kd; }
+	};
+
 }  // namespace Shared
 
 namespace Cpu {
@@ -651,6 +662,20 @@ namespace Mem {
    		freeMem *= Shared::pageSize;
    		mem.stats.at("free") = freeMem;
 
+		if (show_swap) {
+			char buf[_POSIX2_LINE_MAX];
+			Shared::kvm_openfiles_wrapper kd(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
+   			struct kvm_swap swap[16];
+   			int nswap = kvm_getswapinfo(kd(), swap, 16, 0);
+			int totalSwap = 0, usedSwap = 0;
+			for (int i = 0; i < nswap; i++) {
+				totalSwap += swap[i].ksw_total;
+				usedSwap += swap[i].ksw_used;
+			}
+			mem.stats.at("swap_total") = totalSwap * Shared::pageSize;
+			mem.stats.at("swap_used") = usedSwap * Shared::pageSize;
+		}
+
 		if (show_swap and mem.stats.at("swap_total") > 0) {
 			for (const auto &name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
@@ -1088,17 +1113,6 @@ namespace Proc {
 		// }
 	}
 
-	//* RAII wrapper for kvm_openfiles
-	class kvm_openfiles_wrapper {
-		kvm_t* kd = NULL;
-	public:
-		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
-			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
-		}
-		~kvm_openfiles_wrapper() { kvm_close(kd); }
-		auto operator()() -> kvm_t* { return kd; }
-	};
-
 	//* Collects and sorts process information from /proc
     auto collect(bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
@@ -1147,7 +1161,7 @@ namespace Proc {
 
 			int count = 0;
     		char buf[_POSIX2_LINE_MAX];
-			kvm_openfiles_wrapper kd(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
+			Shared::kvm_openfiles_wrapper kd(NULL, _PATH_DEVNULL, NULL, O_RDONLY, buf);
    			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
 
    			for (int i = 0; i < count; i++) {
