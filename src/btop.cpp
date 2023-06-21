@@ -118,7 +118,7 @@ void argumentParser(const int& argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-			fmt::println(
+			fmt::print(
 					"usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
 					"optional arguments:\n"
 					"  -h, --help            show this help message and exit\n"
@@ -129,12 +129,12 @@ void argumentParser(const int& argc, char **argv) {
 					"  -p, --preset <id>     start with preset, integer value between 0-9\n"
 					"  --utf-force           force start even if no UTF-8 locale was detected\n"
 					"  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
-					"                        and screen draw functions and sets loglevel to DEBUG"
+					"                        and screen draw functions and sets loglevel to DEBUG\n"
 			);
 			exit(0);
 		}
 		else if (is_in(argument, "-v", "--version")) {
-			fmt::println("btop version: {}", Global::Version);
+			fmt::print("btop version: {}\n", Global::Version);
 			exit(0);
 		}
 		else if (is_in(argument, "-lc", "--low-color")) {
@@ -150,14 +150,14 @@ void argumentParser(const int& argc, char **argv) {
 		}
 		else if (is_in(argument, "-p", "--preset")) {
 			if (++i >= argc) {
-				fmt::println("ERROR: Preset option needs an argument.");
+				fmt::print("ERROR: Preset option needs an argument.\n");
 				exit(1);
 			}
 			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
 				Global::arg_preset = std::clamp(stoi(val), 0, 9);
 			}
 			else {
-				fmt::println("ERROR: Preset option only accepts an integer value between 0-9.");
+				fmt::print("ERROR: Preset option only accepts an integer value between 0-9.\n");
 				exit(1);
 			}
 		}
@@ -166,8 +166,8 @@ void argumentParser(const int& argc, char **argv) {
 		else if (argument == "--debug")
 			Global::debug = true;
 		else {
-			fmt::println(" Unknown argument: {}\n"
-				" Use -h or --help for help.", argument);
+			fmt::print(" Unknown argument: {}\n"
+				" Use -h or --help for help.\n", argument);
 			exit(1);
 		}
 	}
@@ -271,7 +271,7 @@ void clean_quit(int sig) {
 	if (not Global::exit_error_msg.empty()) {
 		sig = 1;
 		Logger::error(Global::exit_error_msg);
-		fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
+		fmt::print(std::cerr, "{}ERROR: {}{}{}\n", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
 	}
 	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
 
@@ -763,13 +763,13 @@ int main(int argc, char **argv) {
 		}
 	}
 	if (Config::conf_dir.empty()) {
-		fmt::println("WARNING: Could not get path user HOME folder.\n"
-				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
+		fmt::print("WARNING: Could not get path user HOME folder.\n"
+				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.\n");
 	}
 	else {
 		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			fmt::println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
-					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
+			fmt::print("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
+					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.\n");
 		}
 		else {
 			Config::conf_file = Config::conf_dir / "btop.conf";
