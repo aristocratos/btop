@@ -319,23 +319,43 @@ namespace Menu {
 			{"cpu_graph_upper",
 				"Cpu upper graph.",
 				"",
-				"Sets the CPU stat shown in upper half of",
+				"Sets the CPU/GPU stat shown in upper half of",
 				"the CPU graph.",
 				"",
+				"CPU:",
 				"\"total\" = Total cpu usage.",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split by device.",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."},
 			{"cpu_graph_lower",
 				"Cpu lower graph.",
 				"",
-				"Sets the CPU stat shown in lower half of",
+				"Sets the CPU/GPU stat shown in lower half of",
 				"the CPU graph.",
 				"",
+				"CPU:",
 				"\"total\" = Total cpu usage.",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split by device.",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."},
 			{"cpu_invert_lower",
 					"Toggles orientation of the lower CPU graph.",
 					"",
@@ -352,7 +372,7 @@ namespace Menu {
 				"",
 				"True or False."},
 			{"cpu_sensor",
-				"Cpu temperature sensor",
+				"Cpu temperature sensor.",
 				"",
 				"Select the sensor that corresponds to",
 				"your cpu temperature.",
@@ -392,7 +412,7 @@ namespace Menu {
 				"Rankine, 0 = abosulte zero, 1 degree change",
 				"equals 1 degree change in Fahrenheit."},
 			{"show_cpu_freq",
-				"Show CPU frequency",
+				"Show CPU frequency.",
 				"",
 				"Can cause slowdowns on systems with many",
 				"cores and certain kernel versions."},
@@ -407,6 +427,48 @@ namespace Menu {
 				"\"/uptime\" in the formatting.",
 				"",
 				"True or False."},
+		},
+		{
+			{"nvml_measure_pcie_speeds",
+				"Measure PCIe throughput on NVIDIA cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"graph_symbol_gpu",
+				"Graph symbol to use for graphs in gpu box.",
+				"",
+				"\"default\", \"braille\", \"block\" or \"tty\".",
+				"",
+				"\"default\" for the general default symbol.",},
+			{"gpu_mirror_graph",
+				"Horizontally mirror the GPU graph.",
+				"",
+				"True or False."},
+			{"custom_gpu_name0",
+				"Custom gpu0 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name1",
+				"Custom gpu1 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name2",
+				"Custom gpu2 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name3",
+				"Custom gpu3 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name4",
+				"Custom gpu4 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name5",
+				"Custom gpu5 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
 		},
 		{
 			{"mem_below_net",
@@ -1027,6 +1089,7 @@ namespace Menu {
 			{"proc_sorting", std::cref(Proc::sort_vector)},
 			{"graph_symbol", std::cref(Config::valid_graph_symbols)},
 			{"graph_symbol_cpu", std::cref(Config::valid_graph_symbols_def)},
+			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_mem", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_net", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_proc", std::cref(Config::valid_graph_symbols_def)},
@@ -1085,7 +1148,8 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (option == "custom_cpu_name") screen_redraw = true;
+					if (option == "custom_cpu_name" or option.rfind("custom_gpu_name", 0) == 0)
+						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
 						Config::current_preset = -1;
@@ -1166,7 +1230,7 @@ namespace Menu {
 			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
 			page = selected = 0;
 		}
-		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
 			selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
@@ -1264,11 +1328,11 @@ namespace Menu {
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
-			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
+			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
-					+ Mv::r(10);
+					+ Mv::r(7);
 				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;

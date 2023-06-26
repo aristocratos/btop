@@ -29,6 +29,7 @@ tab-size = 4
 #include <btop_input.hpp>
 #include <btop_menu.hpp>
 #include <stdexcept>
+#include <string>
 
 using std::array;
 using std::clamp;
@@ -862,7 +863,7 @@ namespace Gpu {
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;
 	vector<int> b_x_vec = {}, b_y_vec = {};
-	vector<bool> redraw = {}, mid_line = {};
+	vector<bool> redraw = {};
 	int shown = 0;
 	vector<char> shown_panels = {};
 	int graph_up_height;
@@ -893,16 +894,16 @@ namespace Gpu {
         bool show_temps = gpu.supported_functions.temp_info and (Config::getB("check_temp"));
         auto tty_mode = Config::getB("tty_mode");
 		auto& temp_scale = Config::getS("temp_scale");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu")); // TODO graph_symbol_gpu
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_gpu"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-        auto single_graph = Config::getB("cpu_single_graph");
+        auto single_graph = !Config::getB("gpu_mirror_graph");
 		string out;
 		out.reserve(width * height);
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw[index]) {
 			graph_up_height = single_graph ? height - 2 : ceil((double)(height - 2) / 2);
-			const int graph_low_height = height - 2 - graph_up_height - (mid_line[index] ? 1 : 0);
+			const int graph_low_height = height - 2 - graph_up_height;
 			out += box[index];
 
 			if (gpu.supported_functions.gpu_utilization) {
@@ -935,7 +936,7 @@ namespace Gpu {
 		if (gpu.supported_functions.gpu_utilization) {
 			out += Fx::ub + Mv::to(y + 1, x + 1) + graph_upper(gpu.gpu_percent.at("gpu-totals"), (data_same or redraw[index]));
 			if (not single_graph)
-				out += Mv::to(y + graph_up_height + 1 + mid_line[index], x + 1) + graph_lower(gpu.gpu_percent.at("gpu-totals"), (data_same or redraw[index]));
+				out += Mv::to(y + graph_up_height + 1, x + 1) + graph_lower(gpu.gpu_percent.at("gpu-totals"), (data_same or redraw[index]));
 
 			out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(gpu.gpu_percent.at("gpu-totals").back())
 				+ Theme::g("cpu").at(gpu.gpu_percent.at("gpu-totals").back()) + rjust(to_string(gpu.gpu_percent.at("gpu-totals").back()), 4) + Theme::c("main_fg") + '%';
@@ -950,7 +951,7 @@ namespace Gpu {
 			out += Theme::c("div_line") + Symbols::v_line;
 		}
 
-		if (gpu.supported_functions.gpu_clock and Config::getB("show_cpu_freq")) { // TODO show_gpu_freq
+		if (gpu.supported_functions.gpu_clock) {
 			string clock_speed_string = to_string(gpu.gpu_clock_speed);
 			out += Mv::to(b_y, b_x + b_width - 12) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " Mhz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
@@ -988,19 +989,18 @@ namespace Gpu {
 						+  Mv::l(b_width/2-1) + Mv::u(1) + rjust(to_string(gpu.mem_utilization_percent.back()), 3) + '%';
 
 				//? Memory clock speed
-				if (gpu.supported_functions.mem_clock and Config::getB("show_cpu_freq")) { // TODO show_gpu_freq
+				if (gpu.supported_functions.mem_clock) {
 					string clock_speed_string = to_string(gpu.mem_clock_speed);
 					out += Mv::to(b_y + 3, b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
 						+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " Mhz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 				}
 			} else {
 				out += Theme::c("main_fg") + Mv::r(1);
-				bool clock_shown = gpu.supported_functions.mem_clock and Config::getB("show_cpu_freq"); // TODO show_gpu_freq
 				if (gpu.supported_functions.mem_total)
-					out += "VRAM total:" + rjust(floating_humanizer(gpu.mem_total), b_width/(1 + clock_shown)-14);
-				else out += "VRAM usage:" + rjust(floating_humanizer(gpu.mem_used), b_width/(1 + clock_shown)-14);
+					out += "VRAM total:" + rjust(floating_humanizer(gpu.mem_total), b_width/(1 + gpu.supported_functions.mem_clock)-14);
+				else out += "VRAM usage:" + rjust(floating_humanizer(gpu.mem_used), b_width/(1 + gpu.supported_functions.mem_clock)-14);
 
-				if (clock_shown)
+				if (gpu.supported_functions.mem_clock)
 					out += "   VRAM clock:" + rjust(to_string(gpu.mem_clock_speed) + " Mhz", b_width/2-13);
 			}
 		}
@@ -1010,7 +1010,7 @@ namespace Gpu {
 		//	+ Symbols::title_right + Symbols::h_line*(b_width/2-12) + Symbols::div_down + Symbols::h_line*(b_width/2-2) + Symbols::div_right;
 
 		//? PCIe link throughput
-		if (gpu.supported_functions.pcie_txrx) {
+		if (gpu.supported_functions.pcie_txrx and Config::getB("nvml_measure_pcie_speeds")) {
 			string tx_string = floating_humanizer(gpu.pcie_tx, 0, 1, 0, 1);
 			string rx_string = floating_humanizer(gpu.pcie_rx, 0, 1, 0, 1);
 			out += Mv::to(b_y + b_height_vec[index] - 1, b_x+2) + Theme::c("div_line")
@@ -1988,7 +1988,6 @@ namespace Draw {
 			gpu_meter_vec.resize(shown);
 			pwr_meter_vec.resize(shown);
 			redraw.resize(shown);
-			mid_line.resize(shown);
 			for (auto i = 0; i < shown; ++i) {
 				redraw[i] = true;
 
@@ -2014,7 +2013,10 @@ namespace Draw {
 				b_x_vec[i] = x_vec[i] + width - b_width - 1;
 				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2) / 2) - ceil((double)(b_height_vec[i]) / 2) + 1;
 
-				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, gpu_names[shown_panels[i]].substr(0, b_width-5));
+				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
+				if (name.empty()) name = gpu_names[shown_panels[i]];
+
+				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
 			}
 		}
 

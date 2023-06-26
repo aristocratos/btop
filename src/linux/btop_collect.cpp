@@ -1071,7 +1071,7 @@ namespace Gpu {
 				}
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
-				if (gpus_slice[i].supported_functions.pcie_txrx) {
+				if (gpus_slice[i].supported_functions.pcie_txrx and (Config::getB("nvml_measure_pcie_speeds") or is_init)) {
 					pcie_tx_thread = std::thread([gpus_slice, i]() {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
@@ -1196,7 +1196,7 @@ namespace Gpu {
 				if constexpr(is_init) { // there doesn't seem to be a better way to do this, but this should be fine considering it's just 2 lines
 					pcie_tx_thread.join();
 					pcie_rx_thread.join();
-				} else if (gpus_slice[i].supported_functions.pcie_txrx) {
+				} else if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("nvml_measure_pcie_speeds")) {
 					pcie_tx_thread.join();
 					pcie_rx_thread.join();
 				}

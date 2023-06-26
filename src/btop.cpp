@@ -683,10 +683,7 @@ namespace Runner {
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
-<<<<<<< HEAD
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
-=======
->>>>>>> 48c3392 (Merged changes from main)
 				for (const string name : {"cpu", "mem", "net", "proc", "gpu", "total"}) {
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);

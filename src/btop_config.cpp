@@ -72,6 +72,8 @@ namespace Config {
 
 		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
+		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+
 		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
@@ -190,7 +192,19 @@ namespace Config {
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
-								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
+								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
+
+		{"nvml_measure_pcie_speeds",
+								"#* Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards."},
+
+		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+
+		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
+		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
+		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
+		{"custom_gpu_name3",	"#* Custom gpu3 model name, empty string to disable."},
+		{"custom_gpu_name4",	"#* Custom gpu4 model name, empty string to disable."},
+		{"custom_gpu_name5",	"#* Custom gpu5 model name, empty string to disable."},
 	};
 
 	unordered_flat_map<string, string> strings = {
@@ -199,6 +213,7 @@ namespace Config {
 		{"graph_symbol", "braille"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
+		{"graph_symbol_gpu", "default"},
 		{"graph_symbol_mem", "default"},
 		{"graph_symbol_net", "default"},
 		{"graph_symbol_proc", "default"},
@@ -218,6 +233,12 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+		{"custom_gpu_name0", ""},
+		{"custom_gpu_name1", ""},
+		{"custom_gpu_name2", ""},
+		{"custom_gpu_name3", ""},
+		{"custom_gpu_name4", ""},
+		{"custom_gpu_name5", ""},
 	};
 	unordered_flat_map<string, string> stringsTmp;
 
@@ -266,6 +287,8 @@ namespace Config {
 		{"lowcolor", false},
 		{"show_detailed", false},
 		{"proc_filtering", false},
+		{"nvml_measure_pcie_speeds", true},
+		{"gpu_mirror_graph", true},
 	};
 	unordered_flat_map<string, bool> boolsTmp;
 
