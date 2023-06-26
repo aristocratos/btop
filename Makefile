@@ -59,17 +59,23 @@ ifeq ($(CLANG_WORKS),false)
 	#? Try to find a newer GCC version
 	ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
 		CXX := g++-12
+	else ifeq ($(shell command -v g++12 >/dev/null; echo $$?),0)
+		CXX := g++12
 	else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
 		CXX := g++-11
 	else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
 		CXX := g++11
 	else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
 		CXX := g++
+	else
+		GCC_NOT_FOUND := true
 	endif
-	override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-	override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
-		GCC_WORKS := true
+	ifndef GCC_NOT_FOUND
+		override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
+		override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
+		ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
+			GCC_WORKS := true
+		endif
 	endif
 endif
 
