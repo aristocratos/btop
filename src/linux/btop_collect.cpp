@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <cstdlib>
 #include <robin_hood.h>
 #include <fstream>
 #include <ranges>
@@ -672,16 +673,13 @@ namespace Cpu {
 		if (Config::getB("show_cpu_freq"))
 			cpuHz = get_cpuHz();
 
+		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
+			Logger::error("failed to get load averages");
+		}
+
 		ifstream cread;
 
 		try {
-			//? Get cpu load averages from /proc/loadavg
-			cread.open(Shared::procPath / "loadavg");
-			if (cread.good()) {
-				cread >> cpu.load_avg[0] >> cpu.load_avg[1] >> cpu.load_avg[2];
-			}
-			cread.close();
-
 			//? Get cpu total times for all cores from /proc/stat
 			string cpu_name;
 			cread.open(Shared::procPath / "stat");
@@ -696,7 +694,7 @@ namespace Cpu {
 						while (cmp_less(cpu.core_percent.size(), i)) {
 							core_old_totals.push_back(0);
 							core_old_idles.push_back(0);
-							cpu.core_percent.push_back({});
+							cpu.core_percent.emplace_back();
 						}
 						cpu.core_percent.at(i-1).push_back(0);
 					}
@@ -714,7 +712,7 @@ namespace Cpu {
 							while (cmp_less(cpu.core_percent.size(), i)) {
 								core_old_totals.push_back(0);
 								core_old_idles.push_back(0);
-								cpu.core_percent.push_back({});
+								cpu.core_percent.emplace_back();
 							}
 							cpu.core_percent[i-1].push_back(0);
 							if (cpu.core_percent.at(i-1).size() > 40) cpu.core_percent.at(i-1).pop_front();
@@ -730,7 +728,7 @@ namespace Cpu {
 						times.push_back(val);
 					}
 					cread.clear();
-					if (times.size() < 4) throw std::runtime_error("Malformatted /proc/stat");
+					if (times.size() < 4) throw std::runtime_error("Malformed /proc/stat");
 
 					//? Subtract fields 8-9 and any future unknown fields
 					const long long totals = max(0ll, total_sum - (times.size() > 8 ? std::accumulate(times.begin() + 8, times.end(), 0ll) : 0));
@@ -769,7 +767,7 @@ namespace Cpu {
 						while (cmp_less(cpu.core_percent.size(), i)) {
 							core_old_totals.push_back(0);
 							core_old_idles.push_back(0);
-							cpu.core_percent.push_back({});
+							cpu.core_percent.emplace_back();
 						}
 						const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
 						const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
