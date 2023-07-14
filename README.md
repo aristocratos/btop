@@ -33,6 +33,7 @@
 * [Compilation Linux](#compilation-linux)
 * [Compilation macOS](#compilation-macos-osx)
 * [Compilation FreeBSD](#compilation-freebsd)
+* [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
@@ -342,11 +343,7 @@ Also needs a UTF8 locale and a font that covers:
    If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
    Append `RSMI_STATIC=true` to statically link the ROCm SMI library used for querying AMDGPU data.
-   For this to work, the `lib/rocm_smi_lib` directory must contain the RSMI source code, which can obtained using the following command:
-
-   ```bash
-   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
-   ```
+   See [GPU compatibility](#gpu-compatibility) for details.
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 
@@ -576,6 +573,28 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    gmake help
+   ```
+
+## GPU compatibility
+
+   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux, provided you have the correct drivers and libraries.
+
+   Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+
+ * **NVIDIA**
+
+    You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
+
+    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+
+ * **AMD**
+
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+
+    This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
+
+   ```bash
+   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
    ```
 
 ## Installing the snap

@@ -30,6 +30,9 @@ tab-size = 4
 #include <arpa/inet.h> // for inet_ntop()
 #include <dlfcn.h>
 
+#if defined(RSMI_STATIC)
+	#include <rocm_smi/rocm_smi.h>
+#endif
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
