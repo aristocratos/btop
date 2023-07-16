@@ -359,3 +359,6 @@ namespace Logger {
 	inline void debug(const string msg) { log_write(4, msg); }
 }
 
+std::string get_cmd_line(size_t pid);
+int copy_to_clipboard(const std::string& msg);
+extern bool pcopy(const char *buf);

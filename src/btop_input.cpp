@@ -436,6 +436,9 @@ namespace Input {
 						return;
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
+				} else if (is_in(key, "copyout-shellcmd", "v")) {
+					atomic_wait(Runner::active);
+					copy_to_clipboard(get_cmd_line(Config::getI("selected_pid")));
 				}
 				else keep_going = true;
 

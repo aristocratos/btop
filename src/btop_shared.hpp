@@ -82,7 +82,7 @@ namespace Shared {
 	//* Initialize platform specific needed variables and check for errors
 	void init();
 
-	extern long coreCount, page_size, clk_tck;
+	extern long coreCount, page_size, clk_tck, arg_max;
 }
 
 

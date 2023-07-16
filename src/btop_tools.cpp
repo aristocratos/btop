@@ -598,3 +598,18 @@ namespace Logger {
 		}
 	}
 }
+
+std::string get_cmd_line(size_t pid) {
+	auto procs = Proc::collect(true);
+	auto p_info = rng::find(procs, pid, &Proc::proc_info::pid);
+	return p_info->cmd; // Copy
+}
+
+int copy_to_clipboard(const std::string& msg) {
+	// TODO(..): Implement FreeBSD and Linux
+#ifdef __APPLE__
+	return pcopy(msg.c_str());
+#elif // __APPLE__
+	return 0;
+#endif // __APPLE__
+}
