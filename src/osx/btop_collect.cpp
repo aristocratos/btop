@@ -447,13 +447,9 @@ namespace Cpu {
 			return current_cpu;
 		auto &cpu = current_cpu;
 
-		double avg[3];
-
-		if (getloadavg(avg, sizeof(avg)) < 0) {
+		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
 		}
-
-		cpu.load_avg = { (float)avg[0], (float)avg[1], (float)avg[2]};
 
 		natural_t cpu_count;
 		natural_t i;

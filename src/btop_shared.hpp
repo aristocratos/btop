@@ -112,7 +112,7 @@ namespace Cpu {
 		vector<deque<long long>> core_percent;
 		vector<deque<long long>> temp;
 		long long temp_max = 0;
-		array<float, 3> load_avg;
+		array<double, 3> load_avg;
 	};
 
 	//* Collect cpu stats and temperatures
