@@ -842,9 +842,11 @@ namespace Cpu {
 					} else out += Mv::r(17);
 					if (show_temps and gpus[i].supported_functions.temp_info) {
 						const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
-						out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
-							+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw)
-							+ rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+						if (b_width > 38)
+							out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
+								+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw);
+						else out += Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll));
+						out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 					}
 				}
 			}
