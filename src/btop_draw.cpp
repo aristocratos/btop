@@ -825,12 +825,17 @@ namespace Cpu {
 			auto shown_panels_count = 0u;
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
 				if (not v_contains(Gpu::shown_panels, i)) {
-					out += Mv::to(b_y + b_height - 1 - gpus.size() + ++shown_panels_count - (Gpu::shown == 0), b_x + 1)
-						+ Theme::c("main_fg") + Fx::b + "GPU " + (gpus.size() > 1 ? ((gpus.size() > 9 and i <= 9 ? " " : "") + to_string(i) + ' ') : "");
-					if (gpus[i].supported_functions.gpu_utilization)
-						out += gpu_meters[i](gpus[i].gpu_percent.at("gpu-totals").back())
+					out += Mv::to(b_y + b_height - 1 - gpus.size() + ++shown_panels_count - (Gpu::shown == 0), b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
+					if (show_temps and gpus[i].supported_functions.temp_info and b_width < 34) {
+						const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
+						if (temp < 100) out += " ";
+					}
+					if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
+					if (gpus[i].supported_functions.gpu_utilization) {
+						string meter = gpu_meters[i](gpus[i].gpu_percent.at("gpu-totals").back());
+						out += (meter.size() > 1 ? " " : "") + meter
 							+ Theme::g("cpu").at(gpus[i].gpu_percent.at("gpu-totals").back()) + rjust(to_string(gpus[i].gpu_percent.at("gpu-totals").back()), 4) + Theme::c("main_fg") + '%';
-					else out += Mv::r(gpu_meter_width);
+					} else out += Mv::r(gpu_meter_width);
 
 					if (gpus[i].supported_functions.mem_used) {
 						out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("used").at(gpus[i].gpu_percent.at("gpu-vram-totals").back())
@@ -846,7 +851,7 @@ namespace Cpu {
 							out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
 								+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw);
 						else out += Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll));
-						out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+						out += rjust(to_string(temp), 3 + (b_width >= 34 or temp > 99)) + Theme::c("main_fg") + unit;
 					}
 				}
 			}
