@@ -260,21 +260,13 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (std::isdigit(*key.c_str())) {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
-					Config::toggle_box(boxes.at(std::stoi(key) - 1));
-					Draw::calcSizes();
-					Runner::run("all", false, true);
-					return;
-				}
-				else if (is_in(key, "5", "6", "7", "8", "9", "0")) {
-					atomic_wait(Runner::active);
-					Config::current_preset = -1;
-					auto key_i = key == "0" ? 10 : std::stoi(key);
-					if (std::cmp_greater(key_i-3, Gpu::gpu_names.size())) return;
-					Config::toggle_box(std::string("gpu") + (char)(key_i-5 + '0'));
+					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
+					auto box = boxes.at(*key.c_str() - '0');
+					if (box.rfind("gpu", 0) == 0 && (box[3] - '0' + 2) > (int)Gpu::gpu_names.size()) return;
+					Config::toggle_box(box);
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;

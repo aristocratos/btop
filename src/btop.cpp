@@ -187,7 +187,7 @@ void term_resize(bool force) {
 	}
 	else return;
 
-	static const array<string, 5> all_boxes = {"cpu", "mem", "net", "proc", "gpu"};
+	static const array<string, 10> all_boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
 	Term::refresh();
@@ -225,9 +225,11 @@ void term_resize(bool force) {
 				auto key = Input::get();
 				if (key == "q")
 					clean_quit(0);
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (std::isdigit(*key.c_str())) {
 					Config::current_preset = -1;
-					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
+					auto box = all_boxes.at(*key.c_str() - '0');
+					if (box.rfind("gpu", 0) == 0 && (box[3] - '0' + 2) > (int)Gpu::gpu_names.size()) return;
+					Config::toggle_box(box);
 					boxes = Config::getS("shown_boxes");
 				}
 			}
