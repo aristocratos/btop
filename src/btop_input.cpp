@@ -263,7 +263,7 @@ namespace Input {
 				else if (is_in(key, "1", "2", "3", "4")) {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					static const array<string, 10> boxes = {"cpu", "mem", "net", "proc"};
+					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
 					Config::toggle_box(boxes.at(std::stoi(key) - 1));
 					Draw::calcSizes();
 					Runner::run("all", false, true);

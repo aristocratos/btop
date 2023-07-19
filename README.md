@@ -681,7 +681,7 @@ graph_symbol_net = "default"
 # Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
 graph_symbol_proc = "default"
 
-#* Manually set which boxes to show. Available values are "cpu mem net proc gpu", separate values with whitespace.
+#* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
 shown_boxes = "proc cpu mem net"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
