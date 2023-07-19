@@ -272,9 +272,9 @@ namespace Input {
 				else if (is_in(key, "5", "6", "7", "8", "9", "0")) {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					auto key_i = std::stoi(key);
-					if (std::cmp_greater(key_i-4, Gpu::gpu_names.size())) return;
-					Config::toggle_box(std::string("gpu") + (char)((key_i == 0 ? 10 : (key_i-5)) + '0'));
+					auto key_i = key == "0" ? 10 : std::stoi(key);
+					if (std::cmp_greater(key_i-3, Gpu::gpu_names.size())) return;
+					Config::toggle_box(std::string("gpu") + (char)(key_i-5 + '0'));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
