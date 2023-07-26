@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -93,9 +93,9 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-    bool debuginit{};   // defaults to false
-    bool debug{};       // defaults to false
-    bool utf_force{};   // defaults to false
+	bool debuginit{};   // defaults to false
+	bool debug{};       // defaults to false
+	bool utf_force{};   // defaults to false
 
 	uint64_t start_time;
 
@@ -105,8 +105,8 @@ namespace Global {
 	atomic<bool> should_sleep (false);
 	atomic<bool> _runner_started (false);
 
-    bool arg_tty{};         // defaults to false
-    bool arg_low_color{};   // defaults to false
+	bool arg_tty{};         // defaults to false
+	bool arg_low_color{};   // defaults to false
 	int arg_preset = -1;
 }
 
@@ -355,14 +355,14 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-        thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-            pthread_mutex_init(&pt_mutex, NULL);
-            status = pthread_mutex_lock(&pt_mutex);
-        }
-        ~thread_lock() {
-            if (status == 0)
-                pthread_mutex_unlock(&pt_mutex);
-        }
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
+			pthread_mutex_init(&pt_mutex, NULL);
+			status = pthread_mutex_lock(&pt_mutex);
+		}
+		~thread_lock() {
+			if (status == 0)
+				pthread_mutex_unlock(&pt_mutex);
+		}
 	};
 
 	//* Wrapper for raising priviliges when using SUID bit
@@ -370,18 +370,18 @@ namespace Runner {
 		int status = -1;
 	public:
 		gain_priv() {
-            if (Global::real_uid != Global::set_uid)
-                this->status = seteuid(Global::set_uid);
+			if (Global::real_uid != Global::set_uid)
+				this->status = seteuid(Global::set_uid);
 		}
 		~gain_priv() {
-            if (status == 0)
-                status = seteuid(Global::real_uid);
+			if (status == 0)
+				status = seteuid(Global::real_uid);
 		}
 	};
 
 	string output;
 	string empty_bg;
-    bool pause_output{}; // defaults to false
+	bool pause_output{}; // defaults to false
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
@@ -437,7 +437,7 @@ namespace Runner {
 	}
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-    void * _runner(void *) {
+	void * _runner(void *) {
 		//? Block some signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		sigemptyset(&mask);
 		// sigaddset(&mask, SIGINT);
@@ -480,8 +480,8 @@ namespace Runner {
 
 			//! DEBUG stats
 			if (Global::debug) {
-                if (debug_bg.empty() or redraw)
-                    Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
+				if (debug_bg.empty() or redraw)
+					Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
 
 
 
@@ -517,7 +517,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Cpu:: -> " + string{e.what()});
+						throw std::runtime_error("Cpu:: -> " + string{e.what()});
 					}
 				}
 
@@ -537,7 +537,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("mem", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Mem:: -> " + string{e.what()});
+						throw std::runtime_error("Mem:: -> " + string{e.what()});
 					}
 				}
 
@@ -557,7 +557,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("net", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Net:: -> " + string{e.what()});
+						throw std::runtime_error("Net:: -> " + string{e.what()});
 					}
 				}
 
@@ -577,12 +577,12 @@ namespace Runner {
 						if (Global::debug) debug_timer("proc", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Proc:: -> " + string{e.what()});
+						throw std::runtime_error("Proc:: -> " + string{e.what()});
 					}
 				}
 			}
 			catch (const std::exception& e) {
-                Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
+				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -659,7 +659,7 @@ namespace Runner {
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
-    void run(const string& box, bool no_update, bool force_redraw) {
+	void run(const string& box, bool no_update, bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
 		if (active) {
 			Logger::error("Stall in Runner thread, restarting!");
@@ -827,7 +827,7 @@ int main(int argc, char **argv) {
 	}
 	else {
 		string found;
-        bool set_failure{}; // defaults to false
+		bool set_failure{}; // defaults to false
 		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
 			if (std::getenv(loc_env) != NULL and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
@@ -923,7 +923,7 @@ int main(int argc, char **argv) {
 		Shared::init();
 	}
 	catch (const std::exception& e) {
-        Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
+		Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
 		clean_quit(1);
 	}
 
@@ -1035,7 +1035,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	catch (const std::exception& e) {
-        Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
+		Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
 		clean_quit(1);
 	}
 

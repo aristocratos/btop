@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -194,12 +194,12 @@ namespace Cpu {
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
 	unordered_flat_map<string, long long> cpu_old = {
-	    {"totals", 0},
-	    {"idles", 0},
-	    {"user", 0},
-	    {"nice", 0},
-	    {"system", 0},
-	    {"idle", 0}
+		{"totals", 0},
+		{"idles", 0},
+		{"user", 0},
+		{"nice", 0},
+		{"system", 0},
+		{"idle", 0}
 	};
 
 	string get_cpuName() {
@@ -443,7 +443,7 @@ namespace Cpu {
 		return {percent, seconds, status};
 	}
 
-    auto collect(bool no_update) -> cpu_info & {
+	auto collect(bool no_update) -> cpu_info & {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
 			return current_cpu;
 		auto &cpu = current_cpu;
@@ -604,7 +604,7 @@ namespace Mem {
 		}
 		/* Get the list of all drive objects. */
 		if (IOServiceGetMatchingServices(libtop_master_port,
-		                                 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
+										 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
 		}
@@ -664,15 +664,15 @@ namespace Mem {
 		}
 	}
 
-    auto collect(bool no_update) -> mem_info & {
+	auto collect(bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
-        auto show_swap = Config::getB("show_swap");
-        auto show_disks = Config::getB("show_disks");
-        auto swap_disk = Config::getB("swap_disk");
+		auto show_swap = Config::getB("show_swap");
+		auto show_disks = Config::getB("show_disks");
+		auto swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
-        static bool snapped = (getenv("BTOP_SNAPPED") != NULL);
+		static bool snapped = (getenv("BTOP_SNAPPED") != NULL);
 
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
@@ -714,7 +714,7 @@ namespace Mem {
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-            // auto only_physical = Config::getB("only_physical");
+			// auto only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -844,11 +844,11 @@ namespace Net {
 		auto operator()() -> struct ifaddrs * { return ifaddr; }
 	};
 
-    auto collect(bool no_update) -> net_info & {
+	auto collect(bool no_update) -> net_info & {
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
-        auto net_sync = Config::getB("net_sync");
-        auto net_auto = Config::getB("net_auto");
+		auto net_sync = Config::getB("net_sync");
+		auto net_auto = Config::getB("net_auto");
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
@@ -1001,7 +1001,7 @@ namespace Net {
 				auto sorted_interfaces = interfaces;
 				rng::sort(sorted_interfaces, [&](const auto &a, const auto &b) {
 					return cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
-					                   net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
+									   net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
 				});
 				selected_iface.clear();
 				//? Try to set to a connected interface
@@ -1024,8 +1024,8 @@ namespace Net {
 				for (const auto &sel : {0, 1}) {
 					if (rescale or max_count[dir][sel] >= 5) {
 						const long long avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
-						                                ? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
-						                                : net[selected_iface].stat[dir].speed);
+														? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
+														: net[selected_iface].stat[dir].speed);
 						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
 						redraw = true;
@@ -1126,17 +1126,17 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-    auto collect(bool no_update) -> vector<proc_info> & {
+	auto collect(bool no_update) -> vector<proc_info> & {
 		const auto &sorting = Config::getS("proc_sorting");
-        auto reverse = Config::getB("proc_reversed");
+		auto reverse = Config::getB("proc_reversed");
 		const auto &filter = Config::getS("proc_filter");
-        auto per_core = Config::getB("proc_per_core");
-        auto tree = Config::getB("proc_tree");
-        auto show_detailed = Config::getB("show_detailed");
+		auto per_core = Config::getB("proc_per_core");
+		auto tree = Config::getB("proc_tree");
+		auto show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
-        bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		if (sorted_change) {
 			current_sort = sorting;
 			current_rev = reverse;

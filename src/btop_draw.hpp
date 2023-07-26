@@ -66,8 +66,8 @@ namespace Draw {
 
 	//* An editable text field
 	class TextEdit {
-        size_t pos{};   // defaults to 0
-        size_t upos{};  // defaults to 0
+		size_t pos{};   // defaults to 0
+		size_t upos{};  // defaults to 0
 		bool numeric;
 	public:
 		string text;
@@ -79,11 +79,11 @@ namespace Draw {
 	};
 
 	//* Create a box and return as a string
-    string createBox(const int x, const int y, const int width,
-        const int height, string line_color = "", bool fill = false,
-        const string title = "", const string title2 = "", const int num = 0);
+	string createBox(const int x, const int y, const int width,
+		const int height, string line_color = "", bool fill = false,
+		const string title = "", const string title2 = "", const int num = 0);
 
-    bool update_clock(bool force = false);
+	bool update_clock(bool force = false);
 
 	//* Class holding a percentage meter
 	class Meter {
@@ -93,7 +93,7 @@ namespace Draw {
 		array<string, 101> cache;
 	public:
 		Meter();
-        Meter(const int width, const string& color_gradient, bool invert = false);
+		Meter(const int width, const string& color_gradient, bool invert = false);
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value);
@@ -115,15 +115,15 @@ namespace Draw {
 
 	public:
 		Graph();
-        Graph(int width, int height,
-            const string& color_gradient,
-            const deque<long long>& data,
-            const string& symbol="default",
-            bool invert=false, bool no_zero=false,
-            long long max_value=0, long long offset=0);
+		Graph(int width, int height,
+			const string& color_gradient,
+			const deque<long long>& data,
+			const string& symbol="default",
+			bool invert=false, bool no_zero=false,
+			long long max_value=0, long long offset=0);
 
 		//* Add last value from back of <data> and return string representation of graph
-        string& operator()(const deque<long long>& data, bool data_same=false);
+		string& operator()(const deque<long long>& data, bool data_same=false);
 
 		//* Return string representation of graph
 		string& operator()();

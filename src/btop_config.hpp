@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -65,7 +65,7 @@ namespace Config {
 	bool _locked(const string& name);
 
 	//* Return bool for config key <name>
-    inline bool getB(const string& name) { return bools.at(name); }
+	inline bool getB(const string& name) { return bools.at(name); }
 
 	//* Return integer for config key <name>
 	inline const int& getI(const string& name) { return ints.at(name); }
@@ -81,7 +81,7 @@ namespace Config {
 	bool stringValid(const string& name, const string& value);
 
 	//* Set config key <name> to bool <value>
-    inline void set(const string& name, bool value) {
+	inline void set(const string& name, bool value) {
 		if (_locked(name)) boolsTmp.insert_or_assign(name, value);
 		else bools.at(name) = value;
 	}

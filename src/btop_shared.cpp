@@ -26,7 +26,7 @@ using namespace Tools;
 
 
 namespace Proc {
-    void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
+	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
@@ -70,7 +70,7 @@ namespace Proc {
 		}
 	}
 
-    void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, int& c_index, const int index_max, bool collapsed) {
+	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, int& c_index, const int index_max, bool collapsed) {
 		if (proc_vec.size() > 1) {
 			if (reverse) {
 				switch (v_index(sort_vector, sorting)) {
@@ -98,8 +98,8 @@ namespace Proc {
 		}
 	}
 
-    void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
-        int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
+		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
@@ -132,7 +132,7 @@ namespace Proc {
 				std::string_view cmd_view = cur_proc.cmd;
 				cmd_view = cmd_view.substr((size_t)0, std::min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
-                cur_proc.short_cmd = string{cmd_view};
+				cur_proc.short_cmd = string{cmd_view};
 			}
 		}
 		else {

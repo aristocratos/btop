@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -103,7 +103,7 @@ namespace Config {
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
-        {"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
@@ -234,7 +234,7 @@ namespace Config {
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
-        {"proc_filter_kernel", false},
+		{"proc_filter_kernel", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
@@ -383,7 +383,7 @@ namespace Config {
 			return false;
 		}
 		catch (const std::exception& e) {
-            validError = string{e.what()};
+			validError = string{e.what()};
 			return false;
 		}
 
@@ -503,7 +503,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-            Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
+			Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
 			clean_quit(1);
 		}
 

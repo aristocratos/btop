@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -74,8 +74,8 @@ double getValue(IOHIDServiceClientRef sc) {
 
 long long Cpu::ThermalSensors::getSensors() {
 	CFDictionaryRef thermalSensors = matching(0xff00, 5);  // 65280_10 = FF00_16
-	                                                       // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
-	                                                       // can be checked by ioreg -lfx
+														   // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
+														   // can be checked by ioreg -lfx
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	IOHIDEventSystemClientSetMatching(system, thermalSensors);
 	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);

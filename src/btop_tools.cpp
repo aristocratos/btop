@@ -55,9 +55,9 @@ namespace rng = std::ranges;
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
 
-    atomic<bool> initialized{}; // defaults to false
-    atomic<int> width{};        // defaults to 0
-    atomic<int> height{};       // defaults to 0
+	atomic<bool> initialized{}; // defaults to false
+	atomic<int> width{};        // defaults to 0
+	atomic<int> height{};       // defaults to 0
 	string current_tty;
 
 	namespace {
@@ -99,10 +99,10 @@ namespace Term {
 	}
 
 	auto get_min_size(const string& boxes) -> array<int, 2> {
-        bool cpu = boxes.find("cpu") != string::npos;
-        bool mem = boxes.find("mem") != string::npos;
-        bool net = boxes.find("net") != string::npos;
-        bool proc = boxes.find("proc") != string::npos;
+		bool cpu = boxes.find("cpu") != string::npos;
+		bool mem = boxes.find("mem") != string::npos;
+		bool net = boxes.find("net") != string::npos;
+		bool proc = boxes.find("proc") != string::npos;
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
@@ -121,7 +121,7 @@ namespace Term {
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
-                current_tty = (ttyname(STDIN_FILENO) != NULL ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
+				current_tty = (ttyname(STDIN_FILENO) != NULL ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
 
 				//? Disable stream sync
 				cin.sync_with_stdio(false);
@@ -206,9 +206,9 @@ namespace Tools {
 		return chars;
 	}
 
-    string uresize(string str, const size_t len, bool wide) {
-        if (len < 1 or str.empty())
-            return "";
+	string uresize(string str, const size_t len, bool wide) {
+		if (len < 1 or str.empty())
+			return "";
 
 		if (wide) {
 			try {
@@ -236,9 +236,9 @@ namespace Tools {
 		return str;
 	}
 
-    string luresize(string str, const size_t len, bool wide) {
-        if (len < 1 or str.empty())
-            return "";
+	string luresize(string str, const size_t len, bool wide) {
+		if (len < 1 or str.empty())
+			return "";
 
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
 			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
@@ -267,19 +267,19 @@ namespace Tools {
 	}
 
 	string ltrim(const string& str, const string& t_str) {
-        std::string_view str_v{str};
-        while (str_v.starts_with(t_str))
-            str_v.remove_prefix(t_str.size());
+		std::string_view str_v{str};
+		while (str_v.starts_with(t_str))
+			str_v.remove_prefix(t_str.size());
 
-        return string{str_v};
+		return string{str_v};
 	}
 
 	string rtrim(const string& str, const string& t_str) {
-        std::string_view str_v{str};
-        while (str_v.ends_with(t_str))
-            str_v.remove_suffix(t_str.size());
+		std::string_view str_v{str};
+		while (str_v.ends_with(t_str))
+			str_v.remove_suffix(t_str.size());
 
-        return string{str_v};
+		return string{str_v};
 	}
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
@@ -293,56 +293,56 @@ namespace Tools {
 		return out;
 	}
 
-    string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-            if (limit and ulen(str, wide) > x)
-                return uresize(str, x, wide);
+			if (limit and ulen(str, wide) > x)
+				return uresize(str, x, wide);
 
 			return str + string(max((int)(x - ulen(str)), 0), ' ');
 		}
 		else {
-            if (limit and str.size() > x) {
-                str.resize(x);
-                return str;
-            }
+			if (limit and str.size() > x) {
+				str.resize(x);
+				return str;
+			}
 			return str + string(max((int)(x - str.size()), 0), ' ');
 		}
 	}
 
-    string rjust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string rjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-            if (limit and ulen(str, wide) > x)
-                return uresize(str, x, wide);
+			if (limit and ulen(str, wide) > x)
+				return uresize(str, x, wide);
 
 			return string(max((int)(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
-            if (limit and str.size() > x) {
-                str.resize(x);
-                return str;
-            };
+			if (limit and str.size() > x) {
+				str.resize(x);
+				return str;
+			};
 			return string(max((int)(x - str.size()), 0), ' ') + str;
 		}
 	}
 
-    string cjust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string cjust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
-            if (limit and ulen(str, wide) > x)
-                return uresize(str, x, wide);
+			if (limit and ulen(str, wide) > x)
+				return uresize(str, x, wide);
 
 			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
 		}
 		else {
-            if (limit and str.size() > x) {
-                str.resize(x);
-                return str;
-            }
+			if (limit and str.size() > x) {
+				str.resize(x);
+				return str;
+			}
 			return string(max((int)ceil((double)(x - str.size()) / 2), 0), ' ') + str + string(max((int)floor((double)(x - str.size()) / 2), 0), ' ');
 		}
 	}
 
 	string trans(const string& str) {
-        std::string_view oldstr{str};
+		std::string_view oldstr{str};
 		string newstr;
 		newstr.reserve(str.size());
 		for (size_t pos; (pos = oldstr.find(' ')) != string::npos;) {
@@ -352,7 +352,7 @@ namespace Tools {
 			newstr.append(Mv::r(x));
 			oldstr.remove_prefix(pos + x);
 		}
-        return (newstr.empty()) ? str : newstr + string{oldstr};
+		return (newstr.empty()) ? str : newstr + string{oldstr};
 	}
 
 	string sec_to_dhms(size_t seconds, bool no_days, bool no_seconds) {
@@ -366,37 +366,37 @@ namespace Tools {
 		return out;
 	}
 
-    string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
+	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
-        bool mega = Config::getB("base_10_sizes");
+		bool mega = Config::getB("base_10_sizes");
 
-        // taking advantage of type deduction for array creation (since C++17)
-        // combined with string literals (operator""s)
-        static const array mebiUnits_bit {
-            "bit"s, "Kib"s, "Mib"s,
-            "Gib"s, "Tib"s, "Pib"s,
-            "Eib"s, "Zib"s, "Yib"s,
-            "Bib"s, "GEb"s
-        };
-        static const array mebiUnits_byte {
-            "Byte"s, "KiB"s, "MiB"s,
-            "GiB"s, "TiB"s, "PiB"s,
-            "EiB"s, "ZiB"s, "YiB"s,
-            "BiB"s, "GEB"s
-        };
-        static const array megaUnits_bit {
-            "bit"s, "Kb"s, "Mb"s,
-            "Gb"s, "Tb"s, "Pb"s,
-            "Eb"s, "Zb"s, "Yb"s,
-            "Bb"s, "Gb"s
-        };
-        static const array megaUnits_byte {
-            "Byte"s, "KB"s, "MB"s,
-            "GB"s, "TB"s, "PB"s,
-            "EB"s, "ZB"s, "YB"s,
-            "BB"s, "GB"s
-        };
+		// taking advantage of type deduction for array creation (since C++17)
+		// combined with string literals (operator""s)
+		static const array mebiUnits_bit {
+			"bit"s, "Kib"s, "Mib"s,
+			"Gib"s, "Tib"s, "Pib"s,
+			"Eib"s, "Zib"s, "Yib"s,
+			"Bib"s, "GEb"s
+		};
+		static const array mebiUnits_byte {
+			"Byte"s, "KiB"s, "MiB"s,
+			"GiB"s, "TiB"s, "PiB"s,
+			"EiB"s, "ZiB"s, "YiB"s,
+			"BiB"s, "GEB"s
+		};
+		static const array megaUnits_bit {
+			"bit"s, "Kb"s, "Mb"s,
+			"Gb"s, "Tb"s, "Pb"s,
+			"Eb"s, "Zb"s, "Yb"s,
+			"Bb"s, "Gb"s
+		};
+		static const array megaUnits_byte {
+			"Byte"s, "KB"s, "MB"s,
+			"GB"s, "TB"s, "PB"s,
+			"EB"s, "ZB"s, "YB"s,
+			"BB"s, "GB"s
+		};
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
 		value *= 100 * mult;
@@ -423,29 +423,29 @@ namespace Tools {
 		}
 		if (out.empty()) {
 			out = to_string(value);
-            if (not mega and out.size() == 4 and start > 0) {
-                out.pop_back();
-                out.insert(2, ".");
-            }
-            else if (out.size() == 3 and start > 0) {
-                out.insert(1, ".");
-            }
-            else if (out.size() >= 2) {
-                out.resize(out.size() - 2);
-            }
+			if (not mega and out.size() == 4 and start > 0) {
+				out.pop_back();
+				out.insert(2, ".");
+			}
+			else if (out.size() == 3 and start > 0) {
+				out.insert(1, ".");
+			}
+			else if (out.size() >= 2) {
+				out.resize(out.size() - 2);
+			}
 		}
 		if (shorten) {
 			auto f_pos = out.find('.');
-            if (f_pos == 1 and out.size() > 3) {
-                out = to_string(round(stod(out) * 10) / 10).substr(0,3);
-            }
-            else if (f_pos != string::npos) {
-                out = to_string((int)round(stod(out)));
-            }
-            if (out.size() > 3) {
-                out = to_string((int)(out[0] - '0') + 1);
-                start++;
-            }
+			if (f_pos == 1 and out.size() > 3) {
+				out = to_string(round(stod(out) * 10) / 10).substr(0,3);
+			}
+			else if (f_pos != string::npos) {
+				out = to_string((int)round(stod(out)));
+			}
+			if (out.size() > 3) {
+				out = to_string((int)(out[0] - '0') + 1);
+				start++;
+			}
 			out.push_back(units[start][0]);
 		}
 		else out += " " + units[start];
@@ -455,18 +455,18 @@ namespace Tools {
 	}
 
 	std::string operator*(const string& str, int64_t n) {
-        if (n < 1 or str.empty()) {
-            return "";
-        }
-        else if (n == 1) {
-            return str;
-        }
+		if (n < 1 or str.empty()) {
+			return "";
+		}
+		else if (n == 1) {
+			return str;
+		}
 
 		string new_str;
 		new_str.reserve(str.size() * n);
 
-        for (; n > 0; n--)
-            new_str.append(str);
+		for (; n > 0; n--)
+			new_str.append(str);
 
 		return new_str;
 	}
@@ -479,11 +479,11 @@ namespace Tools {
 		return ss.str();
 	}
 
-    void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
+	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
 		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
 	}
 
-    void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
+	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
 		const uint64_t start_time = time_ms();
 		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
@@ -505,7 +505,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-            Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
+			Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -526,7 +526,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
-        return string{host};
+		return string{host};
 	}
 
 	string username() {
@@ -551,14 +551,14 @@ namespace Logger {
 		int status = -1;
 	public:
 		lose_priv() {
-            if (geteuid() != Global::real_uid) {
-                this->status = seteuid(Global::real_uid);
-            }
+			if (geteuid() != Global::real_uid) {
+				this->status = seteuid(Global::real_uid);
+			}
 		}
 		~lose_priv() {
-            if (status == 0) {
-                status = seteuid(Global::set_uid);
-            }
+			if (status == 0) {
+				status = seteuid(Global::set_uid);
+			}
 		}
 	};
 
@@ -576,25 +576,25 @@ namespace Logger {
 				auto old_log = logfile;
 				old_log += ".1";
 
-                if (fs::exists(old_log))
-                    fs::remove(old_log, ec);
+				if (fs::exists(old_log))
+					fs::remove(old_log, ec);
 
-                if (not ec)
-                    fs::rename(logfile, old_log, ec);
+				if (not ec)
+					fs::rename(logfile, old_log, ec);
 			}
 			if (not ec) {
 				std::ofstream lwrite(logfile, std::ios::app);
-                if (first) {
-                    first = false;
-                    lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
-                }
+				if (first) {
+					first = false;
+					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
+				}
 				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
 			}
 			else logfile.clear();
 		}
 		catch (const std::exception& e) {
 			logfile.clear();
-            throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
+			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
 		}
 	}
 }

@@ -63,8 +63,8 @@ namespace Cpu {
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
-    bool got_sensors{};     // defaults to false
-    bool cpu_temp_only{};   // defaults to false
+	bool got_sensors{};     // defaults to false
+	bool cpu_temp_only{};   // defaults to false
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -78,9 +78,9 @@ namespace Cpu {
 	struct Sensor {
 		fs::path path;
 		string label;
-        int64_t temp{}; // defaults to 0
-        int64_t high{}; // defaults to 0
-        int64_t crit{}; // defaults to 0
+		int64_t temp{}; // defaults to 0
+		int64_t high{}; // defaults to 0
+		int64_t crit{}; // defaults to 0
 	};
 
 	unordered_flat_map<string, Sensor> found_sensors;
@@ -162,10 +162,10 @@ namespace Cpu {
 	bool has_battery = true;
 	tuple<int, long, string> current_bat;
 
-    const array time_names {
-        "user"s, "nice"s, "system"s, "idle"s, "iowait"s,
-        "irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
-    };
+	const array time_names {
+		"user"s, "nice"s, "system"s, "idle"s, "iowait"s,
+		"irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
+	};
 
 	unordered_flat_map<string, long long> cpu_old = {
 			{"totals", 0},
@@ -408,14 +408,14 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-        static int failed{}; // defaults to 0
+		static int failed{}; // defaults to 0
 
-        if (failed > 4)
-            return ""s;
+		if (failed > 4)
+			return ""s;
 
 		string cpuhz;
 		try {
-            double hz{}; // defaults to 0.0
+			double hz{}; // defaults to 0.0
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
 			if (not freq_path.empty()) {
 				hz = stod(readfile(freq_path, "0.0")) / 1000;
@@ -440,8 +440,8 @@ namespace Cpu {
 				}
 			}
 
-            if (hz <= 1 or hz >= 1000000)
-                throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
+			if (hz <= 1 or hz >= 1000000)
+				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
 			if (hz >= 1000) {
 				if (hz >= 10000) cpuhz = to_string((int)round(hz / 1000)); // Future proof until we reach THz speeds :)
@@ -471,9 +471,9 @@ namespace Cpu {
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
-            int cpu{};  // defaults to 0
-            int core{}; // defaults to 0
-            int n{};    // defaults to 0
+			int cpu{};  // defaults to 0
+			int core{}; // defaults to 0
+			int n{};    // defaults to 0
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -666,7 +666,7 @@ namespace Cpu {
 		return {percent, seconds, status};
 	}
 
-    auto collect(bool no_update) -> cpu_info& {
+	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
 
@@ -808,10 +808,10 @@ namespace Cpu {
 }
 
 namespace Mem {
-    bool has_swap{}; // defaults to false
+	bool has_swap{}; // defaults to false
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
-    int disk_ios{}; // defaults to 0
+	int disk_ios{}; // defaults to 0
 	vector<string> last_found;
 
 	//?* Find the filepath to the specified ZFS object's stat file
@@ -836,12 +836,12 @@ namespace Mem {
 		return totalMem;
 	}
 
-    auto collect(bool no_update) -> mem_info& {
+	auto collect(bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
-        auto show_swap = Config::getB("show_swap");
-        auto swap_disk = Config::getB("swap_disk");
-        auto show_disks = Config::getB("show_disks");
-        auto zfs_arc_cached = Config::getB("zfs_arc_cached");
+		auto show_swap = Config::getB("show_swap");
+		auto swap_disk = Config::getB("swap_disk");
+		auto show_disks = Config::getB("show_disks");
+		auto zfs_arc_cached = Config::getB("zfs_arc_cached");
 		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 
@@ -935,9 +935,9 @@ namespace Mem {
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
 				bool filter_exclude = false;
-                auto use_fstab = Config::getB("use_fstab");
-                auto only_physical = Config::getB("only_physical");
-                auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
+				auto use_fstab = Config::getB("use_fstab");
+				auto only_physical = Config::getB("only_physical");
+				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
 				ifstream diskread;
 
@@ -1208,14 +1208,14 @@ namespace Mem {
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						}
 					} else {
-                        Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
+						Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
 					}
 					diskread.close();
 				}
 				old_uptime = uptime;
 			}
 			catch (const std::exception& e) {
-                Logger::warning("Error in Mem::collect() : " + string{e.what()});
+				Logger::warning("Error in Mem::collect() : " + string{e.what()});
 			}
 		}
 
@@ -1276,13 +1276,13 @@ namespace Mem {
 	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
 		ifstream diskread;
 
-        int64_t bytes_read;
-        int64_t bytes_write;
-        int64_t io_ticks;
-        int64_t bytes_read_total{};     // defaults to 0
-        int64_t bytes_write_total{};    // defaults to 0
-        int64_t io_ticks_total{};       // defaults to 0
-        int64_t objects_read{};         // defaults to 0
+		int64_t bytes_read;
+		int64_t bytes_write;
+		int64_t io_ticks;
+		int64_t bytes_read_total{};     // defaults to 0
+		int64_t bytes_write_total{};    // defaults to 0
+		int64_t io_ticks_total{};       // defaults to 0
+		int64_t objects_read{};         // defaults to 0
 
 		// looking through all files that start with 'objset'
 		for (const auto& file: fs::directory_iterator(disk.stat)) {
@@ -1358,11 +1358,11 @@ namespace Net {
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
-    int errors{}; // defaults to 0
+	int errors{}; // defaults to 0
 	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
 	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
-    bool rescale{true};
-    uint64_t timestamp{}; // defaults to 0
+	bool rescale{true};
+	uint64_t timestamp{}; // defaults to 0
 
 	//* RAII wrapper for getifaddrs
 	class getifaddr_wrapper {
@@ -1374,12 +1374,12 @@ namespace Net {
 		auto operator()() -> struct ifaddrs* { return ifaddr; }
 	};
 
-    auto collect(bool no_update) -> net_info& {
+	auto collect(bool no_update) -> net_info& {
 		if (Runner::stopping) return empty_net;
 		auto& net = current_net;
 		auto& config_iface = Config::getS("net_iface");
-        auto net_sync = Config::getB("net_sync");
-        auto net_auto = Config::getB("net_auto");
+		auto net_sync = Config::getB("net_sync");
+		auto net_auto = Config::getB("net_auto");
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
@@ -1451,7 +1451,7 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-                    uint64_t val{}; // defaults to 0
+					uint64_t val{}; // defaults to 0
 					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
@@ -1572,15 +1572,15 @@ namespace Proc {
 	unordered_flat_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
-    bool current_rev{}; // defaults to false
+	bool current_rev{}; // defaults to false
 
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
 	int collapse = -1, expand = -1;
-    uint64_t old_cputimes{};    // defaults to 0
-    atomic<int> numpids{};      // defaults to 0
-    int filter_found{};         // defaults to 0
+	uint64_t old_cputimes{};    // defaults to 0
+	atomic<int> numpids{};      // defaults to 0
+	int filter_found{};         // defaults to 0
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
@@ -1684,19 +1684,19 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-    auto collect(bool no_update) -> vector<proc_info>& {
+	auto collect(bool no_update) -> vector<proc_info>& {
 		if (Runner::stopping) return current_procs;
 		const auto& sorting = Config::getS("proc_sorting");
-        auto reverse = Config::getB("proc_reversed");
+		auto reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
-        auto per_core = Config::getB("proc_per_core");
-        auto should_filter_kernel = Config::getB("proc_filter_kernel");
-        auto tree = Config::getB("proc_tree");
-        auto show_detailed = Config::getB("show_detailed");
+		auto per_core = Config::getB("proc_per_core");
+		auto should_filter_kernel = Config::getB("proc_filter_kernel");
+		auto tree = Config::getB("proc_tree");
+		auto show_detailed = Config::getB("show_detailed");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
-        bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		if (sorted_change) {
 			current_sort = sorting;
 			current_rev = reverse;
@@ -1712,7 +1712,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-        static size_t proc_clear_count{}; // defaults to 0
+		static size_t proc_clear_count{}; // defaults to 0
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -1787,7 +1787,7 @@ namespace Proc {
 
 				//? Check if pid already exists in current_procs
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-                bool no_cache{}; // defaults to false
+				bool no_cache{}; // defaults to false
 				if (find_old == current_procs.end()) {
 					current_procs.push_back({pid});
 					find_old = current_procs.end() - 1;
@@ -2070,6 +2070,6 @@ namespace Tools {
 			catch (const std::invalid_argument&) {}
 			catch (const std::out_of_range&) {}
 		}
-        throw std::runtime_error("Failed get uptime from from " + string{Shared::procPath} + "/uptime");
+		throw std::runtime_error("Failed get uptime from from " + string{Shared::procPath} + "/uptime");
 	}
 }

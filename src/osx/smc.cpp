@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,10 +35,10 @@ static UInt32 _strtoul(char *str, int size, int base) {
 static void _ultostr(char *str, UInt32 val) {
 	str[0] = '\0';
 	sprintf(str, "%c%c%c%c",
-	        (unsigned int)val >> 24,
-	        (unsigned int)val >> 16,
-	        (unsigned int)val >> 8,
-	        (unsigned int)val);
+			(unsigned int)val >> 24,
+			(unsigned int)val >> 16,
+			(unsigned int)val >> 8,
+			(unsigned int)val);
 }
 
 namespace Cpu {
@@ -65,7 +65,7 @@ namespace Cpu {
 		}
 	}
 	SMCConnection::~SMCConnection() {
-        IOServiceClose(conn);
+		IOServiceClose(conn);
 	}
 
 	long long SMCConnection::getSMCTemp(char *key) {
@@ -132,7 +132,7 @@ namespace Cpu {
 
 		return kIOReturnSuccess;
 	}
-    
+
 	kern_return_t SMCConnection::SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure) {
 		size_t structureInputSize;
 		size_t structureOutputSize;
@@ -141,10 +141,10 @@ namespace Cpu {
 		structureOutputSize = sizeof(SMCKeyData_t);
 
 		return IOConnectCallStructMethod(conn, index,
-		                                 // inputStructure
-		                                 inputStructure, structureInputSize,
-		                                 // ouputStructure
-		                                 outputStructure, &structureOutputSize);
+										 // inputStructure
+										 inputStructure, structureInputSize,
+										 // ouputStructure
+										 outputStructure, &structureOutputSize);
 	}
 
 }  // namespace Cpu
