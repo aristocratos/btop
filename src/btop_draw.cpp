@@ -293,7 +293,7 @@ namespace Draw {
 		static size_t clock_len{};  // defaults to 0
 		static string clock_str;
 
-		if (auto n_time = time(NULL); not force and n_time == c_time)
+		if (auto n_time = time(nullptr); not force and n_time == c_time)
 			return false;
 		else {
 			c_time = n_time;

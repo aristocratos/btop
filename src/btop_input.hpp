@@ -32,7 +32,7 @@ using std::string;
 
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
-	cin.tie(NULL);
+	cin.tie(nullptr);
 	These will automatically be set when running Term::init() from btop_tools.cpp
 */
 

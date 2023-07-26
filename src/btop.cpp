@@ -244,14 +244,14 @@ void clean_quit(int sig) {
 	Runner::stop();
 	if (Global::_runner_started) {
 	#ifdef __APPLE__
-		if (pthread_join(Runner::runner_id, NULL) != 0) {
+		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
 	#else
 		struct timespec ts;
 		ts.tv_sec = 5;
-		if (pthread_timedjoin_np(Runner::runner_id, NULL, &ts) != 0) {
+		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
@@ -356,7 +356,7 @@ namespace Runner {
 	public:
 		int status;
 		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-			pthread_mutex_init(&pt_mutex, NULL);
+			pthread_mutex_init(&pt_mutex, nullptr);
 			status = pthread_mutex_lock(&pt_mutex);
 		}
 		~thread_lock() {
@@ -444,7 +444,7 @@ namespace Runner {
 		// sigaddset(&mask, SIGTSTP);
 		sigaddset(&mask, SIGWINCH);
 		sigaddset(&mask, SIGTERM);
-		pthread_sigmask(SIG_BLOCK, &mask, NULL);
+		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
 		//? pthread_mutex_lock to lock thread and monitor health from main thread
 		thread_lock pt_lck(mtx);
@@ -666,7 +666,7 @@ namespace Runner {
 			active = false;
 			// exit(1);
 			pthread_cancel(Runner::runner_id);
-			if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
 				clean_quit(1);
 			}
@@ -754,7 +754,7 @@ int main(int argc, char **argv) {
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (std::getenv(env) != NULL and access(std::getenv(env), W_OK) != -1) {
+		if (std::getenv(env) != nullptr and access(std::getenv(env), W_OK) != -1) {
 			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
 			break;
 		}
@@ -821,7 +821,7 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (std::setlocale(LC_ALL, "") != NULL and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
+	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
 	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
 		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
 	}
@@ -829,9 +829,9 @@ int main(int argc, char **argv) {
 		string found;
 		bool set_failure{}; // defaults to false
 		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
-			if (std::getenv(loc_env) != NULL and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
+			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
-				if (std::setlocale(LC_ALL, found.c_str()) == NULL) {
+				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
 					set_failure = true;
 					Logger::warning("Failed to set locale " + found + " continuing anyway.");
 				}
@@ -844,7 +844,7 @@ int main(int argc, char **argv) {
 						for (auto& l : ssplit(loc, ';')) {
 							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
 								found = l.substr(l.find('=') + 1);
-								if (std::setlocale(LC_ALL, found.c_str()) != NULL) {
+								if (std::setlocale(LC_ALL, found.c_str()) != nullptr) {
 									break;
 								}
 							}
@@ -865,10 +865,10 @@ int main(int argc, char **argv) {
 			if (cur_locale.empty()) {
 				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
 			}
-			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != NULL) {
+			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != nullptr) {
 				Logger::debug("Setting LC_ALL=" + cur_locale + ".UTF-8");
 			}
-			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != NULL) {
+			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
 				Logger::debug("Setting LC_ALL=en_US.UTF-8");
 			}
 			else {
@@ -940,7 +940,7 @@ int main(int argc, char **argv) {
 
 	//? Start runner thread
 	Runner::thread_sem_init();
-	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+	if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		clean_quit(1);
 	}

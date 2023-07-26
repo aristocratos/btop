@@ -1399,8 +1399,8 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto* ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
-				if (ifa->ifa_addr == NULL) continue;
+			for (auto* ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto& iface = ifa->ifa_name;
 
@@ -1420,7 +1420,7 @@ namespace Net {
 				//? Get IPv4 address
 				if (family == AF_INET) {
 					if (net[iface].ipv4.empty()) {
-						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
@@ -1431,7 +1431,7 @@ namespace Net {
 				//? Get IPv6 address
 				else if (family == AF_INET6) {
 					if (net[iface].ipv6.empty()) {
-						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
@@ -1841,7 +1841,7 @@ namespace Proc {
 						try {
 							struct passwd* udet;
 							udet = getpwuid(stoi(uid));
-							if (udet != NULL and udet->pw_name != NULL) {
+							if (udet != nullptr and udet->pw_name != nullptr) {
 								new_proc.user = string(udet->pw_name);
 							}
 							else {
