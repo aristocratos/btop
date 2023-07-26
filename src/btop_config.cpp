@@ -22,9 +22,9 @@ tab-size = 4
 #include <fstream>
 #include <string_view>
 
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
 
 using std::array;
 using std::atomic;

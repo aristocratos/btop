@@ -39,10 +39,10 @@ tab-size = 4
 	#endif
 #endif
 #define FMT_HEADER_ONLY
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
+#include "fmt/core.h"
+#include "fmt/format.h"
+#include "fmt/ostream.h"
+#include "fmt/ranges.h"
 
 using std::array;
 using std::atomic;
@@ -50,7 +50,6 @@ using std::string;
 using std::to_string;
 using std::tuple;
 using std::vector;
-using namespace fmt;
 using namespace fmt::literals;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------

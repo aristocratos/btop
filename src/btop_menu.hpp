@@ -23,7 +23,7 @@ tab-size = 4
 #include <vector>
 #include <bitset>
 
-#include <btop_input.hpp>
+#include "btop_input.hpp"
 
 using std::atomic;
 using std::bitset;

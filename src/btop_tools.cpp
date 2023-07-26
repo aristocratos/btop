@@ -32,9 +32,9 @@ tab-size = 4
 
 #include "robin_hood.h"
 #include "widechar_width.hpp"
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
 
 using std::cin;
 using std::cout;
@@ -437,10 +437,10 @@ namespace Tools {
 		if (shorten) {
 			auto f_pos = out.find('.');
             if (f_pos == 1 and out.size() > 3) {
-                out = to_string(round(stof(out) * 10) / 10).substr(0,3);
+                out = to_string(round(stod(out) * 10) / 10).substr(0,3);
             }
             else if (f_pos != string::npos) {
-                out = to_string((int)round(stof(out)));
+                out = to_string((int)round(stod(out)));
             }
             if (out.size() > 3) {
                 out = to_string((int)(out[0] - '0') + 1);
@@ -489,7 +489,7 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-        if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
+		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
 	}
 

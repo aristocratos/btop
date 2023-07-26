@@ -19,24 +19,21 @@ tab-size = 4
 #include <deque>
 #include <robin_hood.h>
 #include <array>
-#include <ranges>
 #include <signal.h>
 #include <errno.h>
 #include <cmath>
 #include <filesystem>
 
-#include <btop_menu.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_theme.hpp>
-#include <btop_draw.hpp>
-#include <btop_shared.hpp>
+#include "btop_menu.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_theme.hpp"
+#include "btop_draw.hpp"
+#include "btop_shared.hpp"
 
 using robin_hood::unordered_flat_map;
 using std::array;
 using std::ceil;
-using std::clamp;
-using std::deque;
 using std::max;
 using std::min;
 using std::ref;
@@ -45,7 +42,6 @@ using std::views::iota;
 using namespace Tools;
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 namespace Menu {
 

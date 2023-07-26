@@ -43,18 +43,16 @@ tab-size = 4
 	#include <semaphore>
 #endif
 
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_input.hpp>
-#include <btop_theme.hpp>
-#include <btop_draw.hpp>
-#include <btop_menu.hpp>
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_input.hpp"
+#include "btop_theme.hpp"
+#include "btop_draw.hpp"
+#include "btop_menu.hpp"
 
 using std::atomic;
 using std::cout;
-using std::endl;
-using std::endl;
 using std::flush;
 using std::min;
 using std::string;
@@ -63,7 +61,6 @@ using std::to_string;
 using std::vector;
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 using namespace Tools;
 using namespace std::chrono_literals;

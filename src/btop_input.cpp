@@ -21,17 +21,17 @@ tab-size = 4
 #include <vector>
 #include <thread>
 #include <mutex>
-
-#include <btop_input.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_menu.hpp>
-#include <btop_draw.hpp>
 #include <signal.h>
 
+#include "btop_input.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_menu.hpp"
+#include "btop_draw.hpp"
+
+
 using std::cin;
-using std::vector;
 
 using namespace Tools;
 using namespace std::literals; // for operator""s

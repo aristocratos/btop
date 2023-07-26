@@ -45,15 +45,16 @@ tab-size = 4
 #include <unistd.h>
 #include <stdexcept>
 
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
 #include <cmath>
 #include <fstream>
 #include <numeric>
 #include <ranges>
 #include <regex>
 #include <string>
+
+#include "../btop_config.hpp"
+#include "../btop_shared.hpp"
+#include "../btop_tools.hpp"
 
 #include "sensors.hpp"
 #include "smc.hpp"

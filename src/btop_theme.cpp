@@ -17,19 +17,13 @@ tab-size = 4
 */
 
 #include <cmath>
-#include <ranges>
 #include <fstream>
 #include <unistd.h>
 
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_theme.hpp>
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_theme.hpp"
 
-using std::ceil;
-using std::clamp;
-using std::max;
-using std::min;
-using std::quoted;
 using std::round;
 using std::stoi;
 using std::to_string;
@@ -38,7 +32,6 @@ using std::views::iota;
 
 using namespace Tools;
 
-namespace rng = std::ranges;
 namespace fs = std::filesystem;
 
 string Term::fg, Term::bg;

@@ -28,18 +28,17 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
-
+#include <filesystem>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
 #endif
 
-#include <btop_shared.hpp>
-#include <btop_config.hpp>
-#include <btop_tools.hpp>
+#include "../btop_shared.hpp"
+#include "../btop_config.hpp"
+#include "../btop_tools.hpp"
 
 using std::clamp;
-using std::cmp_equal;
 using std::cmp_greater;
 using std::cmp_less;
 using std::ifstream;
@@ -48,6 +47,7 @@ using std::min;
 using std::numeric_limits;
 using std::round;
 using std::streamsize;
+using std::vector;
 
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
@@ -453,10 +453,10 @@ namespace Cpu {
 
 		}
 		catch (const std::exception& e) {
-            if (++failed < 5)
-                return ""s;
+			if (++failed < 5)
+				return ""s;
 			else {
-                Logger::warning("get_cpuHZ() : " + string{e.what()});
+				Logger::warning("get_cpuHZ() : " + string{e.what()});
 				return ""s;
 			}
 		}
@@ -792,9 +792,9 @@ namespace Cpu {
 
 		}
 		catch (const std::exception& e) {
-            Logger::debug("Cpu::collect() : " + string{e.what()});
+			Logger::debug("Cpu::collect() : " + string{e.what()});
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
-            else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
+			else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
 		}
 
 		if (Config::getB("check_temp") and got_sensors)

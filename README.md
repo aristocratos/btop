@@ -74,7 +74,7 @@ If you want to help out, test for bugs/fix bugs or just try out the branches:
 ```bash
 # Install and use Homebrew or MacPorts package managers for easy dependency installation
 brew install coreutils make gcc@11
-git clone --recursive https://github.com/aristocratos/btop.git
+git clone https://github.com/aristocratos/btop.git
 cd btop
 git checkout OSX
 gmake
@@ -83,7 +83,7 @@ gmake
 **FreeBSD**
 ```bash
 sudo pkg install gmake gcc11 coreutils git
-git clone --recursive https://github.com/aristocratos/btop.git
+git clone https://github.com/aristocratos/btop.git
 cd btop
 git checkout freebsd
 gmake
@@ -322,7 +322,7 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ```bash
-   git clone --recursive https://github.com/aristocratos/btop.git
+   git clone https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -400,7 +400,7 @@ Also needs a UTF8 locale and a font that covers:
 ## Compilation macOS OSX
 
    Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
-   
+
    GCC 12 needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
    The makefile also needs GNU coreutils and `sed`.
@@ -416,14 +416,14 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ```bash
-   git clone --recursive https://github.com/aristocratos/btop.git
+   git clone https://github.com/aristocratos/btop.git
    cd btop
    ```
 
 3. **Compile**
 
    Append `VERBOSE=true` to display full compiler/linker commands.
-   
+
    Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
 
    Append `QUIET=true` for less verbose output.
@@ -502,7 +502,7 @@ Also needs a UTF8 locale and a font that covers:
 2. **Clone repository**
 
    ```bash
-   git clone --recursive https://github.com/aristocratos/btop.git
+   git clone https://github.com/aristocratos/btop.git
    cd btop
    ```
 
@@ -594,7 +594,7 @@ Also needs a UTF8 locale and a font that covers:
 
     ```bash
 	sudo snap connect btop:removable-media
-	or 
+	or
 	sudo snap connect btop-desktop:removable-media
 	```
 

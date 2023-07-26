@@ -18,8 +18,8 @@ tab-size = 4
 
 #include <ranges>
 
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
 
 namespace rng = std::ranges;
 using namespace Tools;
