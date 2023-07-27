@@ -156,10 +156,10 @@ namespace Draw {
 			upos++;
 			pos = uresize(text, upos).size();
 		}
-		else if (key == "home" and pos > 0) {
+		else if (key == "home" and not text.empty() and pos > 0) {
 			pos = upos = 0;
 		}
-		else if (key == "end" and pos < text.size()) {
+		else if (key == "end" and not text.empty() and pos < text.size()) {
 			pos = text.size();
 			upos = ulen(text);
 		}
@@ -202,6 +202,10 @@ namespace Draw {
 	}
 
 	string TextEdit::operator()(const size_t limit) {
+		string out;
+		size_t c_upos = upos;
+		if (text.empty())
+			return Fx::ul + " " + Fx::uul;
 		if (limit > 0 and ulen(text) + 1 > limit) {
 			try {
 				const size_t half = (size_t)round((double)limit / 2);
@@ -214,13 +218,23 @@ namespace Draw {
 				else
 					first = luresize(text.substr(0, pos), half);
 
-				return first + Fx::bl + "█" + Fx::ubl + uresize(text.substr(pos), limit - ulen(first));
+				out = first + uresize(text.substr(pos), limit - ulen(first));
+				c_upos = ulen(first);
 			}
 			catch (const std::exception& e) {
 				Logger::error("In TextEdit::operator() : " + string{e.what()});
+				return "";
 			}
 		}
-		return text.substr(0, pos) + Fx::bl + "█" + Fx::ubl + text.substr(pos);
+		else
+			out = text;
+
+		if (c_upos == 0)
+			return Fx::ul + uresize(out, 1) + Fx::uul + luresize(out, ulen(out) - 1);
+		else if (c_upos == ulen(out))
+			return out + Fx::ul + " " + Fx::uul;
+		else
+			return uresize(out, c_upos) + Fx::ul + luresize(uresize(out, c_upos + 1), 1) + Fx::uul + luresize(out, ulen(out) - c_upos - 1);
 	}
 
 	void TextEdit::clear() {
