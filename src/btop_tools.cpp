@@ -80,7 +80,7 @@ namespace Term {
 			else settings.c_lflag &= ~(ICANON);
 			if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
 			if (on) setlinebuf(stdin);
-			else setbuf(stdin, NULL);
+			else setbuf(stdin, nullptr);
 			return true;
 		}
 	}
@@ -121,15 +121,15 @@ namespace Term {
 			initialized = (bool)isatty(STDIN_FILENO);
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
-				current_tty = (ttyname(STDIN_FILENO) != NULL ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
+				current_tty = (ttyname(STDIN_FILENO) != nullptr ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
 
 				//? Disable stream sync
 				cin.sync_with_stdio(false);
 				cout.sync_with_stdio(false);
 
 				//? Disable stream ties
-				cin.tie(NULL);
-				cout.tie(NULL);
+				cin.tie(nullptr);
+				cout.tie(nullptr);
 				echo(false);
 				linebuffered(false);
 				refresh();
@@ -531,8 +531,8 @@ namespace Tools {
 
 	string username() {
 		auto user = getenv("LOGNAME");
-		if (user == NULL or strlen(user) == 0) user = getenv("USER");
-		return (user != NULL ? user : "");
+		if (user == nullptr or strlen(user) == 0) user = getenv("USER");
+		return (user != nullptr ? user : "");
 	}
 
 }

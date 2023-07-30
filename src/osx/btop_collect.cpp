@@ -129,7 +129,7 @@ namespace Shared {
 		}
 
 		size_t physicalCoreCountSize = sizeof(physicalCoreCount);
-		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, NULL, 0) < 0) {
+		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, nullptr, 0) < 0) {
 			Logger::error("Could not get physical core count");
 		}
 
@@ -155,7 +155,7 @@ namespace Shared {
 
 		int64_t memsize = 0;
 		size_t size = sizeof(memsize);
-		if (sysctlbyname("hw.memsize", &memsize, &size, NULL, 0) < 0) {
+		if (sysctlbyname("hw.memsize", &memsize, &size, nullptr, 0) < 0) {
 			Logger::warning("Could not get memory size");
 		}
 		totalMem = memsize;
@@ -206,7 +206,7 @@ namespace Cpu {
 		string name;
 		char buffer[1024];
 		size_t size = sizeof(buffer);
-		if (sysctlbyname("machdep.cpu.brand_string", &buffer, &size, NULL, 0) < 0) {
+		if (sysctlbyname("machdep.cpu.brand_string", &buffer, &size, nullptr, 0) < 0) {
 			Logger::error("Failed to get CPU name");
 			return name;
 		}
@@ -324,7 +324,7 @@ namespace Cpu {
 
 		int mib[] = {CTL_HW, HW_CPU_FREQ};
 
-		if (sysctl(mib, 2, &freq, &size, NULL, 0) < 0) {
+		if (sysctl(mib, 2, &freq, &size, nullptr, 0) < 0) {
 			// this fails on Apple Silicon macs. Apparently you're not allowed to know
 			return "";
 		}
@@ -455,7 +455,7 @@ namespace Cpu {
 		natural_t cpu_count;
 		natural_t i;
 		kern_return_t error;
-		processor_cpu_load_info_data_t *cpu_load_info = NULL;
+		processor_cpu_load_info_data_t *cpu_load_info = nullptr;
 
 		MachProcessorInfo info{};
 		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
@@ -672,7 +672,7 @@ namespace Mem {
 		auto show_disks = Config::getB("show_disks");
 		auto swap_disk = Config::getB("swap_disk");
 		auto &mem = current_mem;
-		static bool snapped = (getenv("BTOP_SNAPPED") != NULL);
+		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
@@ -687,7 +687,7 @@ namespace Mem {
 
 		struct xsw_usage swap;
 		size_t len = sizeof(struct xsw_usage);
-		if (sysctl(mib, 2, &swap, &len, NULL, 0) == 0) {
+		if (sysctl(mib, 2, &swap, &len, nullptr, 0) == 0) {
 			mem.stats.at("swap_total") = swap.xsu_total;
 			mem.stats.at("swap_free") = swap.xsu_avail;
 			mem.stats.at("swap_used") = swap.xsu_used;
@@ -868,8 +868,8 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_wrap(); ifa != NULL; ifa = ifa->ifa_next) {
-				if (ifa->ifa_addr == NULL) continue;
+			for (auto *ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto &iface = ifa->ifa_name;
 				//? Update available interfaces vector and get status of interface
@@ -885,7 +885,7 @@ namespace Net {
 				//? Get IPv4 address
 				if (family == AF_INET) {
 					if (net[iface].ipv4.empty()) {
-						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
@@ -896,7 +896,7 @@ namespace Net {
 				//? Get IPv6 address
 				else if (family == AF_INET6) {
 					if (net[iface].ipv6.empty()) {
-						if (NULL != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
@@ -909,15 +909,15 @@ namespace Net {
 			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0};
 			size_t len;
-			if (sysctl(mib, 6, NULL, &len, NULL, 0) < 0) {
+			if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0) {
 				Logger::error("failed getting network interfaces");
 			} else {
 				std::unique_ptr<char[]> buf(new char[len]);
-				if (sysctl(mib, 6, buf.get(), &len, NULL, 0) < 0) {
+				if (sysctl(mib, 6, buf.get(), &len, nullptr, 0) < 0) {
 					Logger::error("failed getting network interfaces");
 				} else {
 					char *lim = buf.get() + len;
-					char *next = NULL;
+					char *next = nullptr;
 					for (next = buf.get(); next < lim;) {
 						struct if_msghdr *ifm = (struct if_msghdr *)next;
 						next += ifm->ifm_msglen;
@@ -1094,7 +1094,7 @@ namespace Proc {
 
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
-		gettimeofday(&currentTime, NULL);
+		gettimeofday(&currentTime, nullptr);
 		detailed.elapsed = sec_to_dhms(currentTime.tv_sec - (detailed.entry.cpu_s / 1'000'000));
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
@@ -1156,7 +1156,7 @@ namespace Proc {
 			{  //* Get CPU totals
 				natural_t cpu_count;
 				kern_return_t error;
-				processor_cpu_load_info_data_t *cpu_load_info = NULL;
+				processor_cpu_load_info_data_t *cpu_load_info = nullptr;
 				MachProcessorInfo info{};
 				error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
 				if (error != KERN_SUCCESS) {
@@ -1178,13 +1178,13 @@ namespace Proc {
 			size_t size = 0;
 			const auto timeNow = time_micros();
 
-			if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0 || size == 0) {
+			if (sysctl(mib, 4, nullptr, &size, nullptr, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
 			}
 			uint64_t cpu_t = 0;
 
 			std::unique_ptr<kinfo_proc[]> processes(new kinfo_proc[size / sizeof(kinfo_proc)]);
-			if (sysctl(mib, 4, processes.get(), &size, NULL, 0) == 0) {
+			if (sysctl(mib, 4, processes.get(), &size, nullptr, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
 					struct kinfo_proc& kproc = processes.get()[i];
@@ -1215,7 +1215,7 @@ namespace Proc {
 							std::unique_ptr<char[]> proc_chars(new char[Shared::arg_max]);
 							int mib[] = {CTL_KERN, KERN_PROCARGS2, (int)pid};
 							size_t argmax = Shared::arg_max;
-							if (sysctl(mib, 3, proc_chars.get(), &argmax, NULL, 0) == 0) {
+							if (sysctl(mib, 3, proc_chars.get(), &argmax, nullptr, 0) == 0) {
 								int argc = 0;
 								memcpy(&argc, &proc_chars.get()[0], sizeof(argc));
 								std::string_view proc_args(proc_chars.get(), argmax);
@@ -1378,8 +1378,8 @@ namespace Tools {
 		struct timeval ts, currTime;
 		std::size_t len = sizeof(ts);
 		int mib[2] = {CTL_KERN, KERN_BOOTTIME};
-		if (sysctl(mib, 2, &ts, &len, NULL, 0) != -1) {
-			gettimeofday(&currTime, NULL);
+		if (sysctl(mib, 2, &ts, &len, nullptr, 0) != -1) {
+			gettimeofday(&currTime, nullptr);
 			return currTime.tv_sec - ts.tv_sec;
 		}
 		return 0.0;
