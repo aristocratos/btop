@@ -660,7 +660,7 @@ namespace Mem {
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVnullptr, nullptr, O_RDONLY, buf);
+			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
    			struct kvm_swap swap[16];
    			int nswap = kvm_getswapinfo(kd(), swap, 16, 0);
 			int totalSwap = 0, usedSwap = 0;
@@ -1157,7 +1157,7 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVnullptr, nullptr, O_RDONLY, buf);
+			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
    			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
 
    			for (int i = 0; i < count; i++) {
@@ -1179,7 +1179,7 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
-					if (kproc->ki_comm == nullptr or kproc->ki_comm == "idle"s) {
+					if (string(kproc->ki_comm) == "idle"s) {
 						current_procs.pop_back();
 						found.pop_back();
 						continue;
