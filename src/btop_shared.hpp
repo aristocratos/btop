@@ -89,7 +89,7 @@ namespace Shared {
 namespace Cpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
-	extern bool shown, redraw, got_sensors, cpu_temp_only, has_battery;
+	extern bool shown, redraw, got_sensors, cpu_temp_only, has_battery, supports_watts;
 	extern string cpuName, cpuHz;
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
@@ -113,6 +113,7 @@ namespace Cpu {
 		vector<deque<long long>> temp;
 		long long temp_max = 0;
 		array<double, 3> load_avg;
+		float usage_watts = 0;
 	};
 
 	//* Collect cpu stats and temperatures

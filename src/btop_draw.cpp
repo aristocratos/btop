@@ -705,6 +705,17 @@ namespace Cpu {
 			}
 		}
 
+		//? Package power
+		if (Config::getB("show_cpu_watts") && supports_watts && cy < b_height - 1 and b_columns > 1) {
+			string cwatts_pre;
+			string cwatts_post;
+			if (b_column_size == 2 and show_temps) { cwatts_pre = "Package Power:"; cwatts_post = "Watts"; }
+			else if (b_column_size == 2 or (b_column_size == 1 and show_temps)) { cwatts_pre = "Pkg Power:"; cwatts_post = "W"; }
+			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { cwatts_pre = "PP:"; cwatts_post = "W"; }
+			string cwatts = fmt::format("{} {:.2f} {}", cwatts_pre, cpu.usage_watts, cwatts_post);
+			out += Mv::to(b_y + b_height - 2, b_x + 1) + Theme::c("main_fg") + cwatts;
+		}
+
 		//? Load average
 		if (cy < b_height - 1 and cc <= b_columns) {
 			string lavg_pre;

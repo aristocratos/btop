@@ -74,7 +74,7 @@ namespace Cpu {
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
-	bool got_sensors = false, cpu_temp_only = false;
+	bool got_sensors = false, cpu_temp_only = false, supports_watts = false;
 	int core_offset = 0;
 
 	//* Populate found_sensors map
