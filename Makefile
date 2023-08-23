@@ -59,6 +59,8 @@ ifeq ($(CLANG_WORKS),false)
 	#? Try to find a newer GCC version
 	ifeq ($(shell command -v g++-13 >/dev/null; echo $$?),0)
 		CXX := g++-13
+	else ifeq ($(shell command -v g++13 >/dev/null; echo $$?),0)
+		CXX := g++13
 	else ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
 		CXX := g++-12
 	else ifeq ($(shell command -v g++12 >/dev/null; echo $$?),0)
