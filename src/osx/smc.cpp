@@ -94,10 +94,10 @@ namespace Cpu {
 	// according to VirtualSMC docs (hackintosh fake SMC) the enumeration follows with alphabetic chars - not implemented yet here (nor in VirtualSMC)
 	long long SMCConnection::getTemp(int core) {
 		char key[] = SMC_KEY_CPU_TEMP;
-		if (core > MaxIndexCount) {
-			return -1;
-		}
 		if (core >= 0) {
+			if ((size_t)core > MaxIndexCount) {
+				return -1;
+			}
 			snprintf(key, 5, "TC%1cc", KeyIndexes[core]);
 		}
 		long long result = getSMCTemp(key);
