@@ -59,6 +59,9 @@ namespace Config {
 	//* Maximize box and update config string shown_boxes
 	void maximize_box(const string& box);
 
+	//* Restore boxes and update config string shown_boxes
+	void restore(const string& boxes);
+
 	//* Parse and setup config value presets
 	bool presetsValid(const string& presets);
 

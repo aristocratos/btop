@@ -274,7 +274,15 @@ namespace Input {
 							{"#", boxes.at(2)},
 							{"$", boxes.at(3)},
 						};
-						Config::maximize_box(binding.at(key));
+						if (Config::getB("is_maximized") && Config::getS("shown_boxes") == binding.at(key)) {
+							string str_boxes;
+							for (const auto& b : boxes) str_boxes += b + ' ';
+							str_boxes.pop_back();
+
+							Config::restore(str_boxes);
+						}
+						else
+							Config::maximize_box(binding.at(key));
 					}
 					Draw::calcSizes();
 					Runner::run("all", false, true);
