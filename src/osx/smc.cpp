@@ -37,7 +37,7 @@ static UInt32 _strtoul(char *str, int size, int base) {
 
 static void _ultostr(char *str, UInt32 val) {
 	str[0] = '\0';
-	sprintf(str, "%c%c%c%c",
+	snprintf(str, 5, "%c%c%c%c",
 			(unsigned int)val >> 24,
 			(unsigned int)val >> 16,
 			(unsigned int)val >> 8,
@@ -47,10 +47,8 @@ static void _ultostr(char *str, UInt32 val) {
 namespace Cpu {
 
 	SMCConnection::SMCConnection() {
-		IOMasterPort(kIOMasterPortDefault, &masterPort);
-
 		CFMutableDictionaryRef matchingDictionary = IOServiceMatching("AppleSMC");
-		result = IOServiceGetMatchingServices(masterPort, matchingDictionary, &iterator);
+		result = IOServiceGetMatchingServices(0, matchingDictionary, &iterator);
 		if (result != kIOReturnSuccess) {
 			throw std::runtime_error("failed to get AppleSMC");
 		}
