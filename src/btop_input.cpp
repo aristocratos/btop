@@ -22,6 +22,7 @@ tab-size = 4
 #include <thread>
 #include <mutex>
 #include <signal.h>
+#include <ctype.h>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -260,11 +261,21 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (is_in(key, "1", "2", "3", "4", "!", "@", "#", "$")) {
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
 					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
-					Config::toggle_box(boxes.at(std::stoi(key) - 1));
+					if (std::isdigit(key[0]))
+						Config::toggle_box(boxes.at(std::stoi(key) - 1));
+					else {
+						static const unordered_flat_map<string, string> binding = {
+							{"!", boxes.at(0)},
+							{"@", boxes.at(1)},
+							{"#", boxes.at(2)},
+							{"$", boxes.at(3)},
+						};
+						Config::maximize_box(binding.at(key));
+					}
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;

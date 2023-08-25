@@ -519,6 +519,12 @@ namespace Config {
 		return true;
 	}
 
+	void maximize_box(const string& box) {
+		current_boxes.clear();
+		current_boxes.push_back(box);
+		Config::set("shown_boxes", box);
+	}
+
 	void toggle_box(const string& box) {
 		auto old_boxes = current_boxes;
 		auto box_pos = rng::find(current_boxes, box);
