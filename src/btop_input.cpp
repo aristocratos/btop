@@ -22,6 +22,7 @@ tab-size = 4
 #include <thread>
 #include <mutex>
 #include <signal.h>
+#include <utility>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -260,13 +261,14 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (std::isdigit(*key.c_str())) {
+				else if (key.size() == 1 and isint(key)) {
+					auto intKey = stoi(key);
+					if ((intKey == 0 and Gpu::gpu_names.size() < 5) or (intKey >= 5 and std::cmp_less(Gpu::gpu_names.size(), intKey - 4)))
+						return;
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
 					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
-					auto box = boxes.at(*key.c_str() - '0');
-					if (box.rfind("gpu", 0) == 0 && (box[3] - '0' + 2) > (int)Gpu::gpu_names.size()) return;
-					Config::toggle_box(box);
+					Config::toggle_box(boxes.at(intKey));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
