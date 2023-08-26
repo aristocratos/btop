@@ -540,7 +540,7 @@ namespace Cpu {
 			graph_up_field = "total";
 		auto graph_lo_field = Config::getS("cpu_graph_lower");
 		if (graph_lo_field == "Auto" or not v_contains(Cpu::available_fields, graph_lo_field)) {
-			graph_lo_field = show_gpu ? "gpu-totals" : "total";
+			graph_lo_field = show_gpu ? "gpu-totals" : graph_up_field;
 		}
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
