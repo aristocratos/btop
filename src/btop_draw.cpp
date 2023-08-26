@@ -532,9 +532,6 @@ namespace Cpu {
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
-		bool show_temps = (Config::getB("check_temp") and got_sensors);
-		auto single_graph = Config::getB("cpu_single_graph");
-		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		const auto& show_gpu_info = Config::getS("show_gpu_info");
 		bool show_gpu = (gpus.size() > 0 and (show_gpu_info == "On" or (show_gpu_info == "Auto" and Gpu::shown == 0)));
