@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,17 +21,17 @@ tab-size = 4
 #include <vector>
 #include <thread>
 #include <mutex>
-
-#include <btop_input.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_menu.hpp>
-#include <btop_draw.hpp>
 #include <signal.h>
 
+#include "btop_input.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_menu.hpp"
+#include "btop_draw.hpp"
+
+
 using std::cin;
-using std::vector;
 
 using namespace Tools;
 using namespace std::literals; // for operator""s
@@ -238,8 +238,8 @@ namespace Input {
 	void process(const string& key) {
 		if (key.empty()) return;
 		try {
-            auto filtering = Config::getB("proc_filtering");
-            auto vim_keys = Config::getB("vim_keys");
+			auto filtering = Config::getB("proc_filtering");
+			auto vim_keys = Config::getB("vim_keys");
 			auto help_key = (vim_keys ? "H" : "h");
 			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
@@ -299,12 +299,12 @@ namespace Input {
 					if (key == "enter" or key == "down") {
 						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-                        old_filter.clear();
-                        if(key == "down"){
-                            process("down");
-                            return;
-                        }
-                    }
+						old_filter.clear();
+						if(key == "down"){
+							process("down");
+							return;
+						}
+					}
 					else if (key == "escape" or key == "mouse_click") {
 						Config::set("proc_filter", old_filter);
 						Config::set("proc_filtering", false);
@@ -551,7 +551,7 @@ namespace Input {
 		}
 
 		catch (const std::exception& e) {
-            throw std::runtime_error("Input::process(\"" + key + "\") : " + string{e.what()});
+			throw std::runtime_error("Input::process(\"" + key + "\") : " + string{e.what()});
 		}
 	}
 

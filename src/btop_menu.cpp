@@ -19,24 +19,21 @@ tab-size = 4
 #include <deque>
 #include <robin_hood.h>
 #include <array>
-#include <ranges>
 #include <signal.h>
 #include <errno.h>
 #include <cmath>
 #include <filesystem>
 
-#include <btop_menu.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_theme.hpp>
-#include <btop_draw.hpp>
-#include <btop_shared.hpp>
+#include "btop_menu.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_theme.hpp"
+#include "btop_draw.hpp"
+#include "btop_shared.hpp"
 
 using robin_hood::unordered_flat_map;
 using std::array;
 using std::ceil;
-using std::clamp;
-using std::deque;
 using std::max;
 using std::min;
 using std::ref;
@@ -45,7 +42,6 @@ using std::views::iota;
 using namespace Tools;
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 namespace Menu {
 
@@ -685,19 +681,19 @@ namespace Menu {
 				"Show cpu graph for each process.",
 				"",
 				"True or False"},
-            {"proc_filter_kernel",
-                "(Linux) Filter kernel processes from output.",
-                "",
-                "Set to 'True' to filter out internal",
-                "processes started by the Linux kernel."},
+			{"proc_filter_kernel",
+				"(Linux) Filter kernel processes from output.",
+				"",
+				"Set to 'True' to filter out internal",
+				"processes started by the Linux kernel."},
 		}
 	};
 
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
 	: width(width), boxtype(boxtype) {
-        auto tty_mode = Config::getB("tty_mode");
-        auto rounded = Config::getB("rounded_corners");
+		auto tty_mode = Config::getB("tty_mode");
+		auto rounded = Config::getB("rounded_corners");
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
@@ -786,10 +782,10 @@ namespace Menu {
 	};
 
 	int signalChoose(const string& key) {
-        auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-        static int x{}; // defaults to 0
-        static int y{}; // defaults to 0
-        static int selected_signal = -1;
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static int x{}; // defaults to 0
+		static int y{}; // defaults to 0
+		static int selected_signal = -1;
 
 		if (bg.empty()) selected_signal = -1;
 		auto& out = Global::overlay;
@@ -916,7 +912,7 @@ namespace Menu {
 	}
 
 	int signalSend(const string& key) {
-        auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
 		if (s_pid == 0) return Closed;
 		if (redraw) {
 			atomic_wait(Runner::active);
@@ -989,11 +985,11 @@ namespace Menu {
 
 	int mainMenu(const string& key) {
 		enum MenuItems { Options, Help, Quit };
-        static int y{};         // defaults to 0
-        static int selected{};  // defaults to 0
+		static int y{};         // defaults to 0
+		static int selected{};  // defaults to 0
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
-        auto tty_mode = Config::getB("tty_mode");
+		auto tty_mode = Config::getB("tty_mode");
 		if (bg.empty()) selected = 0;
 		int retval = Changed;
 
@@ -1068,18 +1064,18 @@ namespace Menu {
 
 	int optionsMenu(const string& key) {
 		enum Predispositions { isBool, isInt, isString, is2D, isBrowseable, isEditable};
-        static int y{};                 // defaults to 0
-        static int x{};                 // defaults to 0
-        static int height{};            // defaults to 0
-        static int page{};              // defaults to 0
-        static int pages{};             // defaults to 0
-        static int selected{};          // defaults to 0
-        static int select_max{};        // defaults to 0
-        static int item_height{};       // defaults to 0
-        static int selected_cat{};      // defaults to 0
-        static int max_items{};         // defaults to 0
-        static int last_sel{};          // defaults to 0
-        static bool editing{};          // defaults to false
+		static int y{};                 // defaults to 0
+		static int x{};                 // defaults to 0
+		static int height{};            // defaults to 0
+		static int page{};              // defaults to 0
+		static int pages{};             // defaults to 0
+		static int selected{};          // defaults to 0
+		static int select_max{};        // defaults to 0
+		static int item_height{};       // defaults to 0
+		static int selected_cat{};      // defaults to 0
+		static int max_items{};         // defaults to 0
+		static int last_sel{};          // defaults to 0
+		static bool editing{};          // defaults to false
 		static Draw::TextEdit editor;
 		static string warnings;
 		static bitset<8> selPred;
@@ -1099,8 +1095,8 @@ namespace Menu {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 		};
-        auto tty_mode = Config::getB("tty_mode");
-        auto vim_keys = Config::getB("vim_keys");
+		auto tty_mode = Config::getB("tty_mode");
+		auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();
@@ -1112,9 +1108,9 @@ namespace Menu {
 			Theme::updateThemes();
 		}
 		int retval = Changed;
-        bool recollect{};       // defaults to false
-        bool screen_redraw{};   // defaults to false
-        bool theme_refresh{};   // defaults to false
+		bool recollect{};       // defaults to false
+		bool screen_redraw{};   // defaults to false
+		bool theme_refresh{};   // defaults to false
 
 		//? Draw background if needed else process input
 		if (redraw) {
@@ -1408,11 +1404,11 @@ namespace Menu {
 	}
 
 	int helpMenu(const string& key) {
-        static int y{};         // defaults to 0
-        static int x{};         // defaults to 0
-        static int height{};    // defaults to 0
-        static int page{};      // defaults to 0
-        static int pages{};     // defaults to 0
+		static int y{};         // defaults to 0
+		static int x{};         // defaults to 0
+		static int height{};    // defaults to 0
+		static int page{};      // defaults to 0
+		static int pages{};     // defaults to 0
 
 		if (bg.empty()) page = 0;
 		int retval = Changed;

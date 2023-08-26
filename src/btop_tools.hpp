@@ -39,10 +39,10 @@ tab-size = 4
 	#endif
 #endif
 #define FMT_HEADER_ONLY
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
+#include "fmt/core.h"
+#include "fmt/format.h"
+#include "fmt/ostream.h"
+#include "fmt/ranges.h"
 
 using std::array;
 using std::atomic;
@@ -50,7 +50,6 @@ using std::string;
 using std::to_string;
 using std::tuple;
 using std::vector;
-using namespace fmt;
 using namespace fmt::literals;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
@@ -92,19 +91,19 @@ namespace Fx {
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-    inline string to(int line, int col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
+	inline string to(int line, int col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
 
 	//* Move cursor right <x> columns
-    inline string r(int x) { return Fx::e + to_string(x) + 'C'; }
+	inline string r(int x) { return Fx::e + to_string(x) + 'C'; }
 
 	//* Move cursor left <x> columns
-    inline string l(int x) { return Fx::e + to_string(x) + 'D'; }
+	inline string l(int x) { return Fx::e + to_string(x) + 'D'; }
 
 	//* Move cursor up x lines
-    inline string u(int x) { return Fx::e + to_string(x) + 'A'; }
+	inline string u(int x) { return Fx::e + to_string(x) + 'A'; }
 
 	//* Move cursor down x lines
-    inline string d(int x) { return Fx::e + to_string(x) + 'B'; }
+	inline string d(int x) { return Fx::e + to_string(x) + 'B'; }
 
 	//* Save cursor position
 	const string save = Fx::e + "s";
@@ -162,15 +161,15 @@ namespace Tools {
 	size_t wide_ulen(const std::wstring& w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-    inline size_t ulen(const string& str, bool wide = false) {
+	inline size_t ulen(const string& str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
-    string uresize(const string str, const size_t len, bool wide = false);
+	string uresize(const string str, const size_t len, bool wide = false);
 
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
-    string luresize(const string str, const size_t len, bool wide = false);
+	string luresize(const string str, const size_t len, bool wide = false);
 
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
@@ -207,11 +206,11 @@ namespace Tools {
 
 	//* Check if string <str> contains string <find_val>, while ignoring case
 	inline bool s_contains_ic(const string& str, const string& find_val) {
-        auto it = std::search(
-            str.begin(), str.end(),
-            find_val.begin(), find_val.end(),
-            [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
-        );
+		auto it = std::search(
+			str.begin(), str.end(),
+			find_val.begin(), find_val.end(),
+			[](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+		);
 		return it != str.end();
 	}
 
@@ -272,35 +271,35 @@ namespace Tools {
 	auto ssplit(const string& str, const char& delim = ' ') -> vector<string>;
 
 	//* Put current thread to sleep for <ms> milliseconds
-    inline void sleep_ms(const size_t& ms) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-    }
+	inline void sleep_ms(const size_t& ms) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+	}
 
 	//* Put current thread to sleep for <micros> microseconds
-    inline void sleep_micros(const size_t& micros) {
-        std::this_thread::sleep_for(std::chrono::microseconds(micros));
-    }
+	inline void sleep_micros(const size_t& micros) {
+		std::this_thread::sleep_for(std::chrono::microseconds(micros));
+	}
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-    string ljust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
+	string ljust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-    string rjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
+	string rjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Center justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-    string cjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
+	string cjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Replace whitespaces " " with escape code for move right
 	string trans(const string& str);
 
 	//* Convert seconds to format "<days>d <hours>:<minutes>:<seconds>" and return string
-    string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
+	string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
 
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
 	//* short=True always returns 0 decimals and shortens unit to 1 character
-    string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
+	string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
@@ -323,21 +322,21 @@ namespace Tools {
 	#endif
 	}
 
-    void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
+	void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
 
-    void atomic_wait_for(const atomic<bool>& atom, bool old = true, const uint64_t wait_ms = 0) noexcept;
+	void atomic_wait_for(const atomic<bool>& atom, bool old = true, const uint64_t wait_ms = 0) noexcept;
 
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
-        bool not_true{}; // defaults to false
+		bool not_true{}; // defaults to false
 	public:
-        atomic_lock(atomic<bool>& atom, bool wait = false);
+		atomic_lock(atomic<bool>& atom, bool wait = false);
 		~atomic_lock();
 	};
 
 	//* Read a complete file and return as a string
-    string readfile(const std::filesystem::path& path, const string& fallback = "");
+	string readfile(const std::filesystem::path& path, const string& fallback = "");
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;

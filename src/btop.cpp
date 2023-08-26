@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -43,18 +43,16 @@ tab-size = 4
 	#include <semaphore>
 #endif
 
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_input.hpp>
-#include <btop_theme.hpp>
-#include <btop_draw.hpp>
-#include <btop_menu.hpp>
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_input.hpp"
+#include "btop_theme.hpp"
+#include "btop_draw.hpp"
+#include "btop_menu.hpp"
 
 using std::atomic;
 using std::cout;
-using std::endl;
-using std::endl;
 using std::flush;
 using std::min;
 using std::string;
@@ -63,7 +61,6 @@ using std::to_string;
 using std::vector;
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 using namespace Tools;
 using namespace std::chrono_literals;
@@ -96,9 +93,9 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-    bool debuginit{};   // defaults to false
-    bool debug{};       // defaults to false
-    bool utf_force{};   // defaults to false
+	bool debuginit{};   // defaults to false
+	bool debug{};       // defaults to false
+	bool utf_force{};   // defaults to false
 
 	uint64_t start_time;
 
@@ -108,8 +105,8 @@ namespace Global {
 	atomic<bool> should_sleep (false);
 	atomic<bool> _runner_started (false);
 
-    bool arg_tty{};         // defaults to false
-    bool arg_low_color{};   // defaults to false
+	bool arg_tty{};         // defaults to false
+	bool arg_low_color{};   // defaults to false
 	int arg_preset = -1;
 }
 
@@ -249,14 +246,14 @@ void clean_quit(int sig) {
 	Runner::stop();
 	if (Global::_runner_started) {
 	#ifdef __APPLE__
-		if (pthread_join(Runner::runner_id, NULL) != 0) {
+		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
 	#else
 		struct timespec ts;
 		ts.tv_sec = 5;
-		if (pthread_timedjoin_np(Runner::runner_id, NULL, &ts) != 0) {
+		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
@@ -363,14 +360,14 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-        thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-            pthread_mutex_init(&pt_mutex, NULL);
-            status = pthread_mutex_lock(&pt_mutex);
-        }
-        ~thread_lock() {
-            if (status == 0)
-                pthread_mutex_unlock(&pt_mutex);
-        }
+		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
+			pthread_mutex_init(&pt_mutex, nullptr);
+			status = pthread_mutex_lock(&pt_mutex);
+		}
+		~thread_lock() {
+			if (status == 0)
+				pthread_mutex_unlock(&pt_mutex);
+		}
 	};
 
 	//* Wrapper for raising priviliges when using SUID bit
@@ -378,18 +375,18 @@ namespace Runner {
 		int status = -1;
 	public:
 		gain_priv() {
-            if (Global::real_uid != Global::set_uid)
-                this->status = seteuid(Global::set_uid);
+			if (Global::real_uid != Global::set_uid)
+				this->status = seteuid(Global::set_uid);
 		}
 		~gain_priv() {
-            if (status == 0)
-                status = seteuid(Global::real_uid);
+			if (status == 0)
+				status = seteuid(Global::real_uid);
 		}
 	};
 
 	string output;
 	string empty_bg;
-    bool pause_output{}; // defaults to false
+	bool pause_output{}; // defaults to false
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
@@ -454,14 +451,14 @@ namespace Runner {
 	}
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-    void * _runner(void *) {
+	void * _runner(void *) {
 		//? Block some signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		sigemptyset(&mask);
 		// sigaddset(&mask, SIGINT);
 		// sigaddset(&mask, SIGTSTP);
 		sigaddset(&mask, SIGWINCH);
 		sigaddset(&mask, SIGTERM);
-		pthread_sigmask(SIG_BLOCK, &mask, NULL);
+		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
 		//? pthread_mutex_lock to lock thread and monitor health from main thread
 		thread_lock pt_lck(mtx);
@@ -549,7 +546,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Cpu:: -> " + string{e.what()});
+						throw std::runtime_error("Cpu:: -> " + string{e.what()});
 					}
 				}
 
@@ -586,7 +583,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("mem", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Mem:: -> " + string{e.what()});
+						throw std::runtime_error("Mem:: -> " + string{e.what()});
 					}
 				}
 
@@ -606,7 +603,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("net", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Net:: -> " + string{e.what()});
+						throw std::runtime_error("Net:: -> " + string{e.what()});
 					}
 				}
 
@@ -626,13 +623,13 @@ namespace Runner {
 						if (Global::debug) debug_timer("proc", draw_done);
 					}
 					catch (const std::exception& e) {
-                        throw std::runtime_error("Proc:: -> " + string{e.what()});
+						throw std::runtime_error("Proc:: -> " + string{e.what()});
 					}
 				}
 
 			}
 			catch (const std::exception& e) {
-                Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
+				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
 				Global::thread_exception = true;
 				Input::interrupt = true;
 				stopping = true;
@@ -711,14 +708,14 @@ namespace Runner {
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
-    void run(const string& box, bool no_update, bool force_redraw) {
+	void run(const string& box, bool no_update, bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
 		if (active) {
 			Logger::error("Stall in Runner thread, restarting!");
 			active = false;
 			// exit(1);
 			pthread_cancel(Runner::runner_id);
-			if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
 				clean_quit(1);
 			}
@@ -806,7 +803,7 @@ int main(int argc, char **argv) {
 
 	//? Setup paths for config, log and user themes
 	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (std::getenv(env) != NULL and access(std::getenv(env), W_OK) != -1) {
+		if (std::getenv(env) != nullptr and access(std::getenv(env), W_OK) != -1) {
 			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
 			break;
 		}
@@ -873,17 +870,17 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (std::setlocale(LC_ALL, "") != NULL and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
+	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
 	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
 		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
 	}
 	else {
 		string found;
-        bool set_failure{}; // defaults to false
+		bool set_failure{}; // defaults to false
 		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
-			if (std::getenv(loc_env) != NULL and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
+			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
-				if (std::setlocale(LC_ALL, found.c_str()) == NULL) {
+				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
 					set_failure = true;
 					Logger::warning("Failed to set locale " + found + " continuing anyway.");
 				}
@@ -896,7 +893,7 @@ int main(int argc, char **argv) {
 						for (auto& l : ssplit(loc, ';')) {
 							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
 								found = l.substr(l.find('=') + 1);
-								if (std::setlocale(LC_ALL, found.c_str()) != NULL) {
+								if (std::setlocale(LC_ALL, found.c_str()) != nullptr) {
 									break;
 								}
 							}
@@ -917,10 +914,10 @@ int main(int argc, char **argv) {
 			if (cur_locale.empty()) {
 				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
 			}
-			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != NULL) {
+			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != nullptr) {
 				Logger::debug("Setting LC_ALL=" + cur_locale + ".UTF-8");
 			}
-			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != NULL) {
+			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
 				Logger::debug("Setting LC_ALL=en_US.UTF-8");
 			}
 			else {
@@ -975,7 +972,7 @@ int main(int argc, char **argv) {
 		Shared::init();
 	}
 	catch (const std::exception& e) {
-        Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
+		Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
 		clean_quit(1);
 	}
 
@@ -992,7 +989,7 @@ int main(int argc, char **argv) {
 
 	//? Start runner thread
 	Runner::thread_sem_init();
-	if (pthread_create(&Runner::runner_id, NULL, &Runner::_runner, NULL) != 0) {
+	if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		clean_quit(1);
 	}
@@ -1087,7 +1084,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	catch (const std::exception& e) {
-        Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
+		Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
 		clean_quit(1);
 	}
 

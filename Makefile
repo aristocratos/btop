@@ -54,7 +54,11 @@ ifeq ($(CXX_IS_CLANG),true)
 endif
 ifeq ($(CLANG_WORKS),false)
 	#? Try to find a newer GCC version
-	ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
+	ifeq ($(shell command -v g++-13 >/dev/null; echo $$?),0)
+		CXX := g++-13
+	else ifeq ($(shell command -v g++13 >/dev/null; echo $$?),0)
+		CXX := g++13
+	else ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
 		CXX := g++-12
 	else ifeq ($(shell command -v g++12 >/dev/null; echo $$?),0)
 		CXX := g++12
@@ -89,15 +93,17 @@ ifneq ($(PLATFORM) $(ARCH),macos arm64)
 endif
 
 ifeq ($(STATIC),true)
-	ifeq ($(CXX_IS_CLANG),true)
+	ifeq ($(CXX_IS_CLANG) $(CLANG_WORKS),true true)
 		ifeq ($(shell $(CXX) -print-target-triple | grep gnu >/dev/null; echo $$?),0)
 $(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link glibc\033[0m"))
 		endif
 	else
 		override ADDFLAGS += -static-libgcc -static-libstdc++
 	endif
-	ifneq ($(PLATFORM),macos)
+	ifeq ($(PLATFORM_LC),linux)
 		override ADDFLAGS += -DSTATIC_BUILD -static -Wl,--fatal-warnings
+	else ifeq ($(PLATFORM_LC),freebsd)
+		override ADDFLAGS += -DSTATIC_BUILD
 	endif
 endif
 
@@ -120,7 +126,10 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := wheel
-	override ADDFLAGS += -lstdc++ -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc11
+	override ADDFLAGS += -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc$(CXX_VERSION_MAJOR)
+	ifneq ($(STATIC),true)
+		override ADDFLAGS += -lstdc++
+	endif
 	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx

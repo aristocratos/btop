@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,14 +17,16 @@ tab-size = 4
 */
 
 #include <array>
-#include <ranges>
 #include <atomic>
 #include <fstream>
+#include <ranges>
 #include <string_view>
 
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include <fmt/core.h>
+
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
 
 using std::array;
 using std::atomic;
@@ -105,7 +107,7 @@ namespace Config {
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
-        {"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
@@ -207,7 +209,7 @@ namespace Config {
 		{"custom_gpu_name5",	"#* Custom gpu5 model name, empty string to disable."},
 	};
 
-	unordered_flat_map<string, string> strings = {
+	unordered_flat_map<std::string_view, string> strings = {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
@@ -240,9 +242,9 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 	};
-	unordered_flat_map<string, string> stringsTmp;
+	unordered_flat_map<std::string_view, string> stringsTmp;
 
-	unordered_flat_map<string, bool> bools = {
+	unordered_flat_map<std::string_view, bool> bools = {
 		{"theme_background", true},
 		{"truecolor", true},
 		{"rounded_corners", true},
@@ -255,7 +257,7 @@ namespace Config {
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
-        {"proc_filter_kernel", false},
+		{"proc_filter_kernel", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
@@ -290,9 +292,9 @@ namespace Config {
 		{"nvml_measure_pcie_speeds", true},
 		{"gpu_mirror_graph", true},
 	};
-	unordered_flat_map<string, bool> boolsTmp;
+	unordered_flat_map<std::string_view, bool> boolsTmp;
 
-	unordered_flat_map<string, int> ints = {
+	unordered_flat_map<std::string_view, int> ints = {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
@@ -303,9 +305,9 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 	};
-	unordered_flat_map<string, int> intsTmp;
+	unordered_flat_map<std::string_view, int> intsTmp;
 
-	bool _locked(const string& name) {
+	bool _locked(const std::string_view name) {
 		atomic_wait(writelock, true);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
@@ -392,7 +394,7 @@ namespace Config {
 
 	string validError;
 
-	bool intValid(const string& name, const string& value) {
+	bool intValid(const std::string_view name, const string& value) {
 		int i_value;
 		try {
 			i_value = stoi(value);
@@ -406,7 +408,7 @@ namespace Config {
 			return false;
 		}
 		catch (const std::exception& e) {
-            validError = string{e.what()};
+			validError = string{e.what()};
 			return false;
 		}
 
@@ -422,7 +424,7 @@ namespace Config {
 		return false;
 	}
 
-	bool stringValid(const string& name, const string& value) {
+	bool stringValid(const std::string_view name, const string& value) {
 		if (name == "log_level" and not v_contains(Logger::log_levels, value))
 			validError = "Invalid log_level: " + value;
 
@@ -430,7 +432,7 @@ namespace Config {
 			validError = "Invalid graph symbol identifier: " + value;
 
 		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
-			validError = "Invalid graph symbol identifier for" + name + ": " + value;
+			validError = fmt::format("Invalid graph symbol identifier for {}: {}", name, value);
 
 		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
@@ -479,7 +481,7 @@ namespace Config {
 		return false;
 	}
 
-	string getAsString(const string& name) {
+	string getAsString(const std::string_view name) {
 		if (bools.contains(name))
 			return (bools.at(name) ? "True" : "False");
 		else if (ints.contains(name))
@@ -489,7 +491,7 @@ namespace Config {
 		return "";
 	}
 
-	void flip(const string& name) {
+	void flip(const std::string_view name) {
 		if (_locked(name)) {
 			if (boolsTmp.contains(name)) boolsTmp.at(name) = not boolsTmp.at(name);
 			else boolsTmp.insert_or_assign(name, (not bools.at(name)));
@@ -526,7 +528,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-            Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
+			Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
 			clean_quit(1);
 		}
 
