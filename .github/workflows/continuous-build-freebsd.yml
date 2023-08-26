@@ -51,3 +51,4 @@ jobs:
         with:
           name: btop-x86_64-FreeBSD-13.1
           path: 'bin/*'
+          if-no-files-found: error
