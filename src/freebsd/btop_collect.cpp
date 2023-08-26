@@ -543,14 +543,16 @@ namespace Mem {
 
 	// find all zpools in the system. Do this only at startup.
 	void get_zpools() {
+		std::regex toReplace("\\.");
 		PipeWrapper poolPipe = PipeWrapper("zpool list -H -o name", "r");
+
 		while (not std::feof(poolPipe())) {
 			char poolName[512];
 			size_t len = 512;
 			if (fgets(poolName, len, poolPipe())) {
 				poolName[strcspn(poolName, "\n")] = 0;
 				Logger::debug("zpool found: " + string(poolName));
-				Mem::zpools.push_back(poolName);
+				Mem::zpools.push_back(std::regex_replace(poolName, toReplace, "%25"));
 			}
 		}
 	}
@@ -583,7 +585,7 @@ namespace Mem {
 		}
 
 		// this code is for ZFS mounts
-		for (string poolName : Mem::zpools) {
+		for (const auto &poolName : Mem::zpools) {
 			char sysCtl[1024];
 			snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset | egrep \'dataset_name|nread|nwritten\'", poolName.c_str());
 			PipeWrapper f = PipeWrapper(sysCtl, "r");
