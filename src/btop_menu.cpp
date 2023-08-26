@@ -320,7 +320,7 @@ namespace Menu {
 				"the CPU graph.",
 				"",
 				"CPU:",
-				"\"total\" = Total cpu usage.",
+				"\"total\" = Total cpu usage. (Auto)",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
 				"+ more depending on kernel.",
@@ -346,7 +346,7 @@ namespace Menu {
 				"+ more depending on kernel.",
 				"",
 				"GPU:",
-				"\"gpu-totals\" = GPU usage split by device.",
+				"\"gpu-totals\" = GPU usage split/device. (Auto)",
 				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
 				"\"gpu-pwr-totals\" = Power usage split by GPU.",
 				"\"gpu-average\" = Avg usage of all GPUs.",
@@ -364,6 +364,16 @@ namespace Menu {
 					"to fit to box height.",
 					"",
 					"True or False."},
+			{"show_gpu_info",
+					"Show gpu info in cpu box.",
+					"",
+					"Toggles gpu stats in cpu box and the",
+					"gpu graph (if \"cpu_graph_lower\" is set to",
+					"\"Auto\").",
+					"",
+					"\"Auto\" to show when no gpu box is shown.",
+					"\"On\" to always show.",
+					"\"Off\" to never show."},
 			{"check_temp",
 				"Enable cpu temperature reporting.",
 				"",
@@ -1094,6 +1104,7 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
+			{"show_gpu_info", std::cref(Config::show_gpu_values)}
 		};
 		auto tty_mode = Config::getB("tty_mode");
 		auto vim_keys = Config::getB("vim_keys");
@@ -1145,7 +1156,7 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (option == "custom_cpu_name" or option.rfind("custom_gpu_name", 0) == 0)
+					if (option == "custom_cpu_name" or option.starts_with("custom_gpu_name"))
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
@@ -1279,7 +1290,7 @@ namespace Menu {
 					Logger::set(optList.at(i));
 					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
 			}
 			else

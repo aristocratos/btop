@@ -115,6 +115,8 @@ namespace Config {
 		{"cpu_graph_lower", 	"#* Sets the CPU stat shown in lower half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
+		{"show_gpu_info",		"#* If gpu info should be shown in the cpu box. Available values = \"Auto\", \"On\" and \"Off\"."},
+
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
 		{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
@@ -220,8 +222,8 @@ namespace Config {
 		{"graph_symbol_net", "default"},
 		{"graph_symbol_proc", "default"},
 		{"proc_sorting", "cpu lazy"},
-		{"cpu_graph_upper", "default"}, // set to "total" in btop_collect.cpp
-		{"cpu_graph_lower", "default"}, // set to "total" or "gpu-totals" in btop_collect.cpp
+		{"cpu_graph_upper", "Auto"},
+		{"cpu_graph_lower", "Auto"},
 		{"cpu_sensor", "Auto"},
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
@@ -241,6 +243,7 @@ namespace Config {
 		{"custom_gpu_name3", ""},
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
+		{"show_gpu_info", "Auto"}
 	};
 	unordered_flat_map<std::string_view, string> stringsTmp;
 
@@ -437,6 +440,9 @@ namespace Config {
 		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
 
+		else if (name == "show_gpu_info" and not v_contains(show_gpu_values, value))
+			validError = "Invalid value for show_gpu_info: " + value;
+
 		else if (name == "presets" and not presetsValid(value))
 			return false;
 
@@ -539,6 +545,11 @@ namespace Config {
 		auto new_boxes = ssplit(boxes);
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
+			if (box.starts_with("gpu")) {
+				size_t gpu_num = stoi(box.substr(3));
+				if (gpu_num == 0) gpu_num = 5;
+				if (std::cmp_greater(gpu_num, Gpu::gpu_names.size())) return false;
+			}
 		}
 		current_boxes = std::move(new_boxes);
 		return true;

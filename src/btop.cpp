@@ -222,12 +222,14 @@ void term_resize(bool force) {
 				auto key = Input::get();
 				if (key == "q")
 					clean_quit(0);
-				else if (std::isdigit(*key.c_str())) {
-					Config::current_preset = -1;
-					auto box = all_boxes.at(*key.c_str() - '0');
-					if (box.rfind("gpu", 0) == 0 && (box[3] - '0' + 2) > (int)Gpu::gpu_names.size()) return;
-					Config::toggle_box(box);
-					boxes = Config::getS("shown_boxes");
+				else if (key.size() == 1 and isint(key)) {
+					auto intKey = stoi(key);
+					auto box = all_boxes.at(intKey);
+					if (not box.starts_with("gpu") or (intKey == 0 and Gpu::gpu_names.size() >= 5) or (intKey >= 5 and std::cmp_greater_equal(Gpu::gpu_names.size(), intKey - 4))) {
+						Config::current_preset = -1;
+						Config::toggle_box(box);
+						boxes = Config::getS("shown_boxes");
+					}
 				}
 			}
 			min_size = Term::get_min_size(boxes);
@@ -506,12 +508,14 @@ namespace Runner {
 			//* Run collection and draw functions for all boxes
 			try {
 				//? GPU data collection
-				bool gpu_in_cpu_panel = Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
-									 or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0;
+				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
+					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
+					or (Gpu::shown == 0 and Config::getS("show_gpu_info") != "Off")
+				);
 
 				vector<unsigned int> gpu_panels = {};
 				for (auto& box : conf.boxes)
-					if (box.rfind("gpu", 0) == 0)
+					if (box.starts_with("gpu"))
 						gpu_panels.push_back(box.back()-'0');
 
 				vector<Gpu::gpu_info> gpus;

@@ -45,6 +45,7 @@ namespace Config {
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
 	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5" };
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
+	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
 
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;

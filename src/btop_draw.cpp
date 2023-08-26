@@ -533,13 +533,21 @@ namespace Cpu {
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
-		auto& graph_up_field = Config::getS("cpu_graph_upper");
-		auto& graph_lo_field = Config::getS("cpu_graph_lower");
+		const auto& show_gpu_info = Config::getS("show_gpu_info");
+		bool show_gpu = (gpus.size() > 0 and (show_gpu_info == "On" or (show_gpu_info == "Auto" and Gpu::shown == 0)));
+		auto graph_up_field = Config::getS("cpu_graph_upper");
+		if (graph_up_field == "Auto" or not v_contains(Cpu::available_fields, graph_up_field))
+			graph_up_field = "total";
+		auto graph_lo_field = Config::getS("cpu_graph_lower");
+		if (graph_lo_field == "Auto" or not v_contains(Cpu::available_fields, graph_lo_field)) {
+			graph_lo_field = show_gpu ? "gpu-totals" : "total";
+		}
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& temp_scale = Config::getS("temp_scale");
 		auto cpu_bottom = Config::getB("cpu_bottom");
+
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
@@ -573,7 +581,7 @@ namespace Cpu {
 			const int graph_default_width = x + width - b_width - 3;
 
 			auto init_graphs = [&](vector<Draw::Graph>& graphs, const int graph_height, int& graph_width, const string& graph_field, bool invert) {
-				if (graph_field.rfind("gpu", 0) == 0) {
+				if (graph_field.starts_with("gpu")) {
 					if (graph_field.find("totals") != string::npos) {
 						graphs.resize(gpus.size());
 						gpu_temp_graphs.resize(gpus.size());
@@ -721,7 +729,7 @@ namespace Cpu {
 		//? Cpu/Gpu graphs
 		out += Fx::ub + Mv::to(y + 1, x + 1);
 		auto draw_graphs = [&](vector<Draw::Graph>& graphs, const int graph_height, const int graph_width, const string& graph_field) {
-			if (graph_field.rfind("gpu", 0) == 0)
+			if (graph_field.starts_with("gpu"))
 				if (graph_field.find("totals") != string::npos)
 					for (unsigned long i = 0;;) {
 						out += graphs[i](gpus[i].gpu_percent.at(graph_field), (data_same or redraw));
@@ -806,7 +814,6 @@ namespace Cpu {
 		}
 
 		//? Load average
-		bool show_gpu = (graph_lo_field.rfind("gpu-", 0) == 0) or (graph_up_field.rfind("gpu-", 0) == 0);
 		if (cy < b_height - 1 and cc <= b_columns) {
 			string lavg_pre;
 			int sep = 1;
@@ -1949,11 +1956,10 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			const bool gpus_shown_in_cpu_panel = (
-				Config::getS("cpu_graph_lower") == "default"
-				or Config::getS("cpu_graph_lower").rfind("gpu-", 0) == 0
-				or Config::getS("cpu_graph_upper").rfind("gpu-", 0) == 0
-			) and Gpu::gpu_names.size() != (unsigned long)Gpu::shown;
+			const bool gpus_shown_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
+				Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
+				or (Config::getS("cpu_graph_lower") == "Auto" and Gpu::shown == 0)
+			);
 			const int gpus_height_offset = (Gpu::gpu_names.size() - Gpu::shown)*gpus_shown_in_cpu_panel;
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);

@@ -64,7 +64,7 @@ using namespace std::literals; // for operator""s
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<string> available_fields;
+	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
@@ -251,7 +251,7 @@ namespace Shared {
 		Cpu::collect();
 		if (Runner::coreNum_reset) Runner::coreNum_reset = false;
 		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
-			if (not vec.empty()) Cpu::available_fields.push_back(field);
+			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
@@ -268,8 +268,6 @@ namespace Shared {
 				Cpu::available_fields.push_back(key);
 			for (auto const& [key, _] : Gpu::shared_gpu_percent)
 				Cpu::available_fields.push_back(key);
-			if (Config::strings.at("cpu_graph_lower") == "default")
-				Config::strings.at("cpu_graph_lower") = "gpu-totals";
 
 			using namespace Gpu;
 			gpu_b_height_offsets.resize(gpus.size());
@@ -283,12 +281,6 @@ namespace Shared {
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
-
-		//? Init for CPU graphs
-		if (Config::strings.at("cpu_graph_upper") == "default" or not v_contains(Cpu::available_fields, Config::strings.at("cpu_graph_upper")))
-			Config::strings.at("cpu_graph_upper") = "total";
-		if (Config::strings.at("cpu_graph_lower") == "default" or not v_contains(Cpu::available_fields, Config::strings.at("cpu_graph_lower")))
-			Config::strings.at("cpu_graph_lower") = "total";
 
 		Logger::debug("Shared::init() : Initialized.");
 	}
