@@ -32,6 +32,14 @@ tab-size = 4
 #include "btop_draw.hpp"
 
 
+#include "btop_input.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_menu.hpp"
+#include "btop_draw.hpp"
+
+
 using std::cin;
 
 using namespace Tools;

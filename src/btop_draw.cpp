@@ -532,6 +532,9 @@ namespace Cpu {
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+		bool show_temps = (Config::getB("check_temp") and got_sensors);
+		auto single_graph = Config::getB("cpu_single_graph");
+		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		const auto& show_gpu_info = Config::getS("show_gpu_info");
 		bool show_gpu = (gpus.size() > 0 and (show_gpu_info == "On" or (show_gpu_info == "Auto" and Gpu::shown == 0)));
@@ -551,6 +554,9 @@ namespace Cpu {
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
+		if (cpu.cpu_percent.at("total").empty()
+			or cpu.core_percent.at(0).empty()
+			or (show_temps and cpu.temp.at(0).empty())) return "";
 		if (cpu.cpu_percent.at("total").empty()
 			or cpu.core_percent.at(0).empty()
 			or (show_temps and cpu.temp.at(0).empty())) return "";
