@@ -96,15 +96,6 @@ namespace Cpu {
 
 namespace Gpu {
 	vector<gpu_info> gpus;
-	vector<string> gpu_names;
-	vector<int> gpu_b_height_offsets;
-	unordered_flat_map<string, deque<long long>> shared_gpu_percent = {
-		{"gpu-average", {}},
-		{"gpu-vram-total", {}},
-		{"gpu-pwr-total", {}},
-	};
-	long long gpu_pwr_total_max;
-
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs

@@ -24,6 +24,16 @@ tab-size = 4
 namespace rng = std::ranges;
 using namespace Tools;
 
+namespace Gpu {
+	vector<string> gpu_names;
+	vector<int> gpu_b_height_offsets;
+	unordered_flat_map<string, deque<long long>> shared_gpu_percent = {
+		{"gpu-average", {}},
+		{"gpu-vram-total", {}},
+		{"gpu-pwr-total", {}},
+	};
+	long long gpu_pwr_total_max;
+}
 
 namespace Proc {
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {

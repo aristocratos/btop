@@ -262,8 +262,10 @@ void clean_quit(int sig) {
 	#endif
 	}
 
+#ifdef __linux__
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
+#endif
 
 	Config::write();
 
@@ -507,6 +509,7 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
+			#ifdef __linux__
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
 					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
@@ -525,6 +528,9 @@ namespace Runner {
 					if (Global::debug) debug_timer("gpu", collect_done);
 				}
 				auto& gpus_ref = gpus;
+			#else
+				vector<Gpu::gpu_info> gpus_ref{};
+			#endif
 
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
@@ -553,7 +559,7 @@ namespace Runner {
 						throw std::runtime_error("Cpu:: -> " + string{e.what()});
 					}
 				}
-
+			#ifdef __linux__
 				//? GPU
 				if (not gpu_panels.empty() and not gpus_ref.empty()) {
 					try {
@@ -570,7 +576,7 @@ namespace Runner {
                         throw std::runtime_error("Gpu:: -> " + string{e.what()});
 					}
 				}
-
+			#endif
 				//? MEM
 				if (v_contains(conf.boxes, "mem")) {
 					try {
