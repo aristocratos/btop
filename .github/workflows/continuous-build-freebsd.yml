@@ -36,18 +36,19 @@ jobs:
       - name: Compile
         uses: vmactions/freebsd-vm@v0
         with:
-          release: 13.1
+          release: 13.2
           usesh: true
           prepare: |
             pkg install -y gmake gcc11 coreutils git
             git config --global --add safe.directory /Users/runner/work/btop/btop
           run: |
-            gmake
+            gmake STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-$GIT_HASH
             ls -alh bin
 
       - uses: actions/upload-artifact@v3
         with:
-          name: btop-x86_64-FreeBSD-13.1
+          name: btop-x86_64-FreeBSD-13.2
           path: 'bin/*'
+          if-no-files-found: error

@@ -18,6 +18,9 @@ tab-size = 4
 
 #include "smc.hpp"
 
+static constexpr size_t MaxIndexCount = sizeof("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") - 1;
+static constexpr const char *KeyIndexes = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 static UInt32 _strtoul(char *str, int size, int base) {
 	UInt32 total = 0;
 	int i;
@@ -34,7 +37,7 @@ static UInt32 _strtoul(char *str, int size, int base) {
 
 static void _ultostr(char *str, UInt32 val) {
 	str[0] = '\0';
-	sprintf(str, "%c%c%c%c",
+	snprintf(str, 5, "%c%c%c%c",
 			(unsigned int)val >> 24,
 			(unsigned int)val >> 16,
 			(unsigned int)val >> 8,
@@ -44,10 +47,8 @@ static void _ultostr(char *str, UInt32 val) {
 namespace Cpu {
 
 	SMCConnection::SMCConnection() {
-		IOMasterPort(kIOMasterPortDefault, &masterPort);
-
 		CFMutableDictionaryRef matchingDictionary = IOServiceMatching("AppleSMC");
-		result = IOServiceGetMatchingServices(masterPort, matchingDictionary, &iterator);
+		result = IOServiceGetMatchingServices(0, matchingDictionary, &iterator);
 		if (result != kIOReturnSuccess) {
 			throw std::runtime_error("failed to get AppleSMC");
 		}
@@ -92,12 +93,15 @@ namespace Cpu {
 	long long SMCConnection::getTemp(int core) {
 		char key[] = SMC_KEY_CPU_TEMP;
 		if (core >= 0) {
-			snprintf(key, 5, "TC%1dc", core);
+			if ((size_t)core > MaxIndexCount) {
+				return -1;
+			}
+			snprintf(key, 5, "TC%1cc", KeyIndexes[core]);
 		}
 		long long result = getSMCTemp(key);
 		if (result == -1) {
 			// try again with C
-			snprintf(key, 5, "TC%1dC", core);
+			snprintf(key, 5, "TC%1dC", KeyIndexes[core]);
 			result = getSMCTemp(key);
 		}
 		return result;
