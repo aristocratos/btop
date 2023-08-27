@@ -71,6 +71,8 @@ ifeq ($(CLANG_WORKS),false)
 		CXX := g++11
 	else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
 		CXX := g++
+	else ifeq ($(shell command -v eg++ >/dev/null; echo $$?),0)
+		CXX := eg++
 	else
 		GCC_NOT_FOUND := true
 	endif
@@ -138,6 +140,12 @@ else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),openbsd)
+	PLATFORM_DIR := openbsd
+	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+	override ADDFLAGS += -lkvm
+	export MAKE = gmake
 	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
