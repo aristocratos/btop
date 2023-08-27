@@ -534,7 +534,8 @@ namespace Cpu {
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		const auto& show_gpu_info = Config::getS("show_gpu_info");
-		bool show_gpu = (gpus.size() > 0 and (show_gpu_info == "On" or (show_gpu_info == "Auto" and Gpu::shown == 0)));
+		const bool gpu_always = show_gpu_info == "On";
+		bool show_gpu = (gpus.size() > 0 and (gpu_always or (show_gpu_info == "Auto" and Gpu::shown == 0)));
 		auto graph_up_field = Config::getS("cpu_graph_upper");
 		if (graph_up_field == "Auto" or not v_contains(Cpu::available_fields, graph_up_field))
 			graph_up_field = "total";
@@ -842,15 +843,15 @@ namespace Cpu {
 			} else {
 				lavg_str_len = lavg_str.length();
 			}
-			out += Mv::to(b_y + b_height - 2 - show_gpu*(gpus.size() - Gpu::shown), b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
+			cy = b_height - 2 - (show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0);
+			out += Mv::to(b_y + cy, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
 		}
 
 		//? Gpu brief info
 		if (show_gpu) {
-			auto shown_panels_count = 0u;
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
-				if (not v_contains(Gpu::shown_panels, i)) {
-					out += Mv::to(b_y + b_height - 1 - gpus.size() + ++shown_panels_count - (Gpu::shown == 0), b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
+				if (gpu_always or not v_contains(Gpu::shown_panels, i)) {
+					out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
 					if (show_temps and gpus[i].supported_functions.temp_info and b_width < 34) {
 						const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
 						if (temp < 100) out += " ";
@@ -879,6 +880,7 @@ namespace Cpu {
 						out += rjust(to_string(temp), 3 + (b_width >= 34 or temp > 99)) + Theme::c("main_fg") + unit;
 					}
 				}
+				if (cy < b_height - 1) break;
 			}
 		}
 
@@ -1959,11 +1961,12 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
+			const bool show_gpu_on = Config::getS("show_gpu_info") == "On";
 			const bool gpus_shown_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
-				Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
-				or (Config::getS("cpu_graph_lower") == "Auto" and Gpu::shown == 0)
+				show_gpu_on or (Config::getS("cpu_graph_lower") == "Auto" and Gpu::shown == 0)
 			);
 			const int gpus_height_offset = (Gpu::gpu_names.size() - Gpu::shown)*gpus_shown_in_cpu_panel;
+			int gpus_extra_height = gpus_shown_in_cpu_panel ? Gpu::gpu_names.size() - (show_gpu_on ? 0 : Gpu::shown) : 0;
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
@@ -1972,11 +1975,12 @@ namespace Draw {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
 			}
 			if (height <= Term::height-gpus_height_offset) height += gpus_height_offset;
+			if (height - gpus_extra_height < 7) gpus_extra_height = height - 7;
 
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
-			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_height_offset*(height <= Term::height-2) - 5)));
+			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - 5)));
 			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width = (21 + 12 * show_temp) * b_columns - (b_columns - 1);
@@ -1994,7 +1998,7 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + (int)gpus_height_offset - gpus_shown_in_cpu_panel);
+			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
 
 			b_x = x + width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
