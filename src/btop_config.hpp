@@ -20,8 +20,9 @@ tab-size = 4
 
 #include <string>
 #include <vector>
-#include <robin_hood.h>
 #include <filesystem>
+
+#include <robin_hood.h>
 
 using std::string;
 using std::vector;
@@ -33,12 +34,12 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern unordered_flat_map<string, string> strings;
-	extern unordered_flat_map<string, string> stringsTmp;
-	extern unordered_flat_map<string, bool> bools;
-	extern unordered_flat_map<string, bool> boolsTmp;
-	extern unordered_flat_map<string, int> ints;
-	extern unordered_flat_map<string, int> intsTmp;
+	extern unordered_flat_map<std::string_view, string> strings;
+	extern unordered_flat_map<std::string_view, string> stringsTmp;
+	extern unordered_flat_map<std::string_view, bool> bools;
+	extern unordered_flat_map<std::string_view, bool> boolsTmp;
+	extern unordered_flat_map<std::string_view, int> ints;
+	extern unordered_flat_map<std::string_view, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
@@ -68,44 +69,44 @@ namespace Config {
 	//* Apply selected preset
 	void apply_preset(const string& preset);
 
-	bool _locked(const string& name);
+	bool _locked(const std::string_view name);
 
 	//* Return bool for config key <name>
-	inline bool getB(const string& name) { return bools.at(name); }
+	inline bool getB(const std::string_view name) { return bools.at(name); }
 
 	//* Return integer for config key <name>
-	inline const int& getI(const string& name) { return ints.at(name); }
+	inline const int& getI(const std::string_view name) { return ints.at(name); }
 
 	//* Return string for config key <name>
-	inline const string& getS(const string& name) { return strings.at(name); }
+	inline const string& getS(const std::string_view name) { return strings.at(name); }
 
-	string getAsString(const string& name);
+	string getAsString(const std::string_view name);
 
 	extern string validError;
 
-	bool intValid(const string& name, const string& value);
-	bool stringValid(const string& name, const string& value);
+	bool intValid(const std::string_view name, const string& value);
+	bool stringValid(const std::string_view name, const string& value);
 
 	//* Set config key <name> to bool <value>
-	inline void set(const string& name, bool value) {
+	inline void set(const std::string_view name, bool value) {
 		if (_locked(name)) boolsTmp.insert_or_assign(name, value);
 		else bools.at(name) = value;
 	}
 
 	//* Set config key <name> to int <value>
-	inline void set(const string& name, const int& value) {
+	inline void set(const std::string_view name, const int& value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		else ints.at(name) = value;
 	}
 
 	//* Set config key <name> to string <value>
-	inline void set(const string& name, const string& value) {
+	inline void set(const std::string_view name, const string& value) {
 		if (_locked(name)) stringsTmp.insert_or_assign(name, value);
 		else strings.at(name) = value;
 	}
 
 	//* Flip config key bool <name>
-	void flip(const string& name);
+	void flip(const std::string_view name);
 
 	//* Lock config and cache changes until unlocked
 	void lock();
