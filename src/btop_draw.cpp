@@ -226,7 +226,7 @@ namespace Draw {
 				c_upos = ulen(first);
 			}
 			catch (const std::exception& e) {
-				Logger::error("In TextEdit::operator() : " + string{e.what()});
+				Logger::error("In TextEdit::operator() : {}", e.what());
 				return "";
 			}
 		}

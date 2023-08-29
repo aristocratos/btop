@@ -284,10 +284,10 @@ void clean_quit(int sig) {
 
 	if (not Global::exit_error_msg.empty()) {
 		sig = 1;
-		Logger::error(Global::exit_error_msg);
+		Logger::error("{}", Global::exit_error_msg);
 		fmt::println(std::cerr, "{}ERROR: {}{}{}", Global::fg_red, Global::fg_white, Global::exit_error_msg, Fx::reset);
 	}
-	Logger::info("Quitting! Runtime: " + sec_to_dhms(time_s() - Global::start_time));
+	Logger::info("Quitting! Runtime: {}", sec_to_dhms(time_s() - Global::start_time));
 
 	const auto excode = (sig != -1 ? sig : 0);
 
@@ -892,15 +892,15 @@ int main(int argc, char **argv) {
 		}
 		else Logger::set(Config::getS("log_level"));
 
-		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : Config::getS("log_level")));
+		Logger::info("Logger set to {}", (Global::debug ? "DEBUG" : Config::getS("log_level")));
 
-		for (const auto& err_str : load_warnings) Logger::warning(err_str);
+		for (const auto& err_str : load_warnings) Logger::warning("{}", err_str);
 	}
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
 	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
-		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
+		Logger::debug("Using locale {}", std::setlocale(LC_ALL, ""));
 	}
 	else {
 		string found;
@@ -910,7 +910,7 @@ int main(int argc, char **argv) {
 				found = std::getenv(loc_env);
 				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
 					set_failure = true;
-					Logger::warning("Failed to set locale " + found + " continuing anyway.");
+					Logger::warning("Failed to set locale {} continuing anyway.", found);
 				}
 			}
 		}
@@ -943,7 +943,7 @@ int main(int argc, char **argv) {
 				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
 			}
 			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != nullptr) {
-				Logger::debug("Setting LC_ALL=" + cur_locale + ".UTF-8");
+				Logger::debug("Setting LC_ALL={}.UTF-8", cur_locale);
 			}
 			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
 				Logger::debug("Setting LC_ALL=en_US.UTF-8");
@@ -961,7 +961,7 @@ int main(int argc, char **argv) {
 		}
 	#endif
 		else if (not set_failure)
-			Logger::debug("Setting LC_ALL=" + found);
+			Logger::debug("Setting LC_ALL={}", found);
 	}
 
 	//? Initialize terminal and set options
@@ -970,7 +970,7 @@ int main(int argc, char **argv) {
 		clean_quit(1);
 	}
 
-	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
+	if (Term::current_tty != "unknown") Logger::info("Running on {}", Term::current_tty);
 	if (not Global::arg_tty and Config::getB("force_tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");

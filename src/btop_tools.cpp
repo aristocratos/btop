@@ -519,7 +519,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
+			Logger::error("readfile() : Exception when reading {} : {}", path.string(), e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -596,15 +596,15 @@ namespace Tools {
 			report_line = fmt::format(custom_locale, "Timer [{}] took {:L} μs", name, elapsed_time);
 
 		if (delayed_report)
-			report_buffer.emplace_back(report_line);
+			report_buffer.push_back(std::move(report_line));
 		else
-			Logger::debug(report_line);
+			Logger::debug("{}", report_line);
 	}
 
 	void DebugTimer::force_report() {
 		if (report_buffer.empty()) return;
 		for (const auto& line : report_buffer)
-			Logger::debug(line);
+			Logger::debug("{}", line);
 		report_buffer.clear();
 	}
 

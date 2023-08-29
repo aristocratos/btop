@@ -16,9 +16,6 @@ indent = tab
 tab-size = 4
 */
 #include <arpa/inet.h>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <libproc.h>
 // man 3 getifaddrs: "BUGS: If	both <net/if.h>	and <ifaddrs.h>	are being included, <net/if.h> must be included before <ifaddrs.h>"
 #include <net/if.h>
@@ -42,7 +39,6 @@ tab-size = 4
 #include <sys/mount.h>
 #include <sys/vmmeter.h>
 #include <sys/limits.h>
-#include <vector>
 #include <vm/vm_param.h>
 #include <kvm.h>
 #include <paths.h>
@@ -50,14 +46,20 @@ tab-size = 4
 #include <unistd.h>
 #include <devstat.h>
 
-#include <stdexcept>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <memory>
 #include <numeric>
 #include <ranges>
 #include <regex>
+#include <stdexcept>
 #include <string>
-#include <memory>
+#include <vector>
+
+#include <fmt/core.h>
 
 #include "../btop_config.hpp"
 #include "../btop_log.hpp"
@@ -448,8 +450,8 @@ namespace Cpu {
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
 			} catch (const std::exception &e) {
-				Logger::error("Cpu::collect() : " + (string)e.what());
-				throw std::runtime_error("collect() : " + (string)e.what());
+				Logger::error("Cpu::collect() : {}", e.what());
+				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
 
 		}
@@ -552,7 +554,7 @@ namespace Mem {
 			size_t len = 512;
 			if (fgets(poolName, len, poolPipe())) {
 				poolName[strcspn(poolName, "\n")] = 0;
-				Logger::debug("zpool found: " + string(poolName));
+				Logger::debug("zpool found: {}", poolName);
 				Mem::zpools.push_back(std::regex_replace(poolName, toReplace, "%25"));
 			}
 		}
@@ -577,7 +579,7 @@ namespace Mem {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
 						string mountpoint = mapping.at(disk.dev);
-						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+						Logger::debug("dev {} -> {} read={} write={}", devStatName, mountpoint, total_bytes_read, total_bytes_write);
 					}
 				}
 
@@ -767,7 +769,7 @@ namespace Mem {
 					continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 					continue;
 				}
 				disk.total = vfs.f_blocks * vfs.f_frsize;
@@ -841,7 +843,7 @@ namespace Net {
 			getifaddr_wrapper if_wrap{};
 			if (if_wrap.status != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_wrap.status);
 				redraw = true;
 				return empty_net;
 			}
@@ -876,7 +878,7 @@ namespace Net {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}
@@ -887,7 +889,7 @@ namespace Net {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)

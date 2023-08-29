@@ -1367,7 +1367,7 @@ namespace Menu {
 					theme_refresh = true;
 				else if (option == "log_level") {
 					Logger::set(optList.at(i));
-					Logger::info("Logger set to " + optList.at(i));
+					Logger::info("Logger set to {}", optList.at(i));
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;

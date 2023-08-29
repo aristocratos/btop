@@ -6,6 +6,9 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <string_view>
+
+#include <fmt/core.h>
 
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -40,7 +43,7 @@ namespace Logger {
 
 	void set(const string& level) { loglevel = v_index(log_levels, level); }
 
-	void log_write(const size_t level, const string& msg) {
+	void log_write(const size_t level, const std::string_view msg) {
 		if (loglevel < level or logfile.empty()) {
 			return;
 		}
@@ -64,9 +67,9 @@ namespace Logger {
 				std::ofstream lwrite(logfile, std::ios::app);
 				if (first) {
 					first = false;
-					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
+					fmt::print(lwrite, "\n{}===> btop++ v.{}\n", strf_time(tdf), Global::Version);
 				}
-				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
+				fmt::print(lwrite, "{}{}: {}\n", strf_time(tdf), log_levels.at(level), msg);
 			}
 			else {
 				logfile.clear();
@@ -74,7 +77,7 @@ namespace Logger {
 		}
 		catch (const std::exception& e) {
 			logfile.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
+			throw std::runtime_error(fmt::format("Exception in Logger::log_write() : {}", e.what()));
 		}
 	}
 } // namespace Logger
