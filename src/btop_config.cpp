@@ -25,6 +25,7 @@ tab-size = 4
 #include <fmt/core.h>
 
 #include "btop_config.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 

@@ -340,38 +340,7 @@ namespace Tools {
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
-}
 
-//* Simple logging implementation
-namespace Logger {
-	const vector<string> log_levels = {
-		"DISABLED",
-		"ERROR",
-		"WARNING",
-		"INFO",
-		"DEBUG",
-	};
-	extern std::filesystem::path logfile;
-
-	enum Level : size_t {
-		DISABLED = 0,
-		ERROR = 1,
-		WARNING = 2,
-		INFO = 3,
-		DEBUG = 4,
-	};
-
-	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const string& level);
-
-	void log_write(const Level level, const string& msg);
-	inline void error(const string msg) { log_write(ERROR, msg); }
-	inline void warning(const string msg) { log_write(WARNING, msg); }
-	inline void info(const string msg) { log_write(INFO, msg); }
-	inline void debug(const string msg) { log_write(DEBUG, msg); }
-}
-
-namespace Tools {
 	//* Creates a named timer that is started on construct (by default) and reports elapsed time in microseconds to Logger::debug() on destruct if running
 	//* Unless delayed_report is set to false, all reporting is buffered and delayed until DebugTimer is destructed or .force_report() is called
 	//* Usage example: Tools::DebugTimer timer(name:"myTimer", [start:true], [delayed_report:true]) // Create timer and start
@@ -386,7 +355,6 @@ namespace Tools {
 	public:
 		string name{};
 		bool delayed_report{};
-		Logger::Level log_level = Logger::DEBUG;
 		DebugTimer() = default;
 		DebugTimer(const string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
@@ -403,6 +371,4 @@ namespace Tools {
 	};
 
 }
-
-
 

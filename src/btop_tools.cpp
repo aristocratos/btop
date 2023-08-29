@@ -32,9 +32,11 @@ tab-size = 4
 
 #include "robin_hood.h"
 #include "widechar_width.hpp"
+
+#include "btop_config.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
-#include "btop_config.hpp"
 
 using std::cin;
 using std::cout;
@@ -596,13 +598,13 @@ namespace Tools {
 		if (delayed_report)
 			report_buffer.emplace_back(report_line);
 		else
-			Logger::log_write(log_level, report_line);
+			Logger::debug(report_line);
 	}
 
 	void DebugTimer::force_report() {
 		if (report_buffer.empty()) return;
 		for (const auto& line : report_buffer)
-			Logger::log_write(log_level, line);
+			Logger::debug(line);
 		report_buffer.clear();
 	}
 
@@ -617,64 +619,3 @@ namespace Tools {
 	}
 }
 
-namespace Logger {
-	using namespace Tools;
-	std::atomic<bool> busy (false);
-	bool first = true;
-	const string tdf = "%Y/%m/%d (%T) | ";
-
-	size_t loglevel;
-	fs::path logfile;
-
-	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
-	class lose_priv {
-		int status = -1;
-	public:
-		lose_priv() {
-			if (geteuid() != Global::real_uid) {
-				this->status = seteuid(Global::real_uid);
-			}
-		}
-		~lose_priv() {
-			if (status == 0) {
-				status = seteuid(Global::set_uid);
-			}
-		}
-	};
-
-	void set(const string& level) {
-		loglevel = v_index(log_levels, level);
-	}
-
-	void log_write(const Level level, const string& msg) {
-		if (loglevel < level or logfile.empty()) return;
-		atomic_lock lck(busy, true);
-		lose_priv neutered{};
-		std::error_code ec;
-		try {
-			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
-				auto old_log = logfile;
-				old_log += ".1";
-
-				if (fs::exists(old_log))
-					fs::remove(old_log, ec);
-
-				if (not ec)
-					fs::rename(logfile, old_log, ec);
-			}
-			if (not ec) {
-				std::ofstream lwrite(logfile, std::ios::app);
-				if (first) {
-					first = false;
-					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
-				}
-				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
-			}
-			else logfile.clear();
-		}
-		catch (const std::exception& e) {
-			logfile.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
-		}
-	}
-}

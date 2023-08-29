@@ -20,9 +20,10 @@ tab-size = 4
 #include <fstream>
 #include <unistd.h>
 
-#include "btop_tools.hpp"
 #include "btop_config.hpp"
+#include "btop_log.hpp"
 #include "btop_theme.hpp"
+#include "btop_tools.hpp"
 
 using std::round;
 using std::stoi;

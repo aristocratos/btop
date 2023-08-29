@@ -23,13 +23,14 @@ tab-size = 4
 #include <stdexcept>
 #include <string>
 
-#include "btop_draw.hpp"
 #include "btop_config.hpp"
-#include "btop_theme.hpp"
-#include "btop_shared.hpp"
-#include "btop_tools.hpp"
+#include "btop_draw.hpp"
 #include "btop_input.hpp"
+#include "btop_log.hpp"
 #include "btop_menu.hpp"
+#include "btop_shared.hpp"
+#include "btop_theme.hpp"
+#include "btop_tools.hpp"
 
 
 using std::array;
