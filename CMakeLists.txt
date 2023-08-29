@@ -131,6 +131,7 @@ target_compile_definitions(btop PRIVATE
   _GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1
   # Only has an effect with optimizations enabled
   $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
+  FMT_HEADER_ONLY
 )
 
 # Enable GPU support

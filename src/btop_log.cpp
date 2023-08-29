@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include <fmt/core.h>
+#include <fmt/ostream.h>
 
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
