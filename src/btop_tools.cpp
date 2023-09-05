@@ -443,7 +443,7 @@ namespace Tools {
 				out = to_string((int)round(stod(out)));
 			}
 			if (out.size() > 3) {
-				out = to_string((int)(out[0] - '0') + 1);
+				out = to_string((int)(out[0] - '0')) + ".0";
 				start++;
 			}
 			out.push_back(units[start][0]);
