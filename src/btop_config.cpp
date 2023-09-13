@@ -268,6 +268,7 @@ namespace Config {
 		{"lowcolor", false},
 		{"show_detailed", false},
 		{"proc_filtering", false},
+		{"is_maximized", false},
 	};
 	unordered_flat_map<std::string_view, bool> boolsTmp;
 
@@ -521,6 +522,20 @@ namespace Config {
 		return true;
 	}
 
+	void restore(const string& boxes) {
+		current_boxes.clear();
+		current_boxes = ssplit(boxes);
+		Config::set("shown_boxes", boxes);
+		Config::set("is_maximized", false);
+	}
+
+	void maximize_box(const string& box) {
+		current_boxes.clear();
+		current_boxes.push_back(box);
+		Config::set("shown_boxes", box);
+		Config::set("is_maximized", true);
+	}
+
 	void toggle_box(const string& box) {
 		auto old_boxes = current_boxes;
 		auto box_pos = rng::find(current_boxes, box);
@@ -543,6 +558,7 @@ namespace Config {
 		}
 
 		Config::set("shown_boxes", new_boxes);
+		ssplit(new_boxes).size() == 1 ? Config::set("is_maximized", true) : Config::set("is_maximized", false);
 	}
 
 	void load(const fs::path& conf_file, vector<string>& load_warnings) {
