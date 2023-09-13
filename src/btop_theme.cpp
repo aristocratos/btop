@@ -138,7 +138,7 @@ namespace Theme {
 
 	namespace {
 		//* Convert 24-bit colors to 256 colors
-		int truecolor_to_256(const int& r, const int& g, const int& b) {
+		int truecolor_to_256(const int r, const int g, const int b) {
 			//? Use upper 232-255 greyscale values if the downscaled red, green and blue are the same value
 			if (r == g && g == b) {
 				return 232 + round(r / 11.0);

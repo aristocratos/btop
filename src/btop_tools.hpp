@@ -333,7 +333,7 @@ namespace Tools {
 	string readfile(const std::filesystem::path& path, const string& fallback = "");
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
-	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
+	auto celsius_to(const long long celsius, const string& scale) -> tuple<long long, string>;
 
 }
 

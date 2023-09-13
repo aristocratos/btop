@@ -414,7 +414,7 @@ namespace Input {
 				}
 				else if (is_in(key, "+", "-", "space") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
 					atomic_wait(Runner::active);
-					auto& pid = Config::getI("selected_pid");
+					const auto pid = Config::getI("selected_pid");
 					if (key == "+" or key == "space") Proc::expand = pid;
 					if (key == "-" or key == "space") Proc::collapse = pid;
 					no_update = false;

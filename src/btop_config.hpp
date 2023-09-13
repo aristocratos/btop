@@ -69,7 +69,7 @@ namespace Config {
 	inline bool getB(const std::string_view name) { return bools.at(name); }
 
 	//* Return integer for config key <name>
-	inline const int& getI(const std::string_view name) { return ints.at(name); }
+	inline int getI(const std::string_view name) { return ints.at(name); }
 
 	//* Return string for config key <name>
 	inline const string& getS(const std::string_view name) { return strings.at(name); }
@@ -88,7 +88,7 @@ namespace Config {
 	}
 
 	//* Set config key <name> to int <value>
-	inline void set(const std::string_view name, const int& value) {
+	inline void set(const std::string_view name, const int value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		else ints.at(name) = value;
 	}

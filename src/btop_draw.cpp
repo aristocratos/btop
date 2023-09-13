@@ -260,12 +260,12 @@ namespace Draw {
 		out = Fx::reset + line_color;
 
 		//? Draw horizontal lines
-		for (const int& hpos : {y, y + height - 1}) {
+		for (const int hpos : {y, y + height - 1}) {
 			out += Mv::to(hpos, x) + Symbols::h_line * (width - 1);
 		}
 
 		//? Draw vertical lines and fill if enabled
-		for (const int& hpos : iota(y + 1, y + height - 1)) {
+		for (const int hpos : iota(y + 1, y + height - 1)) {
 			out += Mv::to(hpos, x) + Symbols::v_line
 				+  ((fill) ? string(width - 2, ' ') : Mv::r(width - 2))
 				+  Symbols::v_line;
@@ -365,7 +365,7 @@ namespace Draw {
 		value = clamp(value, 0, 100);
 		if (not cache.at(value).empty()) return cache.at(value);
 		auto& out = cache.at(value);
-		for (const int& i : iota(1, width + 1)) {
+		for (const int i : iota(1, width + 1)) {
 			int y = round(i * 100.0 / width);
 			if (value >= y)
 				out += Theme::g(color_gradient).at(invert ? 100 - y : y) + Symbols::meter;
@@ -391,7 +391,7 @@ namespace Draw {
 		}
 
 		//? Horizontal iteration over values in <data>
-		for (const int& i : iota(data_offset, static_cast<int>(data.size()))) {
+		for (const int i : iota(data_offset, static_cast<int>(data.size()))) {
 			// if (tty_mode and mult and i % 2 != 0) continue;
 			if (not tty_mode and mult) current = not current;
 			if (i < 0) {
@@ -404,7 +404,7 @@ namespace Draw {
 			}
 
 			//? Vertical iteration over height of graph
-			for (const int& horizon : iota(0, height)) {
+			for (const int horizon : iota(0, height)) {
 				const int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
 				const int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
@@ -438,7 +438,7 @@ namespace Draw {
 			out += graphs.at(current).at(0);
 		}
 		else {
-			for (const int& i : iota(1, height + 1)) {
+			for (const int i : iota(1, height + 1)) {
 				if (i > 1) out += Mv::d(1) + Mv::l(width);
 				if (not color_gradient.empty())
 					out += (invert) ? Theme::g(color_gradient).at(i * 100 / height) : Theme::g(color_gradient).at(100 - ((i - 1) * 100 / height));
@@ -470,7 +470,7 @@ namespace Draw {
 		}
 
 		//? Populate the two switching graph vectors and fill empty space if data size < width
-		for (const int& i : iota(0, height * 2)) {
+		for (const int i : iota(0, height * 2)) {
 			if (tty_mode and i % 2 != current) continue;
 			graphs[(i % 2 != 0)].push_back((value_width < width) ? ((height == 1) ? Mv::r(1) : " "s) * (width - value_width) : "");
 		}
@@ -483,7 +483,7 @@ namespace Draw {
 
 		//? Make room for new characters on graph
 		if (not tty_mode) current = not current;
-		for (const int& i : iota(0, height)) {
+		for (const int i : iota(0, height)) {
 			if (height == 1 and graphs.at(current).at(i).at(1) == '[') {
 				if (graphs.at(current).at(i).at(3) == 'C') graphs.at(current).at(i).erase(0, 4);
 				else graphs.at(current).at(i).erase(0, graphs.at(current).at(i).find_first_of('m') + 4);
@@ -1246,7 +1246,7 @@ namespace Proc {
 					+ title_left + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
 
 				out += Mv::to(d_y, d_x - 1) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c("div_line");
-				for (const int& i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
+				for (const int i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
 
 				const string& t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 				const string& hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));

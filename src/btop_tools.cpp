@@ -511,7 +511,7 @@ namespace Tools {
 		return (out.empty() ? fallback : out);
 	}
 
-	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string> {
+	auto celsius_to(const long long celsius, const string& scale) -> tuple<long long, string> {
 		if (scale == "celsius")
 			return {celsius, "°C"};
 		else if (scale == "fahrenheit")
