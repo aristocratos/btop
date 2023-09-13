@@ -18,15 +18,15 @@ tab-size = 4
 
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <vector>
-#include <filesystem>
 
-#include <robin_hood.h>
+#include <unordered_dense.h>
 
 using std::string;
 using std::vector;
-using robin_hood::unordered_flat_map;
+using ankerl::unordered_dense::map;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -34,12 +34,12 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern unordered_flat_map<std::string_view, string> strings;
-	extern unordered_flat_map<std::string_view, string> stringsTmp;
-	extern unordered_flat_map<std::string_view, bool> bools;
-	extern unordered_flat_map<std::string_view, bool> boolsTmp;
-	extern unordered_flat_map<std::string_view, int> ints;
-	extern unordered_flat_map<std::string_view, int> intsTmp;
+	extern map<std::string_view, string> strings;
+	extern map<std::string_view, string> stringsTmp;
+	extern map<std::string_view, bool> bools;
+	extern map<std::string_view, bool> boolsTmp;
+	extern map<std::string_view, int> ints;
+	extern map<std::string_view, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };

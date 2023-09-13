@@ -398,7 +398,7 @@ namespace Runner {
 	};
 
 	string debug_bg;
-	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
+	map<string, array<uint64_t, 2>> debug_times;
 
 	class MyNumPunct : public std::numpunct<char>
 	{

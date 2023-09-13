@@ -51,7 +51,7 @@ namespace Symbols {
 
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 
-	const unordered_flat_map<string, vector<string>> graph_symbols = {
+	const map<string, vector<string>> graph_symbols = {
 		{ "braille_up", {
 			" ", "⢀", "⢠", "⢰", "⢸",
 			"⡀", "⣀", "⣠", "⣰", "⣸",
@@ -297,7 +297,7 @@ namespace Draw {
 			return false;
 		}
 
-		static const unordered_flat_map<string, string> clock_custom_format = {
+		static const map<string, string> clock_custom_format = {
 			{"/user", Tools::username()},
 			{"/host", Tools::hostname()},
 			{"/uptime", ""}
@@ -605,7 +605,7 @@ namespace Cpu {
 			static long old_seconds{};  // defaults to = 0
 			static string old_status;
 			static Draw::Meter bat_meter {10, "cpu", true};
-			static const unordered_flat_map<string, string> bat_symbols = {
+			static const map<string, string> bat_symbols = {
 				{"charging", "▲"},
 				{"discharging", "▼"},
 				{"full", "■"},
@@ -749,11 +749,11 @@ namespace Mem {
 	int disks_io_half = 0;
 	bool shown = true, redraw = true;
 	string box;
-	unordered_flat_map<string, Draw::Meter> mem_meters;
-	unordered_flat_map<string, Draw::Graph> mem_graphs;
-	unordered_flat_map<string, Draw::Meter> disk_meters_used;
-	unordered_flat_map<string, Draw::Meter> disk_meters_free;
-	unordered_flat_map<string, Draw::Graph> io_graphs;
+	map<string, Draw::Meter> mem_meters;
+	map<string, Draw::Graph> mem_graphs;
+	map<string, Draw::Meter> disk_meters_used;
+	map<string, Draw::Meter> disk_meters_free;
+	map<string, Draw::Graph> io_graphs;
 
 	string draw(const mem_info& mem, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
@@ -801,7 +801,7 @@ namespace Mem {
 			//? Disk meters and io graphs
 			if (show_disks) {
 				if (show_io_stat or io_mode) {
-					unordered_flat_map<string, int> custom_speeds;
+					map<string, int> custom_speeds;
 					int half_height = 0;
 					if (io_mode) {
 						disks_io_h = max((int)floor((double)(height - 2 - (disk_ios * 2)) / max(1, disk_ios)), (io_graph_combined ? 1 : 2));
@@ -1006,7 +1006,7 @@ namespace Net {
 	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
 	bool shown = true, redraw = true;
 	string old_ip;
-	unordered_flat_map<string, Draw::Graph> graphs;
+	map<string, Draw::Graph> graphs;
 	string box;
 
 	string draw(const net_info& net, bool force_redraw, bool data_same) {
@@ -1106,9 +1106,9 @@ namespace Proc {
 	bool shown = true, redraw = true;
 	int selected_pid = 0, selected_depth = 0;
 	string selected_name;
-	unordered_flat_map<size_t, Draw::Graph> p_graphs;
-	unordered_flat_map<size_t, bool> p_wide_cmd;
-	unordered_flat_map<size_t, int> p_counters;
+	map<size_t, Draw::Graph> p_graphs;
+	map<size_t, bool> p_wide_cmd;
+	map<size_t, int> p_counters;
 	int counter = 0;
 	Draw::TextEdit filter;
 	Draw::Graph detailed_cpu_graph;
@@ -1566,8 +1566,6 @@ namespace Proc {
 				else
 					++element;
 			}
-			p_graphs.compact();
-			p_counters.compact();
 
 			for (auto element = p_wide_cmd.begin(); element != p_wide_cmd.end();) {
 				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
@@ -1576,7 +1574,6 @@ namespace Proc {
 				else
 					++element;
 			}
-			p_wide_cmd.compact();
 		}
 
 		if (selected == 0 and selected_pid != 0) {

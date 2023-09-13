@@ -98,7 +98,7 @@ namespace Cpu {
 
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	map<int, int> core_mapping;
 }  // namespace Cpu
 
 namespace Mem {
@@ -204,7 +204,7 @@ namespace Cpu {
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	map<string, long long> cpu_old = {
 		{"totals", 0},
 		{"idles", 0},
 		{"user", 0},
@@ -323,8 +323,8 @@ namespace Cpu {
 		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> map<int, int> {
+		map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		for (long i = 0; i < Shared::coreCount; i++) {
@@ -557,7 +557,7 @@ namespace Mem {
 		}
 	}
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+	void collect_disk(map<string, disk_info> &disks, map<string, string> &mapping) {
 		// this bit is for 'regular' mounts
 		static struct statinfo cur;
 		long double etime = 0;
@@ -691,7 +691,7 @@ namespace Mem {
 		}
 
 		if (show_disks) {
-			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
@@ -807,13 +807,13 @@ namespace Mem {
 }  // namespace Mem
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors = 0;
-	unordered_flat_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
-	unordered_flat_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
+	map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
+	map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
@@ -892,7 +892,7 @@ namespace Net {
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
-			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
+			map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST, 0};
 			size_t len;
 			if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0) {
@@ -966,7 +966,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -1037,7 +1036,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev = false;

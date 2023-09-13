@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #include <deque>
-#include <robin_hood.h>
+#include <unordered_dense.h>
 #include <array>
 #include <signal.h>
 #include <errno.h>
@@ -31,7 +31,7 @@ tab-size = 4
 #include "btop_draw.hpp"
 #include "btop_shared.hpp"
 
-using robin_hood::unordered_flat_map;
+using ankerl::unordered_dense::map;
 using std::array;
 using std::ceil;
 using std::max;
@@ -65,7 +65,7 @@ namespace Menu {
 		"SIGPWR", "SIGSYS"
 	};
 
-  unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+  map<string, Input::Mouse_loc> mouse_mappings;
 
    const array<array<string, 3>, 3> menu_normal = {
 		array<string, 3>{
@@ -1015,7 +1015,7 @@ namespace Menu {
 		static Draw::TextEdit editor;
 		static string warnings;
 		static bitset<8> selPred;
-		static const unordered_flat_map<string, std::reference_wrapper<const vector<string>>> optionsList = {
+		static const map<string, std::reference_wrapper<const vector<string>>> optionsList = {
 			{"color_theme", std::cref(Theme::themes)},
 			{"log_level", std::cref(Logger::log_levels)},
 			{"temp_scale", std::cref(Config::temp_scales)},

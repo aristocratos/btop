@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #include <cstdlib>
-#include <robin_hood.h>
+#include <unordered_dense.h>
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -83,10 +83,10 @@ namespace Cpu {
 		int64_t crit{}; // defaults to 0
 	};
 
-	unordered_flat_map<string, Sensor> found_sensors;
+	map<string, Sensor> found_sensors;
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	map<int, int> core_mapping;
 }
 
 namespace Mem {
@@ -167,7 +167,7 @@ namespace Cpu {
 		"irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
 	};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	map<string, long long> cpu_old = {
 			{"totals", 0},
 			{"idles", 0},
 			{"user", 0},
@@ -464,8 +464,8 @@ namespace Cpu {
 		return cpuhz;
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> map<int, int> {
+		map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		//? Try to get core mapping from /proc/cpuinfo
@@ -538,7 +538,7 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
 		static string auto_sel;
-		static unordered_flat_map<string, battery> batteries;
+		static map<string, battery> batteries;
 
 		//? Get paths to needed files and check for valid values on first run
 		if (batteries.empty() and has_battery) {
@@ -1354,13 +1354,13 @@ namespace Mem {
 }
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors{}; // defaults to 0
-	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
-	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
+	map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
+	map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
 	bool rescale{true};
 	uint64_t timestamp{}; // defaults to 0
 
@@ -1499,7 +1499,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -1569,7 +1568,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev{}; // defaults to false
@@ -1584,7 +1583,7 @@ namespace Proc {
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
-	static robin_hood::unordered_set<size_t> kernels_procs = {KTHREADD};
+	static ankerl::unordered_dense::set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {

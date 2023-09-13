@@ -40,7 +40,7 @@ namespace rng = std::ranges;
 namespace Input {
 
 	//* Map for translating key codes to readable values
-	const unordered_flat_map<string, string> Key_escapes = {
+	const map<string, string> Key_escapes = {
 		{"\033",	"escape"},
 		{"\n",		"enter"},
 		{" ",		"space"},
@@ -79,7 +79,7 @@ namespace Input {
 	std::atomic<bool> interrupt (false);
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
-	unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	map<string, Mouse_loc> mouse_mappings;
 
 	deque<string> history(50, "");
 	string old_filter;
