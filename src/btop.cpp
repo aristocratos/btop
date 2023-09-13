@@ -178,7 +178,7 @@ void term_resize(bool force) {
 		Input::interrupt = true;
 		return;
 	}
-	atomic_lock lck(resizing, true);
+	const atomic_lock lck(resizing, true);
 	if (auto refreshed = Term::refresh(true); refreshed or force) {
 		if (force and refreshed) force = false;
 	}
@@ -447,7 +447,7 @@ namespace Runner {
 		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
 		//? pthread_mutex_lock to lock thread and monitor health from main thread
-		thread_lock pt_lck(mtx);
+		const thread_lock pt_lck(mtx);
 		if (pt_lck.status != 0) {
 			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
 			Global::thread_exception = true;
@@ -471,10 +471,10 @@ namespace Runner {
 			}
 
 			//? Atomic lock used for blocking non thread-safe actions in main thread
-			atomic_lock lck(active);
+			const atomic_lock lck(active);
 
 			//? Set effective user if SUID bit is set
-			gain_priv powers{};
+			const gain_priv powers{};
 
 			auto& conf = current_conf;
 
@@ -659,7 +659,7 @@ namespace Runner {
 	//? ------------------------------------------ Secondary thread end -----------------------------------------------
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
-	void run(const string& box, bool no_update, bool force_redraw) {
+	void run(const string& box, const bool no_update, const bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
 		if (active) {
 			Logger::error("Stall in Runner thread, restarting!");
@@ -703,7 +703,7 @@ namespace Runner {
 	//* Stops any work being done in runner thread and checks for thread errors
 	void stop() {
 		stopping = true;
-		int ret = pthread_mutex_trylock(&mtx);
+		const int ret = pthread_mutex_trylock(&mtx);
 		if (ret != EBUSY and not Global::quitting) {
 			if (active) active = false;
 			Global::exit_error_msg = "Runner thread died unexpectedly!";

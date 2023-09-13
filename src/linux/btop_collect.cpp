@@ -256,7 +256,7 @@ namespace Cpu {
 			//? Setup up paths to search for sensors
 			if (fs::exists(fs::path("/sys/class/hwmon")) and access("/sys/class/hwmon", R_OK) != -1) {
 				for (const auto& dir : fs::directory_iterator(fs::path("/sys/class/hwmon"))) {
-					fs::path add_path = fs::canonical(dir.path());
+					fs::path const add_path = fs::canonical(dir.path());
 					if (v_contains(search_paths, add_path) or v_contains(search_paths, add_path / "device")) continue;
 
 					if (s_contains(add_path, "coretemp"))
@@ -265,7 +265,7 @@ namespace Cpu {
 					for (const auto & file : fs::directory_iterator(add_path)) {
 						if (string(file.path().filename()) == "device") {
 							for (const auto & dev_file : fs::directory_iterator(file.path())) {
-								string dev_filename = dev_file.path().filename();
+								const string dev_filename = dev_file.path().filename();
 								if (dev_filename.starts_with("temp") and dev_filename.ends_with("_input")) {
 									search_paths.push_back(file.path());
 									break;
@@ -273,7 +273,7 @@ namespace Cpu {
 							}
 						}
 
-						string filename = file.path().filename();
+						const string filename = file.path().filename();
 						if (filename.starts_with("temp") and filename.ends_with("_input")) {
 							search_paths.push_back(add_path);
 							break;
@@ -283,10 +283,10 @@ namespace Cpu {
 			}
 			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
 				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
-					fs::path add_path = fs::canonical(d.path());
+					fs::path const add_path = fs::canonical(d.path());
 
 					for (const auto & file : fs::directory_iterator(add_path)) {
-						string filename = file.path().filename();
+						const string filename = file.path().filename();
 						if (filename.starts_with("temp") and filename.ends_with("_input") and not v_contains(search_paths, add_path)) {
 								search_paths.push_back(add_path);
 								got_coretemp = true;
@@ -517,8 +517,8 @@ namespace Cpu {
 				for (const auto& split : ssplit(custom_map)) {
 					const auto vals = ssplit(split, ':');
 					if (vals.size() != 2) continue;
-					int change_id = std::stoi(vals.at(0));
-					int new_id = std::stoi(vals.at(1));
+					const int change_id = std::stoi(vals.at(0));
+					const int new_id = std::stoi(vals.at(1));
 					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
 					core_map.at(change_id) = new_id;
 				}
@@ -556,7 +556,7 @@ namespace Cpu {
 								or not fs::exists(d.path() / "present")
 								or stoi(readfile(d.path() / "present")) != 1)
 								continue;
-							string dev_type = readfile(d.path() / "type");
+							const string dev_type = readfile(d.path() / "type");
 							if (is_in(dev_type, "Battery", "UPS")) {
 								bat_dir = d.path();
 								new_bat.base_dir = d.path();
@@ -703,7 +703,7 @@ namespace Cpu {
 					if (i == 0) cread.ignore(SSmax, ' ');
 					else {
 						cread >> cpu_name;
-						int cpuNum = std::stoi(cpu_name.substr(3));
+						const int cpuNum = std::stoi(cpu_name.substr(3));
 						if (cpuNum >= target - 1) target = cpuNum + (cread.peek() == 'c' ? 2 : 1);
 
 						//? Add zero value for core if core number is missing from /proc/stat
@@ -930,7 +930,7 @@ namespace Mem {
 		//? Get disks stats
 		if (show_disks) {
 			static vector<string> ignore_list;
-			double uptime = system_uptime();
+			const double uptime = system_uptime();
 			auto free_priv = Config::getB("disk_free_priv");
 			try {
 				auto& disks_filter = Config::getS("disks_filter");
@@ -1006,7 +1006,7 @@ namespace Mem {
 
 						//? Match filter if not empty
 						if (not filter.empty()) {
-							bool match = v_contains(filter, mountpoint);
+							const bool match = v_contains(filter, mountpoint);
 							if ((filter_exclude and match) or (not filter_exclude and not match))
 								continue;
 						}
@@ -1423,7 +1423,7 @@ namespace Net {
 						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv4 = ip;
 						} else {
-							int errsv = errno;
+							const int errsv = errno;
 							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
 						}
 					}
@@ -1434,7 +1434,7 @@ namespace Net {
 						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
 							net[iface].ipv6 = ip;
 						} else {
-							int errsv = errno;
+							const int errsv = errno;
 							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
 						}
 					}
@@ -1588,7 +1588,7 @@ namespace Proc {
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
-		fs::path pid_path = Shared::procPath / std::to_string(pid);
+		fs::path const pid_path = Shared::procPath / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
 			detailed = {};
@@ -1696,7 +1696,7 @@ namespace Proc {
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
-		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+		const bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		if (sorted_change) {
 			current_sort = sorting;
 			current_rev = reverse;
@@ -1733,7 +1733,7 @@ namespace Proc {
 			}
 
 			auto totalMem = Mem::get_totalMem();
-			int totalMem_len = to_string(totalMem >> 10).size();
+			const int totalMem_len = to_string(totalMem >> 10).size();
 
 			//? Update uid_user map if /etc/passwd changed since last run
 			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
@@ -2044,7 +2044,7 @@ namespace Proc {
 
 			//? Move current selection/view to the selected process when collapsing/expanding in the tree
 			if (locate_selection) {
-				int loc = rng::find(current_procs, Proc::selected_pid, &proc_info::pid)->tree_index;
+				const int loc = rng::find(current_procs, Proc::selected_pid, &proc_info::pid)->tree_index;
 				if (Config::ints.at("proc_start") >= loc or Config::ints.at("proc_start") <= loc - Proc::select_max)
 					Config::ints.at("proc_start") = max(0, loc - 1);
 				Config::ints.at("proc_selected") = loc - Config::ints.at("proc_start") + 1;

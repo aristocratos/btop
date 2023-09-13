@@ -100,7 +100,7 @@ namespace Symbols {
 
 namespace Draw {
 
-	string banner_gen(int y, int x, bool centered, bool redraw) {
+	string banner_gen(int y, int x, const bool centered, const bool redraw) {
 		static string banner;
 		static size_t width = 0;
 		if (redraw) banner.clear();
@@ -116,7 +116,7 @@ namespace Draw {
 				}
 				else {
 					fg = Theme::hex_to_color(line[0], lowcolor);
-					int bg_i = 120 - z * 12;
+					const int bg_i = 120 - z * 12;
 					bg = Theme::dec_to_color(bg_i, bg_i, bg_i, lowcolor);
 				}
 				for (size_t i = 0; i < line[1].size(); i += 3) {
@@ -142,7 +142,7 @@ namespace Draw {
 	}
 
 	TextEdit::TextEdit() {}
-	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(text) {
+	TextEdit::TextEdit(string text, const bool numeric) : numeric(numeric), text(text) {
 		pos = this->text.size();
 		upos = ulen(this->text);
 	}
@@ -242,7 +242,7 @@ namespace Draw {
 	}
 
 	string createBox(const int x, const int y, const int width,
-					 const int height, string line_color, bool fill,
+					 const int height, string line_color, const bool fill,
 					 const string title, const string title2, const int num) {
 		string out;
 
@@ -290,7 +290,7 @@ namespace Draw {
 		return out + Fx::reset + Mv::to(y + 1, x + 1);
 	}
 
-	bool update_clock(bool force) {
+	bool update_clock(const bool force) {
 		const auto& clock_format = Config::getS("clock_format");
 		if (not Cpu::shown or clock_format.empty()) {
 			if (clock_format.empty() and not Global::clock.empty()) Global::clock.clear();
@@ -357,7 +357,7 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-	Meter::Meter(const int width, const string& color_gradient, bool invert)
+	Meter::Meter(const int width, const string& color_gradient, const bool invert)
 		: width(width), color_gradient(color_gradient), invert(invert) {}
 
 	string Meter::operator()(int value) {
@@ -366,7 +366,7 @@ namespace Draw {
 		if (not cache.at(value).empty()) return cache.at(value);
 		auto& out = cache.at(value);
 		for (const int& i : iota(1, width + 1)) {
-			int y = round((double)i * 100.0 / width);
+			const int y = round((double)i * 100.0 / width);
 			if (value >= y)
 				out += Theme::g(color_gradient).at(invert ? 100 - y : y) + Symbols::meter;
 			else {
@@ -380,7 +380,7 @@ namespace Draw {
 
 	//* Graph class ------------------------------------------------------------------------------------------------------------>
 	void Graph::_create(const deque<long long>& data, int data_offset) {
-		bool mult = (data.size() - data_offset > 1);
+		const bool mult = (data.size() - data_offset > 1);
 		const auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
 		array<int, 2> result;
 		const float mod = (height == 1) ? 0.3 : 0.1;
@@ -452,7 +452,7 @@ namespace Draw {
 
 	Graph::Graph(int width, int height, const string& color_gradient,
 				 const deque<long long>& data, const string& symbol,
-				 bool invert, bool no_zero, long long max_value, long long offset)
+				 const bool invert, const bool no_zero, long long max_value, long long offset)
 	: width(width), height(height), color_gradient(color_gradient),
 	  invert(invert), no_zero(no_zero), offset(offset) {
 		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
@@ -478,7 +478,7 @@ namespace Draw {
 		this->_create(data, data_offset);
 	}
 
-	string& Graph::operator()(const deque<long long>& data, bool data_same) {
+	string& Graph::operator()(const deque<long long>& data, const bool data_same) {
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
@@ -518,12 +518,12 @@ namespace Cpu {
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 
-	string draw(const cpu_info& cpu, bool force_redraw, bool data_same) {
+	string draw(const cpu_info& cpu, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		bool show_temps = (Config::getB("check_temp") and got_sensors);
+		const bool show_temps = (Config::getB("check_temp") and got_sensors);
 		auto single_graph = Config::getB("cpu_single_graph");
-		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+		const bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
 		auto& graph_up_field = Config::getS("cpu_graph_upper");
 		auto& graph_lo_field = Config::getS("cpu_graph_lower");
@@ -755,7 +755,7 @@ namespace Mem {
 	unordered_flat_map<string, Draw::Meter> disk_meters_free;
 	unordered_flat_map<string, Draw::Graph> io_graphs;
 
-	string draw(const mem_info& mem, bool force_redraw, bool data_same) {
+	string draw(const mem_info& mem, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		auto show_swap = Config::getB("show_swap");
@@ -827,7 +827,7 @@ namespace Mem {
 
 						if (io_mode) {
 							//? Create one combined graph for IO read/write if enabled
-							long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 100) << 20;
+							const long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 100) << 20;
 							if (io_graph_combined) {
 								deque<long long> combined(disk.io_read.size(), 0);
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
@@ -850,7 +850,7 @@ namespace Mem {
 					}
 				}
 
-				for (int i = 0; const auto& [name, ignored] : mem.disks) {
+				for (const int i = 0; const auto& [name, ignored] : mem.disks) {
 					if (i * 2 > height - 2) break;
 					disk_meters_used[name] = Draw::Meter{disk_meter, "used"};
 					if (cmp_less_equal(mem.disks.size() * 3, height - 1))
@@ -868,8 +868,8 @@ namespace Mem {
 		int cx = 1, cy = 1;
 		string divider = (graph_height > 0 ? Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
 						+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg") : "");
-		string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
-		bool big_mem = mem_width > 21;
+		const string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
+		const bool big_mem = mem_width > 21;
 
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
@@ -914,7 +914,7 @@ namespace Mem {
 		if (show_disks) {
 			const auto& disks = mem.disks;
 			cx = mem_width; cy = 0;
-			bool big_disk = disks_width >= 25;
+			const bool big_disk = disks_width >= 25;
 			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
 			const string hu_div = Theme::c("div_line") + Symbols::h_line + Theme::c("main_fg");
 			if (io_mode) {
@@ -1009,14 +1009,14 @@ namespace Net {
 	unordered_flat_map<string, Draw::Graph> graphs;
 	string box;
 
-	string draw(const net_info& net, bool force_redraw, bool data_same) {
+	string draw(const net_info& net, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		auto net_sync = Config::getB("net_sync");
 		auto net_auto = Config::getB("net_auto");
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
-		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
+		const string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
 		if (old_ip != ip_addr) {
 			old_ip = ip_addr;
 			redraw = true;
@@ -1125,7 +1125,7 @@ namespace Proc {
 		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
 		auto vim_keys = Config::getB("vim_keys");
 
-		int numpids = Proc::numpids;
+		const int numpids = Proc::numpids;
 		if ((cmd_key == "up" or (vim_keys and cmd_key == "k")) and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
@@ -1162,7 +1162,7 @@ namespace Proc {
 			if (selected > 0) selected = select_max;
 		}
 		else if (cmd_key.starts_with("mousey")) {
-			int mouse_y = std::stoi(cmd_key.substr(6));
+			const int mouse_y = std::stoi(cmd_key.substr(6));
 			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
 		}
 
@@ -1178,11 +1178,13 @@ namespace Proc {
 		return (not changed ? -1 : selected);
 	}
 
-	string draw(const vector<proc_info>& plist, bool force_redraw, bool data_same) {
+	string draw(const vector<proc_info>& plist, const bool force_redraw, const bool data_same) {
 		if (Runner::stopping) return "";
 		auto proc_tree = Config::getB("proc_tree");
-		bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
-		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
+		const bool show_detailed =
+			(Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
+		const bool proc_gradient =
+			(Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
 		auto proc_colors = Config::getB("proc_colors");
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
@@ -1196,7 +1198,7 @@ namespace Proc {
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
 		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
 		auto totalMem = Mem::get_totalMem();
-		int numpids = Proc::numpids;
+		const int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
 		string out;
 		out.reserve(width * height);
@@ -1224,7 +1226,7 @@ namespace Proc {
 
 			//? Detailed box
 			if (show_detailed) {
-				bool alive = detailed.status != "Dead";
+				const bool alive = detailed.status != "Dead";
 				dgraph_x = x;
 				dgraph_width = max(width / 3, width - 121);
 				d_width = width - dgraph_width - 1;
@@ -1303,7 +1305,7 @@ namespace Proc {
 				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
 				+ (filtering ? Theme::c("hi_fg") + ' ' + Symbols::enter : "") + Fx::ub + title_right;
 			if (not filtering) {
-				int f_len = (filter_text.empty() ? 6 : ulen(filter_text) + 2);
+				const int f_len = (filter_text.empty() ? 6 : ulen(filter_text) + 2);
 				Input::mouse_mappings["f"] = {y, x + 10, 1, f_len};
 				if (filter_text.empty() and Input::mouse_mappings.contains("delete"))
 					Input::mouse_mappings.erase("delete");
@@ -1377,7 +1379,7 @@ namespace Proc {
 
 		//? Draw details box if shown
 		if (show_detailed) {
-			bool alive = detailed.status != "Dead";
+			const bool alive = detailed.status != "Dead";
 			const int item_fit = floor((double)(d_width - 2) / 10);
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
@@ -1428,7 +1430,7 @@ namespace Proc {
 		int lc = 0;
 		for (int n=0; auto& p : plist) {
 			if (p.filtered or (proc_tree and p.tree_index == plist.size()) or n++ < start) continue;
-			bool is_selected = (lc + 1 == selected);
+			const bool is_selected = (lc + 1 == selected);
 			if (is_selected) {
 				selected_pid = (int)p.pid;
 				selected_name = p.name;
@@ -1436,7 +1438,7 @@ namespace Proc {
 			}
 
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
-			bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
+			const bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
 			if (show_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
 				if (not has_graph) {
 					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
@@ -1460,13 +1462,14 @@ namespace Proc {
 				out += Theme::c("selected_bg") + Theme::c("selected_fg") + Fx::b;
 			}
 			else {
-				int calc = (selected > lc) ? selected - lc : lc - selected;
+				const int calc = (selected > lc) ? selected - lc : lc - selected;
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
 					array<string, 3> colors;
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
+					for (int i = 0;
+						 const int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
-							int val = (min(v, 100) + 100) - calc * 100 / select_max;
+							const int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
 							else colors[i++] = Theme::g("process").at(clamp(val - 100, 0, 100));
 						}
@@ -1523,7 +1526,7 @@ namespace Proc {
 			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
-				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
+				const double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
 				mem_str = to_string(mem_p);
 				if (mem_str.size() < 4)	mem_str = "0";
 				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
@@ -1550,8 +1553,8 @@ namespace Proc {
 		}
 
 		//? Current selection and number of processes
-		string location = to_string(start + selected) + '/' + to_string(numpids);
-		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
+		const string location = to_string(start + selected) + '/' + to_string(numpids);
+		const string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
 		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
 
@@ -1626,7 +1629,7 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			bool show_temp = (Config::getB("check_temp") and got_sensors);
+			const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 			x = 1;

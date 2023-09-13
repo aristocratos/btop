@@ -64,7 +64,7 @@ namespace Term {
 		struct termios initial_settings;
 
 		//* Toggle terminal input echo
-		bool echo(bool on=true) {
+		bool echo(const bool on = true) {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ECHO;
@@ -73,7 +73,7 @@ namespace Term {
 		}
 
 		//* Toggle need for return key when reading input
-		bool linebuffered(bool on=true) {
+		bool linebuffered(const bool on = true) {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ICANON;
@@ -85,7 +85,7 @@ namespace Term {
 		}
 	}
 
-	bool refresh(bool only_check) {
+	bool refresh(const bool only_check) {
 		struct winsize w;
 		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) return false;
 		if (width != w.ws_col or height != w.ws_row) {
@@ -99,10 +99,10 @@ namespace Term {
 	}
 
 	auto get_min_size(const string& boxes) -> array<int, 2> {
-		bool cpu = boxes.find("cpu") != string::npos;
-		bool mem = boxes.find("mem") != string::npos;
-		bool net = boxes.find("net") != string::npos;
-		bool proc = boxes.find("proc") != string::npos;
+		const bool cpu = boxes.find("cpu") != string::npos;
+		const bool mem = boxes.find("mem") != string::npos;
+		const bool net = boxes.find("net") != string::npos;
+		const bool proc = boxes.find("proc") != string::npos;
 		int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
@@ -206,7 +206,7 @@ namespace Tools {
 		return chars;
 	}
 
-	string uresize(string str, const size_t len, bool wide) {
+	string uresize(string str, const size_t len, const bool wide) {
 		if (len < 1 or str.empty())
 			return "";
 
@@ -293,7 +293,7 @@ namespace Tools {
 		return out;
 	}
 
-	string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string ljust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
@@ -309,7 +309,7 @@ namespace Tools {
 		}
 	}
 
-	string rjust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string rjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
@@ -325,7 +325,7 @@ namespace Tools {
 		}
 	}
 
-	string cjust(string str, const size_t x, bool utf, bool wide, bool limit) {
+	string cjust(string str, const size_t x, const bool utf, const bool wide, const bool limit) {
 		if (utf) {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
@@ -355,10 +355,13 @@ namespace Tools {
 		return (newstr.empty()) ? str : newstr + string{oldstr};
 	}
 
-	string sec_to_dhms(size_t seconds, bool no_days, bool no_seconds) {
-		size_t days = seconds / 86400; seconds %= 86400;
-		size_t hours = seconds / 3600; seconds %= 3600;
-		size_t minutes = seconds / 60; seconds %= 60;
+	string sec_to_dhms(size_t seconds, const bool no_days, const bool no_seconds) {
+		const size_t days = seconds / 86400;
+		seconds %= 86400;
+		const size_t hours = seconds / 3600;
+		seconds %= 3600;
+		const size_t minutes = seconds / 60;
+		seconds %= 60;
 		string out 	= (not no_days and days > 0 ? to_string(days) + "d " : "")
 					+ (hours < 10 ? "0" : "") + to_string(hours) + ':'
 					+ (minutes < 10 ? "0" : "") + to_string(minutes)
@@ -366,10 +369,10 @@ namespace Tools {
 		return out;
 	}
 
-	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
+	string floating_humanizer(uint64_t value, const bool shorten, size_t start, const bool bit, const bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
-		bool mega = Config::getB("base_10_sizes");
+		const bool mega = Config::getB("base_10_sizes");
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
@@ -479,16 +482,16 @@ namespace Tools {
 		return ss.str();
 	}
 
-	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
+	void atomic_wait(const atomic<bool>& atom, const bool old) noexcept {
 		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
 	}
 
-	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
+	void atomic_wait_for(const atomic<bool>& atom, const bool old, const uint64_t wait_ms) noexcept {
 		const uint64_t start_time = time_ms();
 		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
 
-	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
+	atomic_lock::atomic_lock(atomic<bool>& atom, const bool wait) : atom(atom) {
 		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
 	}
@@ -568,8 +571,8 @@ namespace Logger {
 
 	void log_write(const size_t level, const string& msg) {
 		if (loglevel < level or logfile.empty()) return;
-		atomic_lock lck(busy, true);
-		lose_priv neutered{};
+		const atomic_lock lck(busy, true);
+		const lose_priv neutered{};
 		std::error_code ec;
 		try {
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {

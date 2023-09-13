@@ -159,14 +159,14 @@ namespace Theme {
 					return "";
 				}
 			}
-			string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+			const string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 
 			if (hexa.size() == 2) {
-				int h_int = stoi(hexa, nullptr, 16);
+				const int h_int = stoi(hexa, nullptr, 16);
 				if (t_to_256) {
 					return pre + to_string(truecolor_to_256(h_int, h_int, h_int)) + "m";
 				} else {
-					string h_str = to_string(h_int);
+					const string h_str = to_string(h_int);
 					return pre + h_str + ";" + h_str + ";" + h_str + "m";
 				}
 			}
@@ -190,7 +190,7 @@ namespace Theme {
 	}
 
 	string dec_to_color(int r, int g, int b, bool t_to_256, const string& depth) {
-		string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+		const string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
 		r = std::clamp(r, 0, 255);
 		g = std::clamp(g, 0, 255);
 		b = std::clamp(b, 0, 255);
@@ -209,7 +209,7 @@ namespace Theme {
 				}
 
 				if (hexa.size() == 2) {
-					int h_int = stoi(hexa, nullptr, 16);
+					const int h_int = stoi(hexa, nullptr, 16);
 					return array{h_int, h_int, h_int};
 				}
 				else if (hexa.size() == 6) {
@@ -227,7 +227,7 @@ namespace Theme {
 		void generateColors(const unordered_flat_map<string, string>& source) {
 			vector<string> t_rgb;
 			string depth;
-			bool t_to_256 = Config::getB("lowcolor");
+			const bool t_to_256 = Config::getB("lowcolor");
 			colors.clear(); rgbs.clear();
 			for (const auto& [name, color] : Default_theme) {
 				if (name == "main_bg" and not Config::getB("theme_background")) {
@@ -290,7 +290,7 @@ namespace Theme {
 		//* Generate color gradients from two or three colors, 101 values indexed 0-100
 		void generateGradients() {
 			gradients.clear();
-			bool t_to_256 = Config::getB("lowcolor");
+			const bool t_to_256 = Config::getB("lowcolor");
 
 			//? Insert values for processes greyscale gradient and processes color gradient
 			rgbs.insert({
@@ -321,11 +321,11 @@ namespace Theme {
 				if (input_colors[2][0] >= 0) {
 
 					//? Split iteration in two passes of 50 + 51 instead of one pass of 101 if gradient has start, mid and end values defined
-					int current_range = (input_colors[1][0] >= 0) ? 50 : 100;
-					for (int rgb : iota(0, 3)) {
+					const int current_range = (input_colors[1][0] >= 0) ? 50 : 100;
+					for (const int rgb : iota(0, 3)) {
 						int start = 0, offset = 0;
 						int end = (current_range == 50) ? 1 : 2;
-						for (int i : iota(0, 101)) {
+						for (const int i : iota(0, 101)) {
 							output_colors[i][rgb] = input_colors[start][rgb] + (i - offset) * (input_colors[end][rgb] - input_colors[start][rgb]) / current_range;
 
 							//? Switch source arrays from start->mid to mid->end at 50 passes if mid is defined
@@ -360,7 +360,7 @@ namespace Theme {
 				const string base_name = rtrim(c.first, "_start");
 				string section = "_start";
 				int split = colors.at(base_name + "_mid").empty() ? 50 : 33;
-				for (int i : iota(0, 101)) {
+				for (const int i : iota(0, 101)) {
 					gradients[base_name][i] = colors.at(base_name + section);
 					if (i == split) {
 						section = (split == 33) ? "_mid" : "_end";

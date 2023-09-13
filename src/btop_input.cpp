@@ -97,7 +97,7 @@ namespace Input {
 
 			// TODO(pg83): read whole buffer
 			while (cin.get(ch)) {
-				std::lock_guard<std::mutex> g(lock);
+				const std::lock_guard<std::mutex> g(lock);
 				current.push_back(ch);
 				if (current.size() > 100) {
 					current.clear();
@@ -106,7 +106,7 @@ namespace Input {
 		}
 
 		size_t avail() {
-			std::lock_guard<std::mutex> g(lock);
+			const std::lock_guard<std::mutex> g(lock);
 
 			return current.size();
 		}
@@ -115,7 +115,7 @@ namespace Input {
 			std::string res;
 
 			{
-				std::lock_guard<std::mutex> g(lock);
+				const std::lock_guard<std::mutex> g(lock);
 
 				res.swap(current);
 			}
@@ -137,7 +137,7 @@ namespace Input {
 	};
 
 	bool poll(int timeout) {
-		atomic_lock lck(polling);
+		const atomic_lock lck(polling);
 		if (timeout < 1) return InputThr::instance().avail() > 0;
 		while (timeout > 0) {
 			if (interrupt) {
@@ -448,22 +448,26 @@ namespace Input {
 			//? Input actions for cpu box
 			if (Cpu::shown) {
 				bool keep_going = false;
-				bool no_update = true;
+				const bool no_update = true;
 				bool redraw = true;
 				static uint64_t last_press = 0;
 
 				if (key == "+" and Config::getI("update_ms") <= 86399900) {
-					int add = (Config::getI("update_ms") <= 86399000 and last_press >= time_ms() - 200
-						and rng::all_of(Input::history, [](const auto& str){ return str == "+"; })
-						? 1000 : 100);
+					const int add =
+						(Config::getI("update_ms") <= 86399000 and last_press >= time_ms() - 200 and
+								 rng::all_of(Input::history, [](const auto& str) { return str == "+"; })
+							 ? 1000
+							 : 100);
 					Config::set("update_ms", Config::getI("update_ms") + add);
 					last_press = time_ms();
 					redraw = true;
 				}
 				else if (key == "-" and Config::getI("update_ms") >= 200) {
-					int sub = (Config::getI("update_ms") >= 2000 and last_press >= time_ms() - 200
-						and rng::all_of(Input::history, [](const auto& str){ return str == "-"; })
-						? 1000 : 100);
+					const int sub =
+						(Config::getI("update_ms") >= 2000 and last_press >= time_ms() - 200 and
+								 rng::all_of(Input::history, [](const auto& str) { return str == "-"; })
+							 ? 1000
+							 : 100);
 					Config::set("update_ms", Config::getI("update_ms") - sub);
 					last_press = time_ms();
 					redraw = true;
@@ -480,7 +484,7 @@ namespace Input {
 			if (Mem::shown) {
 				bool keep_going = false;
 				bool no_update = true;
-				bool redraw = true;
+				const bool redraw = true;
 
 				if (key == "i") {
 					Config::flip("io_mode");
@@ -502,7 +506,7 @@ namespace Input {
 			if (Net::shown) {
 				bool keep_going = false;
 				bool no_update = true;
-				bool redraw = true;
+				const bool redraw = true;
 
 				if (is_in(key, "b", "n")) {
 					atomic_wait(Runner::active);

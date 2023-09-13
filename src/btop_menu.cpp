@@ -651,7 +651,7 @@ namespace Menu {
 
 	string msgBox::operator()() {
 		string out;
-		int pos = width / 2 - (boxtype == 0 ? 6 : 14);
+		const int pos = width / 2 - (boxtype == 0 ? 6 : 14);
 		auto& first_color = (selected == 0 ? Theme::c("hi_fg") : Theme::c("div_line"));
 		out = Mv::d(1) + Mv::r(pos) + Fx::b + first_color + button_left + (selected == 0 ? Theme::c("title") : Theme::c("main_fg") + Fx::ub)
 			+ (boxtype == 0 ? "    Ok    " : "    Yes    ") + first_color + button_right;
@@ -738,8 +738,7 @@ namespace Menu {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
-			if (int new_select = stoi(key.substr(7)); new_select == selected_signal)
-				goto ChooseEntering;
+			if (const int new_select = stoi(key.substr(7)); new_select == selected_signal) goto ChooseEntering;
 			else
 				selected_signal = new_select;
 		}
@@ -766,7 +765,7 @@ namespace Menu {
 			if (selected_signal == 1) selected_signal = 31;
 			else if (selected_signal < 6) selected_signal += 25;
 			else {
-				bool offset = (selected_signal > 16);
+				const bool offset = (selected_signal > 16);
 				selected_signal -= 5;
 				if (selected_signal <= 16 and offset) selected_signal--;
 			}
@@ -776,7 +775,7 @@ namespace Menu {
 			else if (selected_signal < 1 or selected_signal == 16) selected_signal = 1;
 			else if (selected_signal > 26) selected_signal -= 25;
 			else {
-				bool offset = (selected_signal < 16);
+				const bool offset = (selected_signal < 16);
 				selected_signal += 5;
 				if (selected_signal >= 16 and offset) selected_signal++;
 				if (selected_signal > 31) selected_signal = 31;
@@ -853,12 +852,14 @@ namespace Menu {
 		if (redraw) {
 			atomic_wait(Runner::active);
 			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
-			vector<string> cont_vec = {
-				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend)
-				+ (signalToSend > 0 and signalToSend <= 32 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')' : ""),
+			const vector<string> cont_vec = {
+				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend) +
+					(signalToSend > 0 and signalToSend <= 32
+						 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')'
+						 : ""),
 
-				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid) + Theme::c("main_fg") + " ("
-				+ uresize(p_name, 16) + ')' + Fx::reset,
+				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid) +
+					Theme::c("main_fg") + " (" + uresize(p_name, 16) + ')' + Fx::reset,
 			};
 			messageBox = Menu::msgBox{50, 1, cont_vec, (signalToSend > 1 and signalToSend <= 32 and signalToSend != 17 ? P_Signals.at(signalToSend) : "signal")};
 			Global::overlay = messageBox();
@@ -949,8 +950,7 @@ namespace Menu {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
-			if (int new_select = key.back() - '0'; new_select == selected)
-				goto MainEntering;
+			if (const int new_select = key.back() - '0'; new_select == selected) goto MainEntering;
 			else
 				selected = new_select;
 		}
@@ -1264,7 +1264,8 @@ namespace Menu {
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
 					+ Mv::r(10);
-				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
+				if (const string button_name = "select_cat_" + to_string(i + 1);
+					not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;
 			}
