@@ -170,7 +170,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
-WARNFLAGS			:= -Wall -Wextra -pedantic
+WARNFLAGS			:= -Wall -Wextra -pedantic -Wold-style-cast
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)

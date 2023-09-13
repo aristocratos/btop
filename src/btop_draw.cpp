@@ -208,7 +208,7 @@ namespace Draw {
 			return Fx::ul + " " + Fx::uul;
 		if (limit > 0 and ulen(text) + 1 > limit) {
 			try {
-				const size_t half = (size_t)round((double)limit / 2);
+				const size_t half = round(limit / 2.0);
 				string first;
 
 				if (upos + half > ulen(text))
@@ -366,7 +366,7 @@ namespace Draw {
 		if (not cache.at(value).empty()) return cache.at(value);
 		auto& out = cache.at(value);
 		for (const int& i : iota(1, width + 1)) {
-			int y = round((double)i * 100.0 / width);
+			int y = round(i * 100.0 / width);
 			if (value >= y)
 				out += Theme::g(color_gradient).at(invert ? 100 - y : y) + Symbols::meter;
 			else {
@@ -391,7 +391,7 @@ namespace Draw {
 		}
 
 		//? Horizontal iteration over values in <data>
-		for (const int& i : iota(data_offset, (int)data.size())) {
+		for (const int& i : iota(data_offset, static_cast<int>(data.size()))) {
 			// if (tty_mode and mult and i % 2 != 0) continue;
 			if (not tty_mode and mult) current = not current;
 			if (i < 0) {
@@ -415,7 +415,7 @@ namespace Draw {
 					else if (value <= cur_low)
 						result[ai++] = clamp_min;
 					else {
-						result[ai++] = clamp((int)round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod), clamp_min, 4);
+						result[ai++] = clamp(static_cast<int>(round((value - cur_low) * 4.0 / (cur_high - cur_low) + mod)), clamp_min, 4);
 					}
 				}
 				//? Generate graph symbol from 5x5 2D vector
@@ -462,7 +462,7 @@ namespace Draw {
 
 		if (max_value == 0 and offset > 0) max_value = 100;
 		this->max_value = max_value;
-		const int value_width = (tty_mode ? data.size() : ceil((double)data.size() / 2));
+		const int value_width = (tty_mode ? data.size() : ceil(data.size() / 2.0));
 		int data_offset = (value_width > width) ? data.size() - width * (tty_mode ? 1 : 2) : 0;
 
 		if (not tty_mode and (data.size() - data_offset) % 2 != 0) {
@@ -491,7 +491,7 @@ namespace Draw {
 			else if (graphs.at(current).at(i).at(0) == ' ') graphs.at(current).at(i).erase(0, 1);
 			else graphs.at(current).at(i).erase(0, 3);
 		}
-		this->_create(data, (int)data.size() - 1);
+		this->_create(data, static_cast<int>(data.size()) - 1);
 		return out;
 	}
 
@@ -544,7 +544,7 @@ namespace Cpu {
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
 			mid_line = (not single_graph and graph_up_field != graph_lo_field);
-			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0 ? 1 : 0));
+			graph_up_height = (single_graph ? height - 2 : ceil((height - 2.0) / 2.0) - (mid_line and height % 2 != 0 ? 1 : 0));
 			const int graph_low_height = height - 2 - graph_up_height - (mid_line ? 1 : 0);
 			const int button_y = cpu_bottom ? y + height - 1 : y;
 			out += box;
@@ -558,7 +558,7 @@ namespace Cpu {
 			const string update = to_string(Config::getI("update_ms")) + "ms";
 			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
 				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
-			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
+			Input::mouse_mappings["-"] = {button_y, x + width - static_cast<int>(update.size()) - 7, 1, 2};
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
 
 			//? Graphs & meters
@@ -592,7 +592,7 @@ namespace Cpu {
 				temp_graphs.clear();
 				temp_graphs.emplace_back(5, 1, "temp", cpu.temp.at(0), graph_symbol, false, false, cpu.temp_max, -23);
 				if (not hide_cores and b_column_size > 1) {
-					for (const auto& i : iota((size_t)1, cpu.temp.size())) {
+					for (const auto& i : iota(static_cast<size_t>(1), cpu.temp.size())) {
 						temp_graphs.emplace_back(5, 1, "temp", cpu.temp.at(i), graph_symbol, false, false, cpu.temp_max, -23);
 					}
 				}
@@ -699,7 +699,7 @@ namespace Cpu {
 
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == b_height - 2) and n != Shared::coreCount - 1) {
+			if ((++cy > ceil(static_cast<double>(Shared::coreCount) / b_columns) or cy == b_height - 2) and n != Shared::coreCount - 1) {
 				if (++cc >= b_columns) break;
 				cy = 1; cx = (b_width / b_columns) * cc;
 			}
@@ -714,7 +714,7 @@ namespace Cpu {
 			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { lavg_pre = "L"; }
 			string lavg;
 			for (const auto& val : cpu.load_avg) {
-				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
+				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string(static_cast<int>(round(val))) : to_string(val).substr(0, 4));
 			}
 
 			string lavg_str = lavg_pre + lavg;
@@ -804,8 +804,8 @@ namespace Mem {
 					unordered_flat_map<string, int> custom_speeds;
 					int half_height = 0;
 					if (io_mode) {
-						disks_io_h = max((int)floor((double)(height - 2 - (disk_ios * 2)) / max(1, disk_ios)), (io_graph_combined ? 1 : 2));
-						half_height = ceil((double)disks_io_h / 2);
+						disks_io_h = max(static_cast<int>(floor((height - 2.0 - (disk_ios * 2.0)) / max(1, disk_ios))), (io_graph_combined ? 1 : 2));
+						half_height = ceil(disks_io_h / 2.0);
 
 						if (not Config::getS("io_graph_speeds").empty()) {
 							auto split = ssplit(Config::getS("io_graph_speeds"));
@@ -893,7 +893,7 @@ namespace Mem {
 
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(mem.stats.at(name));
-			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
+			const int offset = max(0, divider.empty() ? 9 - static_cast<int>(humanized.size()) : 0);
 			const string graphics = (use_graphs ? mem_graphs.at(name)(mem.percent.at(name), redraw or data_same) : mem_meters.at(name)(mem.percent.at(name).back()));
 			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
@@ -928,7 +928,7 @@ namespace Mem {
 						+ trans(total) + Fx::ub;
 					if (big_disk) {
 						const string used_percent = to_string(disk.used_percent);
-						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2) - 1) + hu_div + used_percent + '%' + hu_div;
+						out += Mv::to(y + 1 + cy, x + 1 + cx + round(disks_width / 2.0) - round(used_percent.size() / 2.0) - 1) + hu_div + used_percent + '%' + hu_div;
 					}
 					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6)
 						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
@@ -968,7 +968,7 @@ namespace Mem {
 					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
 						+ trans(human_total) + Fx::ub + Theme::c("main_fg");
 					if (big_disk and not human_io.empty())
-						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2) - 1) + hu_div + human_io + hu_div;
+						out += Mv::to(y + 1 + cy, x + 1 + cx + round(disks_width / 2.0) - round(human_io.size() / 2.0) - 1) + hu_div + human_io + hu_div;
 					if (++cy > height - 3) break;
 					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(clamp(disk.io_activity.back(), 50ll, 100ll))
@@ -1025,9 +1025,9 @@ namespace Net {
 		out.reserve(width * height);
 		const string title_left = Theme::c("net_box") + Fx::ub + Symbols::title_left;
 		const string title_right = Theme::c("net_box") + Fx::ub + Symbols::title_right;
-		const int i_size = min((int)selected_iface.size(), 10);
-		const long long down_max = (net_auto ? graph_max.at("download") : ((long long)(Config::getI("net_download")) << 20) / 8);
-		const long long up_max = (net_auto ? graph_max.at("upload") : ((long long)(Config::getI("net_upload")) << 20) / 8);
+		const int i_size = min(static_cast<int>(selected_iface.size()), 10);
+		const long long down_max = (net_auto ? graph_max.at("download") : (static_cast<long long>(Config::getI("net_download")) << 20) / 8);
+		const long long up_max = (net_auto ? graph_max.at("upload") : (static_cast<long long>(Config::getI("net_upload")) << 20) / 8);
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
@@ -1163,7 +1163,7 @@ namespace Proc {
 		}
 		else if (cmd_key.starts_with("mousey")) {
 			int mouse_y = std::stoi(cmd_key.substr(6));
-			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
+			start = clamp(static_cast<int>(round(mouse_y * (numpids - select_max - 2) / (select_max - 2.0))), 0, max(0, numpids - select_max));
 		}
 
 		bool changed = false;
@@ -1269,8 +1269,8 @@ namespace Proc {
 				if (selected == 0) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
 
 				//? Labels
-				const int item_fit = floor((double)(d_width - 2) / 10);
-				const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
+				const int item_fit = floor((d_width - 2) / 10.0);
+				const int item_width = floor((d_width - 2.0) / min(item_fit, 8));
 				out += Mv::to(d_y + 1, d_x + 1) + Fx::b + Theme::c("title")
 										+ cjust("Status:", item_width)
 										+ cjust("Elapsed:", item_width);
@@ -1288,7 +1288,7 @@ namespace Proc {
 
 				out += Theme::c("main_fg") + Fx::ub;
 				const int cmd_size = ulen(detailed.entry.cmd, true);
-				for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
+				for (int num_lines = min(3, static_cast<int>(ceil(cmd_size / (d_width - 5.0)))), i = 0; i < num_lines; i++) {
 					out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
 						+ cjust(luresize(detailed.entry.cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
 				}
@@ -1378,8 +1378,8 @@ namespace Proc {
 		//? Draw details box if shown
 		if (show_detailed) {
 			bool alive = detailed.status != "Dead";
-			const int item_fit = floor((double)(d_width - 2) / 10);
-			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
+			const int item_fit = floor((d_width - 2) / 10.0);
+			const int item_width = floor((d_width - 2.0) / min(item_fit, 8));
 
 			//? Graph part of box
 			string cpu_str = (alive ? to_string(detailed.entry.cpu_p) : "");
@@ -1405,7 +1405,7 @@ namespace Proc {
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
 
-			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
+			const double mem_p = detailed.mem_bytes.back() * 100.0 / totalMem;
 			string mem_str = to_string(mem_p);
 			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
@@ -1430,7 +1430,7 @@ namespace Proc {
 			if (p.filtered or (proc_tree and p.tree_index == plist.size()) or n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
 			if (is_selected) {
-				selected_pid = (int)p.pid;
+				selected_pid = p.pid;
 				selected_name = p.name;
 				selected_depth = p.depth;
 			}
@@ -1464,7 +1464,7 @@ namespace Proc {
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
 					array<string, 3> colors;
-					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
+					for (int i = 0; int v : {static_cast<int>(round(p.cpu_p)), static_cast<int>(round(p.mem * 100.0 / totalMem)), static_cast<int>(p.threads / 3)}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
@@ -1523,17 +1523,17 @@ namespace Proc {
 			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
-				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
+				double mem_p = clamp(p.mem * 100.0 / totalMem, 0.0, 100.0);
 				mem_str = to_string(mem_p);
 				if (mem_str.size() < 4)	mem_str = "0";
 				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 				mem_str += '%';
 			}
-			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
+			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, static_cast<size_t>(9999))), thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
-				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
+				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : llround(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
 		}
@@ -1543,7 +1543,7 @@ namespace Proc {
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
-			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
+			const int scroll_pos = clamp(static_cast<int>(round(static_cast<double>(start) * select_max / (numpids - select_max))), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
 				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
 				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
@@ -1551,8 +1551,8 @@ namespace Proc {
 
 		//? Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
-		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
-		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
+		string loc_clear = Symbols::h_line * max(static_cast<size_t>(0), 9 - location.size());
+		out += Mv::to(y + height - 1, x+width - 3 - max(9, static_cast<int>(location.size()))) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
 
 		//? Clear out left over graphs from dead processes at a regular interval
@@ -1627,12 +1627,12 @@ namespace Draw {
 		if (Cpu::shown) {
 			using namespace Cpu;
 			bool show_temp = (Config::getB("check_temp") and got_sensors);
-			width = round((double)Term::width * width_p / 100);
-			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+			width = round(Term::width * width_p / 100.0);
+			height = max(8, static_cast<int>(ceil(Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100.0)));
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
-			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
+			b_columns = max(1, static_cast<int>(ceil((Shared::coreCount + 1) / (height - 5.0))));
 			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width = (21 + 12 * show_temp) * b_columns - (b_columns - 1);
@@ -1650,10 +1650,10 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
+			b_height = min(height - 2, static_cast<int>(ceil(static_cast<double>(Shared::coreCount) / b_columns)) + 4);
 
 			b_x = x + width - b_width - 1;
-			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
+			b_y = y + ceil((height - 2) / 2.0) - ceil(b_height / 2.0) + 1;
 
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, (cpu_bottom ? "" : "cpu"), (cpu_bottom ? "cpu" : ""), 1);
 
@@ -1669,8 +1669,8 @@ namespace Draw {
 			auto swap_disk = Config::getB("swap_disk");
 			auto mem_graphs = Config::getB("mem_graphs");
 
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+			width = round(Term::width * (Proc::shown ? width_p : 100) / 100.0);
+			height = ceil(Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100.0) + 1;
 			if (height + Cpu::height > Term::height) height = Term::height - Cpu::height;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
@@ -1679,7 +1679,7 @@ namespace Draw {
 				y = cpu_bottom ? 1 : Cpu::height + 1;
 
 			if (show_disks) {
-				mem_width = ceil((double)(width - 3) / 2);
+				mem_width = ceil((width - 3) / 2.0);
 				mem_width += mem_width % 2;
 				disks_width = width - mem_width - 2;
 				divider = x + mem_width;
@@ -1699,7 +1699,7 @@ namespace Draw {
 			if (mem_size == 1) mem_meter += 6;
 
 			if (mem_graphs) {
-				graph_height = max(1, (int)round((double)((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
+				graph_height = max(1, static_cast<int>(round((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height / static_cast<double>(item_height))));
 				if (graph_height > 1) mem_meter += 6;
 			}
 			else
@@ -1724,7 +1724,7 @@ namespace Draw {
 		//* Calculate and draw net box outlines
 		if (Net::shown) {
 			using namespace Net;
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			width = round(Term::width * (Proc::shown ? width_p : 100) / 100.0);
 			height = Term::height - Cpu::height - Mem::height;
 			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
@@ -1736,7 +1736,7 @@ namespace Draw {
 			b_height = (height > 10) ? 9 : height - 2;
 			b_x = x + width - b_width - 1;
 			b_y = y + ((height - 2) / 2) - b_height / 2 + 1;
-			d_graph_height = round((double)(height - 2) / 2);
+			d_graph_height = round((height - 2) / 2.0);
 			u_graph_height = height - 2 - d_graph_height;
 
 			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);

@@ -29,7 +29,7 @@ static UInt32 _strtoul(char *str, int size, int base) {
 		if (base == 16) {
 			total += str[i] << (size - 1 - i) * 8;
 		} else {
-			total += (unsigned char)(str[i] << (size - 1 - i) * 8);
+			total += static_cast<unsigned char>(str[i] << (size - 1 - i) * 8);
 		}
 	}
 	return total;
@@ -38,10 +38,10 @@ static UInt32 _strtoul(char *str, int size, int base) {
 static void _ultostr(char *str, UInt32 val) {
 	str[0] = '\0';
 	snprintf(str, 5, "%c%c%c%c",
-			(unsigned int)val >> 24,
-			(unsigned int)val >> 16,
-			(unsigned int)val >> 8,
-			(unsigned int)val);
+			static_cast<unsigned int>(val) >> 24,
+			static_cast<unsigned int>(val) >> 16,
+			static_cast<unsigned int>(val) >> 8,
+			static_cast<unsigned int>(val));
 }
 
 namespace Cpu {
@@ -77,7 +77,7 @@ namespace Cpu {
 			if (val.dataSize > 0) {
 				if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
 					// convert sp78 value to temperature
-					int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
+					int intValue = val.bytes[0] * 256 + static_cast<unsigned char>(val.bytes[1]);
 					return static_cast<long long>(intValue / 256.0);
 				}
 			}
@@ -93,7 +93,7 @@ namespace Cpu {
 	long long SMCConnection::getTemp(int core) {
 		char key[] = SMC_KEY_CPU_TEMP;
 		if (core >= 0) {
-			if ((size_t)core > MaxIndexCount) {
+			if (static_cast<size_t>(core) > MaxIndexCount) {
 				return -1;
 			}
 			snprintf(key, 5, "TC%1cc", KeyIndexes[core]);

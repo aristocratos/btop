@@ -645,7 +645,7 @@ namespace Menu {
 
 		box_contents = Draw::createBox(x, y, width, height, Theme::c("hi_fg"), true, title) + Mv::d(1);
 		for (const auto& line : content) {
-			box_contents += Mv::save + Mv::r(max((size_t)0, (width / 2) - (Fx::uncolor(line).size() / 2) - 1)) + line + Mv::restore + Mv::d(1);
+			box_contents += Mv::save + Mv::r(max(static_cast<size_t>(0), (width / 2) - (Fx::uncolor(line).size() / 2) - 1)) + line + Mv::restore + Mv::d(1);
 		}
 	}
 
@@ -1034,7 +1034,7 @@ namespace Menu {
 		auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
-				if ((int)cat.size() > max_items) max_items = cat.size();
+				if (static_cast<int>(cat.size()) > max_items) max_items = cat.size();
 			}
 		}
 		if (bg.empty()) {
@@ -1112,7 +1112,7 @@ namespace Menu {
 				return Closed;
 			}
 			else if (mouse_x < x + 30 and mouse_y > y + 8) {
-				auto m_select = ceil((double)(mouse_y - y - 8) / 2) - 1;
+				auto m_select = ceil((mouse_y - y - 8) / 2.0) - 1;
 				if (selected != m_select)
 					selected = m_select;
 				else if (selPred.test(isEditable))
@@ -1154,11 +1154,11 @@ namespace Menu {
 			selected = 0;
 		}
 		else if (key == "tab") {
-			if (++selected_cat >= (int)categories.size()) selected_cat = 0;
+			if (++selected_cat >= static_cast<int>(categories.size())) selected_cat = 0;
 			page = selected = 0;
 		}
 		else if (key == "shift_tab") {
-			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
+			if (--selected_cat < 0) selected_cat = static_cast<int>(categories.size()) - 1;
 			page = selected = 0;
 		}
 		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
@@ -1203,7 +1203,7 @@ namespace Menu {
 				auto& optList = optionsList.at(option).get();
 				int i = v_index(optList, Config::getS(option));
 
-				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
+				if ((key == "right" or (vim_keys and key == "l")) and ++i >= static_cast<int>(optList.size())) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
 				Config::set(option, optList.at(i));
 
@@ -1228,10 +1228,10 @@ namespace Menu {
 			Config::unlock();
 			auto& out = Global::overlay;
 			out = bg;
-			item_height = min((int)categories[selected_cat].size(), (int)floor((double)(height - 4) / 2));
-			pages = ceil((double)categories[selected_cat].size() / item_height);
+			item_height = min(static_cast<int>(categories[selected_cat].size()), (height - 4) / 2);
+			pages = ceil(static_cast<double>(categories[selected_cat].size()) / item_height);
 			if (page > pages - 1) page = pages - 1;
-			select_max = min(item_height - 1, (int)categories[selected_cat].size() - 1 - item_height * page);
+			select_max = min(item_height - 1, static_cast<int>(categories[selected_cat].size()) - 1 - item_height * page);
 			if (selected > select_max) {
 				selected = select_max;
 			}
@@ -1274,9 +1274,9 @@ namespace Menu {
 			}
 			//? Option name and value
 			auto cy = y+9;
-			for (int c = 0, i = max(0, item_height * page); c++ < item_height and i < (int)categories[selected_cat].size(); i++) {
+			for (int c = 0, i = max(0, item_height * page); c++ < item_height and i < static_cast<int>(categories[selected_cat].size()); i++) {
 				const auto& option = categories[selected_cat][i][0];
-				const auto& value = (option == "color_theme" ? (string) fs::path(Config::getS("color_theme")).stem() : Config::getAsString(option));
+				const auto& value = (option == "color_theme" ? fs::path(Config::getS("color_theme")).stem().string() : Config::getAsString(option)); 
 
 				out += Mv::to(cy++, x + 1) + (c-1 == selected ? Theme::c("selected_bg") + Theme::c("selected_fg") : Theme::c("title"))
 					+ Fx::b + cjust(capitalize(s_replace(option, "_", " "))
@@ -1307,7 +1307,7 @@ namespace Menu {
 			}
 
 			if (not warnings.empty()) {
-				messageBox = msgBox{min(78, (int)ulen(warnings) + 10), msgBox::BoxTypes::OK, {uresize(warnings, 74)}, "warning"};
+				messageBox = msgBox{min(78, static_cast<int>(ulen(warnings)) + 10), msgBox::BoxTypes::OK, {uresize(warnings, 74)}, "warning"};
 				out += messageBox();
 			}
 
@@ -1348,10 +1348,10 @@ namespace Menu {
 		int retval = Changed;
 
 		if (redraw) {
-			y = max(1, Term::height/2 - 4 - (int)(help_text.size() / 2));
-			x = Term::width/2 - 39;
-			height = min(Term::height - 6, (int)help_text.size() + 3);
-			pages = ceil((double)help_text.size() / (height - 3));
+			y = max(1, Term::height / 2 - 4 - static_cast<int>(help_text.size()) / 2);
+			x = Term::width / 2 - 39;
+			height = min(Term::height - 6, static_cast<int>(help_text.size()) + 3);
+			pages = ceil(help_text.size() / (height - 3.0));
 			page = 0;
 			bg = Draw::banner_gen(y, 0, true);
 			bg += Draw::createBox(x, y + 6, 78, height, Theme::c("hi_fg"), true, "help");
@@ -1379,7 +1379,7 @@ namespace Menu {
 			}
 			auto cy = y+7;
 			out += Mv::to(cy++, x + 1) + Theme::c("title") + Fx::b + cjust("Key:", 20) + "Description:";
-			for (int c = 0, i = max(0, (height - 3) * page); c++ < height - 3 and i < (int)help_text.size(); i++) {
+			for (int c = 0, i = max(0, (height - 3) * page); c++ < height - 3 and i < static_cast<int>(help_text.size()); i++) {
 				out += Mv::to(cy++, x + 1) + Theme::c("hi_fg") + Fx::b + cjust(help_text[i][0], 20)
 					+ Theme::c("main_fg") + Fx::ub + help_text[i][1];
 			}
@@ -1426,7 +1426,7 @@ namespace Menu {
 				menuMask.set(SizeError);
 			}
 
-			for (const auto& i : iota(0, (int)menuMask.size())) {
+			for (const auto& i : iota(0, static_cast<int>(menuMask.size()))) {
 				if (menuMask.test(i)) currentMenu = i;
 			}
 

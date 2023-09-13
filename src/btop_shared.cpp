@@ -93,7 +93,7 @@ namespace Proc {
 		for (auto& r : proc_vec) {
 			r.entry.get().tree_index = (collapsed or r.entry.get().filtered ? index_max : c_index++);
 			if (not r.children.empty()) {
-				tree_sort(r.children, sorting, reverse, c_index, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == (size_t)index_max));
+				tree_sort(r.children, sorting, reverse, c_index, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == static_cast<size_t>(index_max)));
 			}
 		}
 	}
@@ -130,7 +130,7 @@ namespace Proc {
 			//? Try to find name of the binary file and append to program name if not the same
 			if (cur_proc.short_cmd.empty() and not cur_proc.cmd.empty()) {
 				std::string_view cmd_view = cur_proc.cmd;
-				cmd_view = cmd_view.substr((size_t)0, std::min(cmd_view.find(' '), cmd_view.size()));
+				cmd_view = cmd_view.substr(0, std::min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
 				cur_proc.short_cmd = string{cmd_view};
 			}

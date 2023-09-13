@@ -88,7 +88,7 @@ endif()
 
 # TODO: enable more warnings in coordination with upstream
 target_compile_options(btop PRIVATE
-  -Wall -Wextra -Wpedantic
+  -Wall -Wextra -Wpedantic -Wold-style-cast
   -ftree-vectorize -fstack-clash-protection
 )
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -99,7 +99,7 @@ endif()
 
 if(BTOP_PEDANTIC)
   target_compile_options(btop PRIVATE
-    -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused
+    -Wshadow -Wnon-virtual-dtor -Wcast-align -Wunused
     -Woverloaded-virtual -Wconversion -Wsign-conversion -Wdouble-promotion
     -Wformat=2 -Wimplicit-fallthrough -Weffc++
   )

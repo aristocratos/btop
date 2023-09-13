@@ -118,7 +118,7 @@ namespace Term {
 
 	bool init() {
 		if (not initialized) {
-			initialized = (bool)isatty(STDIN_FILENO);
+			initialized = isatty(STDIN_FILENO) == 1;
 			if (initialized) {
 				tcgetattr(STDIN_FILENO, &initial_settings);
 				current_tty = (ttyname(STDIN_FILENO) != nullptr ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
@@ -243,7 +243,7 @@ namespace Tools {
 		for (size_t x = 0, last_pos = 0, i = str.size() - 1; i > 0 ; i--) {
 			if (wide and static_cast<unsigned char>(str.at(i)) > 0xef) {
 				x += 2;
-				last_pos = max((size_t)0, i - 1);
+				last_pos = max(static_cast<size_t>(0), i - 1);
 			}
 			else if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) {
 				x++;
@@ -298,14 +298,14 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return str + string(max((int)(x - ulen(str)), 0), ' ');
+			return str + string(max(static_cast<int>(x - ulen(str)), 0), ' ');
 		}
 		else {
 			if (limit and str.size() > x) {
 				str.resize(x);
 				return str;
 			}
-			return str + string(max((int)(x - str.size()), 0), ' ');
+			return str + string(max(static_cast<int>(x - str.size()), 0), ' ');
 		}
 	}
 
@@ -314,14 +314,14 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return string(max((int)(x - ulen(str)), 0), ' ') + str;
+			return string(max(static_cast<int>(x - ulen(str)), 0), ' ') + str;
 		}
 		else {
 			if (limit and str.size() > x) {
 				str.resize(x);
 				return str;
 			};
-			return string(max((int)(x - str.size()), 0), ' ') + str;
+			return string(max(static_cast<int>(x - str.size()), 0), ' ') + str;
 		}
 	}
 
@@ -330,14 +330,14 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
+			return string(max(static_cast<int>(ceil(static_cast<double>(x - ulen(str)) / 2)), 0), ' ') + str + string(max(static_cast<int>(floor((x - ulen(str)) / 2)), 0), ' ');
 		}
 		else {
 			if (limit and str.size() > x) {
 				str.resize(x);
 				return str;
 			}
-			return string(max((int)ceil((double)(x - str.size()) / 2), 0), ' ') + str + string(max((int)floor((double)(x - str.size()) / 2), 0), ' ');
+			return string(max(static_cast<int>(ceil((x - str.size()) / 2.0)), 0), ' ') + str + string(max(static_cast<int>(floor((x - str.size()) / 2.0)), 0), ' ');
 		}
 	}
 
@@ -440,10 +440,10 @@ namespace Tools {
 				out = to_string(round(stod(out) * 10) / 10).substr(0,3);
 			}
 			else if (f_pos != string::npos) {
-				out = to_string((int)round(stod(out)));
+				out = to_string(round(stod(out)));
 			}
 			if (out.size() > 3) {
-				out = to_string((int)(out[0] - '0')) + ".0";
+				out = to_string((out[0] - '0')) + ".0";
 				start++;
 			}
 			out.push_back(units[start][0]);
@@ -515,11 +515,11 @@ namespace Tools {
 		if (scale == "celsius")
 			return {celsius, "°C"};
 		else if (scale == "fahrenheit")
-			return {(long long)round((double)celsius * 1.8 + 32), "°F"};
+			return {round(celsius * 1.8 + 32), "°F"};
 		else if (scale == "kelvin")
-			return {(long long)round((double)celsius + 273.15), "K "};
+			return {round(celsius + 273.15), "K "};
 		else if (scale == "rankine")
-			return {(long long)round((double)celsius * 1.8 + 491.67), "°R"};
+			return {round(celsius * 1.8 + 491.67), "°R"};
 		return {0, ""};
 	}
 

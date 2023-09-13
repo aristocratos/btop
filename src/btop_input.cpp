@@ -16,19 +16,21 @@ indent = tab
 tab-size = 4
 */
 
+#include <charconv>
+#include <csignal>
 #include <iostream>
-#include <ranges>
-#include <vector>
-#include <thread>
 #include <mutex>
-#include <signal.h>
+#include <ranges>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
-#include "btop_input.hpp"
-#include "btop_tools.hpp"
 #include "btop_config.hpp"
-#include "btop_shared.hpp"
-#include "btop_menu.hpp"
 #include "btop_draw.hpp"
+#include "btop_input.hpp"
+#include "btop_menu.hpp"
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
 
 
 using std::cin;
@@ -190,8 +192,10 @@ namespace Input {
 				if (not key.empty()) {
 					try {
 						const auto delim = key_view.find(';');
-						mouse_pos[0] = stoi((string)key_view.substr(0, delim));
-						mouse_pos[1] = stoi((string)key_view.substr(delim + 1, key_view.find('M', delim)));
+						auto result = std::from_chars(key_view.data(), key_view.data() + delim, mouse_pos[0]);
+						if (result.ec == std::errc::invalid_argument) { throw std::invalid_argument(""); }
+						result = std::from_chars(key_view.data() + delim + 1, key_view.data() + key_view.find('M', delim + 1), mouse_pos[1]);
+						if (result.ec == std::errc::invalid_argument) { throw std::invalid_argument(""); }
 					}
 					catch (const std::invalid_argument&) { mouse_event.clear(); }
 					catch (const std::out_of_range&) { mouse_event.clear(); }
@@ -271,7 +275,7 @@ namespace Input {
 				}
 				else if (is_in(key, "p", "P") and Config::preset_list.size() > 1) {
 					if (key == "p") {
-						if (++Config::current_preset >= (int)Config::preset_list.size()) Config::current_preset = 0;
+						if (++Config::current_preset >= static_cast<int>(Config::preset_list.size())) Config::current_preset = 0;
 					}
 					else {
 						if (--Config::current_preset < 0) Config::current_preset = Config::preset_list.size() - 1;
@@ -507,12 +511,12 @@ namespace Input {
 				if (is_in(key, "b", "n")) {
 					atomic_wait(Runner::active);
 					int c_index = v_index(Net::interfaces, Net::selected_iface);
-					if (c_index != (int)Net::interfaces.size()) {
+					if (c_index != static_cast<int>(Net::interfaces.size())) {
 						if (key == "b") {
 							if (--c_index < 0) c_index = Net::interfaces.size() - 1;
 						}
 						else if (key == "n") {
-							if (++c_index == (int)Net::interfaces.size()) c_index = 0;
+							if (++c_index == static_cast<int>(Net::interfaces.size())) c_index = 0;
 						}
 						Net::selected_iface = Net::interfaces.at(c_index);
 						Net::rescale = true;

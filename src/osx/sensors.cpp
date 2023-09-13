@@ -83,7 +83,7 @@ long long Cpu::ThermalSensors::getSensors() {
 	if (matchingsrvs) {
 		long count = CFArrayGetCount(matchingsrvs);
 		for (int i = 0; i < count; i++) {
-			IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
+			IOHIDServiceClientRef sc = reinterpret_cast<IOHIDServiceClientRef>(const_cast<void*>(CFArrayGetValueAtIndex(matchingsrvs, i)));
 			if (sc) {
 				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
 				if (name) {

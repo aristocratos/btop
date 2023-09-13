@@ -140,12 +140,12 @@ namespace Theme {
 		//* Convert 24-bit colors to 256 colors
 		int truecolor_to_256(const int& r, const int& g, const int& b) {
 			//? Use upper 232-255 greyscale values if the downscaled red, green and blue are the same value
-			if (const int red = round((double)r / 11); red == round((double)g / 11) and red == round((double)b / 11)) {
-				return 232 + red;
+			if (r == g && g == b) {
+				return 232 + round(r / 11.0);
 			}
 			//? Else use 6x6x6 color cube to calculate approximate colors
 			else {
-				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
+				return lround(r / 51.0) * 36 + lround(g / 51.0) * 6 + lround(b / 51.0) + 16;
 			}
 		}
 	}

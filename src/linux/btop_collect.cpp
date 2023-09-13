@@ -339,11 +339,11 @@ namespace Cpu {
 					const int64_t temp = stol(readfile(basepath / "temp", "0")) / 1000;
 
 					int64_t high, crit;
-					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
-						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
+					for (int ii = 0; fs::exists(basepath / ("trip_point_" + to_string(ii) + "_temp")); ii++) {
+						const string trip_type = readfile(basepath / ("trip_point_" + to_string(ii) + "_type"));
 						if (not is_in(trip_type, "high", "critical")) continue;
 						auto& val = (trip_type == "high" ? high : crit);
-						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+						val = stol(readfile(basepath / ("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
 					}
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
@@ -444,12 +444,12 @@ namespace Cpu {
 				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
 			if (hz >= 1000) {
-				if (hz >= 10000) cpuhz = to_string((int)round(hz / 1000)); // Future proof until we reach THz speeds :)
+				if (hz >= 10000) cpuhz = to_string(round(hz / 1000)); // Future proof until we reach THz speeds :)
 				else cpuhz = to_string(round(hz / 100) / 10.0).substr(0, 3);
 				cpuhz += " GHz";
 			}
 			else if (hz > 0)
-				cpuhz = to_string((int)round(hz)) + " MHz";
+				cpuhz = to_string(round(hz)) + " MHz";
 
 		}
 		catch (const std::exception& e) {
@@ -495,7 +495,7 @@ namespace Cpu {
 
 		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
-			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
+			if (Shared::coreCount % 2 == 0 and static_cast<long>(core_map.size()) == Shared::coreCount / 2) {
 				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
 					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
 					core_map[Shared::coreCount / 2 + i] = n++;
@@ -649,7 +649,7 @@ namespace Cpu {
 		if (not is_in(status, "charging", "full")) {
 			if (b.use_energy and not b.power_now.empty()) {
 				try {
-					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+					seconds = round(static_cast<double>(stoll(readfile(b.energy_now, "0"))) / stoll(readfile(b.power_now, "1")) * 3600);
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
@@ -744,14 +744,14 @@ namespace Cpu {
 						cpu_old.at("idles") = idles;
 
 						//? Total usage of cpu
-						cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+						cpu.cpu_percent.at("total").push_back(clamp(llround((calc_totals - calc_idles) * 100.0 / calc_totals), 0ll, 100ll));
 
 						//? Reduce size if there are more values than needed for graph
 						while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
 						//? Populate cpu.cpu_percent with all fields from stat
 						for (int ii = 0; const auto& val : times) {
-							cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+							cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp(llround((val - cpu_old.at(time_names.at(ii))) * 100.0 / calc_totals), 0ll, 100ll));
 							cpu_old.at(time_names.at(ii)) = val;
 
 							//? Reduce size if there are more values than needed for graph
@@ -774,7 +774,7 @@ namespace Cpu {
 						core_old_totals.at(i-1) = totals;
 						core_old_idles.at(i-1) = idles;
 
-						cpu.core_percent.at(i-1).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+						cpu.core_percent.at(i-1).push_back(clamp(llround((calc_totals - calc_idles) * 100.0 / calc_totals), 0ll, 100ll));
 					}
 				}
 
@@ -913,13 +913,13 @@ namespace Mem {
 
 		//? Calculate percentages
 		for (const auto& name : mem_names) {
-			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / totalMem));
+			mem.percent.at(name).push_back(round(mem.stats.at(name) * 100.0 / totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
 			for (const auto& name : swap_names) {
-				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+				mem.percent.at(name).push_back(round(mem.stats.at(name) * 100.0 / mem.stats.at("swap_total")));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
 			}
 			has_swap = true;
@@ -1031,12 +1031,13 @@ namespace Mem {
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
+								const std::string_view dev_stat_path {"sys/block/" + devname + "/stat"};
 								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
+									if (fs::exists(dev_stat_path, ec) and access(dev_stat_path.data(), R_OK) == 0) {
 										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
 											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
 										else
-											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+											disks.at(mountpoint).stat = dev_stat_path;
 										break;
 									//? Set ZFS stat filepath
 									} else if (fstype == "zfs") {
@@ -1091,7 +1092,7 @@ namespace Mem {
 					disk.total = vfs.f_blocks * vfs.f_frsize;
 					disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
 					disk.used = disk.total - disk.free;
-					disk.used_percent = round((double)disk.used * 100 / disk.total);
+					disk.used_percent = round(disk.used * 100.0 / disk.total);
 					disk.free_percent = 100 - disk.used_percent;
 				}
 
@@ -1154,7 +1155,7 @@ namespace Mem {
 							if (disk.io_write.empty())
 								disk.io_write.push_back(0);
 							else
-								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1))));
+								disk.io_write.push_back(max(static_cast<int64_t>(0), sectors_write - disk.old_io.at(1)));
 							disk.old_io.at(1) = sectors_write;
 							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
@@ -1169,14 +1170,14 @@ namespace Mem {
 							if (disk.io_read.empty())
 								disk.io_read.push_back(0);
 							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+								disk.io_read.push_back(max(static_cast<int64_t>(0), sectors_read - disk.old_io.at(0)));
 							disk.old_io.at(0) = sectors_read;
 							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
 							if (disk.io_activity.empty())
 								disk.io_activity.push_back(0);
 							else
-								disk.io_activity.push_back(max((int64_t)0, (io_ticks - disk.old_io.at(2))));
+								disk.io_activity.push_back(max(static_cast<int64_t>(0), io_ticks - disk.old_io.at(2)));
 							disk.old_io.at(2) = io_ticks;
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						} else {
@@ -1185,7 +1186,7 @@ namespace Mem {
 							if (disk.io_read.empty())
 								disk.io_read.push_back(0);
 							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
+								disk.io_read.push_back(max(static_cast<int64_t>(0), (sectors_read - disk.old_io.at(0)) * 512));
 							disk.old_io.at(0) = sectors_read;
 							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
@@ -1194,7 +1195,7 @@ namespace Mem {
 							if (disk.io_write.empty())
 								disk.io_write.push_back(0);
 							else
-								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
+								disk.io_write.push_back(max(static_cast<int64_t>(0), (sectors_write - disk.old_io.at(1)) * 512));
 							disk.old_io.at(1) = sectors_write;
 							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
@@ -1203,7 +1204,7 @@ namespace Mem {
 							if (disk.io_activity.empty())
 								disk.io_activity.push_back(0);
 							else
-								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+								disk.io_activity.push_back(clamp(llround(static_cast<double>(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10.0), 0ll, 100ll));
 							disk.old_io.at(2) = io_ticks;
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						}
@@ -1330,21 +1331,21 @@ namespace Mem {
 		if (disk.io_write.empty())
 			disk.io_write.push_back(0);
 		else
-			disk.io_write.push_back(max((int64_t)0, (bytes_write_total - disk.old_io.at(1))));
+			disk.io_write.push_back(max(static_cast<int64_t>(0), bytes_write_total - disk.old_io.at(1)));
 		disk.old_io.at(1) = bytes_write_total;
 		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
 
 		if (disk.io_read.empty())
 			disk.io_read.push_back(0);
 		else
-			disk.io_read.push_back(max((int64_t)0, (bytes_read_total - disk.old_io.at(0))));
+			disk.io_read.push_back(max(static_cast<int64_t>(0), bytes_read_total - disk.old_io.at(0)));
 		disk.old_io.at(0) = bytes_read_total;
 		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
 		if (disk.io_activity.empty())
 			disk.io_activity.push_back(0);
 		else
-			disk.io_activity.push_back(max((int64_t)0, (io_ticks_total - disk.old_io.at(2))));
+			disk.io_activity.push_back(max(static_cast<int64_t>(0), (io_ticks_total - disk.old_io.at(2))));
 		disk.old_io.at(2) = io_ticks_total;
 		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 
@@ -1452,7 +1453,7 @@ namespace Net {
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
 					uint64_t val{}; // defaults to 0
-					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
+					try { val = stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 
@@ -1461,11 +1462,11 @@ namespace Net {
 						saved_stat.rollover += saved_stat.last;
 						saved_stat.last = 0;
 					}
-					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+					if (cmp_greater(static_cast<uint64_t>(saved_stat.rollover) + static_cast<uint64_t>(val), numeric_limits<uint64_t>::max())) {
 						saved_stat.rollover = 0;
 						saved_stat.last = 0;
 					}
-					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
+					saved_stat.speed = round(static_cast<double>(val - saved_stat.last) / (new_timestamp - timestamp) / 1000.0);
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
 					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
 					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
@@ -1544,7 +1545,7 @@ namespace Net {
 						const long long avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
 							? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
 							: net[selected_iface].stat[dir].speed);
-						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
+						graph_max[dir] = max(static_cast<uint64_t>(avg_speed * (sel == 0 ? 1.3 : 3.0)), static_cast<uint64_t>(10) << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
 						redraw = true;
 						if (net_sync) sync = true;
@@ -1602,7 +1603,7 @@ namespace Proc {
 
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
-		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
+		detailed.cpu_percent.push_back(clamp(llround(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
@@ -1651,7 +1652,7 @@ namespace Proc {
 			detailed.memory = floating_humanizer(detailed.entry.mem);
 		}
 		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
-			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
+			detailed.first_mem = min(static_cast<uint64_t>(detailed.mem_bytes.back()) * 2, Mem::get_totalMem());
 			redraw = true;
 		}
 
@@ -1934,10 +1935,10 @@ namespace Proc {
 				}
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
+				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max(static_cast<uint64_t>(1), cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
+				new_proc.cpu_c = cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
 
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
@@ -2051,7 +2052,7 @@ namespace Proc {
 			}
 		}
 
-		numpids = (int)current_procs.size() - filter_found;
+		numpids = current_procs.size() - filter_found;
 
 		return current_procs;
 	}

@@ -56,7 +56,6 @@ using std::cout;
 using std::flush;
 using std::min;
 using std::string;
-using std::string_view;
 using std::to_string;
 using std::vector;
 
@@ -753,9 +752,9 @@ int main(int argc, char **argv) {
 	if (argc > 1) argumentParser(argc, argv);
 
 	//? Setup paths for config, log and user themes
-	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (std::getenv(env) != nullptr and access(std::getenv(env), W_OK) != -1) {
-			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
+	for (const std::string_view env : {"XDG_CONFIG_HOME", "HOME"}) {
+		if (std::getenv(env.data()) != nullptr and access(std::getenv(env.data()), W_OK) != -1) {
+			Config::conf_dir = fs::path(std::getenv(env.data())) / ((env.compare("HOME") == 0) ? ".config/btop" : "btop");
 			break;
 		}
 	}
@@ -821,15 +820,15 @@ int main(int argc, char **argv) {
 	}
 
 	//? Try to find and set a UTF-8 locale
-	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
-	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
-		Logger::debug("Using locale " + (string)std::setlocale(LC_ALL, ""));
+	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains(std::setlocale(LC_ALL, ""), ";")
+	and str_to_upper(s_replace(std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
+		Logger::debug("Using locale " + static_cast<string>(std::setlocale(LC_ALL, "")));
 	}
 	else {
 		string found;
 		bool set_failure{}; // defaults to false
 		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
-			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
+			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace(std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
 				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
 					set_failure = true;
@@ -858,7 +857,7 @@ int main(int argc, char **argv) {
 	#ifdef __APPLE__
 		if (found.empty()) {
 			CFLocaleRef cflocale = CFLocaleCopyCurrent();
-			CFStringRef id_value = (CFStringRef)CFLocaleGetValue(cflocale, kCFLocaleIdentifier);
+			CFStringRef id_value = static_cast<CFStringRef>(CFLocaleGetValue(cflocale, kCFLocaleIdentifier));
 			auto loc_id = CFStringGetCStringPtr(id_value, kCFStringEncodingUTF8);
 			CFRelease(cflocale);
 			std::string cur_locale = (loc_id != nullptr ? loc_id : "");
@@ -951,7 +950,7 @@ int main(int argc, char **argv) {
 	//? Calculate sizes of all boxes
 	Config::presetsValid(Config::getS("presets"));
 	if (Global::arg_preset >= 0) {
-		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
+		Config::current_preset = min(Global::arg_preset, static_cast<int>(Config::preset_list.size()) - 1);
 		Config::apply_preset(Config::preset_list.at(Config::current_preset));
 	}
 
@@ -1020,7 +1019,7 @@ int main(int argc, char **argv) {
 					future_time = current_time;
 
 				//? Poll for input and process any input detected
-				else if (Input::poll(min((uint64_t)1000, future_time - current_time))) {
+				else if (Input::poll(min(static_cast<uint64_t>(1000), future_time - current_time))) {
 					if (not Runner::active) Config::unlock();
 
 					if (Menu::active) Menu::process(Input::get());
