@@ -107,6 +107,8 @@ namespace Config {
 
 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
+		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
+
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
@@ -268,6 +270,7 @@ namespace Config {
 		{"lowcolor", false},
 		{"show_detailed", false},
 		{"proc_filtering", false},
+		{"proc_aggregate", false},
 	};
 	unordered_flat_map<std::string_view, bool> boolsTmp;
 
