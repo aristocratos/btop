@@ -167,6 +167,13 @@ else
 	LTO := $(THREADS)
 endif
 
+#? Enable journald direct logging
+ifeq ($(ENABLE_JOURNALD),true)
+	override ADDFLAGS += $(shell echo "int main() {}" | $(CXX) -include "systemd/sd-journal.h" -lsystemd -o /dev/null -x c++ - >/dev/null 2>&1 && echo "-DHAVE_JOURNALD -lsystemd")
+else ifeq ($(ENABLE_SYSLOG),true)
+	override ADDFLAGS += $(strip $(shell echo "int main() {}" | $(CXX) -include "syslog.h" -o /dev/null -x c++ - >/dev/null 2>&1 && echo "-DHAVE_SYSLOG"))
+endif
+
 #? The Directories, Source, Includes, Objects and Binary
 SRCDIR		:= src
 INCDIRS		:= include $(wildcard lib/**/include)

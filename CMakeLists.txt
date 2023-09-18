@@ -36,6 +36,8 @@ include(CMakeDependentOption)
 option(BTOP_STATIC "Link btop statically" OFF)
 option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
+option(BTOP_SYSLOG "Log with syslog instead of log file" OFF)
+option(BTOP_JOURNALD "Directly log to journald instead of log file" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
@@ -60,6 +62,7 @@ add_executable(btop
   src/btop_config.cpp
   src/btop_draw.cpp
   src/btop_input.cpp
+  src/btop_log.cpp
   src/btop_menu.cpp
   src/btop_shared.cpp
   src/btop_theme.cpp
@@ -180,6 +183,22 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(btop PRIVATE Threads::Threads)
+
+# Logging
+if(BTOP_JOURNALD)
+  find_package(Systemd REQUIRED)
+  target_compile_definitions(btop PRIVATE HAVE_JOURNALD)
+  target_link_libraries(btop PRIVATE Systemd::Journald)
+  message(STATUS "Using journald as logging backend")
+elseif(BTOP_SYSLOG)
+  check_include_file_cxx("syslog.h" HAVE_SYSLOG)
+  if(HAVE_SYSLOG)
+    target_compile_definitions(btop PRIVATE HAVE_SYSLOG)
+    message(STATUS "Using syslog as logging backend")
+  endif()
+else()
+  message(STATUS "Using plain log file")
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   target_link_libraries(btop PRIVATE $<LINK_LIBRARY:FRAMEWORK,CoreFoundation)
