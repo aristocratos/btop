@@ -18,7 +18,7 @@ namespace fs = std::filesystem;
 
 namespace Logger {
 	using namespace Tools;
-	std::atomic<bool> busy(false);
+	std::mutex log_mtx {};
 	bool first = true;
 	const string tdf = "%Y/%m/%d (%T) | ";
 
@@ -48,7 +48,7 @@ namespace Logger {
 		if (loglevel < level or logfile.empty()) {
 			return;
 		}
-		atomic_lock lck(busy, true);
+		std::lock_guard lock {log_mtx};
 		lose_priv neutered{};
 		std::error_code ec;
 		try {
