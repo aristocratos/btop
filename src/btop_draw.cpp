@@ -295,7 +295,7 @@ namespace Draw {
 	}
 
 	bool update_clock(bool force) {
-		const auto& clock_format = Config::getS("clock_format");
+		const std::string_view clock_format = Config::getS("clock_format");
 		if (not Cpu::shown or clock_format.empty()) {
 			if (clock_format.empty() and not Global::clock.empty()) Global::clock.clear();
 			return false;

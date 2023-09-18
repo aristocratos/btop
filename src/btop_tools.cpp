@@ -18,13 +18,15 @@ tab-size = 4
 
 #include <cmath>
 #include <codecvt>
-#include <iostream>
-#include <fstream>
 #include <ctime>
-#include <sstream>
+#include <fstream>
 #include <iomanip>
-#include <utility>
+#include <iostream>
 #include <ranges>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
 
 #include <unistd.h>
 #include <termios.h>
@@ -485,11 +487,11 @@ namespace Tools {
 		return new_str;
 	}
 
-	string strf_time(const string& strf) {
+	string strf_time(const std::string_view strf) {
 		auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 		std::tm bt {};
 		std::stringstream ss;
-		ss << std::put_time(localtime_r(&in_time_t, &bt), strf.c_str());
+		ss << std::put_time(localtime_r(&in_time_t, &bt), strf.data());
 		return ss.str();
 	}
 

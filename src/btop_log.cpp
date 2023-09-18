@@ -27,10 +27,10 @@ namespace Logger {
 	using namespace Tools;
 	std::mutex log_mtx{};
 	bool first = true;
-	const string tdf = "%Y/%m/%d (%T) | ";
 
 	size_t loglevel;
 	fs::path logfile;
+	constexpr const std::string_view tdf = "%Y/%m/%d (%T) | ";
 
 	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
 	class lose_priv {

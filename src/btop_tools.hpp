@@ -26,6 +26,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -303,7 +304,7 @@ namespace Tools {
 	std::string operator*(const string& str, int64_t n);
 
 	//* Return current time in <strf> format
-	string strf_time(const string& strf);
+	string strf_time(const std::string_view strf);
 
 	string hostname();
 	string username();
