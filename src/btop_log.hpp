@@ -21,7 +21,7 @@ namespace Logger {
 	extern std::filesystem::path logfile;
 
 	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const std::string& level);
+	void set(const std::string& level) noexcept;
 
 	void log(const size_t level, const std::string_view msg, const std::source_location location);
 

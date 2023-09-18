@@ -21,35 +21,42 @@
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
-namespace fs = std::filesystem;
-
 namespace Logger {
 	using namespace Tools;
-	std::mutex log_mtx{};
-	bool first = true;
 
 	size_t loglevel;
-	fs::path logfile;
-	constexpr const std::string_view tdf = "%Y/%m/%d (%T) | ";
+	std::mutex log_mtx{};
 
-	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
-	class lose_priv {
+#if !(defined(HAVE_JOURNALD) || defined(HAVE_SYSLOG))
+	namespace fs = std::filesystem;
+	fs::path logfile;
+	std::once_flag log_file_header{};
+	constexpr const std::string_view tdf = "%Y/%m/%d (%T) | ";
+#endif
+
+	// Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
+	class DropPrivileges {
 		int status = -1;
 
 	public:
-		lose_priv() {
+		DropPrivileges() noexcept {
 			if (geteuid() != Global::real_uid) {
 				this->status = seteuid(Global::real_uid);
 			}
 		}
-		~lose_priv() {
+		~DropPrivileges() noexcept {
 			if (status == 0) {
 				status = seteuid(Global::set_uid);
 			}
 		}
+
+		DropPrivileges(DropPrivileges&) = delete;
+		DropPrivileges& operator=(DropPrivileges&) = delete;
+		DropPrivileges(DropPrivileges&&) = delete;
+		DropPrivileges&& operator=(DropPrivileges&&) = delete;
 	};
 
-	void set(const string& level) { loglevel = v_index(log_levels, level); }
+	void set(const string& level) noexcept { loglevel = v_index(log_levels, level); }
 
 	void log(const size_t level, const std::string_view msg, [[maybe_unused]] const std::source_location location) {
 		if (loglevel < level) {
@@ -57,7 +64,7 @@ namespace Logger {
 		}
 
 		std::lock_guard lock{log_mtx};
-		lose_priv neutered{};
+		DropPrivileges neutered{};
 
 #if defined(HAVE_JOURNALD) || defined(HAVE_SYSLOG)
 		int status = LOG_DEBUG;
@@ -101,10 +108,9 @@ namespace Logger {
 			}
 			if (not ec) {
 				std::ofstream lwrite(logfile, std::ios::app);
-				if (first) {
-					first = false;
+				std::call_once(log_file_header, [&lwrite] {
 					fmt::print(lwrite, "\n{}===> btop++ v.{}\n", strf_time(tdf), Global::Version);
-				}
+				});
 				fmt::print(lwrite, "{}{}: {}\n", strf_time(tdf), log_levels.at(level), msg);
 			}
 			else {

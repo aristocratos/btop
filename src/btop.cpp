@@ -847,7 +847,9 @@ int main(int argc, char **argv) {
 		}
 		else {
 			Config::conf_file = Config::conf_dir / "btop.conf";
+#if !(defined(HAVE_JOURNALD) || defined(HAVE_SYSLOG))
 			Logger::logfile = Config::conf_dir / "btop.log";
+#endif
 			Theme::user_theme_dir = Config::conf_dir / "themes";
 			if (not fs::exists(Theme::user_theme_dir) and not fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
 		}
