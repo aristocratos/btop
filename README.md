@@ -1053,6 +1053,13 @@ optional arguments:
                         and screen draw functions and sets loglevel to DEBUG
 ```
 
+It's also possible to specify a log level using the `BTOP_LOG_LEVEL` environment variable.
+It takes the same values as the `log_level` configuation option + "DISABLED", being case insensitive.
+```bash
+BTOP_LOG_LEVEL=info btop
+```
+will launch btop with the info logging level.
+
 ## LICENSE
 
 [Apache License 2.0](LICENSE)

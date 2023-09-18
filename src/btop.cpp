@@ -880,19 +880,32 @@ int main(int argc, char **argv) {
 	}
 
 	//? Config init
-	{	vector<string> load_warnings;
+	{
+		vector<string> load_warnings;
 		Config::load(Config::conf_file, load_warnings);
 
 		if (Config::current_boxes.empty()) Config::check_boxes(Config::getS("shown_boxes"));
 		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
 
+		std::string log_level_env {};
+		{
+			char* log_env = std::getenv("BTOP_LOG_LEVEL");
+			if (log_env != nullptr) {
+				log_level_env = Tools::str_to_upper(log_env);
+			}
+		}
 		if (Global::debug) {
 			Logger::set("DEBUG");
 			Logger::debug("Starting in DEBUG mode!");
 		}
-		else Logger::set(Config::getS("log_level"));
-
-		Logger::info("Logger set to {}", (Global::debug ? "DEBUG" : Config::getS("log_level")));
+		else if (v_contains(Logger::log_levels, log_level_env)) {
+			Logger::set(log_level_env);
+			Logger::info("Log level set to {}", log_level_env);
+		}
+		else {
+			Logger::set(Config::getS("log_level"));
+			Logger::info("Log level set to {}", Config::getS("log_level"));
+		}
 
 		for (const auto& err_str : load_warnings) Logger::warning("{}", err_str);
 	}
