@@ -175,7 +175,7 @@ void term_resize(bool force) {
 	static atomic<bool> resizing (false);
 	if (Input::polling) {
 		Global::resized = true;
-		Input::interrupt = true;
+		Input::interrupt();
 		return;
 	}
 	atomic_lock lck(resizing, true);
@@ -234,7 +234,7 @@ void term_resize(bool force) {
 		else if (not Term::refresh()) break;
 	}
 
-	Input::interrupt = true;
+	Input::interrupt();
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
@@ -304,7 +304,7 @@ void _signal_handler(const int sig) {
 			if (Runner::active) {
 				Global::should_quit = true;
 				Runner::stopping = true;
-				Input::interrupt = true;
+				Input::interrupt();
 			}
 			else {
 				clean_quit(0);
@@ -314,7 +314,7 @@ void _signal_handler(const int sig) {
 			if (Runner::active) {
 				Global::should_sleep = true;
 				Runner::stopping = true;
-				Input::interrupt = true;
+				Input::interrupt();
 			}
 			else {
 				_sleep();
@@ -325,6 +325,9 @@ void _signal_handler(const int sig) {
 			break;
 		case SIGWINCH:
 			term_resize();
+			break;
+		case SIGUSR1:
+			// Input::poll interrupt
 			break;
 	}
 }
@@ -451,7 +454,7 @@ namespace Runner {
 		if (pt_lck.status != 0) {
 			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
 			Global::thread_exception = true;
-			Input::interrupt = true;
+			Input::interrupt();
 			stopping = true;
 		}
 
@@ -462,7 +465,7 @@ namespace Runner {
 			if (active) {
 				Global::exit_error_msg = "Runner thread failed to get active lock!";
 				Global::thread_exception = true;
-				Input::interrupt = true;
+				Input::interrupt();
 				stopping = true;
 			}
 			if (stopping or Global::resized) {
@@ -505,7 +508,7 @@ namespace Runner {
 							coreNum_reset = false;
 							Cpu::core_mapping = Cpu::get_core_mapping();
 							Global::resized = true;
-							Input::interrupt = true;
+							Input::interrupt();
 							continue;
 						}
 
@@ -584,7 +587,7 @@ namespace Runner {
 			catch (const std::exception& e) {
 				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
 				Global::thread_exception = true;
-				Input::interrupt = true;
+				Input::interrupt();
 				stopping = true;
 			}
 
@@ -937,6 +940,12 @@ int main(int argc, char **argv) {
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
+	std::signal(SIGUSR1, _signal_handler);
+
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGUSR1);
+	pthread_sigmask(SIG_BLOCK, &mask, &Input::signal_mask);
 
 	//? Start runner thread
 	Runner::thread_sem_init();
@@ -958,9 +967,10 @@ int main(int argc, char **argv) {
 	{
 		const auto [x, y] = Term::get_min_size(Config::getS("shown_boxes"));
 		if (Term::height < y or Term::width < x) {
+			pthread_sigmask(SIG_SETMASK, &Input::signal_mask, &mask);
 			term_resize(true);
+			pthread_sigmask(SIG_SETMASK, &mask, nullptr);
 			Global::resized = false;
-			Input::interrupt = false;
 		}
 
 	}

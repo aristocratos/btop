@@ -36,7 +36,6 @@ tab-size = 4
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
 
-using std::cin;
 using std::cout;
 using std::floor;
 using std::flush;
@@ -77,7 +76,11 @@ namespace Term {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ICANON;
-			else settings.c_lflag &= ~(ICANON);
+			else {
+				settings.c_lflag &= ~(ICANON);
+				settings.c_cc[VMIN] = 0;
+				settings.c_cc[VTIME] = 0;
+			}
 			if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
 			if (on) setlinebuf(stdin);
 			else setbuf(stdin, nullptr);
@@ -124,11 +127,9 @@ namespace Term {
 				current_tty = (ttyname(STDIN_FILENO) != nullptr ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
 
 				//? Disable stream sync
-				cin.sync_with_stdio(false);
 				cout.sync_with_stdio(false);
 
 				//? Disable stream ties
-				cin.tie(nullptr);
 				cout.tie(nullptr);
 				echo(false);
 				linebuffered(false);
