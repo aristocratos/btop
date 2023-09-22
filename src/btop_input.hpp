@@ -18,13 +18,12 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <atomic>
 #include <array>
-#include <robin_hood.h>
+#include <atomic>
 #include <deque>
+#include <string>
+#include <unordered_map>
 
-using robin_hood::unordered_flat_map;
 using std::array;
 using std::atomic;
 using std::deque;
@@ -44,7 +43,7 @@ namespace Input {
 	};
 
 	//? line, col, height, width
-	extern unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	extern std::unordered_map<string, Mouse_loc> mouse_mappings;
 
 	extern atomic<bool> interrupt;
 	extern atomic<bool> polling;

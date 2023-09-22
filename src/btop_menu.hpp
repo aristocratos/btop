@@ -18,10 +18,11 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
 #include <atomic>
-#include <vector>
 #include <bitset>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "btop_input.hpp"
 
@@ -38,7 +39,7 @@ namespace Menu {
 	extern bool redraw;
 
 	//? line, col, height, width
-	extern unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+	extern std::unordered_map<string, Input::Mouse_loc> mouse_mappings;
 
 	//* Creates a message box centered on screen
 	//? Height of box is determined by size of content vector

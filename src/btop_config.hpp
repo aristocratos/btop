@@ -18,15 +18,14 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <vector>
 #include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include <robin_hood.h>
 
 using std::string;
 using std::vector;
-using robin_hood::unordered_flat_map;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -34,12 +33,12 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern unordered_flat_map<std::string_view, string> strings;
-	extern unordered_flat_map<std::string_view, string> stringsTmp;
-	extern unordered_flat_map<std::string_view, bool> bools;
-	extern unordered_flat_map<std::string_view, bool> boolsTmp;
-	extern unordered_flat_map<std::string_view, int> ints;
-	extern unordered_flat_map<std::string_view, int> intsTmp;
+	extern std::unordered_map<std::string_view, string> strings;
+	extern std::unordered_map<std::string_view, string> stringsTmp;
+	extern std::unordered_map<std::string_view, bool> bools;
+	extern std::unordered_map<std::string_view, bool> boolsTmp;
+	extern std::unordered_map<std::string_view, int> ints;
+	extern std::unordered_map<std::string_view, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };

@@ -16,12 +16,14 @@ indent = tab
 tab-size = 4
 */
 
+#include <csignal>
 #include <iostream>
-#include <ranges>
-#include <vector>
-#include <thread>
 #include <mutex>
-#include <signal.h>
+#include <ranges>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -40,7 +42,7 @@ namespace rng = std::ranges;
 namespace Input {
 
 	//* Map for translating key codes to readable values
-	const unordered_flat_map<string, string> Key_escapes = {
+	const std::unordered_map<string, string> Key_escapes = {
 		{"\033",	"escape"},
 		{"\n",		"enter"},
 		{" ",		"space"},
@@ -79,7 +81,7 @@ namespace Input {
 	std::atomic<bool> interrupt (false);
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
-	unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	std::unordered_map<string, Mouse_loc> mouse_mappings;
 
 	deque<string> history(50, "");
 	string old_filter;
