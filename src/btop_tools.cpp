@@ -26,9 +26,10 @@ tab-size = 4
 #include <utility>
 #include <ranges>
 
-#include <unistd.h>
-#include <termios.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 #include "robin_hood.h"
 #include "widechar_width.hpp"
@@ -86,12 +87,27 @@ namespace Term {
 	}
 
 	bool refresh(bool only_check) {
-		struct winsize w;
-		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) return false;
-		if (width != w.ws_col or height != w.ws_row) {
+		// Query dimensions of '/dev/tty' of the 'STDOUT_FILENO' isn't avaiable.
+		// This variable is set in those cases to avoid calls to ioctl
+		constinit static bool uses_dev_tty = false;
+		struct winsize wsize {};
+		if (uses_dev_tty || ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize) < 0 || (wsize.ws_col == 0 && wsize.ws_row == 0)) {
+			Logger::error(R"(Couldn't determine terminal size of "STDOUT_FILENO"!)");
+			auto dev_tty = open("/dev/tty", O_RDONLY);
+			if (dev_tty != -1) {
+				ioctl(dev_tty, TIOCGWINSZ, &wsize);
+				close(dev_tty);
+			}
+			else {
+				Logger::error(R"(Couldn't determine terminal size of "/dev/tty"!)");
+				return false;
+			}
+			uses_dev_tty = true;
+		}
+		if (width != wsize.ws_col or height != wsize.ws_row) {
 			if (not only_check) {
-				width = w.ws_col;
-				height = w.ws_row;
+				width = wsize.ws_col;
+				height = wsize.ws_row;
 			}
 			return true;
 		}
