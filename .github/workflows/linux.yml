@@ -1,4 +1,4 @@
-name: Continuous Build Linux
+name: Linux Build
 
 on:
   workflow_dispatch:
@@ -89,37 +89,24 @@ jobs:
       - name: Install build tools
         run: apk add --no-cache coreutils git make tar zstd
 
-      - name: Fix - Unsafe repository stop
-        run: git config --global --add safe.directory /__w/btop/btop
-
       - name: Checkout source
         uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
-      - name: Fix - Stopping at filesystem boundary
-        run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
       - name: Build
         run: make STATIC=true STRIP=true
 
-      - name: Make executable
-        run: chmod +x bin/*
-
-      - name: Set up directories
+      - name: Create binary artifact
         run: |
-          mkdir .artifacts
-          mkdir .package
-
-      - name: Create binary atrifacts
-        run: |
+          # This is only required for containers
+          git config --global --add safe.directory /__w/btop/btop
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/btop .artifacts/$FILENAME
+          cp bin/btop bin/$FILENAME
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: btop-${{ matrix.toolchain }}
-          path: '.artifacts/**'
+          path: 'bin/btop-*'
+          if-no-files-found: error

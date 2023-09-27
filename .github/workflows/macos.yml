@@ -1,0 +1,71 @@
+name: MacOS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-macos.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-macos.yml'
+
+jobs:
+  build-macos11:
+    runs-on: macos-11
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+
+      - name: Create binary artifact
+        run: |
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          FILENAME=btop-x86_64-BigSur-$GIT_HASH
+          cp bin/btop bin/$FILENAME
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-macos11-BigSur
+          path: 'bin/btop-*'
+          if-no-files-found: error
+
+  build-macos12:
+    runs-on: macos-12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+
+      - name: Create binary artifact
+        run: |
+          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
+          FILENAME=btop-x86_64-Monterey-$GIT_HASH
+          cp bin/btop bin/$FILENAME
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-macos12-Monterey
+          path: 'bin/btop-*'
+          if-no-files-found: error
