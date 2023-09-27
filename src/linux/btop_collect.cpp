@@ -1105,10 +1105,17 @@ namespace Mem {
 							it = disks.erase(it);
 							continue;
 						}
-						disk = promise_res.first;
+						auto &updated_stats = promise_res.first;
+						disk.total = updated_stats.total;
+						disk.free = updated_stats.free;
+						disk.used = updated_stats.used;
+						disk.used_percent = updated_stats.used_percent;
+						disk.free_percent = updated_stats.free_percent;
+						disk.is_ready = true;
 					}
-					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv](disk_info disk) -> pair<disk_info, int> {
+					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
 						struct statvfs vfs;
+						disk_info disk;
 						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
 							return pair{disk, errno};
 						}
@@ -1118,7 +1125,7 @@ namespace Mem {
 						disk.used_percent = round((double)disk.used * 100 / disk.total);
 						disk.free_percent = 100 - disk.used_percent;
 						return pair{disk, -1};
-					}, disk);
+					});
 					++it;
 				}
 
@@ -1149,6 +1156,7 @@ namespace Mem {
 				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
+					if(!disk.is_ready) continue;
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
 					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
 						disk_ios++;
