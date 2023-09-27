@@ -29,6 +29,7 @@ tab-size = 4
 #include <net/if.h>
 #include <arpa/inet.h> // for inet_ntop()
 #include <filesystem>
+#include <future>
 
 #if !(defined(STATIC_BUILD) && defined(__GLIBC__))
 	#include <pwd.h>
@@ -48,12 +49,17 @@ using std::numeric_limits;
 using std::round;
 using std::streamsize;
 using std::vector;
+using std::future;
+using std::async;
+using std::pair;
+
 
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 
 using namespace Tools;
 using namespace std::literals; // for operator""s
+using namespace std::chrono_literals;
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Cpu {
@@ -939,6 +945,7 @@ namespace Mem {
 				auto only_physical = Config::getB("only_physical");
 				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
+				static unordered_flat_map<string, future<pair<disk_info, int>>> disks_stats_promises;
 				ifstream diskread;
 
 				vector<string> filter;
@@ -1078,31 +1085,41 @@ namespace Mem {
 				diskread.close();
 
 				//? Get disk/partition stats
-				bool new_ignored = false;
-				for (auto& [mountpoint, disk] : disks) {
-					if (std::error_code ec; not fs::exists(mountpoint, ec) or v_contains(ignore_list, mountpoint)) continue;
-					struct statvfs vfs;
-					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-						Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(errno) + ". Ignoring...");
-						ignore_list.push_back(mountpoint);
-						new_ignored = true;
+				for (auto it = disks.begin(); it != disks.end(); ) {
+					auto &[mountpoint, disk] = *it;
+					if (v_contains(ignore_list, mountpoint)) {
+						it = disks.erase(it);
 						continue;
 					}
-					disk.total = vfs.f_blocks * vfs.f_frsize;
-					disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
-					disk.used = disk.total - disk.free;
-					disk.used_percent = round((double)disk.used * 100 / disk.total);
-					disk.free_percent = 100 - disk.used_percent;
-				}
-
-				//? Remove any problematic disks added to the ignore_list
-				if (new_ignored) {
-					for (auto it = disks.begin(); it != disks.end();) {
-						if (v_contains(ignore_list, it->first))
+					if(auto promises_it = disks_stats_promises.find(mountpoint); promises_it != disks_stats_promises.end()){
+						auto& promise = promises_it->second;
+						if(promise.valid() &&
+						   promise.wait_for(0s) == std::future_status::timeout) {
+							++it;
+							continue;
+						}
+						auto promise_res = promises_it->second.get();
+						if(promise_res.second != -1){
+							ignore_list.push_back(mountpoint);
+							Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(promise_res.second) + ". Ignoring...");
 							it = disks.erase(it);
-						else
-							it++;
+							continue;
+						}
+						disk = promise_res.first;
 					}
+					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv](disk_info disk) -> pair<disk_info, int> {
+						struct statvfs vfs;
+						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+							return pair{disk, errno};
+						}
+						disk.total = vfs.f_blocks * vfs.f_frsize;
+						disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
+						disk.used = disk.total - disk.free;
+						disk.used_percent = round((double)disk.used * 100 / disk.total);
+						disk.free_percent = 100 - disk.used_percent;
+						return pair{disk, -1};
+					}, disk);
+					++it;
 				}
 
 				//? Setup disks order in UI and add swap if enabled
