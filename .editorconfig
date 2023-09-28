@@ -1,4 +1,4 @@
-[*.{cpp,h,sh,md,cfg,sample}]
+[*.{cpp,h,hpp,sh,md,cfg,sample}]
 indent_style = tab
 indent_size = 4
 
