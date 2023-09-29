@@ -147,7 +147,6 @@ namespace Mem {
 		int64_t free{};                 // defaults to 0
 		int used_percent{};             // defaults to 0
 		int free_percent{};             // defaults to 0
-		bool is_ready = false;
 
 		array<int64_t, 3> old_io = {0, 0, 0};
 		deque<long long> io_read = {};

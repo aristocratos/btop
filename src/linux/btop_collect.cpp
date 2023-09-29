@@ -1111,7 +1111,6 @@ namespace Mem {
 						disk.used = updated_stats.used;
 						disk.used_percent = updated_stats.used_percent;
 						disk.free_percent = updated_stats.free_percent;
-						disk.is_ready = true;
 					}
 					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
 						struct statvfs vfs;
@@ -1156,7 +1155,6 @@ namespace Mem {
 				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
 				disk_ios = 0;
 				for (auto& [ignored, disk] : disks) {
-					if(!disk.is_ready) continue;
 					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
 					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
 						disk_ios++;
