@@ -1532,12 +1532,13 @@ namespace Proc {
 			}
 
 			// Shorten process thread representation when larger than 5 digits: 10000 -> 10K ...
-			std::string proc_threads_string;
-			if (p.threads > 9999) {
-				proc_threads_string = std::to_string(p.threads / 1000) + 'K';
-			} else {
-				proc_threads_string = std::to_string(p.threads);
-			}
+			const std::string proc_threads_string = [&] {
+				if (p.threads > 9999) {
+					return std::to_string(p.threads / 1000) + 'K';
+				} else {
+					return std::to_string(p.threads);
+				}
+			}();
 
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
