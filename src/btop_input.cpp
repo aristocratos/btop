@@ -343,6 +343,9 @@ namespace Input {
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
+				else if (key == "%")
+					Config::flip("proc_mem_bytes");
+
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
 
