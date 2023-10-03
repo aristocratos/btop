@@ -97,7 +97,7 @@ namespace Config {
 	}
 
 	//* Set config key <name> to int <value>
-	inline void set(const std::string_view name, const int& value) {
+	inline void set(const std::string_view name, const int value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		else ints.at(name) = value;
 	}

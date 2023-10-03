@@ -112,7 +112,7 @@ namespace Global {
 }
 
 //* A simple argument parser
-void argumentParser(const int& argc, char **argv) {
+void argumentParser(const int argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
