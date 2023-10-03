@@ -58,6 +58,8 @@ namespace Config {
 	extern vector<string> available_batteries;
 	extern int current_preset;
 
+	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
+
 	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
 
 	//* Check if string only contains space separated valid names for boxes

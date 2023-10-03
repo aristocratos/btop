@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <algorithm>
 #include <csignal>
 #include <clocale>
 #include <pthread.h>
@@ -51,6 +52,7 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_draw.hpp"
 #include "btop_menu.hpp"
+#include "fmt/core.h"
 
 using std::atomic;
 using std::cout;
@@ -109,6 +111,7 @@ namespace Global {
 	bool arg_tty{};         // defaults to false
 	bool arg_low_color{};   // defaults to false
 	int arg_preset = -1;
+	int arg_update = 0;
 }
 
 //* A simple argument parser
@@ -117,7 +120,7 @@ void argumentParser(const int argc, char **argv) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
 			fmt::println(
-					"usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
+					"usage: btop [-h] [-v] [-/+t] [-p <id>] [-u <ms>] [--utf-force] [--debug]\n\n"
 					"optional arguments:\n"
 					"  -h, --help            show this help message and exit\n"
 					"  -v, --version         show version info and exit\n"
@@ -125,6 +128,7 @@ void argumentParser(const int argc, char **argv) {
 					"  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					"  +t, --tty_off         force (OFF) tty mode\n"
 					"  -p, --preset <id>     start with preset, integer value between 0-9\n"
+					"  -u, --update <ms>     set the program update rate in milliseconds\n"
 					"  --utf-force           force start even if no UTF-8 locale was detected\n"
 					"  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
 					"                        and screen draw functions and sets loglevel to DEBUG"
@@ -156,6 +160,19 @@ void argumentParser(const int argc, char **argv) {
 			}
 			else {
 				fmt::println("ERROR: Preset option only accepts an integer value between 0-9.");
+				exit(1);
+			}
+		}
+		else if (is_in(argument, "-u", "--update")) {
+			if (++i >= argc) {
+				fmt::println("ERROR: Update option needs an argument");
+				exit(1);
+			}
+			const std::string value = argv[i];
+			if (isint(value)) {
+				Global::arg_update = std::clamp(std::stoi(value), 100, Config::ONE_DAY_MILLIS);
+			} else {
+				fmt::println("ERROR: Invalid update rate");
 				exit(1);
 			}
 		}
@@ -1054,6 +1071,9 @@ int main(int argc, char **argv) {
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
+	if (Global::arg_update != 0) {
+		Config::set("update_ms", Global::arg_update);
+	}
 	uint64_t update_ms = Config::getI("update_ms");
 	auto future_time = time_ms();
 
