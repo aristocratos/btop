@@ -1556,8 +1556,11 @@ namespace Proc {
 		if (numpids > select_max) {
 			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
-				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
-				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
+				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down;
+
+			for (int i = y + 2; i < y + height - 2; i++) {
+				out += Mv::to(i, x + width - 2) + ((i == y + 2 + scroll_pos) ? "█" : " ");
+			}
 		}
 
 		//? Current selection and number of processes
