@@ -389,15 +389,16 @@ namespace Cpu {
 
 	void update_sensors() {
 		if (cpu_sensor.empty()) return;
+		auto& config = Config::get();
 
-		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
+		const auto& cpu_sensor = (not config.cpu_sensor.empty() and found_sensors.contains(config.cpu_sensor) ? config.cpu_sensor : Cpu::cpu_sensor);
 
 		found_sensors.at(cpu_sensor).temp = stol(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
 		current_cpu.temp.at(0).push_back(found_sensors.at(cpu_sensor).temp);
 		current_cpu.temp_max = found_sensors.at(cpu_sensor).crit;
 		if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
 
-		if (Config::getB("show_coretemp") and not cpu_temp_only) {
+		if (config.show_coretemp and not cpu_temp_only) {
 			vector<string> done;
 			for (const auto& sensor : core_sensors) {
 				if (v_contains(done, sensor)) continue;
@@ -473,6 +474,7 @@ namespace Cpu {
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
+		auto& config = Config::get();
 
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
@@ -517,7 +519,7 @@ namespace Cpu {
 		}
 
 		//? Apply user set custom mapping if any
-		const auto& custom_map = Config::getS("cpu_core_map");
+		const auto& custom_map = config.cpu_core_map;
 		if (not custom_map.empty()) {
 			try {
 				for (const auto& split : ssplit(custom_map)) {
@@ -543,6 +545,7 @@ namespace Cpu {
 
 	auto get_battery() -> tuple<int, long, string> {
 		if (not has_battery) return {0, 0, ""};
+		auto& config = Config::get();
 		static string auto_sel;
 		static unordered_flat_map<string, battery> batteries;
 
@@ -605,7 +608,7 @@ namespace Cpu {
 			}
 		}
 
-		auto& battery_sel = Config::getS("selected_battery");
+		auto& battery_sel = config.selected_battery;
 
 		if (auto_sel.empty()) {
 			for (auto& [name, bat] : batteries) {
@@ -674,9 +677,10 @@ namespace Cpu {
 
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
+		auto& config = Config::get();
 		auto& cpu = current_cpu;
 
-		if (Config::getB("show_cpu_freq"))
+		if (config.show_cpu_freq)
 			cpuHz = get_cpuHz();
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
@@ -803,10 +807,10 @@ namespace Cpu {
 			else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
 		}
 
-		if (Config::getB("check_temp") and got_sensors)
+		if (config.check_temp and got_sensors)
 			update_sensors();
 
-		if (Config::getB("show_battery") and has_battery)
+		if (config.show_battery and has_battery)
 			current_bat = get_battery();
 
 		return cpu;
@@ -844,10 +848,11 @@ namespace Mem {
 
 	auto collect(bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
-		auto show_swap = Config::getB("show_swap");
-		auto swap_disk = Config::getB("swap_disk");
-		auto show_disks = Config::getB("show_disks");
-		auto zfs_arc_cached = Config::getB("zfs_arc_cached");
+		auto& config = Config::get();
+		auto show_swap = config.show_swap;
+		auto swap_disk = config.swap_disk;
+		auto show_disks = config.show_disks;
+		auto zfs_arc_cached = config.zfs_arc_cached;
 		auto totalMem = get_totalMem();
 		auto& mem = current_mem;
 
@@ -937,13 +942,13 @@ namespace Mem {
 		if (show_disks) {
 			static vector<string> ignore_list;
 			double uptime = system_uptime();
-			auto free_priv = Config::getB("disk_free_priv");
+			auto free_priv = config.disk_free_priv;
 			try {
-				auto& disks_filter = Config::getS("disks_filter");
+				auto& disks_filter = config.disks_filter;
 				bool filter_exclude = false;
-				auto use_fstab = Config::getB("use_fstab");
-				auto only_physical = Config::getB("only_physical");
-				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
+				auto use_fstab = config.use_fstab;
+				auto only_physical = config.only_physical;
+				auto zfs_hide_datasets = config.zfs_hide_datasets;
 				auto& disks = mem.disks;
 				static unordered_flat_map<string, future<pair<disk_info, int>>> disks_stats_promises;
 				ifstream diskread;
@@ -1399,10 +1404,11 @@ namespace Net {
 
 	auto collect(bool no_update) -> net_info& {
 		if (Runner::stopping) return empty_net;
+		auto& config = Config::get();
 		auto& net = current_net;
-		auto& config_iface = Config::getS("net_iface");
-		auto net_sync = Config::getB("net_sync");
-		auto net_auto = Config::getB("net_auto");
+		auto& config_iface = config.net_iface;
+		auto net_sync = config.net_sync;
+		auto net_auto = config.net_auto;
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
@@ -1611,12 +1617,13 @@ namespace Proc {
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
+		auto& config = Config::get();
 		fs::path pid_path = Shared::procPath / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
-			detailed.skip_smaps = not Config::getB("proc_info_smaps");
+			detailed.skip_smaps = not config.proc_cpu_smaps;
 		}
 
 		//? Copy proc_info for process from proc vector
@@ -1624,7 +1631,7 @@ namespace Proc {
 		detailed.entry = *p_info;
 
 		//? Update cpu percent deque for process cpu graph
-		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
+		if (not config.proc_per_core) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
@@ -1709,14 +1716,15 @@ namespace Proc {
 	//* Collects and sorts process information from /proc
 	auto collect(bool no_update) -> vector<proc_info>& {
 		if (Runner::stopping) return current_procs;
-		const auto& sorting = Config::getS("proc_sorting");
-		auto reverse = Config::getB("proc_reversed");
-		const auto& filter = Config::getS("proc_filter");
-		auto per_core = Config::getB("proc_per_core");
-		auto should_filter_kernel = Config::getB("proc_filter_kernel");
-		auto tree = Config::getB("proc_tree");
-		auto show_detailed = Config::getB("show_detailed");
-		const size_t detailed_pid = Config::getI("detailed_pid");
+		auto& config = Config::get();
+		const auto& sorting = config.proc_sorting;
+		auto reverse = config.proc_reversed;
+		const auto& filter = config.proc_filter;
+		auto per_core = config.proc_per_core;
+		auto should_filter_kernel = config.proc_filter_kernel;
+		auto tree = config.proc_tree;
+		auto show_detailed = config.show_detailed;
+		const size_t detailed_pid = config.detailed_pid;
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
@@ -2029,7 +2037,7 @@ namespace Proc {
 					else if (expand > -1) {
 						collapser->collapsed = false;
 					}
-					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+					if (config.proc_selected > 0) locate_selection = true;
 				}
 				collapse = expand = -1;
 			}
@@ -2068,9 +2076,10 @@ namespace Proc {
 			//? Move current selection/view to the selected process when collapsing/expanding in the tree
 			if (locate_selection) {
 				int loc = rng::find(current_procs, Proc::selected_pid, &proc_info::pid)->tree_index;
-				if (Config::ints.at("proc_start") >= loc or Config::ints.at("proc_start") <= loc - Proc::select_max)
-					Config::ints.at("proc_start") = max(0, loc - 1);
-				Config::ints.at("proc_selected") = loc - Config::ints.at("proc_start") + 1;
+				auto& config = Config::get_mut(false, false);
+				if (config.proc_start >= loc or config.proc_start <= loc - Proc::select_max)
+					config.proc_start = max(0, loc - 1);
+				config.proc_selected = loc - config.proc_start + 1;
 			}
 		}
 

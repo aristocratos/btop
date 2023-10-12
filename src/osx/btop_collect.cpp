@@ -247,9 +247,10 @@ namespace Cpu {
 	}
 
 	bool get_sensors() {
-		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
+		auto &config = Config::get();
+		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(config.show_coretemp) + " check_temp=" + std::to_string(config.check_temp));
 		got_sensors = false;
-		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
+		if (config.show_coretemp and config.check_temp) {
 			ThermalSensors sensors;
 			if (sensors.getSensors() > 0) {
 				Logger::debug("M1 sensors found");
@@ -332,6 +333,7 @@ namespace Cpu {
 	auto get_core_mapping() -> unordered_flat_map<int, int> {
 		unordered_flat_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
+		auto &config = Config::get();
 
 		natural_t cpu_count;
 		natural_t i;
@@ -364,7 +366,7 @@ namespace Cpu {
 		}
 
 		//? Apply user set custom mapping if any
-		const auto &custom_map = Config::getS("cpu_core_map");
+		const auto &custom_map = config.cpu_core_map;
 		if (not custom_map.empty()) {
 			try {
 				for (const auto &split : ssplit(custom_map)) {
@@ -444,6 +446,7 @@ namespace Cpu {
 	auto collect(bool no_update) -> cpu_info & {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
 			return current_cpu;
+		auto &config = Config::get();
 		auto &cpu = current_cpu;
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
@@ -524,17 +527,17 @@ namespace Cpu {
 		//? Reduce size if there are more values than needed for graph
 		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
-		if (Config::getB("show_cpu_freq")) {
+		if (config.show_cpu_freq) {
 			auto hz = get_cpuHz();
 			if (hz != "") {
 				cpuHz = hz;
 			}
 		}
 
-		if (Config::getB("check_temp") and got_sensors)
+		if (config.check_temp and got_sensors)
 			update_sensors();
 
-		if (Config::getB("show_battery") and has_battery)
+		if (config.show_battery and has_battery)
 			current_bat = get_battery();
 
 		return cpu;
@@ -666,9 +669,10 @@ namespace Mem {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
-		auto show_swap = Config::getB("show_swap");
-		auto show_disks = Config::getB("show_disks");
-		auto swap_disk = Config::getB("swap_disk");
+		auto &config = Config::get();
+		auto show_swap = config.show_swap;
+		auto show_disks = config.show_disks;
+		auto swap_disk = config.swap_disk;
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
@@ -710,9 +714,9 @@ namespace Mem {
 		if (show_disks) {
 			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
-			auto &disks_filter = Config::getS("disks_filter");
+			auto &disks_filter = config.disks_filter;
 			bool filter_exclude = false;
-			// auto only_physical = Config::getB("only_physical");
+			// auto only_physical = config.only_physical;
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -843,10 +847,11 @@ namespace Net {
 	};
 
 	auto collect(bool no_update) -> net_info & {
+		auto &config = Config::get();
 		auto &net = current_net;
-		auto &config_iface = Config::getS("net_iface");
-		auto net_sync = Config::getB("net_sync");
-		auto net_auto = Config::getB("net_auto");
+		auto &config_iface = config.net_iface;
+		auto net_sync = config.net_sync;
+		auto net_auto = config.net_auto;
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
@@ -1075,10 +1080,11 @@ namespace Proc {
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, vector<proc_info> &procs) {
+		auto &config = Config::get();
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
-			detailed.skip_smaps = not Config::getB("proc_info_smaps");
+			detailed.skip_smaps = not config.proc_cpu_smaps;
 		}
 
 		//? Copy proc_info for process from proc vector
@@ -1086,7 +1092,7 @@ namespace Proc {
 		detailed.entry = *p_info;
 
 		//? Update cpu percent deque for process cpu graph
-		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
+		if (not config.proc_per_core) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
@@ -1125,13 +1131,14 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc
 	auto collect(bool no_update) -> vector<proc_info> & {
-		const auto &sorting = Config::getS("proc_sorting");
-		auto reverse = Config::getB("proc_reversed");
-		const auto &filter = Config::getS("proc_filter");
-		auto per_core = Config::getB("proc_per_core");
-		auto tree = Config::getB("proc_tree");
-		auto show_detailed = Config::getB("show_detailed");
-		const size_t detailed_pid = Config::getI("detailed_pid");
+		auto &config = Config::get();
+		const auto &sorting = config.proc_sorting;
+		auto reverse = config.proc_reversed;
+		const auto &filter = config.proc_filter;
+		auto per_core = config.proc_per_core;
+		auto tree = config.proc_tree;
+		auto show_detailed = config.show_detailed;
+		const size_t detailed_pid = config.detailed_pid;
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
@@ -1321,7 +1328,7 @@ namespace Proc {
 					else if (expand > -1) {
 						collapser->collapsed = false;
 					}
-					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+					if (config.proc_selected > 0) locate_selection = true;
 				}
 				collapse = expand = -1;
 			}
@@ -1359,10 +1366,11 @@ namespace Proc {
 
 			//? Move current selection/view to the selected process when collapsing/expanding in the tree
 			if (locate_selection) {
+				auto &config = Config::get_mut(false, false);
 				int loc = rng::find(current_procs, Proc::selected_pid, &proc_info::pid)->tree_index;
-				if (Config::ints.at("proc_start") >= loc or Config::ints.at("proc_start") <= loc - Proc::select_max)
-					Config::ints.at("proc_start") = max(0, loc - 1);
-				Config::ints.at("proc_selected") = loc - Config::ints.at("proc_start") + 1;
+				if (config.proc_start >= loc or config.proc_start <= loc - Proc::select_max)
+					config.proc_start = max(0, loc - 1);
+				config.proc_selected = loc - config.proc_start + 1;
 			}
 		}
 

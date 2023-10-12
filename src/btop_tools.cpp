@@ -368,8 +368,9 @@ namespace Tools {
 
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
+		auto& config = Config::get();
 		const size_t mult = (bit) ? 8 : 1;
-		bool mega = Config::getB("base_10_sizes");
+		bool mega = config.base_10_sizes;
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)

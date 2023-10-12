@@ -225,12 +225,13 @@ namespace Theme {
 
 		//* Generate colors and rgb decimal vectors for the theme
 		void generateColors(const unordered_flat_map<string, string>& source) {
+			auto& config = Config::get();
 			vector<string> t_rgb;
 			string depth;
-			bool t_to_256 = Config::getB("lowcolor");
+			bool t_to_256 = config.lowcolor;
 			colors.clear(); rgbs.clear();
 			for (const auto& [name, color] : Default_theme) {
-				if (name == "main_bg" and not Config::getB("theme_background")) {
+				if (name == "main_bg" and not config.theme_background) {
 						colors[name] = "\x1b[49m";
 						rgbs[name] = {-1, -1, -1};
 						continue;
@@ -289,8 +290,9 @@ namespace Theme {
 
 		//* Generate color gradients from two or three colors, 101 values indexed 0-100
 		void generateGradients() {
+			auto& config = Config::get();
 			gradients.clear();
-			bool t_to_256 = Config::getB("lowcolor");
+			bool t_to_256 = config.lowcolor;
 
 			//? Insert values for processes greyscale gradient and processes color gradient
 			rgbs.insert({
@@ -349,10 +351,11 @@ namespace Theme {
 
 		//* Set colors and generate gradients for the TTY theme
 		void generateTTYColors() {
+			auto& config = Config::get();
 			rgbs.clear();
 			gradients.clear();
 			colors = TTY_theme;
-			if (not Config::getB("theme_background"))
+			if (not config.theme_background)
 				colors["main_bg"] = "\x1b[49m";
 
 			for (const auto& c : colors) {
@@ -422,7 +425,8 @@ namespace Theme {
 	}
 
 	void setTheme() {
-		const auto& theme = Config::getS("color_theme");
+		auto& config = Config::get();
+		const auto& theme = config.color_theme;
 		fs::path theme_path;
 		for (const fs::path p : themes) {
 			if (p == theme or p.stem() == theme or p.filename() == theme) {
@@ -430,7 +434,7 @@ namespace Theme {
 				break;
 			}
 		}
-		if (theme == "TTY" or Config::getB("tty_mode"))
+		if (theme == "TTY" or config.tty_mode)
 			generateTTYColors();
 		else {
 			generateColors((theme == "Default" or theme_path.empty() ? Default_theme : loadFile(theme_path)));

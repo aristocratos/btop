@@ -692,8 +692,9 @@ namespace Menu {
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
 	: width(width), boxtype(boxtype) {
-		auto tty_mode = Config::getB("tty_mode");
-		auto rounded = Config::getB("rounded_corners");
+		auto& config = Config::get();
+		auto tty_mode = config.tty_mode;
+		auto rounded = config.rounded_corners;
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
@@ -782,7 +783,8 @@ namespace Menu {
 	};
 
 	int signalChoose(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		auto& config = Config::get();
+		auto s_pid = (config.show_detailed and config.selected_pid == 0 ? config.detailed_pid : config.selected_pid);
 		static int x{}; // defaults to 0
 		static int y{}; // defaults to 0
 		static int selected_signal = -1;
@@ -796,7 +798,7 @@ namespace Menu {
 			y = Term::height/2 - 9;
 			bg = Draw::createBox(x + 2, y, 78, 19, Theme::c("hi_fg"), true, "signals");
 			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid) + " ("
-				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
+				+ uresize((s_pid == config.detailed_pid ? Proc::detailed.entry.name : config.selected_name), 30) + ")", 76);
 		}
 		else if (is_in(key, "escape", "q")) {
 			return Closed;
@@ -912,11 +914,12 @@ namespace Menu {
 	}
 
 	int signalSend(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		auto& config = Config::get();
+		auto s_pid = (config.show_detailed and config.selected_pid == 0 ? config.detailed_pid : config.selected_pid);
 		if (s_pid == 0) return Closed;
 		if (redraw) {
 			atomic_wait(Runner::active);
-			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
+			auto& p_name = (s_pid == config.detailed_pid ? Proc::detailed.entry.name : config.selected_name);
 			vector<string> cont_vec = {
 				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend)
 				+ (signalToSend > 0 and signalToSend <= 32 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')' : ""),
@@ -984,12 +987,13 @@ namespace Menu {
 	}
 
 	int mainMenu(const string& key) {
+		auto& config = Config::get();
 		enum MenuItems { Options, Help, Quit };
 		static int y{};         // defaults to 0
 		static int selected{};  // defaults to 0
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
-		auto tty_mode = Config::getB("tty_mode");
+		auto tty_mode = config.tty_mode;
 		if (bg.empty()) selected = 0;
 		int retval = Changed;
 
@@ -1094,8 +1098,9 @@ namespace Menu {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 		};
-		auto tty_mode = Config::getB("tty_mode");
-		auto vim_keys = Config::getB("vim_keys");
+		auto& config = Config::get();
+		auto tty_mode = config.tty_mode;
+		auto vim_keys = config.vim_keys;
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();
@@ -1142,8 +1147,9 @@ namespace Menu {
 			}
 			else if (key == "enter") {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
+				auto& entry = Config::parse_table.at(option);
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
-					Config::set(option, editor.text);
+					Config::set<string>(entry.offset, option, editor.text, true);
 					if (option == "custom_cpu_name") screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
@@ -1159,7 +1165,7 @@ namespace Menu {
 					}
 				}
 				else if (selPred.test(isInt) and Config::intValid(option, editor.text)) {
-					Config::set(option, stoi(editor.text));
+					Config::set<int>(entry.offset, option, stoi(editor.text), true);
 				}
 				else
 					warnings = Config::validError;
@@ -1232,27 +1238,29 @@ namespace Menu {
 		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
 			const auto& option = categories[selected_cat][item_height * page + selected][0];
 			if (selPred.test(isInt)) {
+				auto& entry = Config::parse_table.at(option);
 				const int mod = (option == "update_ms" ? 100 : 1);
-				long value = Config::getI(option);
+				long value = Config::dynamic_get<int>(config, entry.offset);
 				if (key == "right" or (vim_keys and key == "l")) value += mod;
 				else value -= mod;
 
 				if (Config::intValid(option, to_string(value)))
-					Config::set(option, static_cast<int>(value));
+					Config::set(entry.offset, option, static_cast<int>(value), true);
 				else {
 					warnings = Config::validError;
 				}
 			}
 			else if (selPred.test(isBool)) {
-				Config::flip(option);
+				auto& entry = Config::parse_table.at(option);
+				Config::set(entry.offset, option, not Config::dynamic_get<bool>(config, entry.offset), true);
 				screen_redraw = true;
 				if (option == "truecolor") {
 					theme_refresh = true;
-					Config::flip("lowcolor");
+					CONFIG_SET(lowcolor, not config.lowcolor);
 				}
 				else if (option == "force_tty") {
 					theme_refresh = true;
-					Config::flip("tty_mode");
+					CONFIG_SET(tty_mode, not config.tty_mode);
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;
@@ -1265,11 +1273,12 @@ namespace Menu {
 			}
 			else if (selPred.test(isBrowseable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				auto& entry = Config::parse_table.at(option);
+				int i = v_index(optList, Config::dynamic_get<string>(config, entry.offset));
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
-				Config::set(option, optList.at(i));
+				Config::set(entry.offset, option, optList.at(i), true);
 
 				if (option == "color_theme")
 					theme_refresh = true;
@@ -1305,12 +1314,20 @@ namespace Menu {
 				selPred.reset();
 				last_sel = (selected_cat << 8) + selected;
 				const auto& selOption = categories[selected_cat][item_height * page + selected][0];
-				if (Config::ints.contains(selOption))
-					selPred.set(isInt);
-				else if (Config::bools.contains(selOption))
-					selPred.set(isBool);
-				else
-					selPred.set(isString);
+				auto& entry = Config::parse_table.at(selOption);
+				switch(entry.type) {
+					case Config::ConfigType::INT:
+						selPred.set(isInt);
+						break;
+					case Config::ConfigType::BOOL:
+						selPred.set(isBool);
+						break;
+					case Config::ConfigType::STRING:
+						selPred.set(isString);
+						break;
+					default:
+						throw std::logic_error("Not implemented");
+				}
 
 				if (not selPred.test(isString))
 					selPred.set(is2D);
@@ -1340,12 +1357,12 @@ namespace Menu {
 			auto cy = y+9;
 			for (int c = 0, i = max(0, item_height * page); c++ < item_height and i < (int)categories[selected_cat].size(); i++) {
 				const auto& option = categories[selected_cat][i][0];
-				const auto& value = (option == "color_theme" ? (string) fs::path(Config::getS("color_theme")).stem() : Config::getAsString(option));
+				const auto& value = (option == "color_theme" ? (string) fs::path(config.color_theme).stem() : Config::getAsString(option));
 
 				out += Mv::to(cy++, x + 1) + (c-1 == selected ? Theme::c("selected_bg") + Theme::c("selected_fg") : Theme::c("title"))
 					+ Fx::b + cjust(capitalize(s_replace(option, "_", " "))
 						+ (c-1 == selected and selPred.test(isBrowseable)
-							? ' ' + to_string(v_index(optionsList.at(option).get(), (option == "color_theme" ? Config::getS("color_theme") : value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
+							? ' ' + to_string(v_index(optionsList.at(option).get(), (option == "color_theme" ? config.color_theme : value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
 							: ""), 29);
 				out	+= Mv::to(cy++, x + 1) + (c-1 == selected ? "" : Theme::c("main_fg")) + Fx::ub + "  "
 					+ (c-1 == selected and editing ? cjust(editor(24), 34, true) : cjust(value, 25, true)) + "  ";

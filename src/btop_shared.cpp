@@ -157,7 +157,7 @@ namespace Proc {
 				filter_found++;
 				p.filtered = true;
 			}
-			else if (Config::getB("proc_aggregate")) {
+			else if (Config::get().proc_aggregate) {
 				cur_proc.cpu_p += p.cpu_p;
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;
