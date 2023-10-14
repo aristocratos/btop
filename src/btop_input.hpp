@@ -21,10 +21,10 @@ tab-size = 4
 #include <string>
 #include <atomic>
 #include <array>
-#include <robin_hood.h>
 #include <deque>
 
-using robin_hood::unordered_flat_map;
+#include "ankerl/unordered_dense.h"
+
 using std::array;
 using std::atomic;
 using std::deque;
@@ -44,7 +44,7 @@ namespace Input {
 	};
 
 	//? line, col, height, width
-	extern unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	extern ankerl::unordered_dense::map<string, Mouse_loc> mouse_mappings;
 
 	extern atomic<bool> interrupt;
 	extern atomic<bool> polling;

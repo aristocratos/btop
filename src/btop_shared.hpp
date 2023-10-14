@@ -26,10 +26,10 @@ tab-size = 4
 #include <tuple>
 #include <vector>
 #include <ifaddrs.h>
-#include <robin_hood.h>
 #include <unistd.h>
 
-using robin_hood::unordered_flat_map;
+#include "ankerl/unordered_dense.h"
+
 using std::array;
 using std::atomic;
 using std::deque;
@@ -181,7 +181,7 @@ namespace Cpu {
 	extern tuple<int, long, string> current_bat;
 
 	struct cpu_info {
-		unordered_flat_map<string, deque<long long>> cpu_percent = {
+		ankerl::unordered_dense::map<string, deque<long long>> cpu_percent = {
 			{"total", {}},
 			{"user", {}},
 			{"nice", {}},
@@ -207,8 +207,8 @@ namespace Cpu {
     string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpu, bool force_redraw = false, bool data_same = false);
 
 	//* Parse /proc/cpu info for mapping of core ids
-	auto get_core_mapping() -> unordered_flat_map<int, int>;
-	extern unordered_flat_map<int, int> core_mapping;
+	auto get_core_mapping() -> ankerl::unordered_dense::map<int, int>;
+	extern ankerl::unordered_dense::map<int, int> core_mapping;
 
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, long, string>;
@@ -240,13 +240,13 @@ namespace Mem {
 	};
 
 	struct mem_info {
-		unordered_flat_map<string, uint64_t> stats =
+		ankerl::unordered_dense::map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
-		unordered_flat_map<string, deque<long long>> percent =
+		ankerl::unordered_dense::map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
-		unordered_flat_map<string, disk_info> disks;
+		ankerl::unordered_dense::map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
 
@@ -268,7 +268,7 @@ namespace Net {
 	extern string selected_iface;
 	extern vector<string> interfaces;
 	extern bool rescale;
-	extern unordered_flat_map<string, uint64_t> graph_max;
+	extern ankerl::unordered_dense::map<string, uint64_t> graph_max;
 
 	struct net_stat {
 		uint64_t speed{};       // defaults to 0
@@ -280,14 +280,14 @@ namespace Net {
 	};
 
 	struct net_info {
-		unordered_flat_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
-		unordered_flat_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
+		ankerl::unordered_dense::map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
+		ankerl::unordered_dense::map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
 		string ipv4{};      // defaults to ""
 		string ipv6{};      // defaults to ""
 		bool connected{};   // defaults to false
 	};
 
-	extern unordered_flat_map<string, net_info> current_net;
+	extern ankerl::unordered_dense::map<string, net_info> current_net;
 
 	//* Collect net upload/download stats
 	auto collect(bool no_update=false) -> net_info&;
@@ -320,7 +320,7 @@ namespace Proc {
 	};
 
 	//? Translation from process state char to explanative string
-	const unordered_flat_map<char, string> proc_states = {
+	const ankerl::unordered_dense::map<char, string> proc_states = {
 		{'R', "Running"},
 		{'S', "Sleeping"},
 		{'D', "Waiting"},

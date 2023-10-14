@@ -38,6 +38,8 @@ tab-size = 4
 		#define HOST_NAME_MAX 64
 	#endif
 #endif
+
+#include "ankerl/unordered_dense.h"
 #define FMT_HEADER_ONLY
 #include "fmt/core.h"
 #include "fmt/format.h"

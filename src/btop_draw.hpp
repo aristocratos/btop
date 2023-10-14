@@ -21,10 +21,10 @@ tab-size = 4
 #include <string>
 #include <vector>
 #include <array>
-#include <robin_hood.h>
 #include <deque>
 
-using robin_hood::unordered_flat_map;
+#include "ankerl/unordered_dense.h"
+
 using std::array;
 using std::deque;
 using std::string;
@@ -108,7 +108,7 @@ namespace Draw {
 		long long offset;
 		long long last = 0, max_value = 0;
 		bool current = true, tty_mode = false;
-		unordered_flat_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
+		ankerl::unordered_dense::map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
 
 		//* Create two representations of the graph to switch between to represent two values for each braille character
 		void _create(const deque<long long>& data, int data_offset);
@@ -135,6 +135,6 @@ namespace Draw {
 
 namespace Proc {
 	extern Draw::TextEdit filter;
-	extern unordered_flat_map<size_t, Draw::Graph> p_graphs;
-	extern unordered_flat_map<size_t, int> p_counters;
+	extern ankerl::unordered_dense::map<size_t, Draw::Graph> p_graphs;
+	extern ankerl::unordered_dense::map<size_t, int> p_counters;
 }

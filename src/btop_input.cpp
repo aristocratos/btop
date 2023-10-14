@@ -21,6 +21,7 @@ tab-size = 4
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <utility>
 #include <signal.h>
 #include <utility>
 
@@ -32,6 +33,7 @@ tab-size = 4
 #include "btop_draw.hpp"
 
 
+#include "ankerl/unordered_dense.h"
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -49,7 +51,7 @@ namespace rng = std::ranges;
 namespace Input {
 
 	//* Map for translating key codes to readable values
-	const unordered_flat_map<string, string> Key_escapes = {
+	const ankerl::unordered_dense::map<string, string> Key_escapes = {
 		{"\033",	"escape"},
 		{"\n",		"enter"},
 		{" ",		"space"},
@@ -92,7 +94,7 @@ namespace Input {
 	std::atomic<bool> interrupt (false);
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
-	unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	ankerl::unordered_dense::map<string, Mouse_loc> mouse_mappings;
 
 	deque<string> history(50, "");
 	string old_filter;

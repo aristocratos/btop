@@ -43,6 +43,7 @@ tab-size = 4
 	#include <semaphore>
 #endif
 
+#include "ankerl/unordered_dense.h"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -416,7 +417,7 @@ namespace Runner {
 	};
 
 	string debug_bg;
-	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
+	ankerl::unordered_dense::map<string, array<uint64_t, 2>> debug_times;
 
 	class MyNumPunct : public std::numpunct<char>
 	{

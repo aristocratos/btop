@@ -23,6 +23,7 @@ tab-size = 4
 #include <vector>
 #include <bitset>
 
+#include "ankerl/unordered_dense.h"
 #include "btop_input.hpp"
 
 using std::atomic;
@@ -38,7 +39,7 @@ namespace Menu {
 	extern bool redraw;
 
 	//? line, col, height, width
-	extern unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+	extern ankerl::unordered_dense::map<string, Input::Mouse_loc> mouse_mappings;
 
 	//* Creates a message box centered on screen
 	//? Height of box is determined by size of content vector
