@@ -258,14 +258,6 @@ namespace Tools {
 		return str;
 	}
 
-	string s_replace(const string& str, const string& from, const string& to) {
-		string out = str;
-		for (size_t start_pos = out.find(from); start_pos != std::string::npos; start_pos = out.find(from)) {
-			out.replace(start_pos, from.length(), to);
-		}
-		return out;
-	}
-
 	string ltrim(const string& str, const string& t_str) {
 		std::string_view str_v{str};
 		while (str_v.starts_with(t_str))

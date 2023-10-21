@@ -18,6 +18,7 @@ tab-size = 4
 
 #pragma once
 
+#include "btop_tools.hpp"
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -196,9 +197,10 @@ using robin_hood::unordered_flat_map;
 
 #define OPTIONS_LIST OPTIONS_WRITABLE_LIST OPTIONS_INTERNAL_LIST
 
+#define CONFIG_OFFSET(name) offsetof(Config::ConfigSet, name)
 #define CONFIG_SET(name, v) Config::set< \
 	decltype(std::declval<Config::ConfigSet>().name) \
->(offsetof(Config::ConfigSet, name), #name, v, Config::is_writable(#name))
+>(CONFIG_OFFSET(name), v, Config::is_writable(#name))
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -226,12 +228,6 @@ namespace Config {
 		};
 	}
 
-	struct ParseData {
-		// Offset will be 32bit to save space/make this fit in a register
-		uint32_t offset;
-		ConfigType type;
-	};
-
 	struct ConfigSet {
 #define X(T, name, v, desc) T name;
 		OPTIONS_LIST
@@ -246,10 +242,21 @@ namespace Config {
 		}
 	};
 
+	struct ParseData {
+		// Offset will be 32bit to save space/make this fit in a register
+		uint32_t offset;
+		ConfigType type;
+	};
+
+	template<typename T>
+	constexpr inline ConfigType type_enum() {
+		return details::TypeToEnum<T>::value;
+	}
+
 	const unordered_flat_map<std::string_view, ParseData> parse_table = {
 #define X(T, name, v, desc) { #name, { \
-		.offset = offsetof(ConfigSet, name), \
-		.type = Config::details::TypeToEnum<decltype(std::declval<ConfigSet>().name)>::value, \
+		.offset = CONFIG_OFFSET(name), \
+		.type = Config::type_enum<decltype(std::declval<ConfigSet>().name)>(), \
 	} },
 		OPTIONS_LIST
 #undef X
@@ -267,7 +274,7 @@ namespace Config {
 	extern vector<string> preset_list;
 	extern vector<string> available_batteries;
 	extern int current_preset;
-	extern robin_hood::unordered_flat_set<std::string_view> cached;
+	extern unordered_flat_map<uint32_t, ConfigType> cached;
 
 	constexpr static bool is_writable(const std::string_view option) {
 #define X(T, name, v, desc) if(option == #name) return false;
@@ -297,7 +304,7 @@ namespace Config {
 
 	bool _locked();
 
-	string getAsString(const std::string_view name);
+	string getAsString(const size_t offset);
 
 	template<typename T>
 	inline const T& dynamic_get(const ConfigSet& src, size_t offset) {
@@ -310,18 +317,103 @@ namespace Config {
 	}
 
 	template<typename T>
-	void set(const size_t offset, const std::string_view name, const T& value, const bool writable) {
+	void set(const size_t offset, const T& value, const bool writable) {
 		bool locked = _locked();
 		auto& set = get_mut(locked, writable);
 		if(locked)
-			cached.insert(name);
+			cached[offset] =  type_enum<T>();
 		dynamic_set(set, offset, value);
+	}
+
+	namespace details {
+		template<typename T>
+		inline string to_string(const ConfigSet& set, const size_t offset);
+
+		template<>
+		inline string to_string<bool>(const ConfigSet& set, const size_t offset) {
+			return dynamic_get<bool>(set, offset) ? "True" : "False";
+		}
+
+		template<>
+		inline string to_string<int>(const ConfigSet& set, const size_t offset) {
+			return std::to_string(dynamic_get<int>(set, offset));
+		}
+
+		template<>
+		inline string to_string<string>(const ConfigSet& set, const size_t offset) {
+			return dynamic_get<string>(set, offset);
+		}
 	}
 
 	extern string validError;
 
-	bool intValid(const std::string_view name, const string& value);
-	bool stringValid(const std::string_view name, const string& value);
+	//* Converts string to int. True on success, false on error.
+	bool to_int(const string& value, int& result);
+
+	template<typename T>
+	bool validate(const size_t offset, const T& value, const bool setError = true) {
+		using namespace Tools;
+		bool isValid = true;
+
+#define VALIDATE(name, cond, err) case CONFIG_OFFSET(name): \
+		isValid = (cond); \
+		if(setError and not isValid) { \
+			validError = (err); \
+		} \
+		break
+
+		if constexpr(std::is_same_v<T, int>) {
+			switch(offset) {
+				VALIDATE(update_ms, value >= 100 && value <= 86400000,
+						"Config value update_ms out of range (100 <= x <= 86400000)");
+			}
+		}
+
+		if constexpr(std::is_same_v<T, string>) {
+			switch(offset) {
+				VALIDATE(log_level, Tools::v_contains(Logger::log_levels, value),
+						"Invalid log level: " + value);
+				VALIDATE(graph_symbol, Tools::v_contains(valid_graph_symbols, value),
+						"Invalid graph symbol identifier: " + value);
+				VALIDATE(graph_symbol_proc, value == "default" || v_contains(valid_graph_symbols, value),
+						"Invalid graph symbol identifier for graph_symbol_proc: " + value);
+				VALIDATE(graph_symbol_cpu, value == "default" || v_contains(valid_graph_symbols, value),
+						"Invalid graph symbol identifier for graph_symbol_cpu: " + value);
+				VALIDATE(graph_symbol_mem, value == "default" || v_contains(valid_graph_symbols, value),
+						"Invalid graph symbol identifier for graph_symbol_mem: " + value);
+				VALIDATE(graph_symbol_net, value == "default" || v_contains(valid_graph_symbols, value),
+						"Invalid graph symbol identifier for graph_symbol_net: " + value);
+				VALIDATE(shown_boxes, value.empty() || check_boxes(value),
+						"Invalid box_name(s) in shown_boxes");
+				VALIDATE(cpu_core_map, [&]{
+					const auto maps = ssplit(value);
+					for (const auto& map : maps) {
+						const auto map_split = ssplit(map, ':');
+						if (map_split.size() != 2 || not isint(map_split.at(0)) or not isint(map_split.at(1)))
+							return false;
+					}
+					return true;
+				}(), "Invalid formatting of cpu_core_map!");
+				VALIDATE(io_graph_speeds, [&]{
+					const auto maps = ssplit(value);
+					for (const auto& map : maps) {
+						const auto map_split = ssplit(map, ':');
+						if (map_split.size() != 2 || map_split.at(0).empty() or not isint(map_split.at(1)))
+							return false;
+					}
+					return true;
+				}(), "Invalid formatting of io_graph_speeds!");
+
+				case CONFIG_OFFSET(presets):
+					return presetsValid(value);
+			}
+		}
+
+#undef VALIDATE
+
+		return isValid;
+
+	}
 
 	//* Lock config and cache changes until unlocked
 	void lock();

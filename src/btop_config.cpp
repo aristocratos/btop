@@ -21,6 +21,7 @@ tab-size = 4
 #include <exception>
 #include <fstream>
 #include <ranges>
+#include <stdexcept>
 #include <string_view>
 
 #include <fmt/core.h>
@@ -44,7 +45,7 @@ namespace Config {
 	atomic<bool> locked (false);
 	atomic<bool> writelock (false);
 	bool write_new;
-	robin_hood::unordered_flat_set<std::string_view> cached{};
+	unordered_flat_map<uint32_t, ConfigType> cached{};
 	ConfigSet current = ConfigSet::with_defaults();
 	ConfigSet cache{};
 
@@ -150,91 +151,21 @@ namespace Config {
 
 	string validError;
 
-	bool intValid(const std::string_view name, const string& value) {
-		int i_value;
+	bool to_int(const string& value, int& result) {
 		try {
-			i_value = stoi(value);
-		}
-		catch (const std::invalid_argument&) {
+			result = stoi(value);
+		} catch (const std::invalid_argument&) {
 			validError = "Invalid numerical value!";
 			return false;
-		}
-		catch (const std::out_of_range&) {
+		} catch (const std::out_of_range&) {
 			validError = "Value out of range!";
-			return false;
-		}
-		catch (const std::exception& e) {
+			return  false;
+		} catch (const std::exception& e) {
 			validError = string{e.what()};
 			return false;
 		}
 
-		if (name == "update_ms" and i_value < 100)
-			validError = "Config value update_ms set too low (<100).";
-
-		else if (name == "update_ms" and i_value > 86400000)
-			validError = "Config value update_ms set too high (>86400000).";
-
-		else
-			return true;
-
-		return false;
-	}
-
-	bool stringValid(const std::string_view name, const string& value) {
-		if (name == "log_level" and not v_contains(Logger::log_levels, value))
-			validError = "Invalid log_level: " + value;
-
-		else if (name == "graph_symbol" and not v_contains(valid_graph_symbols, value))
-			validError = "Invalid graph symbol identifier: " + value;
-
-		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
-			validError = fmt::format("Invalid graph symbol identifier for {}: {}", name, value);
-
-		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
-			validError = "Invalid box name(s) in shown_boxes!";
-
-		else if (name == "presets" and not presetsValid(value))
-			return false;
-
-		else if (name == "cpu_core_map") {
-			const auto maps = ssplit(value);
-			bool all_good = true;
-			for (const auto& map : maps) {
-				const auto map_split = ssplit(map, ':');
-				if (map_split.size() != 2)
-					all_good = false;
-				else if (not isint(map_split.at(0)) or not isint(map_split.at(1)))
-					all_good = false;
-
-				if (not all_good) {
-					validError = "Invalid formatting of cpu_core_map!";
-					return false;
-				}
-			}
-			return true;
-		}
-		else if (name == "io_graph_speeds") {
-			const auto maps = ssplit(value);
-			bool all_good = true;
-			for (const auto& map : maps) {
-				const auto map_split = ssplit(map, ':');
-				if (map_split.size() != 2)
-					all_good = false;
-				else if (map_split.at(0).empty() or not isint(map_split.at(1)))
-					all_good = false;
-
-				if (not all_good) {
-					validError = "Invalid formatting of io_graph_speeds!";
-					return false;
-				}
-			}
-			return true;
-		}
-
-		else
-			return true;
-
-		return false;
+		return true;
 	}
 
 	template<typename T>
@@ -242,18 +173,16 @@ namespace Config {
 		dynamic_set<T>(dest, offset, dynamic_get<T>(src, offset));
 	}
 
-	string getAsString(const std::string_view name) {
-		auto& entry = parse_table.at(name);
-		switch(entry.type) {
-			case ConfigType::BOOL:
-				return dynamic_get<bool>(current, entry.offset) ? "True" : "False";
-			case ConfigType::INT:
-				return to_string(dynamic_get<int>(current, entry.offset));
-			case ConfigType::STRING:
-				return dynamic_get<string>(current, entry.offset);
-			default:
-				throw std::logic_error("Not implemented");
+	string getAsString(const size_t offset) {
+		switch(offset) {
+#define X(T, name, v, desc) \
+			case CONFIG_OFFSET(name): \
+				return details::to_string<T>(current, offset);
+			OPTIONS_LIST
+#undef X
 		}
+
+		return "";
 	}
 
 	void unlock() {
@@ -270,17 +199,15 @@ namespace Config {
 		}
 
 		for(auto& item: cached) {
-			auto& data = parse_table.at(item);
-
-			switch(data.type) {
+			switch(item.second) {
 				case ConfigType::STRING:
-					copy_field<string>(current, cache, data.offset);
+					copy_field<string>(current, cache, item.first);
 					break;
 				case ConfigType::INT:
-					copy_field<int>(current, cache, data.offset);
+					copy_field<int>(current, cache, item.first);
 					break;
 				case ConfigType::BOOL:
-					copy_field<bool>(current, cache, data.offset);
+					copy_field<bool>(current, cache, item.first);
 					break;
 			}
 		}
@@ -350,23 +277,23 @@ namespace Config {
 				}
 				cread >> std::ws;
 
+				int intValue;
 				switch(found->second.type) {
 					case ConfigType::BOOL:
 						cread >> value;
-						if (not isbool(value))
-							load_warnings.push_back("Got an invalid bool value for config name: " + name);
-						else
+						try {
 							dynamic_set(set, found->second.offset, stobool(value));
+						} catch(std::invalid_argument&) {
+							load_warnings.push_back("Got an invalid bool value for config name: " + name);
+						}
 						break;
 					case ConfigType::INT:
 						cread >> value;
-						if (not isint(value))
-							load_warnings.push_back("Got an invalid integer value for config name: " + name);
-						else if (not intValid(name, value)) {
+						if(to_int(value, intValue) and validate(found->second.offset, intValue)) {
+							dynamic_set(set, found->second.offset, intValue);
+						} else {
 							load_warnings.push_back(validError);
 						}
-						else
-							dynamic_set(set, found->second.offset, stoi(value));
 						break;
 					case ConfigType::STRING:
 						if (cread.peek() == '"') {
@@ -375,10 +302,11 @@ namespace Config {
 						}
 						else cread >> value;
 
-						if (not stringValid(name, value))
-							load_warnings.push_back(validError);
-						else
+						if (validate(found->second.offset, value)) {
 							dynamic_set(set, found->second.offset, value);
+						} else {
+							load_warnings.push_back(validError);
+						}
 						break;
 				}
 
@@ -391,34 +319,37 @@ namespace Config {
 		}
 	}
 
+	template<typename T>
+	inline void write_field(std::ofstream& stream, const std::string_view name, const T& value, const std::string_view description) {
+		stream << "\n\n";
+		if(not description.empty()) {
+			stream << description << '\n';
+		}
+
+		stream << name << " = ";
+
+		if constexpr(std::is_same_v<T, bool>) {
+			stream << (value ? "True" : "False");
+		}
+
+		if constexpr(std::is_same_v<T, int>) {
+			stream << value;
+		}
+
+		if constexpr(std::is_same_v<T, string>) {
+			stream << '"' << value << '"';
+		}
+	}
+
 	void write() {
 		if (conf_file.empty() or not write_new) return;
 		Logger::debug("Writing new config file");
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
-		auto write_field = [&](const std::string_view name, const std::string_view description) {
-			cwrite << "\n\n";
-			if(not description.empty()) {
-				cwrite << description << "\n";
-			}
-			cwrite << name << " = ";
-			auto& data = parse_table.at(name);
-			switch(data.type) {
-				case ConfigType::BOOL:
-					cwrite << (dynamic_get<bool>(current, data.offset) ? "True" : "False");
-					break;
-				case ConfigType::INT:
-					cwrite << dynamic_get<int>(current, data.offset);
-					break;
-				case ConfigType::STRING:
-					cwrite << '"' << dynamic_get<string>(current, data.offset) << '"';
-					break;
-			}
-		};
 
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version;
-#define X(T, name, v, desc) write_field(#name, desc);
+#define X(T, name, v, desc) write_field(cwrite, #name, current.name, desc);
 			OPTIONS_WRITABLE_LIST
 #undef X
 		}
