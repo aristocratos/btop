@@ -669,6 +669,7 @@ namespace Logger {
 		lose_priv neutered{};
 		std::error_code ec;
 		try {
+			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 				auto old_log = logfile;
 				old_log += ".1";

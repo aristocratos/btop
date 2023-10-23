@@ -18,9 +18,10 @@ tab-size = 4
 
 #pragma once
 
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 #include <unordered_map>
 
@@ -56,6 +57,8 @@ namespace Config {
 	extern vector<string> preset_list;
 	extern vector<string> available_batteries;
 	extern int current_preset;
+
+	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
 
 	//* Check if string only contains space separated valid names for boxes
 	bool check_boxes(const string& boxes);
