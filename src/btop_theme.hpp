@@ -121,7 +121,7 @@ namespace Theme {
 		}
 	};
 
-#define THEME_OFFSET(name) offsetof(RGBTheme, name)
+#define THEME_OFFSET(name) offsetof(Theme::RGBTheme, name)
 
 	struct EscapeTheme {
 #define X(name, fg, required, v, escape) string name{};
@@ -146,6 +146,7 @@ namespace Theme {
 		THEME_GRADIENTS
 #undef GRADIENT
 	};
+#define GRADIENT_OFFSET(name) offsetof(Theme::GradientTheme, name)
 
 	//* Contains "Default" and "TTY" at indeces 0 and 1, otherwise full paths to theme files
 	extern vector<string> themes;
@@ -166,6 +167,7 @@ namespace Theme {
 
 	const EscapeTheme& c();
 	const GradientTheme& g();
+	bool is_tty();
 
 	//* Update list of paths for available themes
 	void updateThemes();

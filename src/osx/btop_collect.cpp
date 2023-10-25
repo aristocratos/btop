@@ -692,7 +692,8 @@ namespace Mem {
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
-			for (const auto &name : swap_names) {
+			for (const auto &pair : swap_names) {
+				auto& name = pair.name;
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2))
 					mem.percent.at(name).pop_front();
@@ -701,7 +702,8 @@ namespace Mem {
 		} else
 			has_swap = false;
 		//? Calculate percentages
-		for (const auto &name : mem_names) {
+		for (const auto &pair : mem_names) {
+			auto& name = pair.name;
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2))
 				mem.percent.at(name).pop_front();

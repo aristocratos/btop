@@ -151,11 +151,13 @@ namespace Term {
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
 
+	size_t wide_ulen(const std::string_view& str);
 	size_t wide_ulen(const string& str);
 	size_t wide_ulen(const std::wstring& w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-	inline size_t ulen(const string& str, bool wide = false) {
+	template<typename T>
+	inline size_t ulen(const T& str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 

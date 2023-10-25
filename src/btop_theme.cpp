@@ -16,7 +16,7 @@ indent = tab
 tab-size = 4
 */
 
-#include <cmath>
+#include <cctype>
 #include <fstream>
 #include <unistd.h>
 
@@ -24,7 +24,6 @@ tab-size = 4
 #include "btop_config.hpp"
 #include "btop_theme.hpp"
 
-using std::round;
 using std::vector;
 
 using namespace Tools;
@@ -50,6 +49,7 @@ namespace Theme {
 
 	EscapeTheme escapes;
 	GradientTheme gradients;
+	bool tty_theme{};
 
 	const EscapeTheme& c() {
 		return escapes;
@@ -59,49 +59,187 @@ namespace Theme {
 		return gradients;
 	}
 
+	bool is_tty() {
+		return tty_theme;
+	}
+
+	const std::array<uint8_t, 256> grayscale_lut = {
+		232, 232, 232, 232, 232, 232, 233, 233,
+		233, 233, 233, 233, 233, 233, 233, 233,
+		233, 234, 234, 234, 234, 234, 234, 234,
+		234, 234, 234, 234, 235, 235, 235, 235,
+		235, 235, 235, 235, 235, 235, 235, 236,
+		236, 236, 236, 236, 236, 236, 236, 236,
+		236, 236, 237, 237, 237, 237, 237, 237,
+		237, 237, 237, 237, 237, 238, 238, 238,
+		238, 238, 238, 238, 238, 238, 238, 238,
+		239, 239, 239, 239, 239, 239, 239, 239,
+		239, 239, 239, 240, 240, 240, 240, 240,
+		240, 240, 240, 240, 240, 240, 241, 241,
+		241, 241, 241, 241, 241, 241, 241, 241,
+		241, 242, 242, 242, 242, 242, 242, 242,
+		242, 242, 242, 242, 243, 243, 243, 243,
+		243, 243, 243, 243, 243, 243, 243, 244,
+		244, 244, 244, 244, 244, 244, 244, 244,
+		244, 244, 245, 245, 245, 245, 245, 245,
+		245, 245, 245, 245, 245, 246, 246, 246,
+		246, 246, 246, 246, 246, 246, 246, 246,
+		247, 247, 247, 247, 247, 247, 247, 247,
+		247, 247, 247, 248, 248, 248, 248, 248,
+		248, 248, 248, 248, 248, 248, 249, 249,
+		249, 249, 249, 249, 249, 249, 249, 249,
+		249, 250, 250, 250, 250, 250, 250, 250,
+		250, 250, 250, 250, 251, 251, 251, 251,
+		251, 251, 251, 251, 251, 251, 251, 252,
+		252, 252, 252, 252, 252, 252, 252, 252,
+		252, 252, 253, 253, 253, 253, 253, 253,
+		253, 253, 253, 253, 253, 254, 254, 254,
+		254, 254, 254, 254, 254, 254, 254, 254,
+		255, 255, 255, 255, 255, 255, 255, 231,
+	};
+
+	const std::array<uint8_t, 256> color_lut = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2,
+		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+		2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+		4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+		4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+		4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+		5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+	};
+
+	const std::array<int8_t, 256> hex_lut = {
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1,
+		-1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	};
+
+	const std::array<int8_t, 256> decimal_lut = {
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	};
+
 	namespace {
 		//* Convert 24-bit colors to 256 colors
 		int truecolor_to_256(const int& r, const int& g, const int& b) {
 			//? Use upper 232-255 greyscale values if the downscaled red, green and blue are the same value
-			if (const int red = round((double)r / 11); red == round((double)g / 11) and red == round((double)b / 11)) {
-				return 232 + red;
+			if (grayscale_lut[r] == grayscale_lut[g] && grayscale_lut[g] == grayscale_lut[b]) {
+				return grayscale_lut[r];
 			}
 			//? Else use 6x6x6 color cube to calculate approximate colors
-			else {
-				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
-			}
+			return color_lut[r] * 36 + color_lut[g] * 6 + color_lut[b] + 16;
 		}
 	}
 
+	inline const char* skip_whitespace(const char* s) {
+		while(isspace(*s)) ++s;
+
+		return s;
+	}
+
+	inline size_t parse_decimal(const char* s, uint16_t& output) {
+		size_t i = 0;
+		for(; i < 3; ++i) {
+			int8_t digit = decimal_lut[(size_t)s[i]];
+			if(digit == -1) break;
+			output = output * 10 + digit;
+		}
+
+		return i;
+	}
+
 	int32_t parse_color(const std::string& color) {
-		int32_t n;
-		size_t color_start, color_end, string_end;
-		if(sscanf(color.c_str(), " #%ln%6x%ln %ln", &color_start, &n, &color_end, &string_end) == 4 && string_end == color.length()) {
-			switch(color_end - color_start) {
+		const char* s = skip_whitespace(color.c_str());
+
+		if(*s == '#') { // #ab or #abcdef
+			++s;
+			uint32_t n = 0;
+			size_t i = 0;
+			for(; i < 6; ++i) {
+				int8_t digit = hex_lut[(size_t)s[i]];
+				if(digit == -1) break;
+				n = n * 16 + digit;
+			}
+
+			s = skip_whitespace(s + i);
+			if(*s != '\0') goto error;
+
+			switch(i) {
+				case 2:
+					return n << 16 | n << 8 | n;
 				case 6:
 					return n;
-				case 2:
-					return (n << 16 | n << 8 | n);
 				default:
 					Logger::error("Invalid size of hex value: " + color);
 					return -1;
 			}
-		}
+		} else if(decimal_lut[(size_t)*s] >= 0) { // rgb numbers separated with commas
+			uint16_t r = 0, g = 0, b = 0;
+			size_t i = parse_decimal(s, r);
 
-		uint16_t r,g,b;
-		if(sscanf(color.c_str(), " %3hu , %3hu , %3hu %ln", &r, &g, &b, &string_end) == 4 && string_end == color.length()) {
+			s = skip_whitespace(s + i);
+			if(*s != ',') goto error;
+
+			s = skip_whitespace(s + 1);
+			i = parse_decimal(s, g);
+			if(i == 0) goto error;
+
+			s = skip_whitespace(s + i);
+			if(*s != ',') goto error;
+
+			s = skip_whitespace(s + 1);
+			i = parse_decimal(s, b);
+			if(i == 0) goto error;
+
+			s = skip_whitespace(s + i);
+			if(*s != '\0') goto error;
+
 			r = r > 0xff ? 0xff : r;
 			g = g > 0xff ? 0xff : g;
 			b = b > 0xff ? 0xff : b;
 
 			return r << 16 | g << 8 | b;
-		}
-
-		// String empty or full of whitespace
-		if(sscanf(color.c_str(), " %ln", &string_end) > 0 && string_end == color.length()) {
+		} else if(*s == '\0') { // string empty or whitespace only
 			return -1;
 		}
 
+error:
 		Logger::error("Invalid color value: " + color);
 		return -1;
 	}
@@ -109,16 +247,16 @@ namespace Theme {
 	string color_to_escape(int32_t color, bool t_to_256, ThemeLayer fg) {
 		if(color < 0) return "";
 
-		string pre = Fx::e + (fg == ThemeLayer::Foreground ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+		uint8_t sgr = fg == ThemeLayer::Foreground ? 38 : 48;
+		uint8_t r = color >> 16;
+		uint8_t g = (color >> 8) & 0xff;
+		uint8_t b = color & 0xff;
 
 		if (t_to_256) {
-			return fmt::format("{}{}m", pre, truecolor_to_256(
-						color >> 16,
-						(color >> 8) & 0xff,
-						color & 0xff));
+			return fmt::format("\x1b[{};5;{}m", sgr, truecolor_to_256(r, g, b));
 		}
 
-		return fmt::format("{}{};{};{}m", pre, color >> 16, (color >> 8) & 0xff, color & 0xff);
+		return fmt::format("\x1b[{};2;{};{};{}m", sgr, r, g, b);
 	}
 
 	namespace {
@@ -168,7 +306,7 @@ namespace Theme {
 				source.process_end = source.cpu_end;
 			}
 			if (source.graph_text == -1) {
-				output_theme.graph_text = output_theme.graph_text;
+				output_theme.graph_text = output_theme.inactive_fg;
 				source.graph_text = source.inactive_fg;
 			}
 
@@ -188,24 +326,24 @@ namespace Theme {
 					double t = i/50.0;
 					output_colors[i] = rgb_to_escape(lerp_color(start >> 16, t, mid >> 16),
 						lerp_color(start >> 8 & 0xff, t, mid >> 8 & 0xff),
-						lerp_color(start & 0xff, t, mid & 0xff), to_256, ThemeLayer::Foreground);
+						lerp_color(start & 0xff, t, mid & 0xff), to_256);
 				}
 
 				for (size_t i = 1; i <= 50; ++i) {
 					double t = i/50.0;
 					output_colors[i + 50] = rgb_to_escape(lerp_color(mid >> 16, t, end >> 16),
 						lerp_color(mid >> 8 & 0xff, t, end >> 8 & 0xff),
-						lerp_color(mid & 0xff, t, end & 0xff), to_256, ThemeLayer::Foreground);
+						lerp_color(mid & 0xff, t, end & 0xff), to_256);
 				}
 			} else if(end >= 0) {
 				for (size_t i = 0; i <= 100; ++i) {
 					double t = i/100.0;
 					output_colors[i] = rgb_to_escape(lerp_color(start >> 16, t, end >> 16),
 						lerp_color(start >> 8 & 0xff, t, end >> 8 & 0xff),
-						lerp_color(start & 0xff, t, end & 0xff), to_256, ThemeLayer::Foreground);
+						lerp_color(start & 0xff, t, end & 0xff), to_256);
 				}
 			} else {
-				output_colors.fill(color_to_escape(start, to_256, ThemeLayer::Foreground));
+				output_colors.fill(color_to_escape(start, to_256));
 			}
 
 			return output_colors;
@@ -260,6 +398,7 @@ namespace Theme {
 
 		//* Set colors and generate gradients for the TTY theme
 		void generateTTYColors() {
+			tty_theme = true;
 			escapes = EscapeTheme::get_tty();
 			if (not Config::getB("theme_background"))
 				escapes.main_bg = "\x1b[49m";
@@ -352,11 +491,10 @@ namespace Theme {
 		if (theme == "TTY" or Config::getB("tty_mode")) {
 			generateTTYColors();
 		} else {
+			tty_theme = false;
 			RGBTheme colors = theme == "Default" or theme_path.empty() ? RGBTheme::get_default() : loadFile(theme_path);
 			escapes = generateColors(colors);
 			gradients = generateGradients(colors);
-			Term::fg = escapes.main_fg;
-			Term::fg = escapes.main_bg;
 		}
 		Term::fg = escapes.main_fg;
 		Term::bg = escapes.main_bg;

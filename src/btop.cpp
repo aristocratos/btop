@@ -67,14 +67,14 @@ using namespace std::chrono_literals;
 using namespace std::literals;
 
 namespace Global {
-	const vector<array<string, 2>> Banner_src = {
-		{"#E62525", "██████╗ ████████╗ ██████╗ ██████╗"},
-		{"#CD2121", "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
-		{"#B31D1D", "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
-		{"#9A1919", "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
-		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
-		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
-	};
+	const array<BannerLine, 6> Banner_src = {{
+		{ .color = 0xE62525, .text = "██████╗ ████████╗ ██████╗ ██████╗"},
+		{ .color = 0xCD2121, .text = "██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗   ██╗    ██╗"},
+		{ .color = 0xB31D1D, .text = "██████╔╝   ██║   ██║   ██║██████╔╝ ██████╗██████╗"},
+		{ .color = 0x9A1919, .text = "██╔══██╗   ██║   ██║   ██║██╔═══╝  ╚═██╔═╝╚═██╔═╝"},
+		{ .color = 0x801414, .text = "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
+		{ .color = 0x000000, .text = "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
+	}};
 	const string Version = "1.2.13";
 
 	int coreCount;
@@ -613,7 +613,7 @@ namespace Runner {
 						"{mv6}{hiFg}esc {mainFg}| Show menu"
 						"{mv7}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
-						"titleFg"_a = Theme::c("title"), "b"_a = Fx::b, "hiFg"_a = Theme::c("hi_fg"), "mainFg"_a = Theme::c("main_fg"),
+						"titleFg"_a = Theme::c().title, "b"_a = Fx::b, "hiFg"_a = Theme::c().hi_fg, "mainFg"_a = Theme::c().main_fg,
 						"mv1"_a = Mv::to(y+6, x),
 						"mv2"_a = Mv::to(y+8, x),
 						"mv3"_a = Mv::to(y+9, x),
@@ -629,9 +629,9 @@ namespace Runner {
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
 				output += fmt::format("{pre}{box:5.5} {collect:>12.12} {draw:>12.12}{post}",
-					"pre"_a = debug_bg + Theme::c("title") + Fx::b,
+					"pre"_a = debug_bg + Theme::c().title + Fx::b,
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
-					"post"_a = Theme::c("main_fg") + Fx::ub
+					"post"_a = Theme::c().main_fg + Fx::ub
 				);
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
@@ -650,7 +650,7 @@ namespace Runner {
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			cout << Term::sync_start << (conf.overlay.empty()
 					? output
-					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
+					: (output.empty() ? "" : Fx::ub + Theme::c().inactive_fg + Fx::uncolor(output)) + conf.overlay)
 				<< Term::sync_end << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
