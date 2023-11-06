@@ -56,6 +56,7 @@ namespace Input {
 		{"OC",		"right"},
 		{"[2~",		"insert"},
 		{"[3~",		"delete"},
+		{"[P",		"delete"},
 		{"[H",		"home"},
 		{"[F",		"end"},
 		{"[5~",		"page_up"},
