@@ -18,6 +18,7 @@ tab-size = 4
 
 #pragma once
 
+#include "btop_theme.hpp"
 #include <array>
 #include <atomic>
 #include <deque>
@@ -45,7 +46,12 @@ void banner_gen();
 extern void clean_quit(int sig);
 
 namespace Global {
-	extern const vector<array<string, 2>> Banner_src;
+	struct BannerLine {
+		uint32_t color;
+		const std::string_view text;
+	};
+
+	extern const array<BannerLine, 6> Banner_src;
 	extern const string Version;
 	extern atomic<bool> quitting;
 	extern string exit_error_msg;
@@ -133,8 +139,20 @@ namespace Mem {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool has_swap, shown, redraw;
-	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
-	const array swap_names { "swap_used"s, "swap_free"s };
+	struct MemNameEntry {
+		string name;
+		uint32_t offset;
+	};
+	const std::array<MemNameEntry, 4> mem_names = {{
+		{ "used", GRADIENT_OFFSET(used) },
+		{ "available",  GRADIENT_OFFSET(available) },
+		{ "cached", GRADIENT_OFFSET(cached) },
+		{ "free", GRADIENT_OFFSET(free) }
+	}};
+	const std::array<MemNameEntry, 2> swap_names = {{
+		{ "swap_used", GRADIENT_OFFSET(used) },
+		{ "swap_free", GRADIENT_OFFSET(free) },
+	}};
 	extern int disk_ios;
 
 	struct disk_info {

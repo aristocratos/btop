@@ -178,6 +178,22 @@ namespace Term {
 // }
 
 namespace Tools {
+	size_t wide_ulen(const std::string_view& str) {
+		unsigned int chars = 0;
+		try {
+			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
+
+			for (auto c : w_str) {
+				chars += utf8::wcwidth(c);
+			}
+		}
+		catch (...) {
+			return ulen(str);
+		}
+
+		return chars;
+	}
 
 	size_t wide_ulen(const string& str) {
 		unsigned int chars = 0;

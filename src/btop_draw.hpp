@@ -88,12 +88,12 @@ namespace Draw {
 	//* Class holding a percentage meter
 	class Meter {
 		int width;
-		string color_gradient;
+		uint32_t gradient_offset;
 		bool invert;
 		array<string, 101> cache;
 	public:
 		Meter();
-		Meter(const int width, const string& color_gradient, bool invert = false);
+		Meter(const int width, uint32_t gradient_offset, bool invert = false);
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value);
@@ -102,7 +102,7 @@ namespace Draw {
 	//* Class holding a percentage graph
 	class Graph {
 		int width, height;
-		string color_gradient;
+		int32_t gradient_offset;
 		string out, symbol = "default";
 		bool invert, no_zero;
 		long long offset;
@@ -116,7 +116,7 @@ namespace Draw {
 	public:
 		Graph();
 		Graph(int width, int height,
-			const string& color_gradient,
+			const int32_t gradient_offset,
 			const deque<long long>& data,
 			const string& symbol="default",
 			bool invert=false, bool no_zero=false,

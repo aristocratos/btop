@@ -110,33 +110,33 @@ namespace Draw {
 			auto lowcolor = Config::getB("lowcolor");
 			auto tty_mode = Config::getB("tty_mode");
 			for (size_t z = 0; const auto& line : Global::Banner_src) {
-				if (const auto w = ulen(line[1]); w > width) width = w;
+				if (const auto w = ulen(line.text); w > width) width = w;
 				if (tty_mode) {
 					fg = (z > 2) ? "\x1b[31m" : "\x1b[91m";
 					bg = (z > 2) ? "\x1b[90m" : "\x1b[37m";
 				}
 				else {
-					fg = Theme::hex_to_color(line[0], lowcolor);
+					fg = Theme::color_to_escape(line.color, lowcolor);
 					int bg_i = 120 - z * 12;
-					bg = Theme::dec_to_color(bg_i, bg_i, bg_i, lowcolor);
+					bg = Theme::rgb_to_escape(bg_i, bg_i, bg_i, lowcolor);
 				}
-				for (size_t i = 0; i < line[1].size(); i += 3) {
-					if (line[1][i] == ' ') {
+				for (size_t i = 0; i < line.text.size(); i += 3) {
+					if (line.text[i] == ' ') {
 						letter = Mv::r(1);
 						i -= 2;
 					}
 					else
-						letter = line[1].substr(i, 3);
+						letter = line.text.substr(i, 3);
 
 					b_color = (letter == "█") ? fg : bg;
 					if (b_color != oc) banner += b_color;
 					banner += letter;
 					oc = b_color;
 				}
-				if (++z < Global::Banner_src.size()) banner += Mv::l(ulen(line[1])) + Mv::d(1);
+				if (++z < Global::Banner_src.size()) banner += Mv::l(ulen(line.text)) + Mv::d(1);
 			}
 			banner += Mv::r(18 - Global::Version.size())
-					+ Theme::c("main_fg") + Fx::b + Fx::i + "v" + Global::Version + Fx::reset;
+					+ Theme::c().main_fg + Fx::b + Fx::i + "v" + Global::Version + Fx::reset;
 		}
 		if (redraw) return "";
 		return (centered ? Mv::to(y, Term::width / 2 - width / 2) : Mv::to(y, x)) + banner;
@@ -248,11 +248,11 @@ namespace Draw {
 		string out;
 
 		if (line_color.empty())
-			line_color = Theme::c("div_line");
+			line_color = Theme::c().div_line;
 
 		auto tty_mode = Config::getB("tty_mode");
 		auto rounded = Config::getB("rounded_corners");
-		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
+		const string numbering = (num == 0) ? "" : Theme::c().hi_fg + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
@@ -280,11 +280,11 @@ namespace Draw {
 
 		//? Draw titles if defined
 		if (not title.empty()) {
-			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title
+			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c().title + title
 				+  Fx::ub + line_color + Symbols::title_right;
 		}
 		if (not title2.empty()) {
-			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left_down + Fx::b + numbering + Theme::c("title") + title2
+			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left_down + Fx::b + numbering + Theme::c().title + title2
 				+  Fx::ub + line_color + Symbols::title_right_down;
 		}
 
@@ -345,12 +345,12 @@ namespace Draw {
 
 		if (clock_str.size() != clock_len) {
 			if (not Global::resized and clock_len > 0)
-				out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * clock_len;
+				out = Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c().cpu_box + Symbols::h_line * clock_len;
 			clock_len = clock_str.size();
 		}
 
-		out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c("cpu_box") + title_left
-			+ Theme::c("title") + Fx::b + clock_str + Theme::c("cpu_box") + Fx::ub + title_right;
+		out += Mv::to(y, x+(width / 2)-(clock_len / 2)) + Fx::ub + Theme::c().cpu_box + title_left
+			+ Theme::c().title + Fx::b + clock_str + Theme::c().cpu_box + Fx::ub + title_right;
 
 		return true;
 	}
@@ -358,20 +358,21 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-	Meter::Meter(const int width, const string& color_gradient, bool invert)
-		: width(width), color_gradient(color_gradient), invert(invert) {}
+	Meter::Meter(const int width, uint32_t gradient_offset, bool invert)
+		: width(width), gradient_offset(gradient_offset), invert(invert) {}
 
 	string Meter::operator()(int value) {
 		if (width < 1) return "";
 		value = clamp(value, 0, 100);
 		if (not cache.at(value).empty()) return cache.at(value);
 		auto& out = cache.at(value);
+		auto& color_gradient = *(array<string, 101>*)((char*)&Theme::g() + gradient_offset);
 		for (const int& i : iota(1, width + 1)) {
 			int y = round((double)i * 100.0 / width);
 			if (value >= y)
-				out += Theme::g(color_gradient).at(invert ? 100 - y : y) + Symbols::meter;
+				out += color_gradient.at(invert ? 100 - y : y) + Symbols::meter;
 			else {
-				out += Theme::c("meter_bg") + Symbols::meter * (width + 1 - i);
+				out += Theme::c().meter_bg + Symbols::meter * (width + 1 - i);
 				break;
 			}
 		}
@@ -389,6 +390,12 @@ namespace Draw {
 		if (mult and data_offset > 0) {
 			last = data.at(data_offset - 1);
 			if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
+		}
+
+
+		array<string, 101> *color_gradient{};
+		if(gradient_offset != -1) {
+			color_gradient = (array<string, 101>*)((char*)&Theme::g() + (uint32_t)gradient_offset);
 		}
 
 		//? Horizontal iteration over values in <data>
@@ -423,7 +430,7 @@ namespace Draw {
 				if (height == 1) {
 					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(horizon) += Mv::r(1);
 					else {
-						if (not color_gradient.empty()) graphs.at(current).at(horizon) += Theme::g(color_gradient).at(clamp(max(last, data_value), 0ll, 100ll));
+						if (gradient_offset != -1) graphs.at(current).at(horizon) += color_gradient->at(clamp(max(last, data_value), 0ll, 100ll));
 						graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 					}
 				}
@@ -435,26 +442,26 @@ namespace Draw {
 		out.clear();
 		if (height == 1) {
 			//if (not color_gradient.empty())
-			//	out += (last < 1 ? Theme::c("inactive_fg") : Theme::g(color_gradient).at(clamp(last, 0ll, 100ll)));
+			//	out += (last < 1 ? Theme::c().inactive_fg : Theme::g(color_gradient).at(clamp(last, 0ll, 100ll)));
 			out += graphs.at(current).at(0);
 		}
 		else {
 			for (const int& i : iota(1, height + 1)) {
 				if (i > 1) out += Mv::d(1) + Mv::l(width);
-				if (not color_gradient.empty())
-					out += (invert) ? Theme::g(color_gradient).at(i * 100 / height) : Theme::g(color_gradient).at(100 - ((i - 1) * 100 / height));
+				if (gradient_offset != -1)
+					out += (invert) ? color_gradient->at(i * 100 / height) : color_gradient->at(100 - ((i - 1) * 100 / height));
 				out += (invert) ? graphs.at(current).at(height - i) : graphs.at(current).at(i-1);
 			}
 		}
-		if (not color_gradient.empty()) out += Fx::reset;
+		if (gradient_offset != -1) out += Fx::reset;
 	}
 
 	Graph::Graph() {}
 
-	Graph::Graph(int width, int height, const string& color_gradient,
+	Graph::Graph(int width, int height, int32_t gradient_offset,
 				 const deque<long long>& data, const string& symbol,
 				 bool invert, bool no_zero, long long max_value, long long offset)
-	: width(width), height(height), color_gradient(color_gradient),
+	: width(width), height(height), gradient_offset(gradient_offset),
 	  invert(invert), no_zero(no_zero), offset(offset) {
 		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
@@ -533,8 +540,8 @@ namespace Cpu {
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto& temp_scale = Config::getS("temp_scale");
 		auto cpu_bottom = Config::getB("cpu_bottom");
-		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
-		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
+		const string& title_left = Theme::c().cpu_box + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
+		const string& title_right = Theme::c().cpu_box + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
 		if (cpu.cpu_percent.at("total").empty()
 			or cpu.core_percent.at(0).empty()
@@ -551,24 +558,24 @@ namespace Cpu {
 			out += box;
 
 			//? Buttons on title
-			out += Mv::to(button_y, x + 10) + title_left + Theme::c("hi_fg") + Fx::b + 'm' + Theme::c("title") + "enu" + Fx::ub + title_right;
+			out += Mv::to(button_y, x + 10) + title_left + Theme::c().hi_fg + Fx::b + 'm' + Theme::c().title + "enu" + Fx::ub + title_right;
 			Input::mouse_mappings["m"] = {button_y, x + 11, 1, 4};
-			out += Mv::to(button_y, x + 16) + title_left + Theme::c("hi_fg") + Fx::b + 'p' + Theme::c("title") + "reset "
+			out += Mv::to(button_y, x + 16) + title_left + Theme::c().hi_fg + Fx::b + 'p' + Theme::c().title + "reset "
 				+ (Config::current_preset < 0 ? "*" : to_string(Config::current_preset)) + Fx::ub + title_right;
 			Input::mouse_mappings["p"] = {button_y, x + 17, 1, 8};
 			const string update = to_string(Config::getI("update_ms")) + "ms";
-			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
-				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
+			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c().hi_fg + "- " + Theme::c().title + update
+				+ Theme::c().hi_fg + " +" + Fx::ub + title_right;
 			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
 
 			//? Graphs & meters
-			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", cpu.cpu_percent.at(graph_up_field), graph_symbol, false, true};
-			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11), "cpu"};
+			graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, GRADIENT_OFFSET(cpu), cpu.cpu_percent.at(graph_up_field), graph_symbol, false, true};
+			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11), GRADIENT_OFFSET(cpu)};
 			if (not single_graph) {
 				graph_lower = Draw::Graph{
 					x + width - b_width - 3,
-					graph_low_height, "cpu",
+					graph_low_height, GRADIENT_OFFSET(cpu),
 					cpu.cpu_percent.at(graph_lo_field),
 					graph_symbol,
 					Config::getB("cpu_invert_lower"), true
@@ -576,25 +583,25 @@ namespace Cpu {
 			}
 
 			if (mid_line) {
-				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
+				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c().cpu_box + Symbols::div_left + Theme::c().div_line
 					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
 					+ Mv::to(y + graph_up_height + 1, x + ((width - b_width) / 2) - ((graph_up_field.size() + graph_lo_field.size()) / 2) - 4)
-					+ Theme::c("main_fg") + graph_up_field + Mv::r(1) + "▲▼" + Mv::r(1) + graph_lo_field;
+					+ Theme::c().main_fg + graph_up_field + Mv::r(1) + "▲▼" + Mv::r(1) + graph_lo_field;
 			}
 
 			if (b_column_size > 0 or extra_width > 0) {
 				core_graphs.clear();
 				for (const auto& core_data : cpu.core_percent) {
-					core_graphs.emplace_back(5 * b_column_size + extra_width, 1, "cpu", core_data, graph_symbol);
+					core_graphs.emplace_back(5 * b_column_size + extra_width, 1, GRADIENT_OFFSET(cpu), core_data, graph_symbol);
 				}
 			}
 
 			if (show_temps) {
 				temp_graphs.clear();
-				temp_graphs.emplace_back(5, 1, "temp", cpu.temp.at(0), graph_symbol, false, false, cpu.temp_max, -23);
+				temp_graphs.emplace_back(5, 1, GRADIENT_OFFSET(temp), cpu.temp.at(0), graph_symbol, false, false, cpu.temp_max, -23);
 				if (not hide_cores and b_column_size > 1) {
 					for (const auto& i : iota((size_t)1, cpu.temp.size())) {
-						temp_graphs.emplace_back(5, 1, "temp", cpu.temp.at(i), graph_symbol, false, false, cpu.temp_max, -23);
+						temp_graphs.emplace_back(5, 1, GRADIENT_OFFSET(temp), cpu.temp.at(i), graph_symbol, false, false, cpu.temp_max, -23);
 					}
 				}
 			}
@@ -605,7 +612,7 @@ namespace Cpu {
 			static int old_percent{};   // defaults to = 0
 			static long old_seconds{};  // defaults to = 0
 			static string old_status;
-			static Draw::Meter bat_meter {10, "cpu", true};
+			static Draw::Meter bat_meter {10, GRADIENT_OFFSET(cpu), true};
 			static const unordered_flat_map<string, string> bat_symbols = {
 				{"charging", "▲"},
 				{"discharging", "▼"},
@@ -626,17 +633,17 @@ namespace Cpu {
 				const int current_pos = Term::width - current_len - 17;
 
 				if ((bat_pos != current_pos or bat_len != current_len) and bat_pos > 0 and not redraw)
-					out += Mv::to(y, bat_pos) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * (bat_len + 4);
+					out += Mv::to(y, bat_pos) + Fx::ub + Theme::c().cpu_box + Symbols::h_line * (bat_len + 4);
 				bat_pos = current_pos;
 				bat_len = current_len;
 
-				out += Mv::to(y, bat_pos) + title_left + Theme::c("title") + Fx::b + "BAT" + bat_symbol + ' ' + str_percent
+				out += Mv::to(y, bat_pos) + title_left + Theme::c().title + Fx::b + "BAT" + bat_symbol + ' ' + str_percent
 					+ (Term::width >= 100 ? Fx::ub + ' ' + bat_meter(percent) + Fx::b : "")
-					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : " ") + Fx::ub + title_right;
+					+ (not str_time.empty() ? ' ' + Theme::c().title + str_time : " ") + Fx::ub + title_right;
 			}
 		}
 		else if (bat_pos > 0) {
-			out += Mv::to(y, bat_pos) + Fx::ub + Theme::c("cpu_box") + Symbols::h_line * (bat_len + 4);
+			out += Mv::to(y, bat_pos) + Fx::ub + Theme::c().cpu_box + Symbols::h_line * (bat_len + 4);
 			bat_pos = bat_len = 0;
 		}
 
@@ -654,25 +661,25 @@ namespace Cpu {
 				upstr = trans(upstr);
 			}
 			out += Mv::to(y + (single_graph or not Config::getB("cpu_invert_lower") ? 1 : height - 2), x + 2)
-				+ Theme::c("graph_text") + "up" + Mv::r(1) + upstr;
+				+ Theme::c().graph_text + "up" + Mv::r(1) + upstr;
 		}
 
 		//? Cpu clock and cpu meter
 		if (Config::getB("show_cpu_freq") and not cpuHz.empty())
-			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * (7 - cpuHz.size())
-				+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
+			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c().div_line + Symbols::h_line * (7 - cpuHz.size())
+				+ Symbols::title_left + Fx::b + Theme::c().title + cpuHz + Fx::ub + Theme::c().div_line + Symbols::title_right;
 
-		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
-			+ Theme::g("cpu").at(clamp(cpu.cpu_percent.at("total").back(), 0ll, 100ll)) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c("main_fg") + '%';
+		out += Mv::to(b_y + 1, b_x + 1) + Theme::c().main_fg + Fx::b + "CPU " + cpu_meter(cpu.cpu_percent.at("total").back())
+			+ Theme::g().cpu.at(clamp(cpu.cpu_percent.at("total").back(), 0ll, 100ll)) + rjust(to_string(cpu.cpu_percent.at("total").back()), 4) + Theme::c().main_fg + '%';
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(cpu.temp.at(0).back(), temp_scale);
-			const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
+			const auto& temp_color = Theme::g().temp.at(clamp(cpu.temp.at(0).back() * 100 / cpu.temp_max, 0ll, 100ll));
 			if (b_column_size > 1 or b_columns > 1)
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+				out += ' ' + Theme::c().inactive_fg + graph_bg * 5 + Mv::l(5) + temp_color
 					+ temp_graphs.at(0)(cpu.temp.at(0), data_same or redraw);
-			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			out += rjust(to_string(temp), 4) + Theme::c().main_fg + unit;
 		}
-		out += Theme::c("div_line") + Symbols::v_line;
+		out += Theme::c().div_line + Symbols::v_line;
 
 		} catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + string{e.what()}); }
 
@@ -680,25 +687,25 @@ namespace Cpu {
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
 		for (const auto& n : iota(0, Shared::coreCount)) {
-			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c("main_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c().main_fg + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
-				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
+				out += Theme::c().inactive_fg + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(cpu.core_percent.at(n), data_same or redraw);
 
-			out += Theme::g("cpu").at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll));
-			out += rjust(to_string(cpu.core_percent.at(n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
+			out += Theme::g().cpu.at(clamp(cpu.core_percent.at(n).back(), 0ll, 100ll));
+			out += rjust(to_string(cpu.core_percent.at(n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c().main_fg + '%';
 
 			if (show_temps and not hide_cores) {
 				const auto [temp, unit] = celsius_to(cpu.temp.at(n+1).back(), temp_scale);
-				const auto& temp_color = Theme::g("temp").at(clamp(cpu.temp.at(n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
+				const auto& temp_color = Theme::g().temp.at(clamp(cpu.temp.at(n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
 				if (b_column_size > 1)
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
+					out += ' ' + Theme::c().inactive_fg + graph_bg * 5 + Mv::l(5)
 						+ temp_graphs.at(n+1)(cpu.temp.at(n+1), data_same or redraw);
-				out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				out += temp_color + rjust(to_string(temp), 4) + Theme::c().main_fg + unit;
 			}
 
-			out += Theme::c("div_line") + Symbols::v_line;
+			out += Theme::c().div_line + Symbols::v_line;
 
 			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == b_height - 2) and n != Shared::coreCount - 1) {
 				if (++cc >= b_columns) break;
@@ -732,7 +739,7 @@ namespace Cpu {
 			} else {
 				lavg_str_len = lavg_str.length();
 			}
-			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
+			out += Mv::to(b_y + b_height - 2, b_x + cx + 1) + Theme::c().main_fg + lavg_str;
 		}
 
 		redraw = false;
@@ -783,19 +790,19 @@ namespace Mem {
 			io_graphs.clear();
 
 			//? Mem graphs and meters
-			for (const auto& name : mem_names) {
+			for (const auto& pair : mem_names) {
 
 				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, mem.percent.at(name), graph_symbol};
+					mem_graphs[pair.name] = Draw::Graph{mem_meter, graph_height, (int32_t)pair.offset, mem.percent.at(pair.name), graph_symbol};
 				else
-					mem_meters[name] = Draw::Meter{mem_meter, name};
+					mem_meters[pair.name] = Draw::Meter{mem_meter, pair.offset};
 			}
 			if (show_swap and has_swap) {
-				for (const auto& name : swap_names) {
+				for (const auto& pair : swap_names) {
 					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), mem.percent.at(name), graph_symbol};
+						mem_graphs[pair.name] = Draw::Graph{mem_meter, graph_height, (int32_t)pair.offset, mem.percent.at(pair.name), graph_symbol};
 					else
-						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
+						mem_meters[pair.name] = Draw::Meter{mem_meter, pair.offset};
 				}
 			}
 
@@ -824,7 +831,7 @@ namespace Mem {
 					for (const auto& [name, disk] : mem.disks) {
 						if (disk.io_read.empty()) continue;
 
-						io_graphs[name + "_activity"] = Draw::Graph{disks_width - 6, 1, "available", disk.io_activity, graph_symbol};
+						io_graphs[name + "_activity"] = Draw::Graph{disks_width - 6, 1, GRADIENT_OFFSET(available), disk.io_activity, graph_symbol};
 
 						if (io_mode) {
 							//? Create one combined graph for IO read/write if enabled
@@ -834,17 +841,17 @@ namespace Mem {
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
 								io_graphs[name] = Draw::Graph{
 									disks_width - (io_mode ? 0 : 6),
-									disks_io_h, "available", combined,
+									disks_io_h, GRADIENT_OFFSET(available), combined,
 									graph_symbol, false, true, speed};
 							}
 							else {
 								io_graphs[name + "_read"] = Draw::Graph{
-									disks_width, half_height, "free",
+									disks_width, half_height, GRADIENT_OFFSET(free),
 									disk.io_read, graph_symbol, false,
 									true, speed};
 								io_graphs[name + "_write"] = Draw::Graph{
 									disks_width, disks_io_h - half_height,
-									"used", disk.io_write, graph_symbol,
+									GRADIENT_OFFSET(used), disk.io_write, graph_symbol,
 									true, true, speed};
 							}
 						}
@@ -853,13 +860,13 @@ namespace Mem {
 
 				for (int i = 0; const auto& [name, ignored] : mem.disks) {
 					if (i * 2 > height - 2) break;
-					disk_meters_used[name] = Draw::Meter{disk_meter, "used"};
+					disk_meters_used[name] = Draw::Meter{disk_meter, GRADIENT_OFFSET(used)};
 					if (cmp_less_equal(mem.disks.size() * 3, height - 1))
-						disk_meters_free[name] = Draw::Meter{disk_meter, "free"};
+						disk_meters_free[name] = Draw::Meter{disk_meter, GRADIENT_OFFSET(used)};
 				}
 
-				out += Mv::to(y, x + width - 6) + Fx::ub + Theme::c("mem_box") + Symbols::title_left + (io_mode ? Fx::b : "") + Theme::c("hi_fg")
-				+ 'i' + Theme::c("title") + 'o' + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+				out += Mv::to(y, x + width - 6) + Fx::ub + Theme::c().mem_box + Symbols::title_left + (io_mode ? Fx::b : "") + Theme::c().hi_fg
+				+ 'i' + Theme::c().title + 'o' + Fx::ub + Theme::c().mem_box + Symbols::title_right;
 				Input::mouse_mappings["i"] = {y, x + width - 5, 1, 2};
 			}
 
@@ -867,15 +874,24 @@ namespace Mem {
 
 		//? Mem and swap
 		int cx = 1, cy = 1;
-		string divider = (graph_height > 0 ? Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
-						+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg") : "");
+		string divider = (graph_height > 0 ? Mv::l(2) + Theme::c().mem_box + Symbols::div_left + Theme::c().div_line + Symbols::h_line * (mem_width - 1)
+						+ (show_disks ? "" : Theme::c().mem_box) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c().main_fg : "");
 		string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
 		bool big_mem = mem_width > 21;
 
-		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
-		vector<string> comb_names (mem_names.begin(), mem_names.end());
-		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
-		for (auto name : comb_names) {
+		out += Mv::to(y + 1, x + 2) + Theme::c().title + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c().main_fg;
+		vector<string> comb_names{};
+		comb_names.reserve(mem_names.size() + swap_names.size());
+		for(auto& pair: mem_names) {
+			comb_names.push_back(pair.name);
+		}
+		if (show_swap and has_swap and not swap_disk) {
+			for(auto& pair: swap_names) {
+				comb_names.push_back(pair.name);
+			}
+		}
+
+		for (auto& name : comb_names) {
 			if (cy > height - 4) break;
 			string title;
 			if (name == "swap_used") {
@@ -884,15 +900,15 @@ namespace Mem {
 					if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + divider;
 					cy += 1;
 				}
-				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(mem.stats.at("swap_total")), mem_width - 8)
-					+ Theme::c("main_fg") + Fx::ub;
+				out += Mv::to(y+1+cy, x+1+cx) + Theme::c().title + Fx::b + "Swap:" + rjust(floating_humanizer(mem.stats.at("swap_total")), mem_width - 8)
+					+ Theme::c().main_fg + Fx::ub;
 				cy += 1;
 				title = "Used";
 			}
 			else if (name == "swap_free")
 				title = "Free";
 
-			if (title.empty()) title = capitalize(name);
+			if (title.empty()) title = capitalize(std::string(name));
 			const string humanized = floating_humanizer(mem.stats.at(name));
 			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
 			const string graphics = (use_graphs ? mem_graphs.at(name)(mem.percent.at(name), redraw or data_same) : mem_meters.at(name)(mem.percent.at(name).back()));
@@ -904,7 +920,7 @@ namespace Mem {
 			}
 			else {
 				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
-					+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
+					+ graphics + Theme::c().title + rjust(humanized, (mem_size > 1 ? 9 : 7));
 				cy += (graph_height == 0 ? 1 : graph_height);
 			}
 		}
@@ -916,8 +932,8 @@ namespace Mem {
 			const auto& disks = mem.disks;
 			cx = mem_width; cy = 0;
 			bool big_disk = disks_width >= 25;
-			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
-			const string hu_div = Theme::c("div_line") + Symbols::h_line + Theme::c("main_fg");
+			divider = Mv::l(1) + Theme::c().div_line + Symbols::div_left + Symbols::h_line * disks_width + Theme::c().mem_box + Fx::ub + Symbols::div_right + Mv::l(disks_width);
+			const string hu_div = Theme::c().div_line + Symbols::h_line + Theme::c().main_fg;
 			if (io_mode) {
 				for (const auto& mount : mem.disks_order) {
 					if (not disks.contains(mount)) continue;
@@ -925,14 +941,14 @@ namespace Mem {
 					const auto& disk = disks.at(mount);
 					if (disk.io_read.empty()) continue;
 					const string total = floating_humanizer(disk.total, not big_disk);
-					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - total.size())
+					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c().title + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - total.size())
 						+ trans(total) + Fx::ub;
 					if (big_disk) {
 						const string used_percent = to_string(disk.used_percent);
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2) - 1) + hu_div + used_percent + '%' + hu_div;
 					}
-					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6)
-						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
+					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c().inactive_fg + graph_bg * (disks_width - 6)
+						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c().main_fg;
 					if (++cy > height - 3) break;
 					if (io_graph_combined) {
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
@@ -940,7 +956,7 @@ namespace Mem {
 												+ (comb_val > 0 ? Mv::r(1) + floating_humanizer(comb_val, true) : "RW");
 						if (disks_io_h == 1) out += Mv::to(y+1+cy, x+1+cx) + string(5, ' ');
 						out += Mv::to(y+1+cy, x+1+cx) + io_graphs.at(mount)({comb_val}, redraw or data_same)
-							+ Mv::to(y+1+cy, x+1+cx) + Theme::c("main_fg") + humanized;
+							+ Mv::to(y+1+cy, x+1+cx) + Theme::c().main_fg + humanized;
 						cy += disks_io_h;
 					}
 					else {
@@ -966,15 +982,15 @@ namespace Mem {
 					const string human_used = floating_humanizer(disk.used, not big_disk);
 					const string human_free = floating_humanizer(disk.free, not big_disk);
 
-					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
-						+ trans(human_total) + Fx::ub + Theme::c("main_fg");
+					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c().title + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
+						+ trans(human_total) + Fx::ub + Theme::c().main_fg;
 					if (big_disk and not human_io.empty())
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)human_io.size() / 2) - 1) + hu_div + human_io + hu_div;
 					if (++cy > height - 3) break;
 					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
-						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(clamp(disk.io_activity.back(), 50ll, 100ll))
-							+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
-						if (not big_disk) out += Mv::to(y+1+cy, x+cx+1) + Theme::c("main_fg") + human_io;
+						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c().inactive_fg + graph_bg * (disks_width - 6) + Theme::g().available.at(clamp(disk.io_activity.back(), 50ll, 100ll))
+							+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c().main_fg;
+						if (not big_disk) out += Mv::to(y+1+cy, x+cx+1) + Theme::c().main_fg + human_io;
 						if (++cy > height - 3) break;
 					}
 
@@ -1024,8 +1040,8 @@ namespace Net {
 		}
 		string out;
 		out.reserve(width * height);
-		const string title_left = Theme::c("net_box") + Fx::ub + Symbols::title_left;
-		const string title_right = Theme::c("net_box") + Fx::ub + Symbols::title_right;
+		const string title_left = Theme::c().net_box + Fx::ub + Symbols::title_left;
+		const string title_right = Theme::c().net_box + Fx::ub + Symbols::title_right;
 		const int i_size = min((int)selected_iface.size(), 10);
 		const long long down_max = (net_auto ? graph_max.at("download") : ((long long)(Config::getI("net_download")) << 20) / 8);
 		const long long up_max = (net_auto ? graph_max.at("upload") : ((long long)(Config::getI("net_upload")) << 20) / 8);
@@ -1038,50 +1054,50 @@ namespace Net {
 			if (net.bandwidth.at("download").empty() or net.bandwidth.at("upload").empty())
 				return out + Fx::reset;
 			graphs["download"] = Draw::Graph{
-				width - b_width - 2, u_graph_height, "download",
+				width - b_width - 2, u_graph_height, GRADIENT_OFFSET(download),
 				net.bandwidth.at("download"), graph_symbol,
 				false, true, down_max};
 			graphs["upload"] = Draw::Graph{
-				width - b_width - 2, d_graph_height, "upload",
+				width - b_width - 2, d_graph_height, GRADIENT_OFFSET(upload),
 				net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
 
 			//? Interface selector and buttons
 
-			out += Mv::to(y, x+width - i_size - 9) + title_left + Fx::b + Theme::c("hi_fg") + "<b " + Theme::c("title")
-				+ uresize(selected_iface, 10) + Theme::c("hi_fg") + " n>" + title_right
-				+ Mv::to(y, x+width - i_size - 15) + title_left + Theme::c("hi_fg") + (net.stat.at("download").offset + net.stat.at("upload").offset > 0 ? Fx::b : "") + 'z'
-				+ Theme::c("title") + "ero" + title_right;
+			out += Mv::to(y, x+width - i_size - 9) + title_left + Fx::b + Theme::c().hi_fg + "<b " + Theme::c().title
+				+ uresize(selected_iface, 10) + Theme::c().hi_fg + " n>" + title_right
+				+ Mv::to(y, x+width - i_size - 15) + title_left + Theme::c().hi_fg + (net.stat.at("download").offset + net.stat.at("upload").offset > 0 ? Fx::b : "") + 'z'
+				+ Theme::c().title + "ero" + title_right;
 			Input::mouse_mappings["b"] = {y, x+width - i_size - 8, 1, 3};
 			Input::mouse_mappings["n"] = {y, x+width - 6, 1, 3};
 			Input::mouse_mappings["z"] = {y, x+width - i_size - 14, 1, 4};
 			if (width - i_size - 20 > 6) {
-				out += Mv::to(y, x+width - i_size - 21) + title_left + Theme::c("hi_fg") + (net_auto ? Fx::b : "") + 'a' + Theme::c("title") + "uto" + title_right;
+				out += Mv::to(y, x+width - i_size - 21) + title_left + Theme::c().hi_fg + (net_auto ? Fx::b : "") + 'a' + Theme::c().title + "uto" + title_right;
 				Input::mouse_mappings["a"] = {y, x+width - i_size - 20, 1, 4};
 			}
 			if (width - i_size - 20 > 13) {
-				out += Mv::to(y, x+width - i_size - 27) + title_left + Theme::c("title") + (net_sync ? Fx::b : "") + 's' + Theme::c("hi_fg")
-					+ 'y' + Theme::c("title") + "nc" + title_right;
+				out += Mv::to(y, x+width - i_size - 27) + title_left + Theme::c().title + (net_sync ? Fx::b : "") + 's' + Theme::c().hi_fg
+					+ 'y' + Theme::c().title + "nc" + title_right;
 				Input::mouse_mappings["y"] = {y, x+width - i_size - 26, 1, 4};
 			}
 		}
 
 		//? IP or device address
 		if (not ip_addr.empty() and cmp_greater(width - i_size - 36, ip_addr.size())) {
-			out += Mv::to(y, x + 8) + title_left + Theme::c("title") + Fx::b + ip_addr + title_right;
+			out += Mv::to(y, x + 8) + title_left + Theme::c().title + Fx::b + ip_addr + title_right;
 		}
 
 		//? Graphs and stats
 		int cy = 0;
 		for (const string dir : {"download", "upload"}) {
 			out += Mv::to(y+1 + (dir == "upload" ? u_graph_height : 0), x + 1) + graphs.at(dir)(net.bandwidth.at(dir), redraw or data_same or not net.connected)
-				+ Mv::to(y+1 + (dir == "upload" ? height - 3: 0), x + 1) + Fx::ub + Theme::c("graph_text")
+				+ Mv::to(y+1 + (dir == "upload" ? height - 3: 0), x + 1) + Fx::ub + Theme::c().graph_text
 				+ floating_humanizer((dir == "upload" ? up_max : down_max), true);
 			const string speed = floating_humanizer(net.stat.at(dir).speed, false, 0, false, true);
 			const string speed_bits = (b_width >= 20 ? floating_humanizer(net.stat.at(dir).speed, false, 0, true, true) : "");
 			const string top = floating_humanizer(net.stat.at(dir).top, false, 0, true, true);
 			const string total = floating_humanizer(net.stat.at(dir).total);
 			const string symbol = (dir == "upload" ? "▲" : "▼");
-			out += Mv::to(b_y+1+cy, b_x+1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
+			out += Mv::to(b_y+1+cy, b_x+1) + Fx::ub + Theme::c().main_fg + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
 			cy += (b_height == 5 ? 2 : 1);
 			if (b_height >= 8) {
 				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
@@ -1183,7 +1199,7 @@ namespace Proc {
 		if (Runner::stopping) return "";
 		auto proc_tree = Config::getB("proc_tree");
 		bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
-		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
+		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and not Theme::is_tty());
 		auto proc_colors = Config::getB("proc_colors");
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
@@ -1205,10 +1221,10 @@ namespace Proc {
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
 			out = box;
-			const string title_left = Theme::c("proc_box") + Symbols::title_left;
-			const string title_right = Theme::c("proc_box") + Symbols::title_right;
-			const string title_left_down = Theme::c("proc_box") + Symbols::title_left_down;
-			const string title_right_down = Theme::c("proc_box") + Symbols::title_right_down;
+			const string title_left = Theme::c().proc_box + Symbols::title_left;
+			const string title_right = Theme::c().proc_box + Symbols::title_right;
+			const string title_left_down = Theme::c().proc_box + Symbols::title_left_down;
+			const string title_right_down = Theme::c().proc_box + Symbols::title_right_down;
 			for (const auto& key : {"T", "K", "S", "enter"})
 				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
 
@@ -1234,24 +1250,24 @@ namespace Proc {
 
 				//? Create cpu and mem graphs if process is alive
 				if (alive) {
-					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
-					detailed_mem_graph = Draw::Graph{d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
+					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 7, GRADIENT_OFFSET(cpu), detailed.cpu_percent, graph_symbol, false, true};
+					detailed_mem_graph = Draw::Graph{d_width / 3, 1, -1, detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
 
 				//? Draw structure of details box
 				const string pid_str = to_string(detailed.entry.pid);
-				out += Mv::to(y, x) + Theme::c("proc_box") + Symbols::div_left + Symbols::h_line + title_left + Theme::c("hi_fg") + Fx::b
-				+ (tty_mode ? "4" : Symbols::superscript.at(4)) + Theme::c("title") + "proc"
+				out += Mv::to(y, x) + Theme::c().proc_box + Symbols::div_left + Symbols::h_line + title_left + Theme::c().hi_fg + Fx::b
+				+ (tty_mode ? "4" : Symbols::superscript.at(4)) + Theme::c().title + "proc"
 					+ Fx::ub + title_right + Symbols::h_line * (width - 10) + Symbols::div_right
-					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c("title") + pid_str + Fx::ub + title_right
-					+ title_left + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
+					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c().title + pid_str + Fx::ub + title_right
+					+ title_left + Fx::b + Theme::c().title + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
 
-				out += Mv::to(d_y, d_x - 1) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c("div_line");
+				out += Mv::to(d_y, d_x - 1) + Theme::c().proc_box + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c().div_line;
 				for (const int& i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
 
-				const string& t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
-				const string& hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));
-				const string hide = (selected > 0 ? t_color + "hide " : Theme::c("title") + "hide " + Theme::c("hi_fg"));
+				const string& t_color = (not alive or selected > 0 ? Theme::c().inactive_fg : Theme::c().title);
+				const string& hi_color = (not alive or selected > 0 ? t_color : Theme::c().hi_fg);
+				const string hide = (selected > 0 ? t_color + "hide " : Theme::c().title + "hide " + Theme::c().hi_fg);
 				int mouse_x = d_x + 2;
 				out += Mv::to(d_y, d_x + 1);
 				if (width > 55) {
@@ -1272,7 +1288,7 @@ namespace Proc {
 				//? Labels
 				const int item_fit = floor((double)(d_width - 2) / 10);
 				const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
-				out += Mv::to(d_y + 1, d_x + 1) + Fx::b + Theme::c("title")
+				out += Mv::to(d_y + 1, d_x + 1) + Fx::b + Theme::c().title
 										+ cjust("Status:", item_width)
 										+ cjust("Elapsed:", item_width);
 				if (item_fit >= 3) out += cjust("IO/R:", item_width);
@@ -1287,7 +1303,7 @@ namespace Proc {
 				for (int i = 0; const auto& l : {'C', 'M', 'D'})
 				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
 
-				out += Theme::c("main_fg") + Fx::ub;
+				out += Theme::c().main_fg + Fx::ub;
 				const int cmd_size = ulen(detailed.entry.cmd, true);
 				for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
 					out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
@@ -1299,10 +1315,10 @@ namespace Proc {
 			//? Filter
 			auto filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
 			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
-			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
-				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
-				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
-				+ (filtering ? Theme::c("hi_fg") + ' ' + Symbols::enter : "") + Fx::ub + title_right;
+			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c().hi_fg + 'f'
+				+ Theme::c().title + (not filter_text.empty() ? ' ' + filter_text : "ilter")
+				+ (not filtering and not filter_text.empty() ? Theme::c().hi_fg + " del" : "")
+				+ (filtering ? Theme::c().hi_fg + ' ' + Symbols::enter : "") + Fx::ub + title_right;
 			if (not filtering) {
 				int f_len = (filter_text.empty() ? 6 : ulen(filter_text) + 2);
 				Input::mouse_mappings["f"] = {y, x + 10, 1, f_len};
@@ -1318,31 +1334,31 @@ namespace Proc {
 			const int sort_pos = x + width - sort_len - 8;
 
 			if (width > 55 + sort_len) {
-				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
-					+ "per-" + Theme::c("hi_fg") + 'c' + Theme::c("title") + "ore" + Fx::ub + title_right;
+				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c().title
+					+ "per-" + Theme::c().hi_fg + 'c' + Theme::c().title + "ore" + Fx::ub + title_right;
 				Input::mouse_mappings["c"] = {y, sort_pos - 24, 1, 8};
 			}
 			if (width > 45 + sort_len) {
-				out += Mv::to(y, sort_pos - 15) + title_left + (Config::getB("proc_reversed") ? Fx::b : "") + Theme::c("hi_fg")
-					+ 'r' + Theme::c("title") + "everse" + Fx::ub + title_right;
+				out += Mv::to(y, sort_pos - 15) + title_left + (Config::getB("proc_reversed") ? Fx::b : "") + Theme::c().hi_fg
+					+ 'r' + Theme::c().title + "everse" + Fx::ub + title_right;
 				Input::mouse_mappings["r"] = {y, sort_pos - 14, 1, 7};
 			}
 			if (width > 35 + sort_len) {
-				out += Mv::to(y, sort_pos - 6) + title_left + (Config::getB("proc_tree") ? Fx::b : "") + Theme::c("title") + "tre"
-					+ Theme::c("hi_fg") + 'e' + Fx::ub + title_right;
+				out += Mv::to(y, sort_pos - 6) + title_left + (Config::getB("proc_tree") ? Fx::b : "") + Theme::c().title + "tre"
+					+ Theme::c().hi_fg + 'e' + Fx::ub + title_right;
 				Input::mouse_mappings["e"] = {y, sort_pos - 5, 1, 4};
 			}
-			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c("hi_fg") + "< " + Theme::c("title") + sorting + Theme::c("hi_fg")
+			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c().hi_fg + "< " + Theme::c().title + sorting + Theme::c().hi_fg
 				+ " >" + Fx::ub + title_right;
 				Input::mouse_mappings["left"] = {y, sort_pos + 1, 1, 2};
 				Input::mouse_mappings["right"] = {y, sort_pos + sort_len + 3, 1, 2};
 
 			//? select, info and signal buttons
-			const string down_button = (selected == select_max and start == numpids - select_max ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
-			const string t_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("title"));
-			const string hi_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("hi_fg"));
+			const string down_button = (selected == select_max and start == numpids - select_max ? Theme::c().inactive_fg : Theme::c().hi_fg) + Symbols::down;
+			const string t_color = (selected == 0 ? Theme::c().inactive_fg : Theme::c().title);
+			const string hi_color = (selected == 0 ? Theme::c().inactive_fg : Theme::c().hi_fg);
 			int mouse_x = x + 14;
-			out += Mv::to(y + height - 1, x + 1) + title_left_down + Fx::b + hi_color + Symbols::up + Theme::c("title") + " select " + down_button + Fx::ub + title_right_down
+			out += Mv::to(y + height - 1, x + 1) + title_left_down + Fx::b + hi_color + Symbols::up + Theme::c().title + " select " + down_button + Fx::ub + title_right_down
 				+ title_left_down + Fx::b + t_color + "info " + hi_color + Symbols::enter + Fx::ub + title_right_down;
 				if (selected > 0) Input::mouse_mappings["enter"] = {y + height - 1, mouse_x, 1, 6};
 				mouse_x += 8;
@@ -1361,12 +1377,12 @@ namespace Proc {
 
 			//? Labels for fields in list
 			if (not proc_tree)
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
+				out += Mv::to(y+1, x+1) + Theme::c().title + Fx::b
 					+ rjust("Pid:", 8) + ' '
 					+ ljust("Program:", prog_size) + ' '
 					+ (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
 			else
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
+				out += Mv::to(y+1, x+1) + Theme::c().title + Fx::b
 					+ ljust("Tree:", tree_size) + ' ';
 
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
@@ -1389,14 +1405,14 @@ namespace Proc {
 				cpu_str += '%';
 			}
 			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
-				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + cpu_str;
+				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c().title + Fx::b + cpu_str;
 			for (int i = 0; const auto& l : {'C', 'P', 'U'})
 					out += Mv::to(d_y + 3 + i++, dgraph_x + 1) + l;
 
 			//? Info part of box
-			const string stat_color = (not alive ? Theme::c("inactive_fg") : (detailed.status == "Running" ? Theme::c("proc_misc") : Theme::c("main_fg")));
+			const string stat_color = (not alive ? Theme::c().inactive_fg : (detailed.status == "Running" ? Theme::c().proc_misc : Theme::c().main_fg));
 			out += Mv::to(d_y + 2, d_x + 1) + stat_color + Fx::ub
-									+ cjust(detailed.status, item_width) + Theme::c("main_fg")
+									+ cjust(detailed.status, item_width) + Theme::c().main_fg
 									+ cjust(detailed.elapsed, item_width);
 			if (item_fit >= 3) out += cjust(detailed.io_read, item_width);
 			if (item_fit >= 4) out += cjust(detailed.io_write, item_width);
@@ -1409,10 +1425,10 @@ namespace Proc {
 			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
 			string mem_str = to_string(mem_p);
 			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
-			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
-				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
-				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
-				+ Theme::c("title") + Fx::b + detailed.memory;
+			out += Mv::to(d_y + 4, d_x + 1) + Theme::c().title + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
+				+ Theme::c().inactive_fg + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
+				+ Theme::c().proc_misc + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
+				+ Theme::c().title + Fx::b + detailed.memory;
 		}
 
 		//? Check bounds of current selection and view
@@ -1440,7 +1456,7 @@ namespace Proc {
 			bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
 			if (show_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
 				if (not has_graph) {
-					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
+					p_graphs[p.pid] = Draw::Graph{5, 1, -1, {}, graph_symbol};
 					p_counters[p.pid] = 0;
 				}
 				else if (p.cpu_p < 0.1 and ++p_counters[p.pid] >= 10) {
@@ -1458,21 +1474,21 @@ namespace Proc {
 			if (is_selected) {
 				c_color = m_color = t_color = g_color = Fx::b;
 				end = Fx::ub;
-				out += Theme::c("selected_bg") + Theme::c("selected_fg") + Fx::b;
+				out += Theme::c().selected_bg + Theme::c().selected_fg + Fx::b;
 			}
 			else {
 				int calc = (selected > lc) ? selected - lc : lc - selected;
 				if (proc_colors) {
-					end = Theme::c("main_fg") + Fx::ub;
+					end = Theme::c().main_fg + Fx::ub;
 					array<string, 3> colors;
 					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
 							int val = (min(v, 100) + 100) - calc * 100 / select_max;
-							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
-							else colors[i++] = Theme::g("process").at(clamp(val - 100, 0, 100));
+							if (val < 100) colors[i++] = Theme::g().proc_color.at(max(0, val));
+							else colors[i++] = Theme::g().process.at(clamp(val - 100, 0, 100));
 						}
 						else
-							colors[i++] = Theme::g("process").at(clamp(v, 0, 100));
+							colors[i++] = Theme::g().process.at(clamp(v, 0, 100));
 					}
 					c_color = colors.at(0); m_color = colors.at(1); t_color = colors.at(2);
 				}
@@ -1481,7 +1497,7 @@ namespace Proc {
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
-					g_color = Theme::g("proc").at(clamp(calc * 100 / select_max, 0, 100));
+					g_color = Theme::g().proc.at(clamp(calc * 100 / select_max, 0, 100));
 				}
 			}
 
@@ -1543,7 +1559,7 @@ namespace Proc {
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
-				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
+				+ (is_selected ? "" : Theme::c().inactive_fg) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
@@ -1555,7 +1571,7 @@ namespace Proc {
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
 			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
-			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
+			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c().main_fg + Symbols::up
 				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down;
 
 			for (int i = y + 2; i < y + height - 2; i++) {
@@ -1566,8 +1582,8 @@ namespace Proc {
 		//? Current selection and number of processes
 		string location = to_string(start + selected) + '/' + to_string(numpids);
 		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
-		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
-			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
+		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c().proc_box + loc_clear
+			+ Symbols::title_left_down + Theme::c().title + Fx::b + location + Fx::ub + Theme::c().proc_box + Symbols::title_right_down;
 
 		//? Clear out left over graphs from dead processes at a regular interval
 		if (not data_same and ++counter >= 100) {
@@ -1669,7 +1685,7 @@ namespace Draw {
 			b_x = x + width - b_width - 1;
 			b_y = y + ceil((double)(height - 2) / 2) - ceil((double)b_height / 2) + 1;
 
-			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, (cpu_bottom ? "" : "cpu"), (cpu_bottom ? "cpu" : ""), 1);
+			box = createBox(x, y, width, height, Theme::c().cpu_box, true, (cpu_bottom ? "" : "cpu"), (cpu_bottom ? "cpu" : ""), 1);
 
 			auto& custom = Config::getS("custom_cpu_name");
 			const string cpu_title = uresize((custom.empty() ? Cpu::cpuName : custom) , b_width - 14);
@@ -1724,12 +1740,12 @@ namespace Draw {
 				if (disks_width < 25) disk_meter += 14;
 			}
 
-			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
-			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
-				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+			box = createBox(x, y, width, height, Theme::c().mem_box, true, "mem", "", 2);
+			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c().mem_box + Symbols::title_left + (show_disks ? Fx::b : "")
+				+ Theme::c().hi_fg + 'd' + Theme::c().title + "isks" + Fx::ub + Theme::c().mem_box + Symbols::title_right;
 			Input::mouse_mappings["d"] = {y, (show_disks ? divider + 3 : x + width - 8), 1, 5};
 			if (show_disks) {
-				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c("div_line");
+				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c().div_line;
 				for (auto i : iota(1, height - 1))
 					box += Mv::to(y + i, divider) + Symbols::v_line;
 			}
@@ -1753,7 +1769,7 @@ namespace Draw {
 			d_graph_height = round((double)(height - 2) / 2);
 			u_graph_height = height - 2 - d_graph_height;
 
-			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);
+			box = createBox(x, y, width, height, Theme::c().net_box, true, "net", "", 3);
 			box += createBox(b_x, b_y, b_width, b_height, "", false, "download", "upload");
 		}
 
@@ -1765,7 +1781,7 @@ namespace Draw {
 			x = proc_left ? 1 : Term::width - width + 1;
 			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
 			select_max = height - 3;
-			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+			box = createBox(x, y, width, height, Theme::c().proc_box, true, "proc", "", 4);
 		}
 	}
 }
