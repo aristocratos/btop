@@ -166,7 +166,14 @@ namespace Tools {
 	string luresize(const string str, const size_t len, bool wide = false);
 
 	//* Replace <from> in <str> with <to> and return new string
-	string s_replace(const string& str, const string& from, const string& to);
+	template<typename T>
+	string s_replace(const T& str, const std::string_view from, const std::string_view to) {
+		string out = std::string(str);
+		for (size_t start_pos = out.find(from); start_pos != std::string::npos; start_pos = out.find(from)) {
+			out.replace(start_pos, from.length(), to);
+		}
+		return out;
+	}
 
 	//* Capatilize <str>
 	inline string capitalize(string str) {
@@ -235,14 +242,17 @@ namespace Tools {
 		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
-	//* Check if a string is a valid bool value
-	inline bool isbool(const string& str) {
-		return is_in(str, "true", "false", "True", "False");
-	}
-
-	//* Convert string to bool, returning any value not equal to "true" or "True" as false
+	//* Convert string to bool, or throws if string cannot be converted
 	inline bool stobool(const string& str) {
-		return is_in(str, "true", "True");
+		if(is_in(str, "true", "True")) {
+			return true;
+		}
+
+		if(is_in(str, "false", "False")) {
+			return false;
+		}
+
+		throw std::invalid_argument("Argument cannot be convert to bool");
 	}
 
 	//* Check if a string is a valid integer value (only postive)

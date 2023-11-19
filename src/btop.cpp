@@ -138,11 +138,11 @@ void argumentParser(const int& argc, char **argv) {
 			Global::arg_low_color = true;
 		}
 		else if (is_in(argument, "-t", "--tty_on")) {
-			Config::set("tty_mode", true);
+			CONFIG_SET(tty_mode, true);
 			Global::arg_tty = true;
 		}
 		else if (is_in(argument, "+t", "--tty_off")) {
-			Config::set("tty_mode", false);
+			CONFIG_SET(tty_mode, false);
 			Global::arg_tty = true;
 		}
 		else if (is_in(argument, "-p", "--preset")) {
@@ -172,6 +172,7 @@ void argumentParser(const int& argc, char **argv) {
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
+	auto& config = Config::get();
 	static atomic<bool> resizing (false);
 	if (Input::polling) {
 		Global::resized = true;
@@ -190,7 +191,7 @@ void term_resize(bool force) {
 	Term::refresh();
 	Config::unlock();
 
-	auto boxes = Config::getS("shown_boxes");
+	auto boxes = config.shown_boxes;
 	auto min_size = Term::get_min_size(boxes);
 	auto minWidth = min_size.at(0), minHeight = min_size.at(1);
 
@@ -225,7 +226,7 @@ void term_resize(bool force) {
 				else if (is_in(key, "1", "2", "3", "4")) {
 					Config::current_preset = -1;
 					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
-					boxes = Config::getS("shown_boxes");
+					boxes = config.shown_boxes;
 				}
 			}
 			min_size = Term::get_min_size(boxes);
@@ -661,6 +662,7 @@ namespace Runner {
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
 		atomic_wait_for(active, true, 5000);
+		auto& config = Config::get();
 		if (active) {
 			Logger::error("Stall in Runner thread, restarting!");
 			active = false;
@@ -686,7 +688,7 @@ namespace Runner {
 			current_conf = {
 				(box == "all" ? Config::current_boxes : vector{box}),
 				no_update, force_redraw,
-				(not Config::getB("tty_mode") and Config::getB("background_update")),
+				(not config.tty_mode and config.background_update),
 				Global::overlay,
 				Global::clock
 			};
@@ -806,19 +808,21 @@ int main(int argc, char **argv) {
 	{	vector<string> load_warnings;
 		Config::load(Config::conf_file, load_warnings);
 
-		if (Config::current_boxes.empty()) Config::check_boxes(Config::getS("shown_boxes"));
-		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
+		auto& config = Config::get();
+		if (Config::current_boxes.empty()) Config::check_boxes(config.shown_boxes);
+		CONFIG_SET(lowcolor, (Global::arg_low_color or not config.truecolor));
 
 		if (Global::debug) {
 			Logger::set("DEBUG");
 			Logger::debug("Starting in DEBUG mode!");
 		}
-		else Logger::set(Config::getS("log_level"));
+		else Logger::set(config.log_level);
 
-		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : Config::getS("log_level")));
+		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : config.log_level));
 
 		for (const auto& err_str : load_warnings) Logger::warning(err_str);
 	}
+	auto& config = Config::get();
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
@@ -894,13 +898,13 @@ int main(int argc, char **argv) {
 	}
 
 	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
-	if (not Global::arg_tty and Config::getB("force_tty")) {
-		Config::set("tty_mode", true);
+	if (not Global::arg_tty and config.force_tty) {
+		CONFIG_SET(tty_mode, true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
 #ifndef __APPLE__
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
-		Config::set("tty_mode", true);
+		CONFIG_SET(tty_mode, true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
 #endif
@@ -949,14 +953,14 @@ int main(int argc, char **argv) {
 	}
 
 	//? Calculate sizes of all boxes
-	Config::presetsValid(Config::getS("presets"));
+	Config::presetsValid(config.presets);
 	if (Global::arg_preset >= 0) {
 		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
 		Config::apply_preset(Config::preset_list.at(Config::current_preset));
 	}
 
 	{
-		const auto [x, y] = Term::get_min_size(Config::getS("shown_boxes"));
+		const auto [x, y] = Term::get_min_size(config.shown_boxes);
 		if (Term::height < y or Term::width < x) {
 			term_resize(true);
 			Global::resized = false;
@@ -973,8 +977,9 @@ int main(int argc, char **argv) {
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
-	uint64_t update_ms = Config::getI("update_ms");
+	uint64_t update_ms = config.update_ms;
 	auto future_time = time_ms();
+
 
 	try {
 		while (not true not_eq not false) {
@@ -1004,7 +1009,7 @@ int main(int argc, char **argv) {
 			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
 			if (time_ms() >= future_time and not Global::resized) {
 				Runner::run("all");
-				update_ms = Config::getI("update_ms");
+				update_ms = config.update_ms;
 				future_time = time_ms() + update_ms;
 			}
 
@@ -1012,8 +1017,8 @@ int main(int argc, char **argv) {
 			for (auto current_time = time_ms(); current_time < future_time; current_time = time_ms()) {
 
 				//? Check for external clock changes and for changes to the update timer
-				if (std::cmp_not_equal(update_ms, Config::getI("update_ms"))) {
-					update_ms = Config::getI("update_ms");
+				if (update_ms != config.update_ms) {
+					update_ms = config.update_ms;
 					future_time = time_ms() + update_ms;
 				}
 				else if (future_time - current_time > update_ms)

@@ -258,14 +258,6 @@ namespace Tools {
 		return str;
 	}
 
-	string s_replace(const string& str, const string& from, const string& to) {
-		string out = str;
-		for (size_t start_pos = out.find(from); start_pos != std::string::npos; start_pos = out.find(from)) {
-			out.replace(start_pos, from.length(), to);
-		}
-		return out;
-	}
-
 	string ltrim(const string& str, const string& t_str) {
 		std::string_view str_v{str};
 		while (str_v.starts_with(t_str))
@@ -368,8 +360,9 @@ namespace Tools {
 
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
+		auto& config = Config::get();
 		const size_t mult = (bit) ? 8 : 1;
-		bool mega = Config::getB("base_10_sizes");
+		bool mega = config.base_10_sizes;
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)

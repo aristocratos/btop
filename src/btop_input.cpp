@@ -156,6 +156,7 @@ namespace Input {
 	}
 
 	string get() {
+		auto& config = Config::get();
 		string key = InputThr::instance().get();
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
@@ -185,7 +186,7 @@ namespace Input {
 				else
 					key.clear();
 
-				if (Config::getB("proc_filtering")) {
+				if (config.proc_filtering) {
 					if (mouse_event == "mouse_click") return mouse_event;
 					else return "";
 				}
@@ -242,8 +243,9 @@ namespace Input {
 	void process(const string& key) {
 		if (key.empty()) return;
 		try {
-			auto filtering = Config::getB("proc_filtering");
-			auto vim_keys = Config::getB("vim_keys");
+			auto& config = Config::get();
+			auto filtering = config.proc_filtering;
+			auto vim_keys = config.vim_keys;
 			auto help_key = (vim_keys ? "H" : "h");
 			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
@@ -299,8 +301,8 @@ namespace Input {
 				bool redraw = true;
 				if (filtering) {
 					if (key == "enter" or key == "down") {
-						Config::set("proc_filter", Proc::filter.text);
-						Config::set("proc_filtering", false);
+						CONFIG_SET(proc_filter, Proc::filter.text);
+						CONFIG_SET(proc_filtering, false);
 						old_filter.clear();
 						if(key == "down"){
 							process("down");
@@ -308,65 +310,68 @@ namespace Input {
 						}
 					}
 					else if (key == "escape" or key == "mouse_click") {
-						Config::set("proc_filter", old_filter);
-						Config::set("proc_filtering", false);
+						CONFIG_SET(proc_filter, old_filter);
+						CONFIG_SET(proc_filtering, false);
 						old_filter.clear();
 					}
 					else if (Proc::filter.command(key)) {
-						if (Config::getS("proc_filter") != Proc::filter.text)
-							Config::set("proc_filter", Proc::filter.text);
+						if (config.proc_filter != Proc::filter.text)
+							CONFIG_SET(proc_filter, Proc::filter.text);
 					}
 					else
 						return;
 				}
 				else if (key == "left" or (vim_keys and key == "h")) {
-					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
+					int cur_i = v_index(Proc::sort_vector, config.proc_sorting);
 					if (--cur_i < 0)
 						cur_i = Proc::sort_vector.size() - 1;
-					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					CONFIG_SET(proc_sorting, Proc::sort_vector.at(cur_i));
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
-					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
+					int cur_i = v_index(Proc::sort_vector, config.proc_sorting);
 					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
-					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					CONFIG_SET(proc_sorting, Proc::sort_vector.at(cur_i));
 				}
 				else if (is_in(key, "f", "/")) {
-					Config::flip("proc_filtering");
-					Proc::filter = { Config::getS("proc_filter") };
+					CONFIG_SET(proc_filtering, not config.proc_filtering);
+					Proc::filter = { config.proc_filter };
 					old_filter = Proc::filter.text;
 				}
 				else if (key == "e") {
-					Config::flip("proc_tree");
+					CONFIG_SET(proc_tree, not config.proc_tree);
 					no_update = false;
 				}
 
-				else if (key == "r")
-					Config::flip("proc_reversed");
+				else if (key == "r") {
+					CONFIG_SET(proc_reversed, not config.proc_reversed);
+				}
 
-				else if (key == "c")
-					Config::flip("proc_per_core");
+				else if (key == "c") {
+					CONFIG_SET(proc_per_core, not config.proc_per_core);
+				}
 
-				else if (key == "%")
-					Config::flip("proc_mem_bytes");
+				else if (key == "%") {
+					CONFIG_SET(proc_mem_bytes, not config.proc_mem_bytes);
+				}
 
-				else if (key == "delete" and not Config::getS("proc_filter").empty())
-					Config::set("proc_filter", ""s);
+				else if (key == "delete" and not config.proc_filter.empty())
+					CONFIG_SET(proc_filter, ""s);
 
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
 					const auto& [col, line] = mouse_pos;
-					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
-					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
+					const int y = (config.show_detailed ? Proc::y + 8 : Proc::y);
+					const int height = (config.show_detailed ? Proc::height - 8 : Proc::height);
 					if (col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1) {
 						if (key == "mouse_click") {
 							if (col < Proc::x + Proc::width - 2) {
-								const auto& current_selection = Config::getI("proc_selected");
+								const auto& current_selection = config.proc_selected;
 								if (current_selection == line - y - 1) {
 									redraw = true;
-									if (Config::getB("proc_tree")) {
+									if (config.proc_tree) {
 										const int x_pos = col - Proc::x;
-										const int offset = Config::getI("selected_depth") * 3;
+										const int offset = config.selected_depth * 3;
 										if (x_pos > offset and x_pos < 4 + offset) {
 											process("space");
 											return;
@@ -377,7 +382,7 @@ namespace Input {
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
-								Config::set("proc_selected", line - y - 1);
+								CONFIG_SET(proc_selected, line - y - 1);
 							}
 							else if (line == y + 1) {
 								if (Proc::selection("page_up") == -1) return;
@@ -391,53 +396,53 @@ namespace Input {
 						else
 							goto proc_mouse_scroll;
 					}
-					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
-						Config::set("proc_selected", 0);
+					else if (key == "mouse_click" and config.proc_selected > 0) {
+						CONFIG_SET(proc_selected, 0);
 						redraw = true;
 					}
 					else
 						keep_going = true;
 				}
 				else if (key == "enter") {
-					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
+					if (config.proc_selected == 0 and not config.show_detailed) {
 						return;
 					}
-					else if (Config::getI("proc_selected") > 0 and Config::getI("detailed_pid") != Config::getI("selected_pid")) {
-						Config::set("detailed_pid", Config::getI("selected_pid"));
-						Config::set("proc_last_selected", Config::getI("proc_selected"));
-						Config::set("proc_selected", 0);
-						Config::set("show_detailed", true);
+					else if (config.proc_selected > 0 and config.detailed_pid != config.selected_pid) {
+						CONFIG_SET(detailed_pid, config.selected_pid);
+						CONFIG_SET(proc_last_selected, config.proc_selected);
+						CONFIG_SET(proc_selected, 0);
+						CONFIG_SET(show_detailed, true);
 					}
-					else if (Config::getB("show_detailed")) {
-						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
-						Config::set("proc_last_selected", 0);
-						Config::set("detailed_pid", 0);
-						Config::set("show_detailed", false);
+					else if (config.show_detailed) {
+						if (config.proc_last_selected > 0) CONFIG_SET(proc_selected, config.proc_last_selected);
+						CONFIG_SET(proc_last_selected, 0);
+						CONFIG_SET(detailed_pid, 0);
+						CONFIG_SET(show_detailed, false);
 					}
 				}
-				else if (is_in(key, "+", "-", "space") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
+				else if (is_in(key, "+", "-", "space") and config.proc_tree and config.proc_selected > 0) {
 					atomic_wait(Runner::active);
-					auto& pid = Config::getI("selected_pid");
+					auto& pid = config.selected_pid;
 					if (key == "+" or key == "space") Proc::expand = pid;
 					if (key == "-" or key == "space") Proc::collapse = pid;
 					no_update = false;
 				}
-				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (is_in(key, "t", kill_key) and (config.show_detailed or config.selected_pid > 0)) {
 					atomic_wait(Runner::active);
-					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
+					if (config.show_detailed and config.proc_selected == 0 and Proc::detailed.status == "Dead") return;
 					Menu::show(Menu::Menus::SignalSend, (key == "t" ? SIGTERM : SIGKILL));
 					return;
 				}
-				else if (key == "s" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (key == "s" and (config.show_detailed or config.selected_pid > 0)) {
 					atomic_wait(Runner::active);
-					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
+					if (config.show_detailed and config.proc_selected == 0 and Proc::detailed.status == "Dead") return;
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G"))) {
 					proc_mouse_scroll:
 					redraw = false;
-					auto old_selected = Config::getI("proc_selected");
+					auto old_selected = config.proc_selected;
 					auto new_selected = Proc::selection(key);
 					if (new_selected == -1)
 						return;
@@ -459,19 +464,19 @@ namespace Input {
 				bool redraw = true;
 				static uint64_t last_press = 0;
 
-				if (key == "+" and Config::getI("update_ms") <= 86399900) {
-					int add = (Config::getI("update_ms") <= 86399000 and last_press >= time_ms() - 200
+				if (key == "+" and config.update_ms <= 86399900) {
+					int add = (config.update_ms <= 86399000 and last_press >= time_ms() - 200
 						and rng::all_of(Input::history, [](const auto& str){ return str == "+"; })
 						? 1000 : 100);
-					Config::set("update_ms", Config::getI("update_ms") + add);
+					CONFIG_SET(update_ms, config.update_ms + add);
 					last_press = time_ms();
 					redraw = true;
 				}
-				else if (key == "-" and Config::getI("update_ms") >= 200) {
-					int sub = (Config::getI("update_ms") >= 2000 and last_press >= time_ms() - 200
+				else if (key == "-" and config.update_ms >= 200) {
+					int sub = (config.update_ms >= 2000 and last_press >= time_ms() - 200
 						and rng::all_of(Input::history, [](const auto& str){ return str == "-"; })
 						? 1000 : 100);
-					Config::set("update_ms", Config::getI("update_ms") - sub);
+					CONFIG_SET(update_ms, config.update_ms - sub);
 					last_press = time_ms();
 					redraw = true;
 				}
@@ -490,10 +495,10 @@ namespace Input {
 				bool redraw = true;
 
 				if (key == "i") {
-					Config::flip("io_mode");
+					CONFIG_SET(io_mode, not config.io_mode);
 				}
 				else if (key == "d") {
-					Config::flip("show_disks");
+					CONFIG_SET(show_disks, not config.show_disks);
 					no_update = false;
 					Draw::calcSizes();
 				}
@@ -526,11 +531,11 @@ namespace Input {
 					}
 				}
 				else if (key == "y") {
-					Config::flip("net_sync");
+					CONFIG_SET(net_sync, not config.net_sync);
 					Net::rescale = true;
 				}
 				else if (key == "a") {
-					Config::flip("net_auto");
+					CONFIG_SET(net_auto, not config.net_auto);
 					Net::rescale = true;
 				}
 				else if (key == "z") {

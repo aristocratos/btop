@@ -107,8 +107,9 @@ namespace Draw {
 		if (redraw) banner.clear();
 		if (banner.empty()) {
 			string b_color, bg, fg, oc, letter;
-			auto lowcolor = Config::getB("lowcolor");
-			auto tty_mode = Config::getB("tty_mode");
+			auto& config = Config::get();
+			auto lowcolor = config.lowcolor;
+			auto tty_mode = config.tty_mode;
 			for (size_t z = 0; const auto& line : Global::Banner_src) {
 				if (const auto w = ulen(line[1]); w > width) width = w;
 				if (tty_mode) {
@@ -250,8 +251,9 @@ namespace Draw {
 		if (line_color.empty())
 			line_color = Theme::c("div_line");
 
-		auto tty_mode = Config::getB("tty_mode");
-		auto rounded = Config::getB("rounded_corners");
+		auto& config = Config::get();
+		auto tty_mode = config.tty_mode;
+		auto rounded = config.rounded_corners;
 		const string numbering = (num == 0) ? "" : Theme::c("hi_fg") + (tty_mode ? std::to_string(num) : Symbols::superscript.at(clamp(num, 0, 9)));
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
@@ -292,7 +294,8 @@ namespace Draw {
 	}
 
 	bool update_clock(bool force) {
-		const auto& clock_format = Config::getS("clock_format");
+		auto& config = Config::get();
+		const auto& clock_format = config.clock_format;
 		if (not Cpu::shown or clock_format.empty()) {
 			if (clock_format.empty() and not Global::clock.empty()) Global::clock.clear();
 			return false;
@@ -318,7 +321,7 @@ namespace Draw {
 		}
 
 		auto& out = Global::clock;
-		auto cpu_bottom = Config::getB("cpu_bottom");
+		auto cpu_bottom = config.cpu_bottom;
 		const auto& x = Cpu::x;
 		const auto y = (cpu_bottom ? Cpu::y + Cpu::height - 1 : Cpu::y);
 		const auto& width = Cpu::width;
@@ -340,7 +343,7 @@ namespace Draw {
 
 		}
 
-		clock_str = uresize(clock_str, std::max(10, width - 66 - (Term::width >= 100 and Config::getB("show_battery") and Cpu::has_battery ? 22 : 0)));
+		clock_str = uresize(clock_str, std::max(10, width - 66 - (Term::width >= 100 and config.show_battery and Cpu::has_battery ? 22 : 0)));
 		out.clear();
 
 		if (clock_str.size() != clock_len) {
@@ -456,9 +459,10 @@ namespace Draw {
 				 bool invert, bool no_zero, long long max_value, long long offset)
 	: width(width), height(height), color_gradient(color_gradient),
 	  invert(invert), no_zero(no_zero), offset(offset) {
-		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
+		auto& config = Config::get();
+		if (config.tty_mode or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
-		else this->symbol = Config::getS("graph_symbol");
+		else this->symbol = config.graph_symbol;
 		if (this->symbol == "tty") tty_mode = true;
 
 		if (max_value == 0 and offset > 0) max_value = 100;
@@ -522,17 +526,18 @@ namespace Cpu {
 	string draw(const cpu_info& cpu, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		bool show_temps = (Config::getB("check_temp") and got_sensors);
-		auto single_graph = Config::getB("cpu_single_graph");
-		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
+		auto& config = Config::get();
+		bool show_temps = (config.check_temp and got_sensors);
+		auto single_graph = config.cpu_single_graph;
+		bool hide_cores = show_temps and (cpu_temp_only or not config.show_coretemp);
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
-		auto& graph_up_field = Config::getS("cpu_graph_upper");
-		auto& graph_lo_field = Config::getS("cpu_graph_lower");
-		auto tty_mode = Config::getB("tty_mode");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_cpu"));
-		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-		auto& temp_scale = Config::getS("temp_scale");
-		auto cpu_bottom = Config::getB("cpu_bottom");
+		auto& graph_up_field = config.cpu_graph_upper;
+		auto& graph_lo_field = config.cpu_graph_lower;
+		auto tty_mode = config.tty_mode;
+		auto& graph_symbol = (tty_mode ? "tty" : config.graph_symbol_cpu);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? config.graph_symbol + "_up" : graph_symbol + "_up")).at(6);
+		auto& temp_scale = config.temp_scale;
+		auto cpu_bottom = config.cpu_bottom;
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
 		static int bat_pos = 0, bat_len = 0;
@@ -556,7 +561,7 @@ namespace Cpu {
 			out += Mv::to(button_y, x + 16) + title_left + Theme::c("hi_fg") + Fx::b + 'p' + Theme::c("title") + "reset "
 				+ (Config::current_preset < 0 ? "*" : to_string(Config::current_preset)) + Fx::ub + title_right;
 			Input::mouse_mappings["p"] = {button_y, x + 17, 1, 8};
-			const string update = to_string(Config::getI("update_ms")) + "ms";
+			const string update = to_string(config.update_ms) + "ms";
 			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
 				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
 			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
@@ -571,7 +576,7 @@ namespace Cpu {
 					graph_low_height, "cpu",
 					cpu.cpu_percent.at(graph_lo_field),
 					graph_symbol,
-					Config::getB("cpu_invert_lower"), true
+					config.cpu_invert_lower, true
 				};
 			}
 
@@ -601,7 +606,7 @@ namespace Cpu {
 		}
 
 		//? Draw battery if enabled and present
-		if (Config::getB("show_battery") and has_battery) {
+		if (config.show_battery and has_battery) {
 			static int old_percent{};   // defaults to = 0
 			static long old_seconds{};  // defaults to = 0
 			static string old_status;
@@ -622,7 +627,7 @@ namespace Cpu {
 				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, true, true) : "");
 				const string str_percent = to_string(percent) + '%';
 				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
-				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + to_string(Config::getI("update_ms")).size();
+				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + to_string(config.update_ms).size();
 				const int current_pos = Term::width - current_len - 17;
 
 				if ((bat_pos != current_pos or bat_len != current_len) and bat_pos > 0 and not redraw)
@@ -647,18 +652,18 @@ namespace Cpu {
 			out += Mv::to( y + graph_up_height + 1 + (mid_line ? 1 : 0), x + 1) + graph_lower(cpu.cpu_percent.at(graph_lo_field), (data_same or redraw));
 
 		//? Uptime
-		if (Config::getB("show_uptime")) {
+		if (config.show_uptime) {
 			string upstr = sec_to_dhms(system_uptime());
 			if (upstr.size() > 8) {
 				upstr.resize(upstr.size() - 3);
 				upstr = trans(upstr);
 			}
-			out += Mv::to(y + (single_graph or not Config::getB("cpu_invert_lower") ? 1 : height - 2), x + 2)
+			out += Mv::to(y + (single_graph or not config.cpu_invert_lower ? 1 : height - 2), x + 2)
 				+ Theme::c("graph_text") + "up" + Mv::r(1) + upstr;
 		}
 
 		//? Cpu clock and cpu meter
-		if (Config::getB("show_cpu_freq") and not cpuHz.empty())
+		if (config.show_cpu_freq and not cpuHz.empty())
 			out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * (7 - cpuHz.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
@@ -759,16 +764,17 @@ namespace Mem {
 	string draw(const mem_info& mem, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		auto show_swap = Config::getB("show_swap");
-		auto swap_disk = Config::getB("swap_disk");
-		auto show_disks = Config::getB("show_disks");
-		auto show_io_stat = Config::getB("show_io_stat");
-		auto io_mode = Config::getB("io_mode");
-		auto io_graph_combined = Config::getB("io_graph_combined");
-		auto use_graphs = Config::getB("mem_graphs");
-		auto tty_mode = Config::getB("tty_mode");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
-		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
+		auto& config = Config::get();
+		auto show_swap = config.show_swap;
+		auto swap_disk = config.swap_disk;
+		auto show_disks = config.show_disks;
+		auto show_io_stat = config.show_io_stat;
+		auto io_mode = config.io_mode;
+		auto io_graph_combined = config.io_graph_combined;
+		auto use_graphs = config.mem_graphs;
+		auto tty_mode = config.tty_mode;
+		auto& graph_symbol = (tty_mode ? "tty" : config.graph_symbol_mem);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? config.graph_symbol + "_up" : graph_symbol + "_up")).at(6);
 		auto totalMem = Mem::get_totalMem();
 		string out;
 		out.reserve(height * width);
@@ -808,8 +814,8 @@ namespace Mem {
 						disks_io_h = max((int)floor((double)(height - 2 - (disk_ios * 2)) / max(1, disk_ios)), (io_graph_combined ? 1 : 2));
 						half_height = ceil((double)disks_io_h / 2);
 
-						if (not Config::getS("io_graph_speeds").empty()) {
-							auto split = ssplit(Config::getS("io_graph_speeds"));
+						if (not config.io_graph_speeds.empty()) {
+							auto split = ssplit(config.io_graph_speeds);
 							for (const auto& entry : split) {
 								auto vals = ssplit(entry);
 								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
@@ -1013,10 +1019,11 @@ namespace Net {
 	string draw(const net_info& net, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
-		auto net_sync = Config::getB("net_sync");
-		auto net_auto = Config::getB("net_auto");
-		auto tty_mode = Config::getB("tty_mode");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
+		auto& config = Config::get();
+		auto net_sync = config.net_sync;
+		auto net_auto = config.net_auto;
+		auto tty_mode = config.tty_mode;
+		auto& graph_symbol = (tty_mode ? "tty" : config.graph_symbol_net);
 		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
 		if (old_ip != ip_addr) {
 			old_ip = ip_addr;
@@ -1027,8 +1034,8 @@ namespace Net {
 		const string title_left = Theme::c("net_box") + Fx::ub + Symbols::title_left;
 		const string title_right = Theme::c("net_box") + Fx::ub + Symbols::title_right;
 		const int i_size = min((int)selected_iface.size(), 10);
-		const long long down_max = (net_auto ? graph_max.at("download") : ((long long)(Config::getI("net_download")) << 20) / 8);
-		const long long up_max = (net_auto ? graph_max.at("upload") : ((long long)(Config::getI("net_upload")) << 20) / 8);
+		const long long down_max = (net_auto ? graph_max.at("download") : ((long long)(config.net_download) << 20) / 8);
+		const long long up_max = (net_auto ? graph_max.at("upload") : ((long long)(config.net_upload) << 20) / 8);
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
@@ -1120,17 +1127,18 @@ namespace Proc {
 	string box;
 
 	int selection(const string& cmd_key) {
-		auto start = Config::getI("proc_start");
-		auto selected = Config::getI("proc_selected");
-		auto last_selected = Config::getI("proc_last_selected");
-		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
-		auto vim_keys = Config::getB("vim_keys");
+		auto& config = Config::get();
+		auto start = config.proc_start;
+		auto selected = config.proc_selected;
+		auto last_selected = config.proc_last_selected;
+		const int select_max = (config.show_detailed ? Proc::select_max - 8 : Proc::select_max);
+		auto vim_keys = config.vim_keys;
 
 		int numpids = Proc::numpids;
 		if ((cmd_key == "up" or (vim_keys and cmd_key == "k")) and selected > 0) {
 			if (start > 0 and selected == 1) start--;
 			else selected--;
-			if (Config::getI("proc_last_selected") > 0) Config::set("proc_last_selected", 0);
+			if (config.proc_last_selected > 0) CONFIG_SET(proc_last_selected, 0);
 		}
 		else if (cmd_key == "mouse_scroll_up" and start > 0) {
 			start = max(0, start - 3);
@@ -1142,7 +1150,7 @@ namespace Proc {
 			if (start < numpids - select_max and selected == select_max) start++;
 			else if (selected == 0 and last_selected > 0) {
 				selected = last_selected;
-				Config::set("proc_last_selected", 0);
+				CONFIG_SET(proc_last_selected, 0);
 			}
 			else selected++;
 		}
@@ -1168,12 +1176,12 @@ namespace Proc {
 		}
 
 		bool changed = false;
-		if (start != Config::getI("proc_start")) {
-			Config::set("proc_start", start);
+		if (start != config.proc_start) {
+			CONFIG_SET(proc_start, start);
 			changed = true;
 		}
-		if (selected != Config::getI("proc_selected")) {
-			Config::set("proc_selected", selected);
+		if (selected != config.proc_selected) {
+			CONFIG_SET(proc_selected, selected);
 			changed = true;
 		}
 		return (not changed ? -1 : selected);
@@ -1181,18 +1189,19 @@ namespace Proc {
 
 	string draw(const vector<proc_info>& plist, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
-		auto proc_tree = Config::getB("proc_tree");
-		bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
-		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
-		auto proc_colors = Config::getB("proc_colors");
-		auto tty_mode = Config::getB("tty_mode");
-		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
-		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-		auto mem_bytes = Config::getB("proc_mem_bytes");
-		auto vim_keys = Config::getB("vim_keys");
-		auto show_graphs = Config::getB("proc_cpu_graphs");
-		start = Config::getI("proc_start");
-		selected = Config::getI("proc_selected");
+		auto& config = Config::get();
+		auto proc_tree = config.proc_tree;
+		bool show_detailed = (config.show_detailed and cmp_equal(Proc::detailed.last_pid, config.detailed_pid));
+		bool proc_gradient = (config.proc_gradient and not config.lowcolor and Theme::gradients.contains("proc"));
+		auto proc_colors = config.proc_colors;
+		auto tty_mode = config.tty_mode;
+		auto& graph_symbol = (tty_mode ? "tty" : config.graph_symbol_proc);
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? config.graph_symbol + "_up" : graph_symbol + "_up")).at(6);
+		auto mem_bytes = config.proc_mem_bytes;
+		auto vim_keys = config.vim_keys;
+		auto show_graphs = config.proc_cpu_graphs;
+		start = config.proc_start;
+		selected = config.proc_selected;
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
 		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
@@ -1297,8 +1306,8 @@ namespace Proc {
 			}
 
 			//? Filter
-			auto filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
-			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
+			auto filtering = config.proc_filtering; // ? filter(20) : Config::getS("proc_filter"))
+			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(config.proc_filter, max(6, width - 58));
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
 				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
@@ -1313,22 +1322,22 @@ namespace Proc {
 			}
 
 			//? per-core, reverse, tree and sorting
-			const auto& sorting = Config::getS("proc_sorting");
+			const auto& sorting = config.proc_sorting;
 			const int sort_len = sorting.size();
 			const int sort_pos = x + width - sort_len - 8;
 
 			if (width > 55 + sort_len) {
-				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
+				out += Mv::to(y, sort_pos - 25) + title_left + (config.proc_per_core ? Fx::b : "") + Theme::c("title")
 					+ "per-" + Theme::c("hi_fg") + 'c' + Theme::c("title") + "ore" + Fx::ub + title_right;
 				Input::mouse_mappings["c"] = {y, sort_pos - 24, 1, 8};
 			}
 			if (width > 45 + sort_len) {
-				out += Mv::to(y, sort_pos - 15) + title_left + (Config::getB("proc_reversed") ? Fx::b : "") + Theme::c("hi_fg")
+				out += Mv::to(y, sort_pos - 15) + title_left + (config.proc_reversed ? Fx::b : "") + Theme::c("hi_fg")
 					+ 'r' + Theme::c("title") + "everse" + Fx::ub + title_right;
 				Input::mouse_mappings["r"] = {y, sort_pos - 14, 1, 7};
 			}
 			if (width > 35 + sort_len) {
-				out += Mv::to(y, sort_pos - 6) + title_left + (Config::getB("proc_tree") ? Fx::b : "") + Theme::c("title") + "tre"
+				out += Mv::to(y, sort_pos - 6) + title_left + (config.proc_tree ? Fx::b : "") + Theme::c("title") + "tre"
 					+ Theme::c("hi_fg") + 'e' + Fx::ub + title_right;
 				Input::mouse_mappings["e"] = {y, sort_pos - 5, 1, 4};
 			}
@@ -1607,10 +1616,11 @@ namespace Draw {
 	void calcSizes() {
 		atomic_wait(Runner::active);
 		Config::unlock();
-		auto boxes = Config::getS("shown_boxes");
-		auto cpu_bottom = Config::getB("cpu_bottom");
-		auto mem_below_net = Config::getB("mem_below_net");
-		auto proc_left = Config::getB("proc_left");
+		auto& config = Config::get();
+		auto boxes = config.shown_boxes;
+		auto cpu_bottom = config.cpu_bottom;
+		auto mem_below_net = config.mem_below_net;
+		auto proc_left = config.proc_left;
 
 		Cpu::box.clear();
 		Mem::box.clear();
@@ -1640,7 +1650,7 @@ namespace Draw {
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
 			using namespace Cpu;
-			bool show_temp = (Config::getB("check_temp") and got_sensors);
+			bool show_temp = (config.check_temp and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 			x = 1;
@@ -1671,7 +1681,7 @@ namespace Draw {
 
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, (cpu_bottom ? "" : "cpu"), (cpu_bottom ? "cpu" : ""), 1);
 
-			auto& custom = Config::getS("custom_cpu_name");
+			auto& custom = config.custom_cpu_name;
 			const string cpu_title = uresize((custom.empty() ? Cpu::cpuName : custom) , b_width - 14);
 			box += createBox(b_x, b_y, b_width, b_height, "", false, cpu_title);
 		}
@@ -1679,9 +1689,9 @@ namespace Draw {
 		//* Calculate and draw mem box outlines
 		if (Mem::shown) {
 			using namespace Mem;
-			auto show_disks = Config::getB("show_disks");
-			auto swap_disk = Config::getB("swap_disk");
-			auto mem_graphs = Config::getB("mem_graphs");
+			auto show_disks = config.show_disks;
+			auto swap_disk = config.swap_disk;
+			auto mem_graphs = config.mem_graphs;
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
