@@ -151,6 +151,12 @@ namespace Term {
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
 
+	class MyNumPunct : public std::numpunct<char> {
+	protected:
+		virtual char do_thousands_sep() const { return '\''; }
+		virtual std::string do_grouping() const { return "\03"; }
+	};
+
 	size_t wide_ulen(const string& str);
 	size_t wide_ulen(const std::wstring& w_str);
 
@@ -334,7 +340,6 @@ namespace Tools {
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
-
 }
 
 //* Simple logging implementation
@@ -348,13 +353,56 @@ namespace Logger {
 	};
 	extern std::filesystem::path logfile;
 
+	enum Level : size_t {
+		DISABLED = 0,
+		ERROR = 1,
+		WARNING = 2,
+		INFO = 3,
+		DEBUG = 4,
+	};
+
 	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
 	void set(const string& level);
 
-	void log_write(const size_t level, const string& msg);
-	inline void error(const string msg) { log_write(1, msg); }
-	inline void warning(const string msg) { log_write(2, msg); }
-	inline void info(const string msg) { log_write(3, msg); }
-	inline void debug(const string msg) { log_write(4, msg); }
+	void log_write(const Level level, const string& msg);
+	inline void error(const string msg) { log_write(ERROR, msg); }
+	inline void warning(const string msg) { log_write(WARNING, msg); }
+	inline void info(const string msg) { log_write(INFO, msg); }
+	inline void debug(const string msg) { log_write(DEBUG, msg); }
 }
+
+namespace Tools {
+	//* Creates a named timer that is started on construct (by default) and reports elapsed time in microseconds to Logger::debug() on destruct if running
+	//* Unless delayed_report is set to false, all reporting is buffered and delayed until DebugTimer is destructed or .force_report() is called
+	//* Usage example: Tools::DebugTimer timer(name:"myTimer", [start:true], [delayed_report:true]) // Create timer and start
+	//* timer.stop(); // Stop timer and report elapsed time
+	//* timer.stop_rename_reset("myTimer2"); // Stop timer, report elapsed time, rename timer, reset and restart
+	class DebugTimer {
+		uint64_t start_time{};
+		uint64_t elapsed_time{};
+		bool running{};
+		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
+		vector<string> report_buffer{};
+	public:
+		string name{};
+		bool delayed_report{};
+		Logger::Level log_level = Logger::DEBUG;
+		DebugTimer() = default;
+		DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		~DebugTimer();
+
+		void start();
+		void stop(bool report = true);
+		void reset(bool restart = true);
+		//* Stops and reports (default), renames timer then resets and restarts (default)
+		void stop_rename_reset(const string& new_name, bool report = true, bool restart = true);
+		void report();
+		void force_report();
+		uint64_t elapsed();
+		bool is_running();
+	};
+
+}
+
+
 

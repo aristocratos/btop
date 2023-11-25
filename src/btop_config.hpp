@@ -43,9 +43,16 @@ namespace Config {
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
-	const vector<string> valid_boxes = { "cpu", "mem", "net", "proc" };
+	const vector<string> valid_boxes = {
+		"cpu", "mem", "net", "proc"
+#ifdef GPU_SUPPORT
+		,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
+#endif
+		};
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
-
+#ifdef GPU_SUPPORT
+	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
+#endif
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
 	extern vector<string> available_batteries;

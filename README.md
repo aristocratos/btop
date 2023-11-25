@@ -33,11 +33,32 @@
 * [Compilation Linux](#compilation-linux)
 * [Compilation macOS](#compilation-macos-osx)
 * [Compilation FreeBSD](#compilation-freebsd)
+* [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
 ## News
+
+##### 25 November 2023
+
+GPU monitoring added for Linux!
+
+Compile from git main to try it out.
+
+Use keys `5`, `6`, `7` and `0` to show/hide the gpu monitoring boxes. `5` = Gpu 1, `6` = Gpu 2, etc.
+
+Gpu stats/graphs can also be displayed in the "Cpu box" (not as verbose), see the cpu options menu for info and configuration.
+
+Note that the binaries provided on the release page (when released) and the continuous builds will not have gpu support enabled.
+
+Because the GPU support relies on loading of dynamic gpu libraries, gpu support will not work when also static linking.
+
+See [Compilation Linux](#compilation-linux) for more info on how to compile with gpu monitoring support.
+
+Many thanks to [@romner-set](https://github.com/romner-set) who wrote the vast majority of the implementation for GPU support.
+
+Big update with version bump to 1.3 coming soon.
 
 ##### 28 August 2022
 
@@ -309,6 +330,34 @@ Also needs a UTF8 locale and a font that covers:
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
+   ### GPU compatibility
+
+   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux x86_64, provided you have the correct drivers and libraries.
+
+   Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+
+   Gpu support will not work when static linking glibc (or musl, etc.)!
+
+   For x86_64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
+
+   `make GPU_SUPPORT=false`
+
+ * **NVIDIA**
+
+    You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
+
+    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+
+ * **AMD**
+
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+
+    This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
+
+   ```bash
+   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   ```
+
 <details>
 
 <summary>
@@ -346,6 +395,9 @@ Also needs a UTF8 locale and a font that covers:
 
    Append `ARCH=<architecture>` to manually set the target architecture.
    If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
+
+   Append `RSMI_STATIC=true` to statically link the ROCm SMI library used for querying AMDGPU data.
+   See [GPU compatibility](#gpu-compatibility) for details.
 
    Use `ADDFLAGS` variable for appending flags to both compiler and linker.
 
@@ -834,7 +886,7 @@ graph_symbol_net = "default"
 # Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
 graph_symbol_proc = "default"
 
-#* Manually set which boxes to show. Available values are "cpu mem net proc", separate values with whitespace.
+#* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
 shown_boxes = "proc cpu mem net"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.

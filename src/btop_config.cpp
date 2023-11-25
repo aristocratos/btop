@@ -73,14 +73,16 @@ namespace Config {
 								"#* Note that \"tty\" only has half the horizontal resolution of the other two, so will show a shorter historical view."},
 
 		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
-
+#ifdef GPU_SUPPORT
+		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+#endif
 		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
+		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
@@ -114,7 +116,9 @@ namespace Config {
 
 		{"cpu_graph_lower", 	"#* Sets the CPU stat shown in lower half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
-
+	#ifdef GPU_SUPPORT
+		{"show_gpu_info",		"#* If gpu info should be shown in the cpu box. Available values = \"Auto\", \"On\" and \"Off\"."},
+	#endif
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
 		{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
@@ -194,7 +198,21 @@ namespace Config {
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
-								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
+								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
+	#ifdef GPU_SUPPORT
+
+		{"nvml_measure_pcie_speeds",
+								"#* Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards."},
+
+		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+
+		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
+		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
+		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
+		{"custom_gpu_name3",	"#* Custom gpu3 model name, empty string to disable."},
+		{"custom_gpu_name4",	"#* Custom gpu4 model name, empty string to disable."},
+		{"custom_gpu_name5",	"#* Custom gpu5 model name, empty string to disable."},
+	#endif
 	};
 
 	unordered_flat_map<std::string_view, string> strings = {
@@ -203,12 +221,13 @@ namespace Config {
 		{"graph_symbol", "braille"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
+		{"graph_symbol_gpu", "default"},
 		{"graph_symbol_mem", "default"},
 		{"graph_symbol_net", "default"},
 		{"graph_symbol_proc", "default"},
 		{"proc_sorting", "cpu lazy"},
-		{"cpu_graph_upper", "total"},
-		{"cpu_graph_lower", "total"},
+		{"cpu_graph_upper", "Auto"},
+		{"cpu_graph_lower", "Auto"},
 		{"cpu_sensor", "Auto"},
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
@@ -222,6 +241,15 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+	#ifdef GPU_SUPPORT
+		{"custom_gpu_name0", ""},
+		{"custom_gpu_name1", ""},
+		{"custom_gpu_name2", ""},
+		{"custom_gpu_name3", ""},
+		{"custom_gpu_name4", ""},
+		{"custom_gpu_name5", ""},
+		{"show_gpu_info", "Auto"}
+	#endif
 	};
 	unordered_flat_map<std::string_view, string> stringsTmp;
 
@@ -271,6 +299,10 @@ namespace Config {
 		{"show_detailed", false},
 		{"proc_filtering", false},
 		{"proc_aggregate", false},
+	#ifdef GPU_SUPPORT
+		{"nvml_measure_pcie_speeds", true},
+		{"gpu_mirror_graph", true},
+	#endif
 	};
 	unordered_flat_map<std::string_view, bool> boolsTmp;
 
@@ -321,7 +353,7 @@ namespace Config {
 					validError = "Malformatted preset in config value presets!";
 					return false;
 				}
-				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc")) {
+				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5")) {
 					validError = "Invalid box name in config value presets!";
 					return false;
 				}
@@ -416,6 +448,11 @@ namespace Config {
 
 		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
+
+	#ifdef GPU_SUPPORT
+		else if (name == "show_gpu_info" and not v_contains(show_gpu_values, value))
+			validError = "Invalid value for show_gpu_info: " + value;
+	#endif
 
 		else if (name == "presets" and not presetsValid(value))
 			return false;
@@ -519,6 +556,13 @@ namespace Config {
 		auto new_boxes = ssplit(boxes);
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
+		#ifdef GPU_SUPPORT
+			if (box.starts_with("gpu")) {
+				size_t gpu_num = stoi(box.substr(3));
+				if (gpu_num == 0) gpu_num = 5;
+				if (std::cmp_greater(gpu_num, Gpu::gpu_names.size())) return false;
+			}
+		#endif
 		}
 		current_boxes = std::move(new_boxes);
 		return true;

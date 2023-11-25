@@ -86,6 +86,91 @@ namespace Shared {
 }
 
 
+namespace Gpu {
+#ifdef GPU_SUPPORT
+	extern vector<string> box;
+	extern int width, height, min_width, min_height;
+	extern vector<int> x_vec, y_vec;
+	extern vector<bool> redraw;
+	extern int shown;
+	extern vector<char> shown_panels;
+	extern vector<string> gpu_names;
+	extern vector<int> gpu_b_height_offsets;
+	extern long long gpu_pwr_total_max;
+
+	extern unordered_flat_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
+
+  const array mem_names { "used"s, "free"s };
+
+	//* Container for process information // TODO
+	/*struct proc_info {
+    unsigned int pid;
+    unsigned long long mem;
+	};*/
+
+	//* Container for supported Gpu::*::collect() functions
+	struct gpu_info_supported {
+		bool gpu_utilization = true,
+		   	 mem_utilization = true,
+				 gpu_clock = true,
+				 mem_clock = true,
+				 pwr_usage = true,
+				 pwr_state = true,
+				 temp_info = true,
+				 mem_total = true,
+				 mem_used = true,
+				 pcie_txrx = true;
+	};
+
+	//* Per-device container for GPU info
+	struct gpu_info {
+		unordered_flat_map<string, deque<long long>> gpu_percent = {
+			{"gpu-totals", {}},
+			{"gpu-vram-totals", {}},
+			{"gpu-pwr-totals", {}},
+		};
+		unsigned int gpu_clock_speed; // MHz
+
+		long long pwr_usage; // mW
+		long long pwr_max_usage = 255000;
+		long long pwr_state;
+
+		deque<long long> temp = {0};
+		long long temp_max = 110;
+
+		long long mem_total = 0;
+		long long mem_used = 0;
+		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
+		long long mem_clock_speed = 0; // MHz
+
+		long long pcie_tx = 0; // KB/s
+		long long pcie_rx = 0;
+
+		gpu_info_supported supported_functions;
+
+		// vector<proc_info> graphics_processes = {}; // TODO
+		// vector<proc_info> compute_processes = {};
+	};
+
+	namespace Nvml {
+		extern bool shutdown();
+	}
+	namespace Rsmi {
+		extern bool shutdown();
+	}
+
+	//* Collect gpu stats and temperatures
+    auto collect(bool no_update = false) -> vector<gpu_info>&;
+
+	//* Draw contents of gpu box using <gpus> as source
+  	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
+#else
+	struct gpu_info {
+		bool supported = false;
+	};
+#endif
+}
+
 namespace Cpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
@@ -119,7 +204,7 @@ namespace Cpu {
 	auto collect(bool no_update = false) -> cpu_info&;
 
 	//* Draw contents of cpu box using <cpu> as source
-	string draw(const cpu_info& cpu, bool force_redraw = false, bool data_same = false);
+    string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpu, bool force_redraw = false, bool data_same = false);
 
 	//* Parse /proc/cpu info for mapping of core ids
 	auto get_core_mapping() -> unordered_flat_map<int, int>;
