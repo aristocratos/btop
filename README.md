@@ -712,8 +712,6 @@ Also needs a UTF8 locale and a font that covers:
    gmake help
    ```
 
-
-
 </details>
 
 <details>
