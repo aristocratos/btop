@@ -38,8 +38,11 @@ override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? GPU Support
 ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
-	GPU_SUPPORT := true
-else
+	ifneq ($(STATIC),true)
+		GPU_SUPPORT := true
+	endif
+endif
+ifneq ($(GPU_SUPPORT),true)
 	GPU_SUPPORT := false
 endif
 

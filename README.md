@@ -40,6 +40,26 @@
 
 ## News
 
+##### 25 November 2023
+
+GPU monitoring added for Linux!
+
+Compile from git main to try it out.
+
+Use keys `5`, `6`, `7` and `0` to show/hide the gpu monitoring boxes. `5` = Gpu 1, `6` = Gpu 2, etc.
+
+Gpu stats/graphs can also be displayed in the "Cpu box" (not as verbose), see the cpu options menu for info and configuration.
+
+Note that the binaries provided on the release page (when released) and the continuous builds will not have gpu support enabled.
+
+Because the GPU support relies on loading of dynamic gpu libraries, gpu support will not work when also static linking.
+
+See [Compilation Linux](#compilation-linux) for more info on how to compile with gpu monitoring support.
+
+Many thanks to [@romner-set](https://github.com/romner-set) who wrote the vast majority of the implementation for GPU support.
+
+Big update with version bump to 1.3 coming soon.
+
 ##### 28 August 2022
 
 [![btop4win](https://github.com/aristocratos/btop4win/raw/master/Img/logo.png)](https://github.com/aristocratos/btop4win)
@@ -312,9 +332,15 @@ Also needs a UTF8 locale and a font that covers:
 
    ### GPU compatibility
 
-   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux, provided you have the correct drivers and libraries.
+   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux x86_64, provided you have the correct drivers and libraries.
 
    Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+
+   Gpu support will not work when static linking glibc (or musl, etc.)!
+
+   For x86_64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
+
+   `make GPU_SUPPORT=false`
 
  * **NVIDIA**
 
