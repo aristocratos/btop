@@ -396,6 +396,8 @@ Also needs a UTF8 locale and a font that covers:
    Append `ARCH=<architecture>` to manually set the target architecture.
    If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
 
+   Append `GPU_SUPPORT=true` or `false` to enable/disable GPU support. (Enabled by default on X86_64 Linux).
+
    Append `RSMI_STATIC=true` to statically link the ROCm SMI library used for querying AMDGPU data.
    See [GPU compatibility](#gpu-compatibility) for details.
 
@@ -409,7 +411,7 @@ Also needs a UTF8 locale and a font that covers:
    make
    ```
 
-4. **Install**
+5. **Install**
 
    Append `PREFIX=/target/dir` to set target, default: `/usr/local`
 
@@ -419,7 +421,7 @@ Also needs a UTF8 locale and a font that covers:
    sudo make install
    ```
 
-5. **(Optional) Set suid bit to make btop always run as root (or other user)**
+6. **(Optional) Set suid bit to make btop always run as root (or other user)**
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
