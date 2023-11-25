@@ -310,7 +310,35 @@ Also needs a UTF8 locale and a font that covers:
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
-   For a `cmake` based build alternative see the [fork](https://github.com/jan-guenter/btop/tree/main) by @jan-guenter
+   ### GPU compatibility
+
+   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux, provided you have the correct drivers and libraries.
+
+   Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+
+ * **NVIDIA**
+
+    You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
+
+    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+
+ * **AMD**
+
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+
+    This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
+
+   ```bash
+   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   ```
+
+<details>
+
+<summary>
+
+### With Make
+
+</summary>
 
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
@@ -400,6 +428,79 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    make help
    ```
+
+</details>
+
+<details>
+
+<summary>
+
+### With CMake (Community maintained)
+
+</summary>
+
+1. **Install build dependencies**
+
+   Requires Clang / GCC, CMake, Ninja and Git
+
+   For example, with Debian Bookworm:
+
+   ```bash
+   sudo apt install cmake git g++ ninja-build
+   ```
+
+2. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git && cd btop
+   ``````
+
+3. **Compile**
+
+   ```bash
+   # Configure
+   cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+   This will automatically build a release version of btop.
+
+   Some useful options to pass to the configure step:
+
+   | Configure flag                  | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
+   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
+   | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
+   | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+
+   To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+
+4. **Install**
+
+   ```bash
+   cmake --install build
+   ```
+
+   May require root privileges
+
+5. **Uninstall**
+
+   CMake doesn't generate an uninstall target by default. To remove installed files, run
+   ```
+   cat build/install_manifest.txt | xargs rm -irv
+   ```
+
+6. **Cleanup build directory**
+
+   ```bash
+   cmake --build build -t clean
+   ```
+
+</details>
 
 ## Compilation macOS OSX
 
@@ -497,6 +598,14 @@ Also needs a UTF8 locale and a font that covers:
 
    Note that GNU make (`gmake`) is required to compile on FreeBSD.
 
+<details>
+
+<summary>
+
+### With gmake
+
+</summary>
+
 1. **Install dependencies**
 
    ```bash
@@ -577,27 +686,97 @@ Also needs a UTF8 locale and a font that covers:
    gmake help
    ```
 
-## GPU compatibility
 
-   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux, provided you have the correct drivers and libraries.
 
-   Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+</details>
 
- * **NVIDIA**
+<details>
 
-    You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
+<summary>
 
-    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+### With CMake (Community maintained)
 
- * **AMD**
+</summary>
 
-    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+1. **Install build dependencies**
 
-    This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
+   Requires Clang / GCC, CMake, Ninja and Git
+
+   _**Note:** LLVM's libc++ shipped with FreeBSD 13 is too old and cannot compile btop._
+
+	FreeBSD 14 and later:
+   ```bash
+   pkg install cmake ninja
+   ```
+
+	FreeBSD 13:
+   ```bash
+   pkg install cmake gcc13 ninja
+   ```
+
+2. **Clone the repository**
 
    ```bash
-   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   git clone https://github.com/aristocratos/btop.git && cd btop
+   ``````
+
+3. **Compile**
+
+	FreeBSD 14 and later:
+   ```bash
+   # Configure
+   cmake -B build -G Ninja
+   # Build
+   cmake --build build
    ```
+
+	FreeBSD 13:
+   ```bash
+   # Configure
+   CXX=g++13 cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+   This will automatically build a release version of btop.
+
+   Some useful options to pass to the configure step:
+
+   | Configure flag                  | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
+   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
+   | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
+   | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+
+   _**Note:** Static linking does not work with GCC._
+
+   To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+
+4. **Install**
+
+   ```bash
+   cmake --install build
+   ```
+
+   May require root privileges
+
+5. **Uninstall**
+
+   CMake doesn't generate an uninstall target by default. To remove installed files, run
+   ```
+   cat build/install_manifest.txt | xargs rm -irv
+   ```
+
+6. **Cleanup build directory**
+
+   ```bash
+   cmake --build build -t clean
+   ```
+
+</details>
 
 ## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)

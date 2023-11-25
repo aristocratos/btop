@@ -1,0 +1,86 @@
+# All graphs and meters can be gradients
+# For single color graphs leave "mid" and "end" variable empty.
+# Use "start" and "end" variables for two color gradient
+# Use "start", "mid" and "end" for three color gradient
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#1C1E26"
+
+# Main text color
+theme[main_fg]="#f8f8f2"
+
+# Title color for boxes
+theme[title]="#f8f8f2"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#B877DB"
+
+# Background color of selected items
+theme[selected_bg]="#282b37"
+
+# Foreground color of selected items
+theme[selected_fg]="#f8f8f2"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#272e33"
+
+# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+theme[graph_text]="#f8f8f2"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#27D796"
+
+# Cpu box outline color
+theme[cpu_box]="#B877DB"
+
+# Memory/disks box outline color
+theme[mem_box]="#27D796"
+
+# Net up/down box outline color
+theme[net_box]="#E95678"
+
+# Processes box outline color
+theme[proc_box]="#25B2BC"
+
+# Box divider line and small boxes line color
+theme[div_line]="#272e33"
+
+# Temperature graph colors
+theme[temp_start]="#27D796"
+theme[temp_mid]="#FAC29A"
+theme[temp_end]="#E95678"
+
+# CPU graph colors
+theme[cpu_start]="#27D796"
+theme[cpu_mid]="#FAC29A"
+theme[cpu_end]="#E95678"
+
+# Mem/Disk free meter
+theme[free_start]="#E95678"
+theme[free_mid]="#FAC29A"
+theme[free_end]="#27D796"
+
+# Mem/Disk cached meter
+theme[cached_start]="#27D796"
+theme[cached_mid]="#FAC29A"
+theme[cached_end]="#E95678"
+
+# Mem/Disk available meter
+theme[available_start]="#27D796"
+theme[available_mid]="#FAC29A"
+theme[available_end]="#E95678"
+
+# Mem/Disk used meter
+theme[used_start]="#27D796"
+theme[used_mid]="#FAC29A"
+theme[used_end]="#E95678"
+
+# Download graph colors
+theme[download_start]="#27D796"
+theme[download_mid]="#FAC29A"
+theme[download_end]="#E95678"
+
+# Upload graph colors
+theme[upload_start]="#27D796"
+theme[upload_mid]="#FAC29A"
+theme[upload_end]="#E95678"

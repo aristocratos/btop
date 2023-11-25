@@ -1876,7 +1876,17 @@ namespace Proc {
 				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
 				mem_str += '%';
 			}
-			out += (thread_size > 0 ? t_color + rjust(to_string(min(p.threads, (size_t)9999)), thread_size) + ' ' + end : "" )
+
+			// Shorten process thread representation when larger than 5 digits: 10000 -> 10K ...
+			const std::string proc_threads_string = [&] {
+				if (p.threads > 9999) {
+					return std::to_string(p.threads / 1000) + 'K';
+				} else {
+					return std::to_string(p.threads);
+				}
+			}();
+
+			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
@@ -1892,8 +1902,11 @@ namespace Proc {
 		if (numpids > select_max) {
 			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
-				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down
-				+ Mv::to(y + 2 + scroll_pos, x + width - 2) + "█";
+				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down;
+
+			for (int i = y + 2; i < y + height - 2; i++) {
+				out += Mv::to(i, x + width - 2) + ((i == y + 2 + scroll_pos) ? "█" : " ");
+			}
 		}
 
 		//? Current selection and number of processes

@@ -54,15 +54,73 @@ namespace Menu {
    int signalKillRet{}; // defaults to 0
 
    const array<string, 32> P_Signals = {
-	   	"0",
+	   "0",
+#ifdef __linux__
+#if defined(__hppa__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGSTKFLT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGXCPU",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGUSR1",
+		"SIGUSR2", "SIGCHLD", "SIGPWR", "SIGVTALRM",
+		"SIGPROF", "SIGIO", "SIGWINCH", "SIGSTOP",
+		"SIGTSTP", "SIGCONT", "SIGTTIN", "SIGTTOU",
+		"SIGURG", "SIGXFSZ", "SIGSYS"
+#elif defined(__mips__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGUSR1",
+		"SIGUSR2", "SIGCHLD", "SIGPWR", "SIGWINCH",
+		"SIGURG", "SIGIO", "SIGSTOP", "SIGTSTP",
+		"SIGCONT", "SIGTTIN", "SIGTTOU", "SIGVTALRM",
+		"SIGPROF", "SIGXCPU", "SIGXFSZ"
+#elif defined(__alpha__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGPWR", "SIGUSR1", "SIGUSR2"
+#elif defined (__sparc__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGLOST", "SIGUSR1", "SIGUSR2"
+#else
 		"SIGHUP", "SIGINT",	"SIGQUIT",	"SIGILL",
 		"SIGTRAP", "SIGABRT", "SIGBUS", "SIGFPE",
 		"SIGKILL", "SIGUSR1", "SIGSEGV", "SIGUSR2",
-		"SIGPIPE", "SIGALRM", "SIGTERM", "16", "SIGCHLD",
-		"SIGCONT", "SIGSTOP", "SIGTSTP", "SIGTTIN",
-		"SIGTTOU", "SIGURG", "SIGXCPU", "SIGXFSZ",
-		"SIGVTALRM", "SIGPROF", "SIGWINCH", "SIGIO",
-		"SIGPWR", "SIGSYS"
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGSTKFLT",
+		"SIGCHLD", "SIGCONT", "SIGSTOP", "SIGTSTP",
+		"SIGTTIN", "SIGTTOU", "SIGURG", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGIO", "SIGPWR", "SIGSYS"
+#endif
+#elif defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGINFO", "SIGUSR1", "SIGUSR2"
+#else
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "7", "SIGFPE",
+		"SIGKILL", "10", "SIGSEGV", "12",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "16",
+		"17", "18", "19", "20",
+		"21", "22", "23", "24",
+		"25", "26", "27", "28",
+		"29", "30", "31"
+#endif
 	};
 
   unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
@@ -138,6 +196,7 @@ namespace Menu {
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
 		{"e", "Toggle processes tree view."},
+		{"%", "Toggles memory display mode in processes box."},
 		{"Selected +, -", "Expand/collapse the selected process in tree view."},
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
@@ -675,6 +734,11 @@ namespace Menu {
 				"Set true to show processes grouped by",
 				"parents with lines drawn between parent",
 				"and child process."},
+			{"proc_aggregate",
+				"Aggregate child's resources in parent.",
+				"",
+				"In tree-view, include all child resources",
+				"with the parent even while expanded."},
 			{"proc_colors",
 				"Enable colors in process view.",
 				"",

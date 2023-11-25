@@ -64,9 +64,13 @@ namespace Input {
 		{"[C", 		"right"},
 		{"OC",		"right"},
 		{"[2~",		"insert"},
+		{"[4h",		"insert"},
 		{"[3~",		"delete"},
+		{"[P",		"delete"},
 		{"[H",		"home"},
+		{"[1~",		"home"},
 		{"[F",		"end"},
+		{"[4~",		"end"},
 		{"[5~",		"page_up"},
 		{"[6~",		"page_down"},
 		{"\t",		"tab"},
@@ -361,6 +365,9 @@ namespace Input {
 
 				else if (key == "c")
 					Config::flip("proc_per_core");
+
+				else if (key == "%")
+					Config::flip("proc_mem_bytes");
 
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
