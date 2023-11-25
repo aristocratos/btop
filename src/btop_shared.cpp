@@ -24,6 +24,7 @@ tab-size = 4
 namespace rng = std::ranges;
 using namespace Tools;
 
+#ifdef GPU_SUPPORT
 namespace Gpu {
 	vector<string> gpu_names;
 	vector<int> gpu_b_height_offsets;
@@ -34,6 +35,7 @@ namespace Gpu {
 	};
 	long long gpu_pwr_total_max;
 }
+#endif
 
 namespace Proc {
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {

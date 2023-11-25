@@ -183,8 +183,11 @@ void term_resize(bool force) {
 		if (force and refreshed) force = false;
 	}
 	else return;
-
+#ifdef GPU_SUPPORT
 	static const array<string, 10> all_boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
+#else
+	static const array<string, 5> all_boxes = {"", "cpu", "mem", "net", "proc"};
+#endif
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
 	Term::refresh();
@@ -224,8 +227,12 @@ void term_resize(bool force) {
 					clean_quit(0);
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = stoi(key);
-					auto box = all_boxes.at(intKey);
-					if (not box.starts_with("gpu") or (intKey == 0 and Gpu::gpu_names.size() >= 5) or (intKey >= 5 and std::cmp_greater_equal(Gpu::gpu_names.size(), intKey - 4))) {
+				#ifdef GPU_SUPPORT
+					if ((intKey == 0 and Gpu::gpu_names.size() >= 5) or (intKey >= 5 and std::cmp_greater_equal(Gpu::gpu_names.size(), intKey - 4))) {
+				#else
+					if (intKey > 0 and intKey < 5) {
+				#endif
+						auto box = all_boxes.at(intKey);
 						Config::current_preset = -1;
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
@@ -262,7 +269,7 @@ void clean_quit(int sig) {
 	#endif
 	}
 
-#ifdef __linux__
+#ifdef GPU_SUPPORT
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
 #endif
@@ -499,7 +506,13 @@ namespace Runner {
 			//! DEBUG stats
 			if (Global::debug) {
                 if (debug_bg.empty() or redraw)
-                    Runner::debug_bg = Draw::createBox(2, 2, 33, 9, "", true, "μs");
+                    Runner::debug_bg = Draw::createBox(2, 2, 33,
+					#ifdef GPU_SUPPORT
+						9,
+					#else
+						8,
+					#endif
+					"", true, "μs");
 
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
@@ -509,7 +522,7 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
-			#ifdef __linux__
+			#ifdef GPU_SUPPORT
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
 					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
@@ -559,7 +572,7 @@ namespace Runner {
 						throw std::runtime_error("Cpu:: -> " + string{e.what()});
 					}
 				}
-			#ifdef __linux__
+			#ifdef GPU_SUPPORT
 				//? GPU
 				if (not gpu_panels.empty() and not gpus_ref.empty()) {
 					try {
@@ -693,7 +706,11 @@ namespace Runner {
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
+			#ifdef GPU_SUPPORT
 				for (const string name : {"cpu", "mem", "net", "proc", "gpu", "total"}) {
+			#else
+				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
+			#endif
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;

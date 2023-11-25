@@ -87,6 +87,7 @@ namespace Shared {
 
 
 namespace Gpu {
+#ifdef GPU_SUPPORT
 	extern vector<string> box;
 	extern int width, height, min_width, min_height;
 	extern vector<int> x_vec, y_vec;
@@ -151,20 +152,23 @@ namespace Gpu {
 		// vector<proc_info> compute_processes = {};
 	};
 
-#ifdef __linux__
 	namespace Nvml {
 		extern bool shutdown();
 	}
 	namespace Rsmi {
 		extern bool shutdown();
 	}
-#endif
 
 	//* Collect gpu stats and temperatures
     auto collect(bool no_update = false) -> vector<gpu_info>&;
 
 	//* Draw contents of gpu box using <gpus> as source
   	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
+#else
+	struct gpu_info {
+		bool supported = false;
+	};
+#endif
 }
 
 namespace Cpu {

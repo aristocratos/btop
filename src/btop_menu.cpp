@@ -212,8 +212,10 @@ namespace Menu {
 			{"shown_boxes",
 				"Manually set which boxes to show.",
 				"",
-				"Available values are \"cpu mem net proc\",",
-				"or \"gpu0\" through \"gpu5\" for GPU boxes.",
+				"Available values are \"cpu mem net proc\".",
+			#ifdef GPU_SUPPORT
+				"Or \"gpu0\" through \"gpu5\" for GPU boxes.",
+			#endif
 				"Separate values with whitespace.",
 				"",
 				"Toggle between presets with key \"p\"."},
@@ -324,6 +326,7 @@ namespace Menu {
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
 				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
 				"",
 				"GPU:",
 				"\"gpu-totals\" = GPU usage split by device.",
@@ -332,7 +335,9 @@ namespace Menu {
 				"\"gpu-average\" = Avg usage of all GPUs.",
 				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
 				"\"gpu-pwr-total\" = Power usage of all GPUs.",
-				"Not all stats are supported on all devices."},
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_graph_lower",
 				"Cpu lower graph.",
 				"",
@@ -344,6 +349,7 @@ namespace Menu {
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
 				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
 				"",
 				"GPU:",
 				"\"gpu-totals\" = GPU usage split/device. (Auto)",
@@ -352,7 +358,9 @@ namespace Menu {
 				"\"gpu-average\" = Avg usage of all GPUs.",
 				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
 				"\"gpu-pwr-total\" = Power usage of all GPUs.",
-				"Not all stats are supported on all devices."},
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_invert_lower",
 					"Toggles orientation of the lower CPU graph.",
 					"",
@@ -364,6 +372,7 @@ namespace Menu {
 					"to fit to box height.",
 					"",
 					"True or False."},
+		#ifdef GPU_SUPPORT
 			{"show_gpu_info",
 					"Show gpu info in cpu box.",
 					"",
@@ -374,6 +383,7 @@ namespace Menu {
 					"\"Auto\" to show when no gpu box is shown.",
 					"\"On\" to always show.",
 					"\"Off\" to never show."},
+		#endif
 			{"check_temp",
 				"Enable cpu temperature reporting.",
 				"",
@@ -435,6 +445,7 @@ namespace Menu {
 				"",
 				"True or False."},
 		},
+	#ifdef GPU_SUPPORT
 		{
 			{"nvml_measure_pcie_speeds",
 				"Measure PCIe throughput on NVIDIA cards.",
@@ -477,6 +488,7 @@ namespace Menu {
 				"",
 				"Empty string to disable."},
 		},
+	#endif
 		{
 			{"mem_below_net",
 				"Mem box location.",
@@ -1096,7 +1108,6 @@ namespace Menu {
 			{"proc_sorting", std::cref(Proc::sort_vector)},
 			{"graph_symbol", std::cref(Config::valid_graph_symbols)},
 			{"graph_symbol_cpu", std::cref(Config::valid_graph_symbols_def)},
-			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_mem", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_net", std::cref(Config::valid_graph_symbols_def)},
 			{"graph_symbol_proc", std::cref(Config::valid_graph_symbols_def)},
@@ -1104,7 +1115,10 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
-			{"show_gpu_info", std::cref(Config::show_gpu_values)}
+		#ifdef GPU_SUPPORT
+			{"show_gpu_info", std::cref(Config::show_gpu_values)},
+			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
+		#endif
 		};
 		auto tty_mode = Config::getB("tty_mode");
 		auto vim_keys = Config::getB("vim_keys");
@@ -1336,11 +1350,19 @@ namespace Menu {
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
+		#ifdef GPU_SUPPORT
 			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
+		#else
+			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
+		#endif
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
+				#ifdef GPU_SUPPORT
 					+ Mv::r(7);
+				#else
+					+ Mv::r(10);
+				#endif
 				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;

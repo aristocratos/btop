@@ -96,6 +96,7 @@ namespace Cpu {
 
 namespace Gpu {
 	vector<gpu_info> gpus;
+#ifdef GPU_SUPPORT
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -190,6 +191,7 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+#endif
 }
 
 namespace Mem {
@@ -252,6 +254,7 @@ namespace Shared {
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Gpu
+	#ifdef GPU_SUPPORT
 		Gpu::Nvml::init();
 		Gpu::Rsmi::init();
 		if (not Gpu::gpu_names.empty()) {
@@ -268,6 +271,7 @@ namespace Shared {
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
 						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
 		}
+	#endif
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
@@ -928,6 +932,7 @@ namespace Cpu {
 	}
 }
 
+#ifdef GPU_SUPPORT
 namespace Gpu {
     //? NVIDIA
     namespace Nvml {
@@ -973,7 +978,7 @@ namespace Gpu {
 			//? Function calls
 			nvmlReturn_t result = nvmlInit();
     		if (result != NVML_SUCCESS) {
-    			Logger::warning(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
+    			Logger::debug(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
     			return false;
     		}
 
@@ -1203,10 +1208,10 @@ namespace Gpu {
 			rsmi_dl_handle = dlopen("/opt/rocm/lib/librocm_smi64.so", RTLD_LAZY); // first try /lib and /usr/lib, then /opt/rocm/lib if that fails
 			if (dlerror() != NULL) {
 				rsmi_dl_handle = dlopen("librocm_smi64.so", RTLD_LAZY);
-				if (!rsmi_dl_handle) {
-					Logger::info(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
-					return false;
-				}
+			}
+			if (!rsmi_dl_handle) {
+				Logger::debug(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
+				return false;
 			}
 
 			auto load_rsmi_sym = [&](const char sym_name[]) {
@@ -1468,6 +1473,7 @@ namespace Gpu {
 		return gpus;
 	}
 }
+#endif
 
 namespace Mem {
 	bool has_swap{}; // defaults to false

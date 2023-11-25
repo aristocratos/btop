@@ -36,6 +36,17 @@ endif
 
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
+#? GPU Support
+ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
+	GPU_SUPPORT := true
+else
+	GPU_SUPPORT := false
+endif
+
+ifeq ($(GPU_SUPPORT),true)
+	override ADDFLAGS += -DGPU_SUPPORT
+endif
+
 #? Compiler and Linker
 ifeq ($(shell $(CXX) --version | grep clang >/dev/null 2>&1; echo $$?),0)
 	override CXX_IS_CLANG := true
@@ -218,6 +229,7 @@ info:
 	@printf " $(BANNER)\n"
 	@printf "\033[1;92mPLATFORM     \033[1;93m?| \033[0m$(PLATFORM)\n"
 	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
+	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
 	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
 	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
 	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
@@ -310,7 +322,7 @@ uninstall:
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
 #? Compile rocm_smi
-ifeq ($(RSMI_STATIC)$(PLATFORM_LC),truelinux)
+ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
 .ONESHELL:
 rocm_smi:
 	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
