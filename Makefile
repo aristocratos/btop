@@ -218,7 +218,8 @@ endif
 P := %%
 
 ifeq ($(VERBOSE),true)
-	override SUPPRESS := 1>/dev/null
+	# Doesn't work with `&>`
+	override SUPPRESS := > /dev/null 2> /dev/null
 else
 	override SUPPRESS :=
 endif
