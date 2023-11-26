@@ -340,7 +340,7 @@ Also needs a UTF8 locale and a font that covers:
 
    For x86_64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
 
-   `make GPU_SUPPORT=false`
+   `make GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=false` with CMake)
 
  * **NVIDIA**
 
@@ -503,6 +503,8 @@ Also needs a UTF8 locale and a font that covers:
    | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
+   | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`

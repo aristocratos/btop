@@ -32,11 +32,14 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Options
+include(CMakeDependentOption)
 option(BTOP_STATIC "Link btop statically" OFF)
 option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
+option(BTOP_GPU "Enable GPU support" ON)
+cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
 if(BTOP_STATIC)
   # Set this before calling find_package
@@ -129,6 +132,36 @@ target_compile_definitions(btop PRIVATE
   # Only has an effect with optimizations enabled
   $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
 )
+
+# Enable GPU support
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND BTOP_GPU)
+  target_compile_definitions(btop PRIVATE GPU_SUPPORT)
+
+  if(BTOP_RSMI_STATIC)
+    # ROCm doesn't properly add it's folders to the module path
+    # if `CMAKE_MODULE_PATH` is already set
+    # We could also manully append ROCm's path here
+    set(_CMAKE_MODULE_PATH CMAKE_MODULE_PATH)
+    unset(CMAKE_MODULE_PATH)
+
+    # NOTE: This might be problematic in the future if other sub projects
+    # depend on this or if btop starts producing libraries
+    # Build a static ROCm library
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+    add_subdirectory(lib/rocm_smi_lib EXCLUDE_FROM_ALL)
+
+    add_library(ROCm INTERFACE)
+    # Export ROCm's properties to a CMake target (which should've been done by ROCm :-/)
+    target_compile_definitions(ROCm INTERFACE RSMI_STATIC)
+    target_include_directories(ROCm INTERFACE lib/rocm_smi_lib/include)
+    target_link_libraries(ROCm INTERFACE rocm_smi64)
+
+    set(CMAKE_MODULE_PATH _CMAKE_MODULE_PATH)
+
+    target_link_libraries(btop PRIVATE ROCm)
+  endif()
+endif()
 
 target_include_directories(btop SYSTEM PRIVATE include)
 
