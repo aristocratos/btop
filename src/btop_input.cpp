@@ -456,6 +456,22 @@ namespace Input {
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
 				}
+				else if (key == "y") {
+					atomic_wait(Runner::active);
+
+					auto copy_command = Config::getS("copy_command");
+					if (copy_command.empty()) {
+						vector<string> cont_vec;
+						cont_vec.emplace_back("`copy_command` is empty");
+						Menu::msgBox messageBox = Menu::msgBox{45, 0, cont_vec, "error"};
+						Global::overlay = messageBox();
+					} else {
+						FILE *p_copy_stdin = popen(copy_command.c_str(), "w");
+						auto selected_cmd = Config::getS("selected_cmd");
+						fwrite(selected_cmd.c_str(), sizeof(char), selected_cmd.length(), p_copy_stdin);
+						pclose(p_copy_stdin);
+					}
+				}
 				else keep_going = true;
 
 				if (not keep_going) {
