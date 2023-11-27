@@ -218,7 +218,8 @@ endif
 P := %%
 
 ifeq ($(VERBOSE),true)
-	override SUPPRESS := 1>/dev/null
+	# Doesn't work with `&>`
+	override SUPPRESS := > /dev/null 2> /dev/null
 else
 	override SUPPRESS :=
 endif
@@ -274,11 +275,13 @@ directories:
 clean:
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt objects...\033[0m\n"
 	@rm -rf $(BUILDDIR)
+	@cmake --build lib/rocm_smi_lib/build --target clean &> /dev/null || true
 
 #? Clean Objects and Binaries
 distclean: clean
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt binaries...\033[0m\n"
 	@rm -rf $(TARGETDIR)
+	@rm -rf lib/rocm_smi_lib/build
 
 install:
 	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\n"
@@ -326,20 +329,24 @@ uninstall:
 
 #? Compile rocm_smi
 ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
+	ROCM_DIR ?= lib/rocm_smi_lib
+	ROCM_BUILD_DIR := $(ROCM_DIR)/build
+	ifeq ($(DEBUG),true)
+		BUILD_TYPE := Debug
+	else
+		BUILD_TYPE := Release
+	endif
 .ONESHELL:
 rocm_smi:
 	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@mkdir -p lib/rocm_smi_lib/build
-	@cd lib/rocm_smi_lib/build
 	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
-	@cmake .. $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
+	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
 	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
-	@$(MAKE) $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
-	@ar -crs rocm_smi/librocm_smi64.a $$(find rocm_smi -name '*.o') $(SURPRESS) || { printf "\033[1;91mFailed to pack ROCm SMI into static library, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
-	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37mrocm_smi/librocm_smi64.a \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
+	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
+	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37m$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a \033[1;93m(\033[1;97m$$(du -ah $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
 	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
-	@$(eval override LDFLAGS += lib/rocm_smi_lib/build/rocm_smi/librocm_smi64.a -DRSMI_STATIC) # TODO: this seems to execute every time, no matter if the compilation failed or succeeded
+	@$(eval override LDFLAGS += $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a -DRSMI_STATIC) # TODO: this seems to execute every time, no matter if the compilation failed or succeeded
 	@$(eval override CXXFLAGS += -DRSMI_STATIC)
 else
 rocm_smi:
