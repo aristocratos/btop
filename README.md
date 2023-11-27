@@ -326,7 +326,7 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Compilation Linux
 
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   Needs GCC 10 / Clang 16 (or higher).
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
@@ -366,13 +366,11 @@ Also needs a UTF8 locale and a font that covers:
 
 </summary>
 
-1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
-
-   Use gcc-10 g++-10 if gcc-11 isn't available
+1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**      
 
    ```bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
-   ```
+   ```   
 
 2. **Clone repository**
 
@@ -383,55 +381,49 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation.
-
-   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Append `GPU_SUPPORT=true` or `false` to enable/disable GPU support. (Enabled by default on X86_64 Linux).
-
-   Append `RSMI_STATIC=true` to statically link the ROCm SMI library used for querying AMDGPU data.
-   See [GPU compatibility](#gpu-compatibility) for details.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
-
-   If `g++` is linked to an older version of gcc on your system specify the correct version by appending `CXX=g++-10` or `CXX=g++-11`.
-
    ```bash
    make
    ```
 
-5. **Install**
+   Options for make:
 
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation                                                  |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
+   | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
 
-   Notice! Only use "sudo" when installing to a NON user owned directory.
+   Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
+
+4. **Install**   
 
    ```bash
    sudo make install
    ```
 
-6. **(Optional) Set suid bit to make btop always run as root (or other user)**
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+5. **(Optional) Set suid bit to make btop always run as root (or other user)**   
+
+   ```bash
+   sudo make setuid
+   ```
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
    Run after make install and use same PREFIX if any was used at install.
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `root`
-
-   ```bash
-   sudo make setuid
-   ```
 
 * **Uninstall**
 
@@ -554,49 +546,47 @@ Also needs a UTF8 locale and a font that covers:
    git clone https://github.com/aristocratos/btop.git
    cd btop
    ```
-
 3. **Compile**
-
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
    ```bash
    gmake
    ```
 
-4. **Install**
+   Options for make:
 
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |   
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
 
-   Notice! Only use "sudo" when installing to a NON user owned directory.
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.   
+
+4. **Install**   
 
    ```bash
    sudo gmake install
    ```
 
-5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**   
+
+   ```bash
+   sudo gmake setuid
+   ```
 
    No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
 
    Run after make install and use same PREFIX if any was used at install.
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
-
-   ```bash
-   sudo gmake setuid
-   ```
 
 * **Uninstall**
 
@@ -651,46 +641,45 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
-
    ```bash
    gmake
    ```
 
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |   
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
+
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system. 
+
 4. **Install**
-
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
-
-   Notice! Only use "sudo" when installing to a NON user owned directory.
 
    ```bash
    sudo gmake install
    ```
+   
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
 
 5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
 
+   ```bash
+   sudo gmake setuid
+   ```
+   
    No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
 
    Run after make install and use same PREFIX if any was used at install.
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
-
-   ```bash
-   sudo gmake setuid
-   ```
 
 * **Uninstall**
 
