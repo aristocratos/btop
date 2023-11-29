@@ -111,7 +111,7 @@ namespace Logger {
 				std::call_once(log_file_header, [&lwrite] {
 					fmt::print(lwrite, "\n{}===> btop++ v.{}\n", strf_time(tdf), Global::Version);
 				});
-				fmt::print(lwrite, "{}{}: {}\n", strf_time(tdf), log_levels.at(level), msg);
+				fmt::print(lwrite, "{}{:10}{}\n", strf_time(tdf), log_levels.at(level), msg);
 			}
 			else {
 				logfile.clear();
