@@ -27,29 +27,49 @@ on:
 
 jobs:
   build-freebsd:
-    runs-on: macos-12
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
+    strategy:
+      matrix:
+        compiler: ["clang++", "g++"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Compile
-        uses: vmactions/freebsd-vm@v0
+        uses: vmactions/freebsd-vm@v1
         with:
-          release: 13.2
+          release: '14.0'
           usesh: true
           prepare: |
-            pkg install -y gmake gcc11 coreutils git
-            git config --global --add safe.directory /Users/runner/work/btop/btop
+            pkg install -y gmake gcc coreutils git
+            git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake STATIC=true STRIP=true
+            CXX=${{ matrix.compiler }} gmake STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-            mv bin/btop bin/btop-$GIT_HASH
+            COMPILER=$(echo ${{ matrix.compiler }} | sed 's/clang++/llvm/' | sed 's/g++/gcc/')
+            mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
       - uses: actions/upload-artifact@v3
         with:
-          name: btop-x86_64-FreeBSD-13.2
+          name: btop-x86_64-freebsd-14
           path: 'bin/*'
           if-no-files-found: error
+
+  build-freebsd-cmake:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.0'
+          usesh: true
+          prepare: pkg install -y cmake git ninja
+          run: |
+            CXX=clang++ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBTOP_STATIC=ON
+            cmake --build build
