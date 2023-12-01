@@ -70,8 +70,8 @@ else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
 
-check_include_file_cxx(ranges CXX_HAS_RANGES)
-if(NOT CXX_HAS_RANGES)
+check_include_file_cxx(ranges CXX_HAVE_RANGES)
+if(NOT CXX_HAVE_RANGES)
   message(FATAL_ERROR "The compiler doesn't support <ranges>")
 endif()
 

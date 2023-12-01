@@ -450,7 +450,6 @@ Also needs a UTF8 locale and a font that covers:
    ```
 
 </details>
-
 <details>
 
 <summary>
@@ -526,13 +525,21 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Compilation macOS OSX
 
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   Needs GCC 10 / Clang 16 (or higher).
 
-   GCC 12 needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
+   With GCC, version 12 (or better) is needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
    The makefile also needs GNU coreutils and `sed`.
 
    Install and use Homebrew or MacPorts package managers for easy dependency installation
+
+<details>
+
+<summary>
+
+### With Make
+
+</summary>
 
 1. **Install dependencies (example for Homebrew)**
 
@@ -612,9 +619,99 @@ Also needs a UTF8 locale and a font that covers:
    gmake help
    ```
 
+</details>
+<details>
+
+<summary>
+
+### With CMake (Community maintained)
+
+</summary>
+
+1. **Install build dependencies**
+
+   Requires Clang / GCC, CMake, Ninja and Git
+
+   _**Note**: Since btop uses C++ 20 features the compiler choice is important._
+
+   With LLVM:
+   ```bash
+   brew update --quiet
+   brew install llvm@17 ninja
+   ```
+
+   With GCC:
+   ```bash
+   brew update --quiet
+   brew install gcc@13
+
+2. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git && cd btop
+   ```
+
+3. **Compile**
+
+	FreeBSD 14 and later:
+   ```bash
+   # Configure
+   cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+	FreeBSD 13:
+   ```bash
+   # Configure
+   CXX=g++13 cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+   This will automatically build a release version of btop.
+
+   Some useful options to pass to the configure step:
+
+   | Configure flag                  | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
+   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
+   | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
+   | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+
+   _**Note:** Static linking does not work with GCC._
+
+   To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+
+4. **Install**
+
+   ```bash
+   cmake --install build
+   ```
+
+   May require root privileges
+
+5. **Uninstall**
+
+   CMake doesn't generate an uninstall target by default. To remove installed files, run
+   ```
+   cat build/install_manifest.txt | xargs rm -irv
+   ```
+
+6. **Cleanup build directory**
+
+   ```bash
+   cmake --build build -t clean
+   ```
+
+</details>
+
 ## Compilation FreeBSD
 
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   Needs GCC 10 / Clang 16 (or higher).
 
    Note that GNU make (`gmake`) is required to compile on FreeBSD.
 
@@ -706,7 +803,6 @@ Also needs a UTF8 locale and a font that covers:
    ```
 
 </details>
-
 <details>
 
 <summary>
@@ -735,7 +831,7 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    git clone https://github.com/aristocratos/btop.git && cd btop
-   ``````
+   ```
 
 3. **Compile**
 
