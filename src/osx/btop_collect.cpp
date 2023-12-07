@@ -229,7 +229,9 @@ namespace Cpu {
 				name.clear();
 		} else if (v_contains(name_vec, "Apple"s)) {
 			auto apple_pos = v_index(name_vec, "Apple"s);
-			name = (apple_pos < name_vec.size() - 1 ? name_vec.at(apple_pos + 1) : "") + (apple_pos < name_vec.size() - 1 && name_vec.size() > 2 ? ' ' + name_vec.at(apple_pos + 2) : "");
+			name = (apple_pos < name_vec.size() - 1 ? name_vec.at(apple_pos + 1) : "")
+			+ (apple_pos < name_vec.size() - 1 && name_vec.size() > 2 ? ' ' + name_vec.at(apple_pos + 2) : "")
+			+ (apple_pos < name_vec.size() - 1 && name_vec.size() > 3 ? ' ' + name_vec.at(apple_pos + 3) : "");
 		} else
 			name.clear();
 
