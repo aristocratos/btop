@@ -59,10 +59,14 @@ override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
 
 CLANG_WORKS = false
 GCC_WORKS = false
+MIN_CLANG_VERSION = 16
 
 #? Supported is Clang 16.0.0 and later
 ifeq ($(CXX_IS_CLANG),true)
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 16; echo $$?),0)
+	ifeq ($(shell $(CXX) --version | grep Apple >/dev/null 2>&1; echo $$?),0)
+		MIN_CLANG_VERSION := 15
+	endif
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt $(MIN_CLANG_VERSION); echo $$?),0)
 		CLANG_WORKS := true
 	endif
 endif
