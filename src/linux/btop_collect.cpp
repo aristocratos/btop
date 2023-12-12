@@ -1755,7 +1755,7 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto it = disks.begin(); it != disks.end(); ) {
 					auto &[mountpoint, disk] = *it;
-					if (v_contains(ignore_list, mountpoint)) {
+					if (v_contains(ignore_list, mountpoint) or disk.name == "swap") {
 						it = disks.erase(it);
 						continue;
 					}
@@ -1936,29 +1936,32 @@ namespace Mem {
 		}
 
 		// looking through all files that start with 'objset' to find the one containing `device_name` object stats
-		for (const auto& file: fs::directory_iterator(zfs_pool_stat_path)) {
-			filename = file.path().filename();
-			if (filename.starts_with("objset")) {
-				filestream.open(file.path());
-				if (filestream.good()) {
-					// skip first two lines
-					for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
-					// skip characters until '7' is reached, indicating data type 7, next value will be object name
-					filestream.ignore(numeric_limits<streamsize>::max(), '7');
-					filestream >> name_compare;
-					if (name_compare == device_name) {
-						filestream.close();
-						if (access(file.path().c_str(), R_OK) == 0) {
-							return file.path();
-						} else {
-							Logger::debug("Can't access file: " + file.path().string());
-							return "";
+		try {
+			for (const auto& file: fs::directory_iterator(zfs_pool_stat_path)) {
+				filename = file.path().filename();
+				if (filename.starts_with("objset")) {
+					filestream.open(file.path());
+					if (filestream.good()) {
+						// skip first two lines
+						for (int i = 0; i < 2; i++) filestream.ignore(numeric_limits<streamsize>::max(), '\n');
+						// skip characters until '7' is reached, indicating data type 7, next value will be object name
+						filestream.ignore(numeric_limits<streamsize>::max(), '7');
+						filestream >> name_compare;
+						if (name_compare == device_name) {
+							filestream.close();
+							if (access(file.path().c_str(), R_OK) == 0) {
+								return file.path();
+							} else {
+								Logger::debug("Can't access file: " + file.path().string());
+								return "";
+							}
 						}
 					}
+					filestream.close();
 				}
-				filestream.close();
 			}
 		}
+		catch (fs::filesystem_error& e) {}
 
 		Logger::debug("Could not read directory: " + zfs_pool_stat_path.string());
 		return "";
