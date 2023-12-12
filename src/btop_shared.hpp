@@ -210,6 +210,8 @@ namespace Cpu {
 	auto get_core_mapping() -> unordered_flat_map<int, int>;
 	extern unordered_flat_map<int, int> core_mapping;
 
+	auto get_cpuHz() -> string;
+
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, long, string>;
 }
