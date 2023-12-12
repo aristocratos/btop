@@ -19,44 +19,108 @@ tab-size = 4
 #include <deque>
 #include <robin_hood.h>
 #include <array>
-#include <ranges>
 #include <signal.h>
 #include <errno.h>
 #include <cmath>
 #include <filesystem>
 
-#include <btop_menu.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_theme.hpp>
-#include <btop_draw.hpp>
-#include <btop_shared.hpp>
+#include "btop_menu.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_theme.hpp"
+#include "btop_draw.hpp"
+#include "btop_shared.hpp"
 
-using std::deque, robin_hood::unordered_flat_map, std::array, std::views::iota, std::ref, std::max, std::min, std::ceil, std::clamp;
+using robin_hood::unordered_flat_map;
+using std::array;
+using std::ceil;
+using std::max;
+using std::min;
+using std::ref;
+using std::views::iota;
+
 using namespace Tools;
+
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 namespace Menu {
 
    atomic<bool> active (false);
    string bg;
-   bool redraw = true;
+   bool redraw{true};
    int currentMenu = -1;
    msgBox messageBox;
-   int signalToSend = 0;
-   int signalKillRet = 0;
+   int signalToSend{};  // defaults to 0
+   int signalKillRet{}; // defaults to 0
 
    const array<string, 32> P_Signals = {
-	   	"0",
+	   "0",
+#ifdef __linux__
+#if defined(__hppa__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGSTKFLT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGXCPU",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGUSR1",
+		"SIGUSR2", "SIGCHLD", "SIGPWR", "SIGVTALRM",
+		"SIGPROF", "SIGIO", "SIGWINCH", "SIGSTOP",
+		"SIGTSTP", "SIGCONT", "SIGTTIN", "SIGTTOU",
+		"SIGURG", "SIGXFSZ", "SIGSYS"
+#elif defined(__mips__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGUSR1",
+		"SIGUSR2", "SIGCHLD", "SIGPWR", "SIGWINCH",
+		"SIGURG", "SIGIO", "SIGSTOP", "SIGTSTP",
+		"SIGCONT", "SIGTTIN", "SIGTTOU", "SIGVTALRM",
+		"SIGPROF", "SIGXCPU", "SIGXFSZ"
+#elif defined(__alpha__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGPWR", "SIGUSR1", "SIGUSR2"
+#elif defined (__sparc__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGLOST", "SIGUSR1", "SIGUSR2"
+#else
 		"SIGHUP", "SIGINT",	"SIGQUIT",	"SIGILL",
 		"SIGTRAP", "SIGABRT", "SIGBUS", "SIGFPE",
 		"SIGKILL", "SIGUSR1", "SIGSEGV", "SIGUSR2",
-		"SIGPIPE", "SIGALRM", "SIGTERM", "16", "SIGCHLD",
-		"SIGCONT", "SIGSTOP", "SIGTSTP", "SIGTTIN",
-		"SIGTTOU", "SIGURG", "SIGXCPU", "SIGXFSZ",
-		"SIGVTALRM", "SIGPROF", "SIGWINCH", "SIGIO",
-		"SIGPWR", "SIGSYS"
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGSTKFLT",
+		"SIGCHLD", "SIGCONT", "SIGSTOP", "SIGTSTP",
+		"SIGTTIN", "SIGTTOU", "SIGURG", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGIO", "SIGPWR", "SIGSYS"
+#endif
+#elif defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "SIGEMT", "SIGFPE",
+		"SIGKILL", "SIGBUS", "SIGSEGV", "SIGSYS",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "SIGURG",
+		"SIGSTOP", "SIGTSTP", "SIGCONT", "SIGCHLD",
+		"SIGTTIN", "SIGTTOU", "SIGIO", "SIGXCPU",
+		"SIGXFSZ", "SIGVTALRM", "SIGPROF", "SIGWINCH",
+		"SIGINFO", "SIGUSR1", "SIGUSR2"
+#else
+		"SIGHUP", "SIGINT", "SIGQUIT", "SIGILL",
+		"SIGTRAP", "SIGABRT", "7", "SIGFPE",
+		"SIGKILL", "10", "SIGSEGV", "12",
+		"SIGPIPE", "SIGALRM", "SIGTERM", "16",
+		"17", "18", "19", "20",
+		"21", "22", "23", "24",
+		"25", "26", "27", "28",
+		"29", "30", "31"
+#endif
 	};
 
   unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
@@ -109,6 +173,7 @@ namespace Menu {
 		{"2", "Toggle MEM box."},
 		{"3", "Toggle NET box."},
 		{"4", "Toggle PROC box."},
+		{"5", "Toggle GPU box."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},
@@ -131,6 +196,7 @@ namespace Menu {
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
 		{"e", "Toggle processes tree view."},
+		{"%", "Toggles memory display mode in processes box."},
 		{"Selected +, -", "Expand/collapse the selected process in tree view."},
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
@@ -197,7 +263,7 @@ namespace Menu {
 				"P=(0 or 1) for alternate positions.",
 				"G=graph symbol to use for box.",
 				"",
-				"Use withespace \" \" as separator between",
+				"Use whitespace \" \" as separator between",
 				"different presets.",
 				"",
 				"Example:",
@@ -206,6 +272,9 @@ namespace Menu {
 				"Manually set which boxes to show.",
 				"",
 				"Available values are \"cpu mem net proc\".",
+			#ifdef GPU_SUPPORT
+				"Or \"gpu0\" through \"gpu5\" for GPU boxes.",
+			#endif
 				"Separate values with whitespace.",
 				"",
 				"Toggle between presets with key \"p\"."},
@@ -308,23 +377,49 @@ namespace Menu {
 			{"cpu_graph_upper",
 				"Cpu upper graph.",
 				"",
-				"Sets the CPU stat shown in upper half of",
+				"Sets the CPU/GPU stat shown in upper half of",
 				"the CPU graph.",
 				"",
-				"\"total\" = Total cpu usage.",
+				"CPU:",
+				"\"total\" = Total cpu usage. (Auto)",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split by device.",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_graph_lower",
 				"Cpu lower graph.",
 				"",
-				"Sets the CPU stat shown in lower half of",
+				"Sets the CPU/GPU stat shown in lower half of",
 				"the CPU graph.",
 				"",
+				"CPU:",
 				"\"total\" = Total cpu usage.",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split/device. (Auto)",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_invert_lower",
 					"Toggles orientation of the lower CPU graph.",
 					"",
@@ -336,12 +431,24 @@ namespace Menu {
 					"to fit to box height.",
 					"",
 					"True or False."},
+		#ifdef GPU_SUPPORT
+			{"show_gpu_info",
+					"Show gpu info in cpu box.",
+					"",
+					"Toggles gpu stats in cpu box and the",
+					"gpu graph (if \"cpu_graph_lower\" is set to",
+					"\"Auto\").",
+					"",
+					"\"Auto\" to show when no gpu box is shown.",
+					"\"On\" to always show.",
+					"\"Off\" to never show."},
+		#endif
 			{"check_temp",
 				"Enable cpu temperature reporting.",
 				"",
 				"True or False."},
 			{"cpu_sensor",
-				"Cpu temperature sensor",
+				"Cpu temperature sensor.",
 				"",
 				"Select the sensor that corresponds to",
 				"your cpu temperature.",
@@ -381,7 +488,7 @@ namespace Menu {
 				"Rankine, 0 = abosulte zero, 1 degree change",
 				"equals 1 degree change in Fahrenheit."},
 			{"show_cpu_freq",
-				"Show CPU frequency",
+				"Show CPU frequency.",
 				"",
 				"Can cause slowdowns on systems with many",
 				"cores and certain kernel versions."},
@@ -397,6 +504,50 @@ namespace Menu {
 				"",
 				"True or False."},
 		},
+	#ifdef GPU_SUPPORT
+		{
+			{"nvml_measure_pcie_speeds",
+				"Measure PCIe throughput on NVIDIA cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"graph_symbol_gpu",
+				"Graph symbol to use for graphs in gpu box.",
+				"",
+				"\"default\", \"braille\", \"block\" or \"tty\".",
+				"",
+				"\"default\" for the general default symbol.",},
+			{"gpu_mirror_graph",
+				"Horizontally mirror the GPU graph.",
+				"",
+				"True or False."},
+			{"custom_gpu_name0",
+				"Custom gpu0 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name1",
+				"Custom gpu1 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name2",
+				"Custom gpu2 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name3",
+				"Custom gpu3 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name4",
+				"Custom gpu4 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name5",
+				"Custom gpu5 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+		},
+	#endif
 		{
 			{"mem_below_net",
 				"Mem box location.",
@@ -583,6 +734,11 @@ namespace Menu {
 				"Set true to show processes grouped by",
 				"parents with lines drawn between parent",
 				"and child process."},
+			{"proc_aggregate",
+				"Aggregate child's resources in parent.",
+				"",
+				"In tree-view, include all child resources",
+				"with the parent even while expanded."},
 			{"proc_colors",
 				"Enable colors in process view.",
 				"",
@@ -611,19 +767,19 @@ namespace Menu {
 				"Show cpu graph for each process.",
 				"",
 				"True or False"},
-            {"proc_filter_kernel",
-                "(Linux) Filter kernel processes from output.",
-                "",
-                "Set to 'True' to filter out internal",
-                "processes started by the Linux kernel."},
+			{"proc_filter_kernel",
+				"(Linux) Filter kernel processes from output.",
+				"",
+				"Set to 'True' to filter out internal",
+				"processes started by the Linux kernel."},
 		}
 	};
 
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
 	: width(width), boxtype(boxtype) {
-		const auto& tty_mode = Config::getB("tty_mode");
-		const auto& rounded = Config::getB("rounded_corners");
+		auto tty_mode = Config::getB("tty_mode");
+		auto rounded = Config::getB("rounded_corners");
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);
@@ -712,8 +868,11 @@ namespace Menu {
 	};
 
 	int signalChoose(const string& key) {
-		auto& s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-		static int x = 0, y = 0, selected_signal = -1;
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static int x{}; // defaults to 0
+		static int y{}; // defaults to 0
+		static int selected_signal = -1;
+
 		if (bg.empty()) selected_signal = -1;
 		auto& out = Global::overlay;
 		int retval = Changed;
@@ -839,7 +998,7 @@ namespace Menu {
 	}
 
 	int signalSend(const string& key) {
-		auto& s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
 		if (s_pid == 0) return Closed;
 		if (redraw) {
 			atomic_wait(Runner::active);
@@ -912,10 +1071,11 @@ namespace Menu {
 
 	int mainMenu(const string& key) {
 		enum MenuItems { Options, Help, Quit };
-		static int y = 0, selected = 0;
+		static int y{};         // defaults to 0
+		static int selected{};  // defaults to 0
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
-		auto& tty_mode = Config::getB("tty_mode");
+		auto tty_mode = Config::getB("tty_mode");
 		if (bg.empty()) selected = 0;
 		int retval = Changed;
 
@@ -969,7 +1129,6 @@ namespace Menu {
 			retval = NoChange;
 		}
 
-
 		if (retval == Changed) {
 			auto& out = Global::overlay;
 			out = bg + Fx::reset + Fx::b;
@@ -986,14 +1145,23 @@ namespace Menu {
 			out += Fx::reset;
 		}
 
-
 		return (redraw ? Changed : retval);
 	}
 
 	int optionsMenu(const string& key) {
 		enum Predispositions { isBool, isInt, isString, is2D, isBrowseable, isEditable};
-		static int y = 0, x = 0, height = 0, page = 0, pages = 0, selected = 0, select_max = 0, item_height = 0, selected_cat = 0, max_items = 0, last_sel = 0;
-		static bool editing = false;
+		static int y{};                 // defaults to 0
+		static int x{};                 // defaults to 0
+		static int height{};            // defaults to 0
+		static int page{};              // defaults to 0
+		static int pages{};             // defaults to 0
+		static int selected{};          // defaults to 0
+		static int select_max{};        // defaults to 0
+		static int item_height{};       // defaults to 0
+		static int selected_cat{};      // defaults to 0
+		static int max_items{};         // defaults to 0
+		static int last_sel{};          // defaults to 0
+		static bool editing{};          // defaults to false
 		static Draw::TextEdit editor;
 		static string warnings;
 		static bitset<8> selPred;
@@ -1011,9 +1179,13 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
+		#ifdef GPU_SUPPORT
+			{"show_gpu_info", std::cref(Config::show_gpu_values)},
+			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
+		#endif
 		};
-		auto& tty_mode = Config::getB("tty_mode");
-		auto& vim_keys = Config::getB("vim_keys");
+		auto tty_mode = Config::getB("tty_mode");
+		auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
 			for (const auto& cat : categories) {
 				if ((int)cat.size() > max_items) max_items = cat.size();
@@ -1025,9 +1197,9 @@ namespace Menu {
 			Theme::updateThemes();
 		}
 		int retval = Changed;
-		bool recollect = false;
-		bool screen_redraw = false;
-		bool theme_refresh = false;
+		bool recollect{};       // defaults to false
+		bool screen_redraw{};   // defaults to false
+		bool theme_refresh{};   // defaults to false
 
 		//? Draw background if needed else process input
 		if (redraw) {
@@ -1062,7 +1234,8 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (option == "custom_cpu_name") screen_redraw = true;
+					if (option == "custom_cpu_name" or option.starts_with("custom_gpu_name"))
+						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
 						Config::current_preset = -1;
@@ -1143,7 +1316,7 @@ namespace Menu {
 			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
 			page = selected = 0;
 		}
-		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
 			selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
@@ -1195,7 +1368,7 @@ namespace Menu {
 					Logger::set(optList.at(i));
 					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
 			}
 			else
@@ -1241,11 +1414,19 @@ namespace Menu {
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
+		#ifdef GPU_SUPPORT
+			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
+		#else
 			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
+		#endif
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
+				#ifdef GPU_SUPPORT
+					+ Mv::r(7);
+				#else
 					+ Mv::r(10);
+				#endif
 				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;
@@ -1304,11 +1485,11 @@ namespace Menu {
 			optionsMenu("");
 		}
 		if (screen_redraw) {
-			auto overlay_bkp = move(Global::overlay);
-			auto clock_bkp = move(Global::clock);
+			auto overlay_bkp = std::move(Global::overlay);
+			auto clock_bkp = std::move(Global::clock);
 			Draw::calcSizes();
-			Global::overlay = move(overlay_bkp);
-			Global::clock = move(clock_bkp);
+			Global::overlay = std::move(overlay_bkp);
+			Global::clock = std::move(clock_bkp);
 			recollect = true;
 		}
 		if (recollect) {
@@ -1320,7 +1501,12 @@ namespace Menu {
 	}
 
 	int helpMenu(const string& key) {
-		static int y = 0, x = 0, height = 0, page = 0, pages = 0;
+		static int y{};         // defaults to 0
+		static int x{};         // defaults to 0
+		static int height{};    // defaults to 0
+		static int page{};      // defaults to 0
+		static int pages{};     // defaults to 0
+
 		if (bg.empty()) page = 0;
 		int retval = Changed;
 

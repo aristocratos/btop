@@ -1,3 +1,115 @@
+## v1.3.0
+
+* Added Gpu Support | @romner-set | PR #529
+
+* Elementarish theme: color update according to Elementary palette | @stradicat | PR #660
+
+* Add alternative key codes for Delete, Insert, Home, End | @ivanp7 | PR #659
+
+* Fix scrollbar not clearing sometimes. | @DecklynKern | PR #643
+
+* Add keybind for toggling memory display mode in PROC box | @rahulaggarwal965 | PR #623
+
+* Minor string initialization improvement | @imwints | PR #636
+
+* Made disks statvfs logic asynchronous. | @crestfallnatwork | PR #633
+
+* Fix signal list on non-linux/weird linux platforms | @lvxnull | PR #630
+
+* Add option to accumulate a child's resources in parent in tree-view | @imwints | PR #618
+
+* Add CMake support for Linux | @imwints | PR #589
+
+* Horizon theme | @SidVeld | PR #610
+
+* Fix short conversion of 1000-1023 *iB | @scorpion-26 | #609
+
+* Fix integer overflows in btop_collect.cpp | @dorrellmw | #546
+
+* Support compiling with LLVM | @imwints | #510
+
+* Fix getting zfs pool name with '.' char in freebsd | @jfouquart | #602
+
+* [macos/freebsd] support gcc13 | @joske | #600
+
+* FreeBSD swap info | @rrveex | #560
+
+* Create adwaita.theme | @flipflop133 | #485
+
++ Various fixes by @imwints, @simplepad, @joske, @gwena, @cpalv, @iambeingtracked, @mattico, @NexAdn
+
+## v1.2.13
+
+* Makefile: VERBOSE=true flag for Makefile to display all compiler commands and fixed so already set CXXFLAGS and LDFLAGS are displayed.
+
+* Makefile: Added autodetection for gcc12 to make compiling on macos Ventura easier.
+
+* Changed: Reverted back to sysconf(_SC_NPROCESSORS_ONLN) for Cpu core count ant let the new dynamic update fix if cores are turned on later
+
+* Fixed: Ignore disks that fails in statvfs64() to avoid slowdowns and possible crashes.
+
+* Fixed: Moved up get_cpuHz() in the execution order to get better cpu clock reading.
+
+* Added: proc tree view: if there's more than 40 width left, try to print full cmd, by @Superty
+
+* Fixed: Show the first IP of the interface in NET box instead of the last, by @correabuscar
+
+* Changed: Replace getnameinfo with inet_ntop [on Linux], by @correabuscar
+
+* Fixed: Not picking up last username from /etc/passwd
+
+* Fixed: Process nice value underflowing, issue #461
+
+* Changed: Replace getnameinfo with inet_ntop [on FreeBSD], by @correabuscar
+
+* Changed: Replace getnameinfo with inet_ntop [on macos], by @correabuscar
+
+## v1.2.12
+
+* Added: Dynamic updating of max number of CPU cores.
+
+## v1.2.11
+
+* Fixed: Number of cores wrongly detected for Ryzen in rare cases.
+
+## v1.2.10
+
+* Fixed: Process tree filtering not case insensitive
+
+* Added: Paper theme, by @s6muel
+
+* Fixed: Extra checks to avoid crash on trying to replace empty strings in tree mode
+
+* Fixed: Crashing when cores are offline
+
+* Fixed: Cpu::collect() core count counter...
+
+* Changed: Using sysconf(_SC_NPROCESSORS_CONF) for number of cores instead of sysconf(_SC_NPROCESSORS_ONLN)
+
+* Maintenance: Code cleanup, by @stefanos82
+
+## v1.2.9
+
+* Fixed: Memory values not clearing properly when not in graph mode in mem box
+
+* Changed: kyli0x theme color update, by @kyli0x
+
+* Added: Elementarish theme, by @dennismayr
+
+* Added: key "?" to see help, by @mohi001
+
+* Added: solarized_light theme, by @Fingerzam
+
+* Changed: Made ZFS stats collection compatible with zfs_pools_only option, by @simplepad
+
+* Changed: Rewrite of process sorting and tree generation including fixes for tree sorting and mouse support
+
+* Added: Option to hide the small cpu graphs for processes
+
+* Changed: Small graphs now show colors for each character
+
+* Fixed: Getting selfpath on macos (fix for finding theme folder)
+
 ## v1.2.8
 
 * Added: Support for ZFS pool io stats monitoring, by @simplepad

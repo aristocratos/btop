@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,18 +17,25 @@ tab-size = 4
 */
 
 #include <array>
-#include <ranges>
 #include <atomic>
 #include <fstream>
+#include <ranges>
 #include <string_view>
 
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include <fmt/core.h>
 
-using std::array, std::atomic, std::string_view, std::string_literals::operator""s;
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
+
+using std::array;
+using std::atomic;
+using std::string_view;
+
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
+
+using namespace std::literals;
 using namespace Tools;
 
 //* Functions and variables for reading and writing the btop config file
@@ -51,7 +58,7 @@ namespace Config {
 
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
-								"#* Use withespace \" \" as separator between different presets.\n"
+								"#* Use whitespace \" \" as separator between different presets.\n"
 								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
 
 		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
@@ -66,14 +73,16 @@ namespace Config {
 								"#* Note that \"tty\" only has half the horizontal resolution of the other two, so will show a shorter historical view."},
 
 		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
-
+#ifdef GPU_SUPPORT
+		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+#endif
 		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\", separate values with whitespace."},
+		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
@@ -98,14 +107,18 @@ namespace Config {
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
-        {"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+
+		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
 		{"cpu_graph_lower", 	"#* Sets the CPU stat shown in lower half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
-
+	#ifdef GPU_SUPPORT
+		{"show_gpu_info",		"#* If gpu info should be shown in the cpu box. Available values = \"Auto\", \"On\" and \"Off\"."},
+	#endif
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
 		{"cpu_single_graph", 	"#* Set to True to completely disable the lower CPU graph."},
@@ -185,21 +198,36 @@ namespace Config {
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
-								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."}
+								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
+	#ifdef GPU_SUPPORT
+
+		{"nvml_measure_pcie_speeds",
+								"#* Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards."},
+
+		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+
+		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
+		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
+		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
+		{"custom_gpu_name3",	"#* Custom gpu3 model name, empty string to disable."},
+		{"custom_gpu_name4",	"#* Custom gpu4 model name, empty string to disable."},
+		{"custom_gpu_name5",	"#* Custom gpu5 model name, empty string to disable."},
+	#endif
 	};
 
-	unordered_flat_map<string, string> strings = {
+	unordered_flat_map<std::string_view, string> strings = {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
+		{"graph_symbol_gpu", "default"},
 		{"graph_symbol_mem", "default"},
 		{"graph_symbol_net", "default"},
 		{"graph_symbol_proc", "default"},
 		{"proc_sorting", "cpu lazy"},
-		{"cpu_graph_upper", "total"},
-		{"cpu_graph_lower", "total"},
+		{"cpu_graph_upper", "Auto"},
+		{"cpu_graph_lower", "Auto"},
 		{"cpu_sensor", "Auto"},
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
@@ -213,10 +241,19 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+	#ifdef GPU_SUPPORT
+		{"custom_gpu_name0", ""},
+		{"custom_gpu_name1", ""},
+		{"custom_gpu_name2", ""},
+		{"custom_gpu_name3", ""},
+		{"custom_gpu_name4", ""},
+		{"custom_gpu_name5", ""},
+		{"show_gpu_info", "Auto"}
+	#endif
 	};
-	unordered_flat_map<string, string> stringsTmp;
+	unordered_flat_map<std::string_view, string> stringsTmp;
 
-	unordered_flat_map<string, bool> bools = {
+	unordered_flat_map<std::string_view, bool> bools = {
 		{"theme_background", true},
 		{"truecolor", true},
 		{"rounded_corners", true},
@@ -229,7 +266,7 @@ namespace Config {
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
-        {"proc_filter_kernel", false},
+		{"proc_filter_kernel", false},
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
@@ -261,10 +298,15 @@ namespace Config {
 		{"lowcolor", false},
 		{"show_detailed", false},
 		{"proc_filtering", false},
+		{"proc_aggregate", false},
+	#ifdef GPU_SUPPORT
+		{"nvml_measure_pcie_speeds", true},
+		{"gpu_mirror_graph", true},
+	#endif
 	};
-	unordered_flat_map<string, bool> boolsTmp;
+	unordered_flat_map<std::string_view, bool> boolsTmp;
 
-	unordered_flat_map<string, int> ints = {
+	unordered_flat_map<std::string_view, int> ints = {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
@@ -275,9 +317,9 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 	};
-	unordered_flat_map<string, int> intsTmp;
+	unordered_flat_map<std::string_view, int> intsTmp;
 
-	bool _locked(const string& name) {
+	bool _locked(const std::string_view name) {
 		atomic_wait(writelock, true);
 		if (not write_new and rng::find_if(descriptions, [&name](const auto& a) { return a.at(0) == name; }) != descriptions.end())
 			write_new = true;
@@ -311,7 +353,7 @@ namespace Config {
 					validError = "Malformatted preset in config value presets!";
 					return false;
 				}
-				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc")) {
+				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5")) {
 					validError = "Invalid box name in config value presets!";
 					return false;
 				}
@@ -327,7 +369,7 @@ namespace Config {
 			new_presets.push_back(preset);
 		}
 
-		preset_list = move(new_presets);
+		preset_list = std::move(new_presets);
 		return true;
 	}
 
@@ -364,7 +406,7 @@ namespace Config {
 
 	string validError;
 
-	bool intValid(const string& name, const string& value) {
+	bool intValid(const std::string_view name, const string& value) {
 		int i_value;
 		try {
 			i_value = stoi(value);
@@ -378,7 +420,7 @@ namespace Config {
 			return false;
 		}
 		catch (const std::exception& e) {
-			validError = (string)e.what();
+			validError = string{e.what()};
 			return false;
 		}
 
@@ -394,7 +436,7 @@ namespace Config {
 		return false;
 	}
 
-	bool stringValid(const string& name, const string& value) {
+	bool stringValid(const std::string_view name, const string& value) {
 		if (name == "log_level" and not v_contains(Logger::log_levels, value))
 			validError = "Invalid log_level: " + value;
 
@@ -402,10 +444,15 @@ namespace Config {
 			validError = "Invalid graph symbol identifier: " + value;
 
 		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
-			validError = "Invalid graph symbol identifier for" + name + ": " + value;
+			validError = fmt::format("Invalid graph symbol identifier for {}: {}", name, value);
 
 		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
+
+	#ifdef GPU_SUPPORT
+		else if (name == "show_gpu_info" and not v_contains(show_gpu_values, value))
+			validError = "Invalid value for show_gpu_info: " + value;
+	#endif
 
 		else if (name == "presets" and not presetsValid(value))
 			return false;
@@ -451,7 +498,7 @@ namespace Config {
 		return false;
 	}
 
-	string getAsString(const string& name) {
+	string getAsString(const std::string_view name) {
 		if (bools.contains(name))
 			return (bools.at(name) ? "True" : "False");
 		else if (ints.contains(name))
@@ -461,7 +508,7 @@ namespace Config {
 		return "";
 	}
 
-	void flip(const string& name) {
+	void flip(const std::string_view name) {
 		if (_locked(name)) {
 			if (boolsTmp.contains(name)) boolsTmp.at(name) = not boolsTmp.at(name);
 			else boolsTmp.insert_or_assign(name, (not bools.at(name)));
@@ -498,7 +545,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-			Global::exit_error_msg = "Exception during Config::unlock() : " + (string)e.what();
+			Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
 			clean_quit(1);
 		}
 
@@ -509,8 +556,15 @@ namespace Config {
 		auto new_boxes = ssplit(boxes);
 		for (auto& box : new_boxes) {
 			if (not v_contains(valid_boxes, box)) return false;
+		#ifdef GPU_SUPPORT
+			if (box.starts_with("gpu")) {
+				size_t gpu_num = stoi(box.substr(3));
+				if (gpu_num == 0) gpu_num = 5;
+				if (std::cmp_greater(gpu_num, Gpu::gpu_names.size())) return false;
+			}
+		#endif
 		}
-		current_boxes = move(new_boxes);
+		current_boxes = std::move(new_boxes);
 		return true;
 	}
 

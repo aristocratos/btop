@@ -13,7 +13,17 @@ on:
       - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/continuous-build.yml'
+      - '.github/workflows/continuous-build-linux.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-linux.yml'
 
 jobs:
   static-build:
@@ -83,7 +93,9 @@ jobs:
         run: git config --global --add safe.directory /__w/btop/btop
 
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Fix - Stopping at filesystem boundary
         run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
@@ -107,7 +119,7 @@ jobs:
           cp bin/btop .artifacts/$FILENAME
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: btop-${{ matrix.toolchain }}
           path: '.artifacts/**'

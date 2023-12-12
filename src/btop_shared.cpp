@@ -18,16 +18,28 @@ tab-size = 4
 
 #include <ranges>
 
-#include <btop_shared.hpp>
-#include <btop_tools.hpp>
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_tools.hpp"
 
-using std::string_literals::operator""s;
 namespace rng = std::ranges;
 using namespace Tools;
 
+#ifdef GPU_SUPPORT
+namespace Gpu {
+	vector<string> gpu_names;
+	vector<int> gpu_b_height_offsets;
+	unordered_flat_map<string, deque<long long>> shared_gpu_percent = {
+		{"gpu-average", {}},
+		{"gpu-vram-total", {}},
+		{"gpu-pwr-total", {}},
+	};
+	long long gpu_pwr_total_max;
+}
+#endif
 
 namespace Proc {
-	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, const bool reverse, const bool tree) {
+	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
@@ -71,7 +83,7 @@ namespace Proc {
 		}
 	}
 
-	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, const bool reverse, int& c_index, const int index_max, const bool collapsed) {
+	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, int& c_index, const int index_max, bool collapsed) {
 		if (proc_vec.size() > 1) {
 			if (reverse) {
 				switch (v_index(sort_vector, sorting)) {
@@ -99,16 +111,17 @@ namespace Proc {
 		}
 	}
 
-	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs, int cur_depth, const bool collapsed, const string& filter, bool found, const bool no_update, const bool should_filter) {
+	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
+		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
 		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
 		//? If filtering, include children of matching processes
 		if (not found and (should_filter or not filter.empty())) {
 			if (not s_contains(std::to_string(cur_proc.pid), filter)
-			and not s_contains(cur_proc.name, filter)
-			and not s_contains(cur_proc.cmd, filter)
-			and not s_contains(cur_proc.user, filter)) {
+			and not s_contains_ic(cur_proc.name, filter)
+			and not s_contains_ic(cur_proc.cmd, filter)
+			and not s_contains_ic(cur_proc.user, filter)) {
 				filtering = true;
 				cur_proc.filtered = true;
 				filter_found++;
@@ -132,7 +145,7 @@ namespace Proc {
 				std::string_view cmd_view = cur_proc.cmd;
 				cmd_view = cmd_view.substr((size_t)0, std::min(cmd_view.find(' '), cmd_view.size()));
 				cmd_view = cmd_view.substr(std::min(cmd_view.find_last_of('/') + 1, cmd_view.size()));
-				cur_proc.short_cmd = (string)cmd_view;
+				cur_proc.short_cmd = string{cmd_view};
 			}
 		}
 		else {
@@ -140,12 +153,10 @@ namespace Proc {
 		}
 
 		//? Recursive iteration over all children
-		int children = 0;
 		for (auto& p : rng::equal_range(in_procs, cur_proc.pid, rng::less{}, &proc_info::ppid)) {
 			if (collapsed and not filtering) {
 				cur_proc.filtered = true;
 			}
-			children++;
 
 			_tree_gen(p, in_procs, out_procs.back().children, cur_depth + 1, (collapsed or cur_proc.collapsed), filter, found, no_update, should_filter);
 
@@ -158,17 +169,24 @@ namespace Proc {
 				filter_found++;
 				p.filtered = true;
 			}
+			else if (Config::getB("proc_aggregate")) {
+				cur_proc.cpu_p += p.cpu_p;
+				cur_proc.cpu_c += p.cpu_c;
+				cur_proc.mem += p.mem;
+				cur_proc.threads += p.threads;
+			}
 		}
 		if (collapsed or filtering) {
 			return;
 		}
 
 		//? Add tree terminator symbol if it's the last child in a sub-tree
-		if (children > 0 and out_procs.back().children.back().entry.get().prefix.size() >= 8 and not out_procs.back().children.back().entry.get().prefix.ends_with("]─"))
+		if (out_procs.back().children.size() > 0 and out_procs.back().children.back().entry.get().prefix.size() >= 8 and not out_procs.back().children.back().entry.get().prefix.ends_with("]─"))
 			out_procs.back().children.back().entry.get().prefix.replace(out_procs.back().children.back().entry.get().prefix.size() - 8, 8, " └─ ");
 
 		//? Add collapse/expand symbols if process have any children
-		out_procs.at(cur_pos).entry.get().prefix = " │ "s * cur_depth + (children > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
+		out_procs.at(cur_pos).entry.get().prefix = " │ "s * cur_depth + (out_procs.at(cur_pos).children.size() > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
+
 	}
 
 }

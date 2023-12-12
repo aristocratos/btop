@@ -18,16 +18,17 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include <algorithm>        // for std::ranges::count_if
 #include <array>
 #include <atomic>
-#include <regex>
+#include <chrono>
 #include <filesystem>
 #include <ranges>
-#include <chrono>
+#include <regex>
+#include <string>
 #include <thread>
 #include <tuple>
+#include <vector>
 #include <pthread.h>
 #include <limits.h>
 #ifndef HOST_NAME_MAX
@@ -37,9 +38,19 @@ tab-size = 4
 		#define HOST_NAME_MAX 64
 	#endif
 #endif
+#define FMT_HEADER_ONLY
+#include "fmt/core.h"
+#include "fmt/format.h"
+#include "fmt/ostream.h"
+#include "fmt/ranges.h"
 
-using std::string, std::vector, std::atomic, std::to_string, std::tuple, std::array;
-
+using std::array;
+using std::atomic;
+using std::string;
+using std::to_string;
+using std::tuple;
+using std::vector;
+using namespace fmt::literals;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -80,19 +91,19 @@ namespace Fx {
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-	inline string to(const int& line, const int& col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
+	inline string to(int line, int col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
 
 	//* Move cursor right <x> columns
-	inline string r(const int& x) { return Fx::e + to_string(x) + 'C'; }
+	inline string r(int x) { return Fx::e + to_string(x) + 'C'; }
 
 	//* Move cursor left <x> columns
-	inline string l(const int& x) { return Fx::e + to_string(x) + 'D'; }
+	inline string l(int x) { return Fx::e + to_string(x) + 'D'; }
 
 	//* Move cursor up x lines
-	inline string u(const int& x) { return Fx::e + to_string(x) + 'A'; }
+	inline string u(int x) { return Fx::e + to_string(x) + 'A'; }
 
 	//* Move cursor down x lines
-	inline string d(const int& x) { return Fx::e + to_string(x) + 'B'; }
+	inline string d(int x) { return Fx::e + to_string(x) + 'B'; }
 
 	//* Save cursor position
 	const string save = Fx::e + "s";
@@ -140,19 +151,25 @@ namespace Term {
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
 
+	class MyNumPunct : public std::numpunct<char> {
+	protected:
+		virtual char do_thousands_sep() const { return '\''; }
+		virtual std::string do_grouping() const { return "\03"; }
+	};
+
 	size_t wide_ulen(const string& str);
 	size_t wide_ulen(const std::wstring& w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-	inline size_t ulen(const string& str, const bool wide=false) {
+	inline size_t ulen(const string& str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
 	//* Resize a string consisting of UTF8 characters (only reduces size)
-	string uresize(const string str, const size_t len, const bool wide=false);
+	string uresize(const string str, const size_t len, bool wide = false);
 
 	//* Resize a string consisting of UTF8 characters from left (only reduces size)
-	string luresize(const string str, const size_t len, const bool wide=false);
+	string luresize(const string str, const size_t len, bool wide = false);
 
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
@@ -189,11 +206,11 @@ namespace Tools {
 
 	//* Check if string <str> contains string <find_val>, while ignoring case
 	inline bool s_contains_ic(const string& str, const string& find_val) {
-        auto it = std::search(
-            str.begin(), str.end(),
-            find_val.begin(), find_val.end(),
-            [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
-        );
+		auto it = std::search(
+			str.begin(), str.end(),
+			find_val.begin(), find_val.end(),
+			[](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+		);
 		return it != str.end();
 	}
 
@@ -254,31 +271,35 @@ namespace Tools {
 	auto ssplit(const string& str, const char& delim = ' ') -> vector<string>;
 
 	//* Put current thread to sleep for <ms> milliseconds
-	inline void sleep_ms(const size_t& ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+	inline void sleep_ms(const size_t& ms) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+	}
 
 	//* Put current thread to sleep for <micros> microseconds
-	inline void sleep_micros(const size_t& micros) { std::this_thread::sleep_for(std::chrono::microseconds(micros)); }
+	inline void sleep_micros(const size_t& micros) {
+		std::this_thread::sleep_for(std::chrono::microseconds(micros));
+	}
 
 	//* Left justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string ljust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+	string ljust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Right justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string rjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+	string rjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Center justify string <str> if <x> is greater than <str> length, limit return size to <x> by default
-	string cjust(string str, const size_t x, const bool utf=false, const bool wide=false, const bool limit=true);
+	string cjust(string str, const size_t x, bool utf = false, bool wide = false, bool limit = true);
 
 	//* Replace whitespaces " " with escape code for move right
 	string trans(const string& str);
 
 	//* Convert seconds to format "<days>d <hours>:<minutes>:<seconds>" and return string
-	string sec_to_dhms(size_t seconds, bool no_days=false, bool no_seconds=false);
+	string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
 
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
 	//* bit=True or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
 	//* short=True always returns 0 decimals and shortens unit to 1 character
-	string floating_humanizer(uint64_t value, const bool shorten=false, size_t start=0, const bool bit=false, const bool per_second=false);
+	string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
@@ -301,25 +322,24 @@ namespace Tools {
 	#endif
 	}
 
-	void atomic_wait(const atomic<bool>& atom, const bool old=true) noexcept;
+	void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
 
-	void atomic_wait_for(const atomic<bool>& atom, const bool old=true, const uint64_t wait_ms=0) noexcept;
+	void atomic_wait_for(const atomic<bool>& atom, bool old = true, const uint64_t wait_ms = 0) noexcept;
 
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
-		bool not_true = false;
+		bool not_true{}; // defaults to false
 	public:
-		atomic_lock(atomic<bool>& atom, bool wait=false);
+		atomic_lock(atomic<bool>& atom, bool wait = false);
 		~atomic_lock();
 	};
 
 	//* Read a complete file and return as a string
-	string readfile(const std::filesystem::path& path, const string& fallback="");
+	string readfile(const std::filesystem::path& path, const string& fallback = "");
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
-
 }
 
 //* Simple logging implementation
@@ -333,13 +353,56 @@ namespace Logger {
 	};
 	extern std::filesystem::path logfile;
 
+	enum Level : size_t {
+		DISABLED = 0,
+		ERROR = 1,
+		WARNING = 2,
+		INFO = 3,
+		DEBUG = 4,
+	};
+
 	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
 	void set(const string& level);
 
-	void log_write(const size_t level, const string& msg);
-	inline void error(const string msg) { log_write(1, msg); }
-	inline void warning(const string msg) { log_write(2, msg); }
-	inline void info(const string msg) { log_write(3, msg); }
-	inline void debug(const string msg) { log_write(4, msg); }
+	void log_write(const Level level, const string& msg);
+	inline void error(const string msg) { log_write(ERROR, msg); }
+	inline void warning(const string msg) { log_write(WARNING, msg); }
+	inline void info(const string msg) { log_write(INFO, msg); }
+	inline void debug(const string msg) { log_write(DEBUG, msg); }
 }
+
+namespace Tools {
+	//* Creates a named timer that is started on construct (by default) and reports elapsed time in microseconds to Logger::debug() on destruct if running
+	//* Unless delayed_report is set to false, all reporting is buffered and delayed until DebugTimer is destructed or .force_report() is called
+	//* Usage example: Tools::DebugTimer timer(name:"myTimer", [start:true], [delayed_report:true]) // Create timer and start
+	//* timer.stop(); // Stop timer and report elapsed time
+	//* timer.stop_rename_reset("myTimer2"); // Stop timer, report elapsed time, rename timer, reset and restart
+	class DebugTimer {
+		uint64_t start_time{};
+		uint64_t elapsed_time{};
+		bool running{};
+		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
+		vector<string> report_buffer{};
+	public:
+		string name{};
+		bool delayed_report{};
+		Logger::Level log_level = Logger::DEBUG;
+		DebugTimer() = default;
+		DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		~DebugTimer();
+
+		void start();
+		void stop(bool report = true);
+		void reset(bool restart = true);
+		//* Stops and reports (default), renames timer then resets and restarts (default)
+		void stop_rename_reset(const string& new_name, bool report = true, bool restart = true);
+		void report();
+		void force_report();
+		uint64_t elapsed();
+		bool is_running();
+	};
+
+}
+
+
 

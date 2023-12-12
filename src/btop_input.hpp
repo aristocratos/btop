@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,10 +24,15 @@ tab-size = 4
 #include <robin_hood.h>
 #include <deque>
 
-using robin_hood::unordered_flat_map, std::array, std::string, std::atomic, std::deque;
+using robin_hood::unordered_flat_map;
+using std::array;
+using std::atomic;
+using std::deque;
+using std::string;
+
 /* The input functions relies on the following std::cin options being set:
 	cin.sync_with_stdio(false);
-	cin.tie(NULL);
+	cin.tie(nullptr);
 	These will automatically be set when running Term::init() from btop_tools.cpp
 */
 

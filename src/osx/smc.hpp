@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -104,7 +104,7 @@ namespace Cpu {
 		long long getTemp(int core);
 
 	   private:
-        kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);
+		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);
 		long long getSMCTemp(char *key);
 		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure);
 

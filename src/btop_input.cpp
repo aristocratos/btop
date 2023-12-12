@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,17 +21,29 @@ tab-size = 4
 #include <vector>
 #include <thread>
 #include <mutex>
-
-#include <btop_input.hpp>
-#include <btop_tools.hpp>
-#include <btop_config.hpp>
-#include <btop_shared.hpp>
-#include <btop_menu.hpp>
-#include <btop_draw.hpp>
 #include <signal.h>
+#include <utility>
 
-using std::cin, std::vector, std::string_literals::operator""s;
+#include "btop_input.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_menu.hpp"
+#include "btop_draw.hpp"
+
+
+#include "btop_input.hpp"
+#include "btop_tools.hpp"
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "btop_menu.hpp"
+#include "btop_draw.hpp"
+
+
+using std::cin;
+
 using namespace Tools;
+using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
 
 namespace Input {
@@ -52,9 +64,13 @@ namespace Input {
 		{"[C", 		"right"},
 		{"OC",		"right"},
 		{"[2~",		"insert"},
+		{"[4h",		"insert"},
 		{"[3~",		"delete"},
+		{"[P",		"delete"},
 		{"[H",		"home"},
+		{"[1~",		"home"},
 		{"[F",		"end"},
+		{"[4~",		"end"},
 		{"[5~",		"page_up"},
 		{"[6~",		"page_down"},
 		{"\t",		"tab"},
@@ -235,8 +251,8 @@ namespace Input {
 	void process(const string& key) {
 		if (key.empty()) return;
 		try {
-			auto& filtering = Config::getB("proc_filtering");
-			auto& vim_keys = Config::getB("vim_keys");
+			auto filtering = Config::getB("proc_filtering");
+			auto vim_keys = Config::getB("vim_keys");
 			auto help_key = (vim_keys ? "H" : "h");
 			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
@@ -257,11 +273,21 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (key.size() == 1 and isint(key)) {
+					auto intKey = stoi(key);
+				#ifdef GPU_SUPPORT
+					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
+					if ((intKey == 0 and Gpu::gpu_names.size() < 5) or (intKey >= 5 and std::cmp_less(Gpu::gpu_names.size(), intKey - 4)))
+						return;
+				#else
+				static const array<string, 10> boxes = {"", "cpu", "mem", "net", "proc"};
+					if (intKey == 0 or intKey > 4)
+						return;
+				#endif
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
-					Config::toggle_box(boxes.at(std::stoi(key) - 1));
+
+					Config::toggle_box(boxes.at(intKey));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
@@ -294,12 +320,12 @@ namespace Input {
 					if (key == "enter" or key == "down") {
 						Config::set("proc_filter", Proc::filter.text);
 						Config::set("proc_filtering", false);
-                        old_filter.clear();
-                        if(key == "down"){
-                            process("down");
-                            return;
-                        }
-                    }
+						old_filter.clear();
+						if(key == "down"){
+							process("down");
+							return;
+						}
+					}
 					else if (key == "escape" or key == "mouse_click") {
 						Config::set("proc_filter", old_filter);
 						Config::set("proc_filtering", false);
@@ -339,6 +365,9 @@ namespace Input {
 
 				else if (key == "c")
 					Config::flip("proc_per_core");
+
+				else if (key == "%")
+					Config::flip("proc_mem_bytes");
 
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
@@ -545,9 +574,8 @@ namespace Input {
 			}
 		}
 
-
 		catch (const std::exception& e) {
-			throw std::runtime_error("Input::process(\"" + key + "\") : " + (string)e.what());
+			throw std::runtime_error("Input::process(\"" + key + "\") : " + string{e.what()});
 		}
 	}
 
