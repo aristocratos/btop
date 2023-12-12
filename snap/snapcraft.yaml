@@ -37,6 +37,7 @@ apps:
       - network-observe
       - home
       - removable-media
+      - opengl
 
 parts:
   btop:
@@ -47,7 +48,6 @@ parts:
       - PREFIX=/usr/local
       - STATIC=true
       - ADDFLAGS="-D SNAPPED"
-      
     build-packages:
       - coreutils
       - sed
