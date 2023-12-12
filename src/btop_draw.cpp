@@ -2063,7 +2063,11 @@ namespace Draw {
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, (cpu_bottom ? "" : "cpu"), (cpu_bottom ? "cpu" : ""), 1);
 
 			auto& custom = Config::getS("custom_cpu_name");
-			const string cpu_title = uresize((custom.empty() ? Cpu::cpuName : custom) , b_width - 14);
+			static const bool hasCpuHz = not Cpu::get_cpuHz().empty();
+			const string cpu_title = uresize(
+					(custom.empty() ? Cpu::cpuName : custom),
+					b_width - (Config::getB("show_cpu_freq") and hasCpuHz ? 14 : 4)
+			);
 			box += createBox(b_x, b_y, b_width, b_height, "", false, cpu_title);
 		}
 

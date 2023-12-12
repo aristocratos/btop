@@ -339,7 +339,7 @@ namespace Cpu {
 
 			}
 
-			auto name_vec = ssplit(name);
+			auto name_vec = ssplit(name, ' ');
 
 			if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
 				auto cpu_pos = v_index(name_vec, "CPU"s);
@@ -355,7 +355,7 @@ namespace Cpu {
 			}
 			else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
 				auto cpu_pos = v_index(name_vec, "CPU"s);
-				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
+				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1).size() != 1)
 					name = name_vec.at(cpu_pos + 1);
 				else
 					name.clear();
