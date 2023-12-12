@@ -1755,7 +1755,7 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto it = disks.begin(); it != disks.end(); ) {
 					auto &[mountpoint, disk] = *it;
-					if (v_contains(ignore_list, mountpoint)) {
+					if (v_contains(ignore_list, mountpoint) or disk.name == "swap") {
 						it = disks.erase(it);
 						continue;
 					}
