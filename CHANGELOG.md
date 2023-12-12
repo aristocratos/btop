@@ -2,6 +2,12 @@
 
 * Added Gpu Support | @romner-set | PR #529
 
+* Enable macos clang | @muneebmahmed | PR #666
+
+* Fix Apple Silicon CPUs misprinted | @masiboss | PR #679
+
+* Cmake support for MacOS | @imwints | PR #675
+
 * Elementarish theme: color update according to Elementary palette | @stradicat | PR #660
 
 * Add alternative key codes for Delete, Insert, Home, End | @ivanp7 | PR #659
