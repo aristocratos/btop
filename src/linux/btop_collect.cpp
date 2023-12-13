@@ -661,9 +661,10 @@ namespace Cpu {
 	}
 
 	struct battery {
-		fs::path base_dir, energy_now, energy_full, power_now, status, online;
+		fs::path base_dir, energy_now, energy_full, power_now, current_now, voltage_now, status, online;
 		string device_type;
 		bool use_energy = true;
+		bool use_power = true;
 	};
 
 	auto get_battery() -> tuple<int, long, string> {
@@ -710,8 +711,16 @@ namespace Cpu {
 							continue;
 						}
 
-						if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
-						else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+						if (fs::exists(bat_dir / "power_now")) {
+							new_bat.power_now = bat_dir / "power_now";
+						}
+						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "current_now"))) { 
+							 new_bat.current_now = bat_dir / "current_now";
+							 new_bat.voltage_now = bat_dir / "voltage_now";
+						} 
+						else { 
+							new_bat.use_power = false; 
+						}
 
 						if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
 						else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
