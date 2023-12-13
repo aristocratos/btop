@@ -787,13 +787,23 @@ namespace Cpu {
 
 		//? Get seconds to empty
 		if (not is_in(status, "charging", "full")) {
-			if (b.use_energy_or_charge and not b.power_now.empty()) {
-				try {
-					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+			if (b.use_energy_or_charge ) {
+				if (not b.power_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
 				}
-				catch (const std::invalid_argument&) { }
-				catch (const std::out_of_range&) { }
+				else if (not b.current_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
+				}
 			}
+
 			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
 				try {
 					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
