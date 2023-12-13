@@ -755,6 +755,7 @@ namespace Cpu {
 
 		int percent = -1;
 		long seconds = -1;
+		float watts = -1;
 
 		//? Try to get battery percentage
 		if (percent < 0) {
@@ -818,6 +819,25 @@ namespace Cpu {
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
+		}
+
+		//? Get power draw
+		if (b.use_power) {
+			if (not b.power_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.energy_now, "-1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+			else if (not b.voltage_now.empty() and not b.current_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0 * stoll(readfile(b.voltage_now, "1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+
 		}
 
 		return {percent, seconds, status};
