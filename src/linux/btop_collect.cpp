@@ -764,6 +764,13 @@ namespace Cpu {
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
+		if (b.use_energy_or_charge == true and percent < 0) {
+			try {
+				percent = round(100.0 * stoll(readfile(b.charge_now, "-1")) / stoll(readfile(b.charge_full, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
 		if (percent < 0) {
 			try {
 				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
