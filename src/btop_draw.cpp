@@ -724,7 +724,7 @@ namespace Cpu {
 				old_status = status;
 				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, true, true) : "");
 				const string str_percent = to_string(percent) + '%';
-				const string str_watts = (watts != -1 ? to_string(watts) + 'W' : "");
+				const string str_watts = (watts != -1 ? fmt::format("{:.2f}", watts) + 'W' : "");
 				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
 				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + str_watts.size() + to_string(Config::getI("update_ms")).size();
 				const int current_pos = Term::width - current_len - 17;
