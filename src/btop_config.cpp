@@ -197,7 +197,7 @@ namespace Config {
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
-		{"show_battery_watt"	"#* Show power stats of battery next to charge indicator"},
+		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
 
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},

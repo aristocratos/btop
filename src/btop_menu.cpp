@@ -356,11 +356,9 @@ namespace Menu {
 				"\"Auto\" for auto detection."},
 			{"show_battery_watts",
 				"Show battery power.",
-				""
-				"Shows power consumed by device when not connected to power",
-				"Shows power charging power otherwise"
 				"",
-				"True or False."},
+				"Show discharge power when discharging.",
+				"Show charging power when charging."},
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
