@@ -306,7 +306,7 @@ Also needs a UTF8 locale and a font that covers:
     ```bash
     sudo dnf install btop
 	```
-* **debian**
+* **deepin**
     ```bash
     sudo apt install btop
 	```
