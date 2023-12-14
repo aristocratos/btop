@@ -10,7 +10,7 @@
 
 * If it's a fix for an unreported bug, make a bug report and link the pull request.
 
-* Pure cosmetic changes won't be accepted without an excellent explanation of its value.
+* Pure cosmetic changes won't be accepted without a very good explanation of its value.
 
 ## Formatting
 
@@ -48,6 +48,6 @@
 
 * Benchmark your code and look for alternatives if they cause a noticeable negative impact.
 
-For questions open a new discussion thread or send a mail to jakob@qvantnet.com
+For questions open a new discussion thread or send an email to jakob@qvantnet.com
 
 For proposing changes to this document create a [new issue](https://github.com/aristocratos/btop/issues/new/choose).
