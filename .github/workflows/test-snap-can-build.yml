@@ -3,9 +3,17 @@ name: 🧪 Test snap can be built on x86_64
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-linux.yml'    
   pull_request:
     branches: [ main ]
-    
+    tags-ignore:
+      - '*.*'      
 jobs:
   build:
     runs-on: ubuntu-latest
