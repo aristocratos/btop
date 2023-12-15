@@ -16,6 +16,8 @@ indent = tab
 tab-size = 4
 */
 
+#include <Availability.h>
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 #include "sensors.hpp"
 
 #include <CoreFoundation/CoreFoundation.h>
@@ -109,3 +111,4 @@ long long Cpu::ThermalSensors::getSensors() {
 	if (temps.empty()) return 0ll;
 	return round(std::accumulate(temps.begin(), temps.end(), 0ll) / temps.size());
 }
+#endif
