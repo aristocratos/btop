@@ -16,9 +16,12 @@ indent = tab
 tab-size = 4
 */
 
+#include <Availability.h>
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 namespace Cpu {
 	class ThermalSensors {
 	   public:
 		long long getSensors();
 	};
 }  // namespace Cpu
+#endif

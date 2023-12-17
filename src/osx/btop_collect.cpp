@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <Availability.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
@@ -56,7 +57,9 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 #include "sensors.hpp"
+#endif
 #include "smc.hpp"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
@@ -250,6 +253,7 @@ namespace Cpu {
 		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			ThermalSensors sensors;
 			if (sensors.getSensors() > 0) {
 				Logger::debug("M1 sensors found");
@@ -257,6 +261,7 @@ namespace Cpu {
 				cpu_temp_only = true;
 				macM1 = true;
 			} else {
+#endif
 				// try SMC (intel)
 				Logger::debug("checking intel");
 				SMCConnection smcCon;
@@ -281,7 +286,9 @@ namespace Cpu {
 					// ignore, we don't have temp
 					got_sensors = false;
 				}
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			}
+#endif
 		}
 		return got_sensors;
 	}
@@ -290,11 +297,12 @@ namespace Cpu {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
 			if (macM1) {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
 				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
-
+#endif
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
