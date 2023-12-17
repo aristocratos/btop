@@ -1,19 +1,27 @@
 name: 🧪 Test snap can be built on x86_64
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
+   branches: [ main ]
    tags-ignore:
       - '*.*'     
-    paths:
+   paths:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/continuous-build-linux.yml'    
-   pull_request:
-    branches: [ main ]
+      - '.github/workflows/test-snap-can-build.yml'
+  pull_request:
+   branches: [ main ]
+   paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/test-snap-can-build.yml'
  
 jobs:
   build:
