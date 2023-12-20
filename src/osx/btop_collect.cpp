@@ -50,14 +50,22 @@ tab-size = 4
 #include <fstream>
 #include <numeric>
 #include <ranges>
-#include <regex>
 #include <string>
 
 #include "../btop_config.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
+#define IOMainPort IOMasterPort
+#endif
+
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#ifdef __clang__
+extern "C" {
+#include "CpuFreq.h"
+}
+#endif
 #include "sensors.hpp"
 #endif
 #include "smc.hpp"
@@ -191,6 +199,9 @@ namespace Cpu {
 	bool has_battery = true;
 	bool macM1 = false;
 	tuple<int, long, string> current_bat;
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
+	CpuFreqData data;
+#endif
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
@@ -253,13 +264,15 @@ namespace Cpu {
 		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
 			ThermalSensors sensors;
 			if (sensors.getSensors() > 0) {
 				Logger::debug("M1 sensors found");
 				got_sensors = true;
 				cpu_temp_only = true;
 				macM1 = true;
+				data.existingCPUs = Shared::coreCount;
+				CpuFreq_init(&data);
 			} else {
 #endif
 				// try SMC (intel)
@@ -286,7 +299,7 @@ namespace Cpu {
 					// ignore, we don't have temp
 					got_sensors = false;
 				}
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
 			}
 #endif
 		}
@@ -297,7 +310,7 @@ namespace Cpu {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
 			if (macM1) {
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
 				ThermalSensors sensors;
 				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
@@ -324,16 +337,39 @@ namespace Cpu {
 		}
 	}
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
+	uint32_t get_m1_cpuHz() {
+		uint32_t freq = 0;
+		CpuFreq_update(&data);
+		double highest = 0;
+		for (unsigned int i = 0; i < data.existingCPUs; i++) {
+			if (data.frequencies[i] > highest)
+				highest = data.frequencies[i];
+		}
+		return freq = (uint32_t)highest;
+	}
+#endif
+
 	string get_cpuHz() {
-		unsigned int freq = 1;
+		uint32_t freq = 1;
 		size_t size = sizeof(freq);
 
 		int mib[] = {CTL_HW, HW_CPU_FREQ};
 
 		if (sysctl(mib, 2, &freq, &size, nullptr, 0) < 0) {
+			Logger::debug("sysctl failed");
 			// this fails on Apple Silicon macs. Apparently you're not allowed to know
-			return "";
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
+			freq = get_m1_cpuHz();
+			if (freq == 0) {
+				// give up
+#endif
+				return "";
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504 && defined(__clang__) && defined (__aarch64__)
+			}
+#endif
 		}
+		Logger::debug("freq: " + std::to_string(freq));
 		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
 	}
 
@@ -604,7 +640,7 @@ namespace Mem {
 		io_iterator_t drive_list;
 
 		mach_port_t libtop_master_port;
-		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
+		if (IOMainPort(bootstrap_port, &libtop_master_port)) {
 			Logger::error("errot getting master port");
 			return;
 		}
