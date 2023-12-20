@@ -14,7 +14,7 @@ project("btop"
   VERSION 1.2.13
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX
+  LANGUAGES C CXX
 )
 
 include(CheckCXXCompilerFlag)
@@ -61,7 +61,7 @@ add_executable(btop
 )
 
 if(APPLE)
-  target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
+  target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp src/osx/CpuFreq.c)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(LINUX)
@@ -165,6 +165,7 @@ endif()
 if(APPLE)
   target_link_libraries(btop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
+    IOReport
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the

@@ -37,6 +37,7 @@ jobs:
       - name: Configure
         run: |
           export LLVM_PREFIX="$(brew --prefix llvm)"
+          export CC="$LLVM_PREFIX/bin/clang"
           export CXX="$LLVM_PREFIX/bin/clang++"
           export CPPFLAGS="-I$LLVM_PREFIX/include"
           export LDFLAGS="-L$LLVM_PREFIX/lib -L$LLVM_PREFIX/lib/c++ -Wl,-rpath,$LLVM_PREFIX/lib/c++ -fuse-ld=$LLVM_PREFIX/bin/ld64.lld"
