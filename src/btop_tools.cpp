@@ -30,7 +30,7 @@ tab-size = 4
 #include <termios.h>
 #include <sys/ioctl.h>
 
-#include "unordered_map"
+#include "robin_hood.h"
 #include "widechar_width.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -43,6 +43,7 @@ using std::flush;
 using std::max;
 using std::string_view;
 using std::to_string;
+using robin_hood::unordered_flat_map;
 
 using namespace std::literals; // to use operator""s
 

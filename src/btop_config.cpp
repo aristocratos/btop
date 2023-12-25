@@ -21,7 +21,6 @@ tab-size = 4
 #include <fstream>
 #include <ranges>
 #include <string_view>
-#include <utility>
 
 #include <fmt/core.h>
 
@@ -216,7 +215,7 @@ namespace Config {
 	#endif
 	};
 
-	std::unordered_map<std::string_view, string> strings = {
+	unordered_flat_map<std::string_view, string> strings = {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
@@ -252,9 +251,9 @@ namespace Config {
 		{"show_gpu_info", "Auto"}
 	#endif
 	};
-	std::unordered_map<std::string_view, string> stringsTmp;
+	unordered_flat_map<std::string_view, string> stringsTmp;
 
-	std::unordered_map<std::string_view, bool> bools = {
+	unordered_flat_map<std::string_view, bool> bools = {
 		{"theme_background", true},
 		{"truecolor", true},
 		{"rounded_corners", true},
@@ -305,9 +304,9 @@ namespace Config {
 		{"gpu_mirror_graph", true},
 	#endif
 	};
-	std::unordered_map<std::string_view, bool> boolsTmp;
+	unordered_flat_map<std::string_view, bool> boolsTmp;
 
-	std::unordered_map<std::string_view, int> ints = {
+	unordered_flat_map<std::string_view, int> ints = {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
@@ -318,7 +317,7 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 	};
-	std::unordered_map<std::string_view, int> intsTmp;
+	unordered_flat_map<std::string_view, int> intsTmp;
 
 	bool _locked(const std::string_view name) {
 		atomic_wait(writelock, true);

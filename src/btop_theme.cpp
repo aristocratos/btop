@@ -42,11 +42,11 @@ namespace Theme {
 	fs::path theme_dir;
 	fs::path user_theme_dir;
 	vector<string> themes;
-	std::unordered_map<string, string> colors;
-	std::unordered_map<string, array<int, 3>> rgbs;
-	std::unordered_map<string, array<string, 101>> gradients;
+	unordered_flat_map<string, string> colors;
+	unordered_flat_map<string, array<int, 3>> rgbs;
+	unordered_flat_map<string, array<string, 101>> gradients;
 
-	const std::unordered_map<string, string> Default_theme = {
+	const unordered_flat_map<string, string> Default_theme = {
 		{ "main_bg", "#00" },
 		{ "main_fg", "#cc" },
 		{ "title", "#ee" },
@@ -91,7 +91,7 @@ namespace Theme {
 		{ "process_end", "#d45454" }
 	};
 
-	const std::unordered_map<string, string> TTY_theme = {
+	const unordered_flat_map<string, string> TTY_theme = {
 		{ "main_bg", "\x1b[0;40m" },
 		{ "main_fg", "\x1b[37m" },
 		{ "title", "\x1b[97m" },
@@ -224,7 +224,7 @@ namespace Theme {
 		}
 
 		//* Generate colors and rgb decimal vectors for the theme
-		void generateColors(const std::unordered_map<string, string>& source) {
+		void generateColors(const unordered_flat_map<string, string>& source) {
 			vector<string> t_rgb;
 			string depth;
 			bool t_to_256 = Config::getB("lowcolor");
@@ -372,7 +372,7 @@ namespace Theme {
 
 		//* Load a .theme file from disk
 		auto loadFile(const string& filename) {
-			std::unordered_map<string, string> theme_out;
+			unordered_flat_map<string, string> theme_out;
 			const fs::path filepath = filename;
 			if (not fs::exists(filepath))
 				return Default_theme;

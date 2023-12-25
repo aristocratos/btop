@@ -22,11 +22,12 @@ tab-size = 4
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <robin_hood.h>
 
 using std::array;
 using std::string;
 using std::vector;
+using robin_hood::unordered_flat_map;
 
 namespace Theme {
 	extern std::filesystem::path theme_dir;
@@ -53,9 +54,9 @@ namespace Theme {
 	//* Set current theme from current "color_theme" value in config
 	void setTheme();
 
-	extern std::unordered_map<string, string> colors;
-	extern std::unordered_map<string, array<int, 3>> rgbs;
-	extern std::unordered_map<string, array<string, 101>> gradients;
+	extern unordered_flat_map<string, string> colors;
+	extern unordered_flat_map<string, array<int, 3>> rgbs;
+	extern unordered_flat_map<string, array<string, 101>> gradients;
 
 	//* Return escape code for color <name>
 	inline const string& c(const string& name) { return colors.at(name); }
