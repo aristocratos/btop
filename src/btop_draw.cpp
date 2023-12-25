@@ -798,7 +798,7 @@ namespace Cpu {
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
 			const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
-			if (b_column_size > 1 or b_columns > 1 and temp_graphs.size() >= 1)
+			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
 			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
@@ -811,7 +811,7 @@ namespace Cpu {
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
 		for (const auto& n : iota(0, Shared::coreCount)) {
-			if (core_graphs.size() < n+1) break;
+			if (cmp_less(core_graphs.size(), n+1)) break;
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c("main_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
@@ -821,7 +821,7 @@ namespace Cpu {
 			out += Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll));
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
 
-			if (show_temps and not hide_cores and temp_graphs.size() >= n) {
+			if (show_temps and not hide_cores and std::cmp_greater_equal(temp_graphs.size(), n)) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
 				const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
 				if (b_column_size > 1)

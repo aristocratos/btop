@@ -579,10 +579,10 @@ namespace Mem {
 				auto d = cur.dinfo->devices[i];
 				string devStatName = "/dev/" + string(d.device_name) + std::to_string(d.unit_number);
 				for (auto& [ignored, disk] : disks) { // find matching mountpoints - could be multiple as d.device_name is only ada (and d.unit_number is the device number), while the disk.dev is like /dev/ada0s1
-					if (disk.dev.string().rfind(devStatName, 0) == 0) {
+					if (disk.dev.string().rfind(devStatName, 0) == 0 and mapping.contains(disk.dev)) {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
-						string mountpoint = safeVal(mapping, disk.dev);
+						string mountpoint = mapping.at(disk.dev);
 						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
 					}
 				}
@@ -609,7 +609,7 @@ namespace Mem {
 							// alternatively you could parse the objset-0x... when this changes, you have a new entry
 							string datasetname = string(value);// this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
 							if (mapping.contains(datasetname)) {
-								string mountpoint = safeVal(mapping, datasetname);
+								string mountpoint = mapping.at(datasetname);
 								if (disks.contains(mountpoint)) {
 									auto& disk = disks.at(mountpoint);
 									assign_values(disk, nread, nwritten);
