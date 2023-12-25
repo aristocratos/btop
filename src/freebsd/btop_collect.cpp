@@ -170,17 +170,23 @@ namespace Shared {
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Logger::debug("Init -> Cpu::collect()");
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
+		Logger::debug("Init -> Cpu::get_cpuName()");
 		Cpu::cpuName = Cpu::get_cpuName();
+		Logger::debug("Init -> Cpu::get_sensors()");
 		Cpu::got_sensors = Cpu::get_sensors();
+		Logger::debug("Init -> Cpu::get_core_mapping()");
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
+		Logger::debug("Init -> Mem::collect()");
 		Mem::collect();
+		Logger::debug("Init -> Mem::get_zpools()");
 		Mem::get_zpools();
 	}
 
@@ -576,13 +582,12 @@ namespace Mem {
 					if (disk.dev.string().rfind(devStatName, 0) == 0) {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
-						string mountpoint = mapping.at(disk.dev);
+						string mountpoint = safeVal(mapping, disk.dev);
 						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
 					}
 				}
 
 			}
-			Logger::debug("");
 		}
 
 		// this code is for ZFS mounts
@@ -604,7 +609,7 @@ namespace Mem {
 							// alternatively you could parse the objset-0x... when this changes, you have a new entry
 							string datasetname = string(value);// this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
 							if (mapping.contains(datasetname)) {
-								string mountpoint = mapping.at(datasetname);
+								string mountpoint = safeVal(mapping, datasetname);
 								if (disks.contains(mountpoint)) {
 									auto& disk = disks.at(mountpoint);
 									assign_values(disk, nread, nwritten);

@@ -798,7 +798,7 @@ namespace Cpu {
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
 			const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
-			if (b_column_size > 1 or b_columns > 1)
+			if (b_column_size > 1 or b_columns > 1 and temp_graphs.size() >= 1)
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
 			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
@@ -811,6 +811,7 @@ namespace Cpu {
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
 		for (const auto& n : iota(0, Shared::coreCount)) {
+			if (core_graphs.size() < n+1) break;
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c("main_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
@@ -820,7 +821,7 @@ namespace Cpu {
 			out += Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll));
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
 
-			if (show_temps and not hide_cores) {
+			if (show_temps and not hide_cores and temp_graphs.size() >= n) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
 				const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
 				if (b_column_size > 1)
@@ -1242,7 +1243,10 @@ namespace Mem {
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(safeVal(mem.stats, name));
 			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
-			const string graphics = (use_graphs ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same) : mem_meters.at(name)(safeVal(mem.percent, name).back()));
+			const string graphics = (
+				use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same)
+				: mem_meters.contains(name) ? mem_meters.at(name)(safeVal(mem.percent, name).back())
+				: "");
 			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
@@ -1278,9 +1282,12 @@ namespace Mem {
 						const string used_percent = to_string(disk.used_percent);
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2) - 1) + hu_div + used_percent + '%' + hu_div;
 					}
+					if (io_graphs.contains(mount + "_activity")) {
 					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6)
 						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
+					}
 					if (++cy > height - 3) break;
+					if (not io_graphs.contains(mount)) continue;
 					if (io_graph_combined) {
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
 						const string humanized = (disk.io_write.back() > 0 ? "▼"s : ""s) + (disk.io_read.back() > 0 ? "▲"s : ""s)
@@ -1306,6 +1313,7 @@ namespace Mem {
 					if (not disks.contains(mount)) continue;
 					if (cy > height - 3) break;
 					const auto& disk = safeVal(disks, mount);
+					if (disk.name.empty() or not disk_meters_used.contains(mount)) continue;
 					auto comb_val = (not disk.io_read.empty() ? disk.io_read.back() + disk.io_write.back() : 0ll);
 					const string human_io = (comb_val > 0 ? (disk.io_write.back() > 0 and big_disk ? "▼"s : ""s) + (disk.io_read.back() > 0 and big_disk ? "▲"s : ""s)
 											+ floating_humanizer(comb_val, true) : "");
@@ -1329,7 +1337,7 @@ namespace Mem {
 						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 5));
 					if (++cy > height - 3) break;
 
-					if (cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
+					if (disk_meters_free.contains(mount) and cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
 						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
 						cy++;
