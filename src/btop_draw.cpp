@@ -800,7 +800,7 @@ namespace Cpu {
 			const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
 			if (b_column_size > 1 or b_columns > 1)
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
-					+ safeVal(temp_graphs, 0)(safeVal(cpu.temp, 0), data_same or redraw);
+					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
 			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 		}
 		out += Theme::c("div_line") + Symbols::v_line;
@@ -815,7 +815,7 @@ namespace Cpu {
 				+ ljust(to_string(n), core_width);
 			if (b_column_size > 0 or extra_width > 0)
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
-					+ safeVal(core_graphs, n)(safeVal(cpu.core_percent, n), data_same or redraw);
+					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
 
 			out += Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll));
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c("main_fg") + '%';
@@ -825,7 +825,7 @@ namespace Cpu {
 				const auto& temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
 				if (b_column_size > 1)
 					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
-						+ safeVal(temp_graphs, n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
+						+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
 				out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
 
@@ -1242,7 +1242,7 @@ namespace Mem {
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(safeVal(mem.stats, name));
 			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
-			const string graphics = (use_graphs ? safeVal(mem_graphs, name)(safeVal(mem.percent, name), redraw or data_same) : safeVal(mem_meters, name)(safeVal(mem.percent, name).back()));
+			const string graphics = (use_graphs ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same) : mem_meters.at(name)(safeVal(mem.percent, name).back()));
 			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
@@ -1279,14 +1279,14 @@ namespace Mem {
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width / 2) - round((double)used_percent.size() / 2) - 1) + hu_div + used_percent + '%' + hu_div;
 					}
 					out += Mv::to(y+2+cy++, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6)
-						+ Mv::l(disks_width - 6) + safeVal(io_graphs, mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
+						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 					if (++cy > height - 3) break;
 					if (io_graph_combined) {
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
 						const string humanized = (disk.io_write.back() > 0 ? "▼"s : ""s) + (disk.io_read.back() > 0 ? "▲"s : ""s)
 												+ (comb_val > 0 ? Mv::r(1) + floating_humanizer(comb_val, true) : "RW");
 						if (disks_io_h == 1) out += Mv::to(y+1+cy, x+1+cx) + string(5, ' ');
-						out += Mv::to(y+1+cy, x+1+cx) + safeVal(io_graphs, mount)({comb_val}, redraw or data_same)
+						out += Mv::to(y+1+cy, x+1+cx) + io_graphs.at(mount)({comb_val}, redraw or data_same)
 							+ Mv::to(y+1+cy, x+1+cx) + Theme::c("main_fg") + humanized;
 						cy += disks_io_h;
 					}
@@ -1294,8 +1294,8 @@ namespace Mem {
 						const string human_read = (disk.io_read.back() > 0 ? "▲" + floating_humanizer(disk.io_read.back(), true) : "R");
 						const string human_write = (disk.io_write.back() > 0 ? "▼" + floating_humanizer(disk.io_write.back(), true) : "W");
 						if (disks_io_h <= 3) out += Mv::to(y+1+cy, x+1+cx) + string(5, ' ') + Mv::to(y+cy + disks_io_h, x+1+cx) + string(5, ' ');
-						out += Mv::to(y+1+cy, x+1+cx) + safeVal(io_graphs, mount + "_read")(disk.io_read, redraw or data_same) + Mv::l(disks_width)
-							+ Mv::d(1) + safeVal(io_graphs, mount + "_write")(disk.io_write, redraw or data_same)
+						out += Mv::to(y+1+cy, x+1+cx) + io_graphs.at(mount + "_read")(disk.io_read, redraw or data_same) + Mv::l(disks_width)
+							+ Mv::d(1) + io_graphs.at(mount + "_write")(disk.io_write, redraw or data_same)
 							+ Mv::to(y+1+cy, x+1+cx) + human_read + Mv::to(y+cy + disks_io_h, x+1+cx) + human_write;
 						cy += disks_io_h;
 					}
@@ -1320,18 +1320,18 @@ namespace Mem {
 					if (++cy > height - 3) break;
 					if (show_io_stat and io_graphs.contains(mount + "_activity")) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " IO% " : " IO   " + Mv::l(2)) + Theme::c("inactive_fg") + graph_bg * (disks_width - 6) + Theme::g("available").at(clamp(disk.io_activity.back(), 50ll, 100ll))
-							+ Mv::l(disks_width - 6) + safeVal(io_graphs, mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
+							+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 						if (not big_disk) out += Mv::to(y+1+cy, x+cx+1) + Theme::c("main_fg") + human_io;
 						if (++cy > height - 3) break;
 					}
 
 					out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Used:" + rjust(to_string(disk.used_percent) + '%', 4) : "U") + ' '
-						+ safeVal(disk_meters_used, mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 5));
+						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 5));
 					if (++cy > height - 3) break;
 
 					if (cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
 						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
-						+ safeVal(disk_meters_free, mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
+						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
 						cy++;
 						if (cmp_less_equal(disks.size() * 4 + (show_io_stat ? disk_ios : 0), height - 1)) cy++;
 					}
@@ -1420,7 +1420,7 @@ namespace Net {
 		//? Graphs and stats
 		int cy = 0;
 		for (const string dir : {"download", "upload"}) {
-			out += Mv::to(y+1 + (dir == "upload" ? u_graph_height : 0), x + 1) + safeVal(graphs, dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
+			out += Mv::to(y+1 + (dir == "upload" ? u_graph_height : 0), x + 1) + graphs.at(dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
 				+ Mv::to(y+1 + (dir == "upload" ? height - 3: 0), x + 1) + Fx::ub + Theme::c("graph_text")
 				+ floating_humanizer((dir == "upload" ? up_max : down_max), true);
 			const string speed = floating_humanizer(safeVal(net.stat, dir).speed, false, 0, false, true);
@@ -1891,7 +1891,7 @@ namespace Proc {
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
-				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + safeVal(p_graphs, p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
+				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
 		}

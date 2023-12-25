@@ -339,7 +339,7 @@ namespace Tools {
 
 	template <typename K, typename T>
 #ifdef BTOP_DEBUG
-	T safeVal(const std::unordered_map<K, T>& map, const K& key, T fallback = T(), std::source_location loc = std::source_location::current()) {
+	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
 		if (map.contains(key)) {
 			return map.at(key);
 		} else {
@@ -348,7 +348,7 @@ namespace Tools {
 		}
 	};
 #else
-	T safeVal(const std::unordered_map<K, T>& map, const K& key, T fallback = T()) {
+	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
 		if (map.contains(key)) {
 			return map.at(key);
 		} else {
@@ -360,7 +360,7 @@ namespace Tools {
 
 	template <typename T>
 #ifdef BTOP_DEBUG
-	T safeVal(const std::vector<T>& vec, const size_t& index, T fallback = T(), std::source_location loc = std::source_location::current()) {
+	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
 		if (index < vec.size()) {
 			return vec.at(index);
 		} else {
@@ -369,7 +369,7 @@ namespace Tools {
 		}
 	};
 #else
-	T safeVal(const std::vector<T>& vec, const size_t& index, T fallback = T()) {
+	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
 		if (index < vec.size()) {
 			return vec.at(index);
 		} else {
