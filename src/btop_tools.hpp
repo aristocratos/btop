@@ -31,6 +31,10 @@ tab-size = 4
 #include <vector>
 #include <pthread.h>
 #include <limits.h>
+#include <unordered_map>
+#ifdef BTOP_DEBUG
+#include <source_location>
+#endif
 #ifndef HOST_NAME_MAX
 	#ifdef __APPLE__
 		#define HOST_NAME_MAX 255
@@ -144,6 +148,35 @@ namespace Term {
 
 	//* Restore terminal options
 	void restore();
+}
+
+//* Simple logging implementation
+namespace Logger {
+	const vector<string> log_levels = {
+		"DISABLED",
+		"ERROR",
+		"WARNING",
+		"INFO",
+		"DEBUG",
+	};
+	extern std::filesystem::path logfile;
+
+	enum Level : size_t {
+		DISABLED = 0,
+		ERROR = 1,
+		WARNING = 2,
+		INFO = 3,
+		DEBUG = 4,
+	};
+
+	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
+	void set(const string& level);
+
+	void log_write(const Level level, const string& msg);
+	inline void error(const string msg) { log_write(ERROR, msg); }
+	inline void warning(const string msg) { log_write(WARNING, msg); }
+	inline void info(const string msg) { log_write(INFO, msg); }
+	inline void debug(const string msg) { log_write(DEBUG, msg); }
 }
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -304,6 +337,50 @@ namespace Tools {
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
 
+	template <typename K, typename T>
+#ifdef BTOP_DEBUG
+	T safeVal(const std::unordered_map<K, T>& map, const K& key, T fallback = T(), std::source_location loc = std::source_location::current()) {
+		if (map.contains(key)) {
+			return map.at(key);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
+			return fallback;
+		}
+	};
+#else
+	T safeVal(const std::unordered_map<K, T>& map, const K& key, T fallback = T()) {
+		if (map.contains(key)) {
+			return map.at(key);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
+			return fallback;
+		}
+	};
+#endif
+
+	template <typename T>
+#ifdef BTOP_DEBUG
+	T safeVal(const std::vector<T>& vec, const size_t& index, T fallback = T(), std::source_location loc = std::source_location::current()) {
+		if (index < vec.size()) {
+			return vec.at(index);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
+			return fallback;
+		}
+	};
+#else
+	T safeVal(const std::vector<T>& vec, const size_t& index, T fallback = T()) {
+		if (index < vec.size()) {
+			return vec.at(index);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
+			return fallback;
+		}
+	};
+#endif
+
+
+
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
 
@@ -340,35 +417,6 @@ namespace Tools {
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
-}
-
-//* Simple logging implementation
-namespace Logger {
-	const vector<string> log_levels = {
-		"DISABLED",
-		"ERROR",
-		"WARNING",
-		"INFO",
-		"DEBUG",
-	};
-	extern std::filesystem::path logfile;
-
-	enum Level : size_t {
-		DISABLED = 0,
-		ERROR = 1,
-		WARNING = 2,
-		INFO = 3,
-		DEBUG = 4,
-	};
-
-	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const string& level);
-
-	void log_write(const Level level, const string& msg);
-	inline void error(const string msg) { log_write(ERROR, msg); }
-	inline void warning(const string msg) { log_write(WARNING, msg); }
-	inline void info(const string msg) { log_write(INFO, msg); }
-	inline void debug(const string msg) { log_write(DEBUG, msg); }
 }
 
 namespace Tools {

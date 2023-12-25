@@ -61,6 +61,10 @@ CLANG_WORKS = false
 GCC_WORKS = false
 MIN_CLANG_VERSION = 16
 
+ifeq ($(DEBUG),true)
+	override ADDFLAGS += -DBTOP_DEBUG
+endif
+
 #? Supported is Clang 16.0.0 and later
 ifeq ($(CXX_IS_CLANG),true)
 	ifeq ($(shell $(CXX) --version | grep Apple >/dev/null 2>&1; echo $$?),0)
@@ -279,13 +283,13 @@ directories:
 clean:
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt objects...\033[0m\n"
 	@rm -rf $(BUILDDIR)
-	@cmake --build lib/rocm_smi_lib/build --target clean &> /dev/null || true
+	@test -e lib/rocm_smi_lib/build && cmake --build lib/rocm_smi_lib/build --target clean &> /dev/null || true
 
 #? Clean Objects and Binaries
 distclean: clean
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt binaries...\033[0m\n"
 	@rm -rf $(TARGETDIR)
-	@rm -rf lib/rocm_smi_lib/build
+	@test -e lib/rocm_smi_lib/build && rm -rf lib/rocm_smi_lib/build || true
 
 install:
 	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\n"
