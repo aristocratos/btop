@@ -45,6 +45,7 @@ tab-size = 4
 #include <netinet/in.h> // for inet_ntop
 #include <unistd.h>
 #include <stdexcept>
+#include <utility>
 
 #include <cmath>
 #include <fstream>
@@ -986,7 +987,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
