@@ -26,10 +26,9 @@ tab-size = 4
 #include <tuple>
 #include <vector>
 #include <ifaddrs.h>
-#include <robin_hood.h>
+#include <unordered_map>
 #include <unistd.h>
 
-using robin_hood::unordered_flat_map;
 using std::array;
 using std::atomic;
 using std::deque;
@@ -98,7 +97,7 @@ namespace Gpu {
 	extern vector<int> gpu_b_height_offsets;
 	extern long long gpu_pwr_total_max;
 
-	extern unordered_flat_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
+	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
   const array mem_names { "used"s, "free"s };
 
@@ -124,7 +123,7 @@ namespace Gpu {
 
 	//* Per-device container for GPU info
 	struct gpu_info {
-		unordered_flat_map<string, deque<long long>> gpu_percent = {
+		std::unordered_map<string, deque<long long>> gpu_percent = {
 			{"gpu-totals", {}},
 			{"gpu-vram-totals", {}},
 			{"gpu-pwr-totals", {}},
@@ -181,7 +180,7 @@ namespace Cpu {
 	extern tuple<int, long, string> current_bat;
 
 	struct cpu_info {
-		unordered_flat_map<string, deque<long long>> cpu_percent = {
+		std::unordered_map<string, deque<long long>> cpu_percent = {
 			{"total", {}},
 			{"user", {}},
 			{"nice", {}},
@@ -207,8 +206,8 @@ namespace Cpu {
     string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpu, bool force_redraw = false, bool data_same = false);
 
 	//* Parse /proc/cpu info for mapping of core ids
-	auto get_core_mapping() -> unordered_flat_map<int, int>;
-	extern unordered_flat_map<int, int> core_mapping;
+	auto get_core_mapping() -> std::unordered_map<int, int>;
+	extern std::unordered_map<int, int> core_mapping;
 
 	auto get_cpuHz() -> string;
 
@@ -242,13 +241,13 @@ namespace Mem {
 	};
 
 	struct mem_info {
-		unordered_flat_map<string, uint64_t> stats =
+		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
-		unordered_flat_map<string, deque<long long>> percent =
+		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
-		unordered_flat_map<string, disk_info> disks;
+		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
 
@@ -270,7 +269,7 @@ namespace Net {
 	extern string selected_iface;
 	extern vector<string> interfaces;
 	extern bool rescale;
-	extern unordered_flat_map<string, uint64_t> graph_max;
+	extern std::unordered_map<string, uint64_t> graph_max;
 
 	struct net_stat {
 		uint64_t speed{};       // defaults to 0
@@ -282,14 +281,14 @@ namespace Net {
 	};
 
 	struct net_info {
-		unordered_flat_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
-		unordered_flat_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
+		std::unordered_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
+		std::unordered_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
 		string ipv4{};      // defaults to ""
 		string ipv6{};      // defaults to ""
 		bool connected{};   // defaults to false
 	};
 
-	extern unordered_flat_map<string, net_info> current_net;
+	extern std::unordered_map<string, net_info> current_net;
 
 	//* Collect net upload/download stats
 	auto collect(bool no_update=false) -> net_info&;
@@ -322,7 +321,7 @@ namespace Proc {
 	};
 
 	//? Translation from process state char to explanative string
-	const unordered_flat_map<char, string> proc_states = {
+	const std::unordered_map<char, string> proc_states = {
 		{'R', "Running"},
 		{'S', "Sleeping"},
 		{'D', "Waiting"},

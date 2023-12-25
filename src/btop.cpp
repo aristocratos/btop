@@ -32,6 +32,7 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#include <utility>
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
 	#include <mach-o/dyld.h>
@@ -416,7 +417,7 @@ namespace Runner {
 	};
 
 	string debug_bg;
-	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
+	std::unordered_map<string, array<uint64_t, 2>> debug_times;
 
 	class MyNumPunct : public std::numpunct<char>
 	{
