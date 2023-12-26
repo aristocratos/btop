@@ -17,7 +17,8 @@ tab-size = 4
 */
 
 #include <cstdlib>
-#include <robin_hood.h>
+#include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -31,6 +32,8 @@ tab-size = 4
 #include <filesystem>
 #include <future>
 #include <dlfcn.h>
+#include <unordered_map>
+#include <utility>
 
 #if defined(RSMI_STATIC)
 	#include <rocm_smi/rocm_smi.h>
@@ -94,10 +97,10 @@ namespace Cpu {
 		int64_t crit{}; // defaults to 0
 	};
 
-	unordered_flat_map<string, Sensor> found_sensors;
+	std::unordered_map<string, Sensor> found_sensors;
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	std::unordered_map<int, int> core_mapping;
 }
 
 namespace Gpu {
@@ -298,7 +301,7 @@ namespace Cpu {
 		"irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
 	};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	std::unordered_map<string, long long> cpu_old = {
 			{"totals", 0},
 			{"idles", 0},
 			{"user", 0},
@@ -595,8 +598,8 @@ namespace Cpu {
 		return cpuhz;
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> std::unordered_map<int, int> {
+		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		//? Try to get core mapping from /proc/cpuinfo
@@ -670,7 +673,7 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, float, long, string> {
 		if (not has_battery) return {0, 0, 0, ""};
 		static string auto_sel;
-		static unordered_flat_map<string, battery> batteries;
+		static std::unordered_map<string, battery> batteries;
 
 		//? Get paths to needed files and check for valid values on first run
 		if (batteries.empty() and has_battery) {
@@ -998,10 +1001,27 @@ namespace Gpu {
 				return false;
 			}
 
+			//? Try possible library names for libnvidia-ml.so
+			const array libNvAlts = {
+				"libnvidia-ml.so",
+				"libnvidia-ml.so.1",
+			};
+
+			for (const auto& l : libNvAlts) {
+				nvml_dl_handle = dlopen(l, RTLD_LAZY);
+				if (nvml_dl_handle != nullptr) {
+					break;
+				}
+			}
+ 			if (!nvml_dl_handle) {
+				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: "s + dlerror());
+ 				return false;
+ 			}
+
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("NVML: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
@@ -1257,19 +1277,31 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 		#if !defined(RSMI_STATIC)
-			rsmi_dl_handle = dlopen("/opt/rocm/lib/librocm_smi64.so", RTLD_LAZY); // first try /lib and /usr/lib, then /opt/rocm/lib if that fails
-			if (dlerror() != NULL) {
-				rsmi_dl_handle = dlopen("librocm_smi64.so", RTLD_LAZY);
-			}
+
+			//? Try possible library paths and names for librocm_smi64.so
+			const array libRocAlts = {
+				"/opt/rocm/lib/librocm_smi64.so",
+				"librocm_smi64.so",
+				"librocm_smi64.so.5", // fedora
+				"librocm_smi64.so.1.0", // debian
+			};
+
+			for (const auto& l : libRocAlts) {
+				rsmi_dl_handle = dlopen(l, RTLD_LAZY);
+				if (rsmi_dl_handle != nullptr) {
+					break;
+				}
+ 			}
+
 			if (!rsmi_dl_handle) {
-				Logger::debug(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
+				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: "s + dlerror());
 				return false;
 			}
 
 			auto load_rsmi_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(rsmi_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("ROCm SMI: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
@@ -1659,7 +1691,7 @@ namespace Mem {
 				auto only_physical = Config::getB("only_physical");
 				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
-				static unordered_flat_map<string, future<pair<disk_info, int>>> disks_stats_promises;
+				static std::unordered_map<string, future<pair<disk_info, int>>> disks_stats_promises;
 				ifstream diskread;
 
 				vector<string> filter;
@@ -2094,13 +2126,13 @@ namespace Mem {
 }
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	std::unordered_map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors{}; // defaults to 0
-	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
-	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
+	std::unordered_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
+	std::unordered_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
 	bool rescale{true};
 	uint64_t timestamp{}; // defaults to 0
 
@@ -2239,7 +2271,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -2309,7 +2340,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev{}; // defaults to false
@@ -2324,7 +2355,7 @@ namespace Proc {
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
-	static robin_hood::unordered_set<size_t> kernels_procs = {KTHREADD};
+	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
