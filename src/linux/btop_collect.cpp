@@ -955,10 +955,27 @@ namespace Gpu {
 				return false;
 			}
 
+			//? Try possible library names for libnvidia-ml.so
+			const array libNvAlts = {
+				"libnvidia-ml.so",
+				"libnvidia-ml.so.1",
+			};
+
+			for (const auto& l : libNvAlts) {
+				nvml_dl_handle = dlopen(l, RTLD_LAZY);
+				if (nvml_dl_handle != nullptr) {
+					break;
+				}
+			}
+ 			if (!nvml_dl_handle) {
+				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: "s + dlerror());
+ 				return false;
+ 			}
+
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("NVML: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
@@ -1214,19 +1231,31 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 		#if !defined(RSMI_STATIC)
-			rsmi_dl_handle = dlopen("/opt/rocm/lib/librocm_smi64.so", RTLD_LAZY); // first try /lib and /usr/lib, then /opt/rocm/lib if that fails
-			if (dlerror() != NULL) {
-				rsmi_dl_handle = dlopen("librocm_smi64.so", RTLD_LAZY);
-			}
+
+			//? Try possible library paths and names for librocm_smi64.so
+			const array libRocAlts = {
+				"/opt/rocm/lib/librocm_smi64.so",
+				"librocm_smi64.so",
+				"librocm_smi64.so.5", // fedora
+				"librocm_smi64.so.1.0", // debian
+			};
+
+			for (const auto& l : libRocAlts) {
+				rsmi_dl_handle = dlopen(l, RTLD_LAZY);
+				if (rsmi_dl_handle != nullptr) {
+					break;
+				}
+ 			}
+
 			if (!rsmi_dl_handle) {
-				Logger::debug(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
+				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: "s + dlerror());
 				return false;
 			}
 
 			auto load_rsmi_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(rsmi_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("ROCm SMI: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
