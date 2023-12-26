@@ -364,11 +364,11 @@ Also needs a UTF8 locale and a font that covers:
 ### With Make
 </summary>
 
-1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**      
+1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
    ```bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
-   ```   
+   ```
 
 2. **Clone repository**
 
@@ -391,17 +391,18 @@ Also needs a UTF8 locale and a font that covers:
    | `STATIC=true`                   | For static compilation                                                  |
    | `QUIET=true`                    | For less verbose output                                                 |
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
 
    Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
    Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
 
-4. **Install**   
+4. **Install**
 
    ```bash
    sudo make install
@@ -411,7 +412,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-5. **(Optional) Set suid bit to make btop always run as root (or other user)**   
+5. **(Optional) Set suid bit to make btop always run as root (or other user)**
 
    ```bash
    sudo make setuid
@@ -561,13 +562,14 @@ Also needs a UTF8 locale and a font that covers:
    | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
    | `QUIET=true`                    | For less verbose output                                                 |
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |   
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
 
-   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.   
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
-4. **Install**   
+4. **Install**
 
    ```bash
    sudo gmake install
@@ -577,7 +579,7 @@ Also needs a UTF8 locale and a font that covers:
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-5. **(Recommended) Set suid bit to make btop always run as root (or other user)**   
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
 
    ```bash
    sudo gmake setuid
@@ -726,18 +728,19 @@ Also needs a UTF8 locale and a font that covers:
    | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
    | `QUIET=true`                    | For less verbose output                                                 |
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |   
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |   
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
 
-   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system. 
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
 4. **Install**
 
    ```bash
    sudo gmake install
    ```
-   
+
    Append `PREFIX=/target/dir` to set target, default: `/usr/local`
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
@@ -747,7 +750,7 @@ Also needs a UTF8 locale and a font that covers:
    ```bash
    sudo gmake setuid
    ```
-   
+
    No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
 
    Run after make install and use same PREFIX if any was used at install.
