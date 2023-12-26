@@ -948,13 +948,6 @@ namespace Gpu {
 		bool init() {
 			if (initialized) return false;
 
-			//? Dynamic loading & linking
-			nvml_dl_handle = dlopen("libnvidia-ml.so", RTLD_LAZY);
-			if (!nvml_dl_handle) {
-				Logger::info(std::string("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: ") + dlerror());
-				return false;
-			}
-
 			//? Try possible library names for libnvidia-ml.so
 			const array libNvAlts = {
 				"libnvidia-ml.so",
