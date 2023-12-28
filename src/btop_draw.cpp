@@ -1799,7 +1799,7 @@ namespace Proc {
 					p_counters[p.pid] = 0;
 				}
 				else if (p.cpu_p < 0.1 and ++p_counters[p.pid] >= 10) {
-					p_graphs.erase(p.pid);
+					if (p_graphs.contains(p.pid)) p_graphs.erase(p.pid);
 					p_counters.erase(p.pid);
 				}
 				else
@@ -1927,22 +1927,18 @@ namespace Proc {
 		//? Clear out left over graphs from dead processes at a regular interval
 		if (not data_same and ++counter >= 100) {
 			counter = 0;
-			for (auto element = p_graphs.begin(); element != p_graphs.end();) {
-				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
-					element = p_graphs.erase(element);
-					p_counters.erase(element->first);
-				}
-				else
-					++element;
-			}
 
-			for (auto element = p_wide_cmd.begin(); element != p_wide_cmd.end();) {
-				if (rng::find(plist, element->first, &proc_info::pid) == plist.end()) {
-					element = p_wide_cmd.erase(element);
-				}
-				else
-					++element;
-			}
+			std::erase_if(p_graphs, [&](const auto& pair) {
+				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			});
+
+			std::erase_if(p_counters, [&](const auto& pair) {
+				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			});
+
+			std::erase_if(p_wide_cmd, [&](const auto& pair) {
+				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			});
 		}
 
 		if (selected == 0 and selected_pid != 0) {
