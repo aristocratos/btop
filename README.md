@@ -33,6 +33,7 @@
 * [Compilation Linux](#compilation-linux)
 * [Compilation macOS](#compilation-macos-osx)
 * [Compilation FreeBSD](#compilation-freebsd)
+* [Compilation OpenBSD](#compilation-openbsd)
 * [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
@@ -864,6 +865,100 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    cmake --build build -t clean
+   ```
+
+</details>
+
+## Compilation OpenBSD
+
+   Requires at least GCC 10.
+
+   Note that GNU make (`gmake`) is required to compile on OpenBSD.
+
+<details>
+<summary>
+
+### With gmake
+</summary>
+
+1. **Install dependencies**
+
+   ```bash
+   pkg_add gmake gcc%11 g++%11 coreutils git
+   ```
+
+2. **Clone repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   ```bash
+   gmake CXX=eg++
+   ```
+
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+4. **Install**
+
+   ```bash
+   sudo gmake install
+   ```
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   ```bash
+   sudo gmake setuid
+   ```
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+* **Uninstall**
+
+   ```bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
    ```
 
 </details>
