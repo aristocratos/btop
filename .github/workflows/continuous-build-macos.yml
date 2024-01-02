@@ -11,6 +11,7 @@ on:
       - 'src/**'
       - '!src/linux/**'
       - '!src/freebsd/**'
+      - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build-macos.yml'
@@ -21,6 +22,7 @@ on:
       - 'src/**'
       - '!src/linux/**'
       - '!src/freebsd/**'
+      - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build-macos.yml'
@@ -44,18 +46,18 @@ jobs:
         with:
           name: btop-x86_64-macos11-BigSur
           path: 'bin/*'
-      
+
   build-macos12:
     runs-on: macos-12
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable            
+          xcode-version: latest-stable
 
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-      
+
       - name: Compile
         run: |
           make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
