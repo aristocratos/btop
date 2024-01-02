@@ -28,7 +28,7 @@ on:
       - '.github/workflows/continuous-build-openbsd.yml'
 
 jobs:
-  build-freebsd:
+  build-openbsd:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
