@@ -51,9 +51,11 @@ bin
 btop
 .*/
 
+# Optional libraries
+lib/rocm_smi_lib
 
-#do not ignore .github directory
-!.github
+# Don't ignore .github directory
+!.github/
 
 # Ignore files created by Qt Creator
 *.config
@@ -64,3 +66,19 @@ btop
 *.cxxflags
 *.files
 *.includes
+
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# CLion
+cmake-build-*

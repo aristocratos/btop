@@ -58,6 +58,7 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+#include <utility>
 
 #include "../btop_config.hpp"
 #include "../btop_shared.hpp"
@@ -74,7 +75,7 @@ using namespace Tools;
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<string> available_fields = {"total"};
+	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	bool got_sensors = false, cpu_temp_only = false;
@@ -98,7 +99,7 @@ namespace Cpu {
 
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	std::unordered_map<int, int> core_mapping;
 }  // namespace Cpu
 
 namespace Mem {
@@ -169,17 +170,23 @@ namespace Shared {
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Logger::debug("Init -> Cpu::collect()");
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
+		Logger::debug("Init -> Cpu::get_cpuName()");
 		Cpu::cpuName = Cpu::get_cpuName();
+		Logger::debug("Init -> Cpu::get_sensors()");
 		Cpu::got_sensors = Cpu::get_sensors();
+		Logger::debug("Init -> Cpu::get_core_mapping()");
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
+		Logger::debug("Init -> Mem::collect()");
 		Mem::collect();
+		Logger::debug("Init -> Mem::get_zpools()");
 		Mem::get_zpools();
 	}
 
@@ -204,7 +211,7 @@ namespace Cpu {
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	std::unordered_map<string, long long> cpu_old = {
 		{"totals", 0},
 		{"idles", 0},
 		{"user", 0},
@@ -323,8 +330,8 @@ namespace Cpu {
 		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> std::unordered_map<int, int> {
+		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		for (long i = 0; i < Shared::coreCount; i++) {
@@ -557,7 +564,7 @@ namespace Mem {
 		}
 	}
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
 		// this bit is for 'regular' mounts
 		static struct statinfo cur;
 		long double etime = 0;
@@ -572,7 +579,7 @@ namespace Mem {
 				auto d = cur.dinfo->devices[i];
 				string devStatName = "/dev/" + string(d.device_name) + std::to_string(d.unit_number);
 				for (auto& [ignored, disk] : disks) { // find matching mountpoints - could be multiple as d.device_name is only ada (and d.unit_number is the device number), while the disk.dev is like /dev/ada0s1
-					if (disk.dev.string().rfind(devStatName, 0) == 0) {
+					if (disk.dev.string().rfind(devStatName, 0) == 0 and mapping.contains(disk.dev)) {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
 						string mountpoint = mapping.at(disk.dev);
@@ -581,7 +588,6 @@ namespace Mem {
 				}
 
 			}
-			Logger::debug("");
 		}
 
 		// this code is for ZFS mounts
@@ -691,7 +697,7 @@ namespace Mem {
 		}
 
 		if (show_disks) {
-			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			std::unordered_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
@@ -807,13 +813,13 @@ namespace Mem {
 }  // namespace Mem
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	std::unordered_map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors = 0;
-	unordered_flat_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
-	unordered_flat_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
@@ -892,7 +898,7 @@ namespace Net {
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
-			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
+			std::unordered_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST, 0};
 			size_t len;
 			if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0) {
@@ -966,7 +972,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -1037,7 +1042,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev = false;

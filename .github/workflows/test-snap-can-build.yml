@@ -1,0 +1,42 @@
+name: 🧪 Test snap can be built on x86_64
+
+on:
+  workflow_dispatch:
+  push:
+   branches: [ main ]
+   tags-ignore:
+      - '*.*'     
+   paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/test-snap-can-build.yml'
+  pull_request:
+   branches: [ main ]
+   paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/test-snap-can-build.yml'
+ 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x]
+        
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: snapcore/action-build@v1
+        id: build
+
+      - uses: diddlesnaps/snapcraft-review-action@v1
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          isClassic: 'false'

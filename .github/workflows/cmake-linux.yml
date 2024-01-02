@@ -1,0 +1,40 @@
+name: Linux CMake
+
+on:
+  push:
+    branches: main
+    tags-ignore: '*.*'
+    paths:
+      - '.github/workflows/cmake-linux.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/linux/*pp'
+  pull_request:
+    branches: main
+    paths:
+      - '.github/workflows/cmake-linux.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/linux/*pp'
+
+jobs:
+  cmake_build_on_linux:
+    runs-on: ubuntu-latest
+    container: alpine:edge
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: apk add --no-cache --update clang cmake lld ninja
+
+      - name: Configure
+        run: CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build -G Ninja -DBTOP_STATIC=ON
+
+      - name: Compile
+        run: cmake --build build --verbose
+

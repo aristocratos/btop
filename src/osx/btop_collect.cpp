@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <Availability.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
@@ -44,6 +45,7 @@ tab-size = 4
 #include <netinet/in.h> // for inet_ntop
 #include <unistd.h>
 #include <stdexcept>
+#include <utility>
 
 #include <cmath>
 #include <fstream>
@@ -56,7 +58,9 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 #include "sensors.hpp"
+#endif
 #include "smc.hpp"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
@@ -70,7 +74,7 @@ using namespace Tools;
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<string> available_fields = {"total"};
+	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	bool got_sensors = false, cpu_temp_only = false;
@@ -95,7 +99,7 @@ namespace Cpu {
 
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	std::unordered_map<int, int> core_mapping;
 }  // namespace Cpu
 
 namespace Mem {
@@ -191,7 +195,7 @@ namespace Cpu {
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	std::unordered_map<string, long long> cpu_old = {
 		{"totals", 0},
 		{"idles", 0},
 		{"user", 0},
@@ -236,7 +240,7 @@ namespace Cpu {
 				name += n + ' ';
 			}
 			name.pop_back();
-				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
+				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Apple", "Core"}) {
 					name = s_replace(name, replace, "");
 					name = s_replace(name, "  ", " ");
 				}
@@ -250,6 +254,7 @@ namespace Cpu {
 		Logger::debug("get_sensors(): show_coretemp=" + std::to_string(Config::getB("show_coretemp")) + " check_temp=" + std::to_string(Config::getB("check_temp")));
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			ThermalSensors sensors;
 			if (sensors.getSensors() > 0) {
 				Logger::debug("M1 sensors found");
@@ -257,6 +262,7 @@ namespace Cpu {
 				cpu_temp_only = true;
 				macM1 = true;
 			} else {
+#endif
 				// try SMC (intel)
 				Logger::debug("checking intel");
 				SMCConnection smcCon;
@@ -281,7 +287,9 @@ namespace Cpu {
 					// ignore, we don't have temp
 					got_sensors = false;
 				}
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			}
+#endif
 		}
 		return got_sensors;
 	}
@@ -290,11 +298,12 @@ namespace Cpu {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
 			if (macM1) {
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
 				current_cpu.temp.at(0).push_back(sensors.getSensors());
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
-
+#endif
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
@@ -329,8 +338,8 @@ namespace Cpu {
 		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> std::unordered_map<int, int> {
+		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		natural_t cpu_count;
@@ -591,7 +600,7 @@ namespace Mem {
 			io_object_t &object;
 	};
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
@@ -708,7 +717,7 @@ namespace Mem {
 		}
 
 		if (show_disks) {
-			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			std::unordered_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
@@ -821,13 +830,13 @@ namespace Mem {
 }  // namespace Mem
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	std::unordered_map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors = 0;
-	unordered_flat_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
-	unordered_flat_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
@@ -904,7 +913,7 @@ namespace Net {
 				} // else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
-			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
+			std::unordered_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0};
 			size_t len;
 			if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0) {
@@ -978,7 +987,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -1049,7 +1057,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev = false;

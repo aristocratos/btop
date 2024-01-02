@@ -29,6 +29,7 @@ Any bug that can be solved by just reading the [prerequisites](https://github.co
 
 **Info (please complete the following information):**
  - btop++ version: `btop -v`
+   - If using snap: `snap info btop`
  - Binary: [self compiled or static binary from release]
  - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
@@ -40,7 +41,9 @@ Any bug that can be solved by just reading the [prerequisites](https://github.co
 
 **Additional context**
 
-contents of `~/.config/btop/btop.log`
+Contents of `~/.config/btop/btop.log`
+
+Note: The snap uses: `~/snap/btop/current/.config/btop`
 
 (try running btop with `--debug` flag if btop.log is empty)
 

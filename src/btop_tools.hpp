@@ -31,6 +31,10 @@ tab-size = 4
 #include <vector>
 #include <pthread.h>
 #include <limits.h>
+#include <unordered_map>
+#ifdef BTOP_DEBUG
+#include <source_location>
+#endif
 #ifndef HOST_NAME_MAX
 	#ifdef __APPLE__
 		#define HOST_NAME_MAX 255
@@ -146,10 +150,45 @@ namespace Term {
 	void restore();
 }
 
+//* Simple logging implementation
+namespace Logger {
+	const vector<string> log_levels = {
+		"DISABLED",
+		"ERROR",
+		"WARNING",
+		"INFO",
+		"DEBUG",
+	};
+	extern std::filesystem::path logfile;
+
+	enum Level : size_t {
+		DISABLED = 0,
+		ERROR = 1,
+		WARNING = 2,
+		INFO = 3,
+		DEBUG = 4,
+	};
+
+	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
+	void set(const string& level);
+
+	void log_write(const Level level, const string& msg);
+	inline void error(const string msg) { log_write(ERROR, msg); }
+	inline void warning(const string msg) { log_write(WARNING, msg); }
+	inline void info(const string msg) { log_write(INFO, msg); }
+	inline void debug(const string msg) { log_write(DEBUG, msg); }
+}
+
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Tools {
 	constexpr auto SSmax = std::numeric_limits<std::streamsize>::max();
+
+	class MyNumPunct : public std::numpunct<char> {
+	protected:
+		virtual char do_thousands_sep() const { return '\''; }
+		virtual std::string do_grouping() const { return "\03"; }
+	};
 
 	size_t wide_ulen(const string& str);
 	size_t wide_ulen(const std::wstring& w_str);
@@ -298,6 +337,50 @@ namespace Tools {
 	//* Add std::string operator * : Repeat string <str> <n> number of times
 	std::string operator*(const string& str, int64_t n);
 
+	template <typename K, typename T>
+#ifdef BTOP_DEBUG
+	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
+		if (map.contains(key)) {
+			return map.at(key);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
+			return fallback;
+		}
+	};
+#else
+	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
+		if (map.contains(key)) {
+			return map.at(key);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
+			return fallback;
+		}
+	};
+#endif
+
+	template <typename T>
+#ifdef BTOP_DEBUG
+	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
+		if (index < vec.size()) {
+			return vec.at(index);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
+			return fallback;
+		}
+	};
+#else
+	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
+		if (index < vec.size()) {
+			return vec.at(index);
+		} else {
+			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
+			return fallback;
+		}
+	};
+#endif
+
+
+
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
 
@@ -334,27 +417,40 @@ namespace Tools {
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
-
 }
 
-//* Simple logging implementation
-namespace Logger {
-	const vector<string> log_levels = {
-		"DISABLED",
-		"ERROR",
-		"WARNING",
-		"INFO",
-		"DEBUG",
+namespace Tools {
+	//* Creates a named timer that is started on construct (by default) and reports elapsed time in microseconds to Logger::debug() on destruct if running
+	//* Unless delayed_report is set to false, all reporting is buffered and delayed until DebugTimer is destructed or .force_report() is called
+	//* Usage example: Tools::DebugTimer timer(name:"myTimer", [start:true], [delayed_report:true]) // Create timer and start
+	//* timer.stop(); // Stop timer and report elapsed time
+	//* timer.stop_rename_reset("myTimer2"); // Stop timer, report elapsed time, rename timer, reset and restart
+	class DebugTimer {
+		uint64_t start_time{};
+		uint64_t elapsed_time{};
+		bool running{};
+		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
+		vector<string> report_buffer{};
+	public:
+		string name{};
+		bool delayed_report{};
+		Logger::Level log_level = Logger::DEBUG;
+		DebugTimer() = default;
+		DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		~DebugTimer();
+
+		void start();
+		void stop(bool report = true);
+		void reset(bool restart = true);
+		//* Stops and reports (default), renames timer then resets and restarts (default)
+		void stop_rename_reset(const string& new_name, bool report = true, bool restart = true);
+		void report();
+		void force_report();
+		uint64_t elapsed();
+		bool is_running();
 	};
-	extern std::filesystem::path logfile;
 
-	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const string& level);
-
-	void log_write(const size_t level, const string& msg);
-	inline void error(const string msg) { log_write(1, msg); }
-	inline void warning(const string msg) { log_write(2, msg); }
-	inline void info(const string msg) { log_write(3, msg); }
-	inline void debug(const string msg) { log_write(4, msg); }
 }
+
+
 

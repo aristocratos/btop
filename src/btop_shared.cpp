@@ -18,12 +18,25 @@ tab-size = 4
 
 #include <ranges>
 
+#include "btop_config.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
 namespace rng = std::ranges;
 using namespace Tools;
 
+#ifdef GPU_SUPPORT
+namespace Gpu {
+	vector<string> gpu_names;
+	vector<int> gpu_b_height_offsets;
+	std::unordered_map<string, deque<long long>> shared_gpu_percent = {
+		{"gpu-average", {}},
+		{"gpu-vram-total", {}},
+		{"gpu-pwr-total", {}},
+	};
+	long long gpu_pwr_total_max;
+}
+#endif
 
 namespace Proc {
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
@@ -155,6 +168,12 @@ namespace Proc {
 				cur_proc.threads += p.threads;
 				filter_found++;
 				p.filtered = true;
+			}
+			else if (Config::getB("proc_aggregate")) {
+				cur_proc.cpu_p += p.cpu_p;
+				cur_proc.cpu_c += p.cpu_c;
+				cur_proc.mem += p.mem;
+				cur_proc.threads += p.threads;
 			}
 		}
 		if (collapsed or filtering) {

@@ -1,3 +1,49 @@
+## v1.3.0
+
+* Added Gpu Support | @romner-set | PR #529
+
+* Enable macos clang | @muneebmahmed | PR #666
+
+* Fix Apple Silicon CPUs misprinted | @masiboss | PR #679
+
+* Cmake support for MacOS | @imwints | PR #675
+
+* Elementarish theme: color update according to Elementary palette | @stradicat | PR #660
+
+* Add alternative key codes for Delete, Insert, Home, End | @ivanp7 | PR #659
+
+* Fix scrollbar not clearing sometimes. | @DecklynKern | PR #643
+
+* Add keybind for toggling memory display mode in PROC box | @rahulaggarwal965 | PR #623
+
+* Minor string initialization improvement | @imwints | PR #636
+
+* Made disks statvfs logic asynchronous. | @crestfallnatwork | PR #633
+
+* Fix signal list on non-linux/weird linux platforms | @lvxnull | PR #630
+
+* Add option to accumulate a child's resources in parent in tree-view | @imwints | PR #618
+
+* Add CMake support for Linux | @imwints | PR #589
+
+* Horizon theme | @SidVeld | PR #610
+
+* Fix short conversion of 1000-1023 *iB | @scorpion-26 | #609
+
+* Fix integer overflows in btop_collect.cpp | @dorrellmw | #546
+
+* Support compiling with LLVM | @imwints | #510
+
+* Fix getting zfs pool name with '.' char in freebsd | @jfouquart | #602
+
+* [macos/freebsd] support gcc13 | @joske | #600
+
+* FreeBSD swap info | @rrveex | #560
+
+* Create adwaita.theme | @flipflop133 | #485
+
++ Various fixes by @imwints, @simplepad, @joske, @gwena, @cpalv, @iambeingtracked, @mattico, @NexAdn
+
 ## v1.2.13
 
 * Makefile: VERBOSE=true flag for Makefile to display all compiler commands and fixed so already set CXXFLAGS and LDFLAGS are displayed.
