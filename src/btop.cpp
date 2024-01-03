@@ -832,29 +832,23 @@ int main(int argc, char **argv) {
 	//? Call argument parser if launched with arguments
 	if (argc > 1) argumentParser(argc, argv);
 
-	//? Setup paths for config, log and user themes
-	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (std::getenv(env) != nullptr and access(std::getenv(env), W_OK) != -1) {
-			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
-			break;
-		}
-	}
-	if (Config::conf_dir.empty()) {
-		fmt::println("WARNING: Could not get path user HOME folder.\n"
-				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
-	}
-	else {
-		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			fmt::println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
-					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
-		}
-		else {
+	{
+		const auto config_dir = Config::get_config_dir();
+		if (config_dir.has_value()) {
+			Config::conf_dir = config_dir.value();
 			Config::conf_file = Config::conf_dir / "btop.conf";
 			Logger::logfile = Config::conf_dir / "btop.log";
 			Theme::user_theme_dir = Config::conf_dir / "themes";
-			if (not fs::exists(Theme::user_theme_dir) and not fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
+
+			// If necessary create the user theme directory
+			std::error_code error;
+			if (not fs::exists(Theme::user_theme_dir, error) and not fs::create_directories(Theme::user_theme_dir, error)) {
+				Theme::user_theme_dir.clear();
+				Logger::warning("Failed to create user theme directory: " + error.message());
+			}
 		}
 	}
+
 	//? Try to find global btop theme path relative to binary path
 #ifdef __linux__
 	{ 	std::error_code ec;
