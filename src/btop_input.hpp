@@ -29,9 +29,9 @@ using std::atomic;
 using std::deque;
 using std::string;
 
-/* The input functions relies on the following std::cin options being set:
-	cin.sync_with_stdio(false);
-	cin.tie(nullptr);
+/* The input functions rely on the following termios parameters being set:
+	Non-canonical mode (c_lflags & ~(ICANON))
+	VMIN and VTIME (c_cc) set to 0
 	These will automatically be set when running Term::init() from btop_tools.cpp
 */
 
@@ -45,7 +45,9 @@ namespace Input {
 	//? line, col, height, width
 	extern std::unordered_map<string, Mouse_loc> mouse_mappings;
 
-	extern atomic<bool> interrupt;
+	//* Signal mask used during polling read
+	extern sigset_t signal_mask;
+
 	extern atomic<bool> polling;
 
 	//* Mouse column and line position
@@ -55,13 +57,16 @@ namespace Input {
 	extern deque<string> history;
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
-	bool poll(int timeout=0);
+	bool poll(const uint64_t timeout=0);
 
 	//* Get a key or mouse action from input
 	string get();
 
 	//* Wait until input is available and return key
 	string wait();
+
+	//* Interrupt poll/wait
+	void interrupt();
 
 	//* Clears last entered key
 	void clear();
