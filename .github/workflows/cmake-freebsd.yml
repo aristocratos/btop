@@ -1,0 +1,40 @@
+name: FreeBSD CMake
+
+on:
+  push:
+    branches: main
+    tags-ignore: '*.*'
+    paths:
+      - '.github/workflows/cmake-freebsd.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/freebsd/*pp'
+  pull_request:
+    branches: main
+    paths:
+      - '.github/workflows/cmake-freebsd.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/freebsd/*pp'
+
+jobs:
+  cmake_build_on_freebsd:
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.0'
+          usesh: true
+          prepare: pkg install -y cmake ninja
+          run: |
+            CXX=clang++ cmake -B build -G Ninja -DBTOP_STATIC=ON
+            cmake --build build --verbose
+

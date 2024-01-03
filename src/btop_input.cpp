@@ -23,6 +23,7 @@ tab-size = 4
 #include <mutex>
 #include <signal.h>
 #include <sys/select.h>
+#include <utility>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -38,7 +39,7 @@ namespace rng = std::ranges;
 namespace Input {
 
 	//* Map for translating key codes to readable values
-	const unordered_flat_map<string, string> Key_escapes = {
+	const std::unordered_map<string, string> Key_escapes = {
 		{"\033",	"escape"},
 		{"\n",		"enter"},
 		{" ",		"space"},
@@ -53,9 +54,13 @@ namespace Input {
 		{"[C", 		"right"},
 		{"OC",		"right"},
 		{"[2~",		"insert"},
+		{"[4h",		"insert"},
 		{"[3~",		"delete"},
+		{"[P",		"delete"},
 		{"[H",		"home"},
+		{"[1~",		"home"},
 		{"[F",		"end"},
+		{"[4~",		"end"},
 		{"[5~",		"page_up"},
 		{"[6~",		"page_down"},
 		{"\t",		"tab"},
@@ -77,7 +82,7 @@ namespace Input {
 	sigset_t signal_mask;
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
-	unordered_flat_map<string, Mouse_loc> mouse_mappings;
+	std::unordered_map<string, Mouse_loc> mouse_mappings;
 
 	deque<string> history(50, "");
 	string old_filter;
@@ -222,11 +227,21 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (is_in(key, "1", "2", "3", "4")) {
+				else if (key.size() == 1 and isint(key)) {
+					auto intKey = stoi(key);
+				#ifdef GPU_SUPPORT
+					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
+					if ((intKey == 0 and Gpu::gpu_names.size() < 5) or (intKey >= 5 and std::cmp_less(Gpu::gpu_names.size(), intKey - 4)))
+						return;
+				#else
+				static const array<string, 10> boxes = {"", "cpu", "mem", "net", "proc"};
+					if (intKey == 0 or intKey > 4)
+						return;
+				#endif
 					atomic_wait(Runner::active);
 					Config::current_preset = -1;
-					static const array<string, 4> boxes = {"cpu", "mem", "net", "proc"};
-					Config::toggle_box(boxes.at(std::stoi(key) - 1));
+
+					Config::toggle_box(boxes.at(intKey));
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
@@ -304,6 +319,9 @@ namespace Input {
 
 				else if (key == "c")
 					Config::flip("proc_per_core");
+
+				else if (key == "%")
+					Config::flip("proc_mem_bytes");
 
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);

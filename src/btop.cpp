@@ -32,6 +32,7 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#include <utility>
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
 	#include <mach-o/dyld.h>
@@ -75,7 +76,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.2.13";
+	const string Version = "1.3.0";
 
 	int coreCount;
 	string overlay;
@@ -183,8 +184,11 @@ void term_resize(bool force) {
 		if (force and refreshed) force = false;
 	}
 	else return;
-
-	static const array<string, 4> all_boxes = {"cpu", "mem", "net", "proc"};
+#ifdef GPU_SUPPORT
+	static const array<string, 10> all_boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
+#else
+	static const array<string, 5> all_boxes = {"", "cpu", "mem", "net", "proc"};
+#endif
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
 	Term::refresh();
@@ -222,10 +226,18 @@ void term_resize(bool force) {
 				auto key = Input::get();
 				if (key == "q")
 					clean_quit(0);
-				else if (is_in(key, "1", "2", "3", "4")) {
-					Config::current_preset = -1;
-					Config::toggle_box(all_boxes.at(std::stoi(key) - 1));
-					boxes = Config::getS("shown_boxes");
+				else if (key.size() == 1 and isint(key)) {
+					auto intKey = stoi(key);
+				#ifdef GPU_SUPPORT
+					if ((intKey == 0 and Gpu::gpu_names.size() >= 5) or (intKey >= 5 and std::cmp_greater_equal(Gpu::gpu_names.size(), intKey - 4))) {
+				#else
+					if (intKey > 0 and intKey < 5) {
+				#endif
+						auto box = all_boxes.at(intKey);
+						Config::current_preset = -1;
+						Config::toggle_box(box);
+						boxes = Config::getS("shown_boxes");
+					}
 				}
 			}
 			min_size = Term::get_min_size(boxes);
@@ -243,7 +255,7 @@ void clean_quit(int sig) {
 	Global::quitting = true;
 	Runner::stop();
 	if (Global::_runner_started) {
-	#ifdef __APPLE__
+	#if defined __APPLE__ || defined __OpenBSD__
 		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
@@ -257,6 +269,11 @@ void clean_quit(int sig) {
 		}
 	#endif
 	}
+
+#ifdef GPU_SUPPORT
+	Gpu::Nvml::shutdown();
+	Gpu::Rsmi::shutdown();
+#endif
 
 	Config::write();
 
@@ -274,7 +291,7 @@ void clean_quit(int sig) {
 
 	const auto excode = (sig != -1 ? sig : 0);
 
-#ifdef __APPLE__
+#if defined __APPLE__ || defined __OpenBSD__
 	_Exit(excode);
 #else
 	quick_exit(excode);
@@ -391,7 +408,9 @@ namespace Runner {
 
 	enum debug_actions {
 		collect_begin,
+		collect_done,
 		draw_begin,
+		draw_begin_only,
 		draw_done
 	};
 
@@ -401,7 +420,7 @@ namespace Runner {
 	};
 
 	string debug_bg;
-	unordered_flat_map<string, array<uint64_t, 2>> debug_times;
+	std::unordered_map<string, array<uint64_t, 2>> debug_times;
 
 	class MyNumPunct : public std::numpunct<char>
 	{
@@ -426,6 +445,13 @@ namespace Runner {
 		switch (action) {
 			case collect_begin:
 				debug_times[name].at(collect) = time_micros();
+				return;
+			case collect_done:
+				debug_times[name].at(collect) = time_micros() - debug_times[name].at(collect);
+				debug_times["total"].at(collect) += debug_times[name].at(collect);
+				return;
+			case draw_begin_only:
+				debug_times[name].at(draw) = time_micros();
 				return;
 			case draw_begin:
 				debug_times[name].at(draw) = time_micros();
@@ -483,10 +509,14 @@ namespace Runner {
 
 			//! DEBUG stats
 			if (Global::debug) {
-				if (debug_bg.empty() or redraw)
-					Runner::debug_bg = Draw::createBox(2, 2, 33, 8, "", true, "μs");
-
-
+                if (debug_bg.empty() or redraw)
+                    Runner::debug_bg = Draw::createBox(2, 2, 33,
+					#ifdef GPU_SUPPORT
+						9,
+					#else
+						8,
+					#endif
+					"", true, "μs");
 
 				debug_times.clear();
 				debug_times["total"] = {0, 0};
@@ -496,6 +526,29 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
+			#ifdef GPU_SUPPORT
+				//? GPU data collection
+				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
+					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
+					or (Gpu::shown == 0 and Config::getS("show_gpu_info") != "Off")
+				);
+
+				vector<unsigned int> gpu_panels = {};
+				for (auto& box : conf.boxes)
+					if (box.starts_with("gpu"))
+						gpu_panels.push_back(box.back()-'0');
+
+				vector<Gpu::gpu_info> gpus;
+				if (gpu_in_cpu_panel or not gpu_panels.empty()) {
+					if (Global::debug) debug_timer("gpu", collect_begin);
+					gpus = Gpu::collect(conf.no_update);
+					if (Global::debug) debug_timer("gpu", collect_done);
+				}
+				auto& gpus_ref = gpus;
+			#else
+				vector<Gpu::gpu_info> gpus_ref{};
+			#endif
+
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
 					try {
@@ -515,7 +568,7 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, conf.force_redraw, conf.no_update);
+						if (not pause_output) output += Cpu::draw(cpu, gpus_ref, conf.force_redraw, conf.no_update);
 
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
@@ -523,7 +576,24 @@ namespace Runner {
 						throw std::runtime_error("Cpu:: -> " + string{e.what()});
 					}
 				}
+			#ifdef GPU_SUPPORT
+				//? GPU
+				if (not gpu_panels.empty() and not gpus_ref.empty()) {
+					try {
+						if (Global::debug) debug_timer("gpu", draw_begin_only);
 
+						//? Draw box
+						if (not pause_output)
+							for (unsigned long i = 0; i < gpu_panels.size(); ++i)
+								output += Gpu::draw(gpus_ref[gpu_panels[i]], i, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("gpu", draw_done);
+					}
+					catch (const std::exception& e) {
+                        throw std::runtime_error("Gpu:: -> " + string{e.what()});
+					}
+				}
+			#endif
 				//? MEM
 				if (v_contains(conf.boxes, "mem")) {
 					try {
@@ -583,6 +653,7 @@ namespace Runner {
 						throw std::runtime_error("Proc:: -> " + string{e.what()});
 					}
 				}
+
 			}
 			catch (const std::exception& e) {
 				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
@@ -613,8 +684,9 @@ namespace Runner {
 						"{mv3}{hiFg}2 {mainFg}| Show MEM box"
 						"{mv4}{hiFg}3 {mainFg}| Show NET box"
 						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
-						"{mv6}{hiFg}esc {mainFg}| Show menu"
-						"{mv7}{hiFg}q {mainFg}| Quit",
+						"{mv6}{hiFg}5-0 {mainFg}| Show GPU boxes"
+						"{mv7}{hiFg}esc {mainFg}| Show menu"
+						"{mv8}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
 						"titleFg"_a = Theme::c("title"), "b"_a = Fx::b, "hiFg"_a = Theme::c("hi_fg"), "mainFg"_a = Theme::c("main_fg"),
 						"mv1"_a = Mv::to(y+6, x),
@@ -623,7 +695,8 @@ namespace Runner {
 						"mv4"_a = Mv::to(y+10, x),
 						"mv5"_a = Mv::to(y+11, x),
 						"mv6"_a = Mv::to(y+12, x-2),
-						"mv7"_a = Mv::to(y+13, x)
+						"mv7"_a = Mv::to(y+13, x-2),
+						"mv8"_a = Mv::to(y+14, x)
 					);
 				}
 				output += empty_bg;
@@ -637,7 +710,11 @@ namespace Runner {
 					"post"_a = Theme::c("main_fg") + Fx::ub
 				);
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
+			#ifdef GPU_SUPPORT
+				for (const string name : {"cpu", "mem", "net", "proc", "gpu", "total"}) {
+			#else
 				for (const string name : {"cpu", "mem", "net", "proc", "total"}) {
+			#endif
 					if (not debug_times.contains(name)) debug_times[name] = {0,0};
 					const auto& [time_collect, time_draw] = debug_times.at(name);
 					if (name == "total") output += Fx::b;
@@ -857,7 +934,7 @@ int main(int argc, char **argv) {
 				catch (...) { found.clear(); }
 			}
 		}
-
+	//
 	#ifdef __APPLE__
 		if (found.empty()) {
 			CFLocaleRef cflocale = CFLocaleCopyCurrent();
@@ -901,7 +978,7 @@ int main(int argc, char **argv) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
-#ifndef __APPLE__
+#if not defined __APPLE__ && not defined __OpenBSD__
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");

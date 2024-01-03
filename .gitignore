@@ -51,6 +51,9 @@ bin
 btop
 .*/
 
+# Optional libraries
+lib/rocm_smi_lib
+
 # Don't ignore .github directory
 !.github/
 

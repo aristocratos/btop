@@ -7,6 +7,7 @@
 ![Linux](https://img.shields.io/badge/-Linux-grey?logo=linux)
 ![macOS](https://img.shields.io/badge/-OSX-black?logo=apple)
 ![FreeBSD](https://img.shields.io/badge/-FreeBSD-red?logo=freebsd)
+![OpenBSD](https://img.shields.io/badge/-OpenBSD-black?logo=openbsd)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
 ![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
 ![latest_release](https://img.shields.io/github/v/tag/aristocratos/btop?label=release)
@@ -17,6 +18,7 @@
 [![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
 [![Continuous Build macOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
 [![Continuous Build FreeBSD](https://github.com/aristocratos/btop/actions/workflows/continuous-build-freebsd.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-freebsd.yml)
+[![Continuous Build OpenBSD](https://github.com/aristocratos/btop/actions/workflows/continuous-build-openbsd.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-openbsd.yml)
 
 ## Index
 
@@ -33,11 +35,33 @@
 * [Compilation Linux](#compilation-linux)
 * [Compilation macOS](#compilation-macos-osx)
 * [Compilation FreeBSD](#compilation-freebsd)
+* [Compilation OpenBSD](#compilation-openbsd)
+* [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
 
 ## News
+
+##### 25 November 2023
+
+GPU monitoring added for Linux!
+
+Compile from git main to try it out.
+
+Use keys `5`, `6`, `7` and `0` to show/hide the gpu monitoring boxes. `5` = Gpu 1, `6` = Gpu 2, etc.
+
+Gpu stats/graphs can also be displayed in the "Cpu box" (not as verbose), see the cpu options menu for info and configuration.
+
+Note that the binaries provided on the release page (when released) and the continuous builds will not have gpu support enabled.
+
+Because the GPU support relies on loading of dynamic gpu libraries, gpu support will not work when also static linking.
+
+See [Compilation Linux](#compilation-linux) for more info on how to compile with gpu monitoring support.
+
+Many thanks to [@romner-set](https://github.com/romner-set) who wrote the vast majority of the implementation for GPU support.
+
+Big update with version bump to 1.3 coming soon.
 
 ##### 28 August 2022
 
@@ -305,21 +329,45 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Compilation Linux
 
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   Requires at least GCC 10 or Clang 16.
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
-<details>
+   ### GPU compatibility
 
+   Btop++ supports NVIDIA and AMD GPUs out of the box on Linux x86_64, provided you have the correct drivers and libraries.
+
+   Compatibility with Intel GPUs using generic DRM calls is planned, as is compatibility for FreeBSD and macOS.
+
+   Gpu support will not work when static linking glibc (or musl, etc.)!
+
+   For x86_64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
+
+   `make GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=false` with CMake)
+
+ * **NVIDIA**
+
+    You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
+
+    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+
+ * **AMD**
+
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+
+    This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
+
+   ```bash
+   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   ```
+
+<details>
 <summary>
 
 ### With Make
-
 </summary>
 
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
-
-   Use gcc-10 g++-10 if gcc-11 isn't available
 
    ```bash
    sudo apt install coreutils sed git build-essential gcc-11 g++-11
@@ -334,50 +382,50 @@ Also needs a UTF8 locale and a font that covers:
 
 3. **Compile**
 
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation.
-
-   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
-
-   If `g++` is linked to an older version of gcc on your system specify the correct version by appending `CXX=g++-10` or `CXX=g++-11`.
-
    ```bash
    make
    ```
 
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation                                                  |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
+   | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+
+   Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+   Notice! If using LDAP Authentication, usernames will show as UID number for LDAP users if compiling statically with glibc.
+
 4. **Install**
-
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
-
-   Notice! Only use "sudo" when installing to a NON user owned directory.
 
    ```bash
    sudo make install
    ```
 
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
 5. **(Optional) Set suid bit to make btop always run as root (or other user)**
+
+   ```bash
+   sudo make setuid
+   ```
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
    Run after make install and use same PREFIX if any was used at install.
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `root`
-
-   ```bash
-   sudo make setuid
-   ```
 
 * **Uninstall**
 
@@ -404,13 +452,10 @@ Also needs a UTF8 locale and a font that covers:
    ```
 
 </details>
-
 <details>
-
 <summary>
 
 ### With CMake (Community maintained)
-
 </summary>
 
 1. **Install build dependencies**
@@ -449,9 +494,11 @@ Also needs a UTF8 locale and a font that covers:
    | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
+   | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
-   To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+   To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
 4. **Install**
 
@@ -478,13 +525,19 @@ Also needs a UTF8 locale and a font that covers:
 
 ## Compilation macOS OSX
 
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
+   Requires at least GCC 10 or Clang 16.
 
-   GCC 12 needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
+   With GCC, version 12 (or better) is needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
    The makefile also needs GNU coreutils and `sed`.
 
    Install and use Homebrew or MacPorts package managers for easy dependency installation
+
+<details>
+<summary>
+
+### With Make
+</summary>
 
 1. **Install dependencies (example for Homebrew)**
 
@@ -498,143 +551,48 @@ Also needs a UTF8 locale and a font that covers:
    git clone https://github.com/aristocratos/btop.git
    cd btop
    ```
-
 3. **Compile**
-
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
    ```bash
    gmake
    ```
 
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
 4. **Install**
-
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
-
-   Notice! Only use "sudo" when installing to a NON user owned directory.
 
    ```bash
    sudo gmake install
    ```
 
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
 5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   ```bash
+   sudo gmake setuid
+   ```
 
    No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
 
    Run after make install and use same PREFIX if any was used at install.
 
    Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
-
-   ```bash
-   sudo gmake setuid
-   ```
-
-* **Uninstall**
-
-   ```bash
-   sudo gmake uninstall
-   ```
-
-* **Remove any object files from source dir**
-
-   ```bash
-   gmake clean
-   ```
-
-* **Remove all object files, binaries and created directories in source dir**
-
-   ```bash
-   gmake distclean
-   ```
-
-* **Show help**
-
-   ```bash
-   gmake help
-   ```
-
-## Compilation FreeBSD
-
-   Needs GCC 10 or higher, (GCC 11 or above strongly recommended for better CPU efficiency in the compiled binary).
-
-   Note that GNU make (`gmake`) is required to compile on FreeBSD.
-
-<details>
-
-<summary>
-
-### With gmake
-
-</summary>
-
-1. **Install dependencies**
-
-   ```bash
-   sudo pkg install gmake gcc11 coreutils git
-   ```
-
-2. **Clone repository**
-
-   ```bash
-   git clone https://github.com/aristocratos/btop.git
-   cd btop
-   ```
-
-3. **Compile**
-
-   Append `VERBOSE=true` to display full compiler/linker commands.
-
-   Append `STATIC=true` for static compilation (only libgcc and libstdc++ will be static!).
-
-   Append `QUIET=true` for less verbose output.
-
-   Append `STRIP=true` to force stripping of debug symbols (adds `-s` linker flag).
-
-   Append `ARCH=<architecture>` to manually set the target architecture.
-   If omitted the makefile uses the machine triple (output of `-dumpmachine` compiler parameter) to detect the target system.
-
-   Use `ADDFLAGS` variable for appending flags to both compiler and linker.
-
-   For example: `ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
-
-   ```bash
-   gmake
-   ```
-
-4. **Install**
-
-   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
-
-   Notice! Only use "sudo" when installing to a NON user owned directory.
-
-   ```bash
-   sudo gmake install
-   ```
-
-5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
-
-   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
-
-   Run after make install and use same PREFIX if any was used at install.
-
-   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
-
-   ```bash
-   sudo gmake setuid
-   ```
 
 * **Uninstall**
 
@@ -661,13 +619,176 @@ Also needs a UTF8 locale and a font that covers:
    ```
 
 </details>
-
 <details>
-
 <summary>
 
 ### With CMake (Community maintained)
+</summary>
 
+1. **Install build dependencies**
+
+   Requires Clang, CMake, Ninja and Git
+
+   ```bash
+   brew update --quiet
+   brew install cmake git llvm ninja
+   ```
+
+2. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git && cd btop
+   ```
+
+3. **Compile**
+
+   ```bash
+   # Configure
+   export LLVM_PREFIX="$(brew --prefix llvm)"
+   export CXX="$LLVM_PREFIX/bin/clang++"
+   export CPPFLAGS="-I$LLVM_PREFIX/include"
+   export LDFLAGS="-L$LLVM_PREFIX/lib -L$LLVM_PREFIX/lib/c++ -Wl,-rpath,$LLVM_PREFIX/lib/c++ -fuse-ld=$LLVM_PREFIX/bin/ld64.lld"
+   cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+   _**Note:** btop uses lots of C++ 20 features, so it's necessary to be specific about the compiler and the standard library. If you get a compile with Apple-Clang or GCC, feel free to add the instructions here._
+
+   This will automatically build a release version of btop.
+
+   Some useful options to pass to the configure step:
+
+   | Configure flag                  | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
+   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
+   | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
+   | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+
+   To force any specific compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+
+4. **Install**
+
+   ```bash
+   cmake --install build
+   ```
+
+   May require root privileges
+
+5. **Uninstall**
+
+   CMake doesn't generate an uninstall target by default. To remove installed files, run
+   ```
+   cat build/install_manifest.txt | xargs rm -irv
+   ```
+
+6. **Cleanup build directory**
+
+   ```bash
+   cmake --build build -t clean
+   ```
+
+</details>
+
+## Compilation FreeBSD
+
+   Requires at least GCC 10 or Clang 16.
+
+   Note that GNU make (`gmake`) is required to compile on FreeBSD.
+
+<details>
+<summary>
+
+### With gmake
+</summary>
+
+1. **Install dependencies**
+
+   ```bash
+   sudo pkg install gmake gcc11 coreutils git
+   ```
+
+2. **Clone repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   ```bash
+   gmake
+   ```
+
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+4. **Install**
+
+   ```bash
+   sudo gmake install
+   ```
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   ```bash
+   sudo gmake setuid
+   ```
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+* **Uninstall**
+
+   ```bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
+   ```
+
+</details>
+<details>
+<summary>
+
+### With CMake (Community maintained)
 </summary>
 
 1. **Install build dependencies**
@@ -690,7 +811,7 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    git clone https://github.com/aristocratos/btop.git && cd btop
-   ``````
+   ```
 
 3. **Compile**
 
@@ -725,7 +846,7 @@ Also needs a UTF8 locale and a font that covers:
 
    _**Note:** Static linking does not work with GCC._
 
-   To force a compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+   To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
 4. **Install**
 
@@ -746,6 +867,100 @@ Also needs a UTF8 locale and a font that covers:
 
    ```bash
    cmake --build build -t clean
+   ```
+
+</details>
+
+## Compilation OpenBSD
+
+   Requires at least GCC 10.
+
+   Note that GNU make (`gmake`) is required to compile on OpenBSD.
+
+<details>
+<summary>
+
+### With gmake
+</summary>
+
+1. **Install dependencies**
+
+   ```bash
+   pkg_add gmake gcc%11 g++%11 coreutils git
+   ```
+
+2. **Clone repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git
+   cd btop
+   ```
+
+3. **Compile**
+
+   ```bash
+   gmake CXX=eg++
+   ```
+
+   Options for make:
+
+   | Flag                            | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
+   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
+   | `QUIET=true`                    | For less verbose output                                                 |
+   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
+   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
+   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+
+   Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
+
+4. **Install**
+
+   ```bash
+   sudo gmake install
+   ```
+
+   Append `PREFIX=/target/dir` to set target, default: `/usr/local`
+
+   Notice! Only use "sudo" when installing to a NON user owned directory.
+
+5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+
+   ```bash
+   sudo gmake setuid
+   ```
+
+   No need for `sudo` to see information for non user owned processes and to enable signal sending to any process.
+
+   Run after make install and use same PREFIX if any was used at install.
+
+   Set `SU_USER` and `SU_GROUP` to select user and group, default is `root` and `wheel`
+
+* **Uninstall**
+
+   ```bash
+   sudo gmake uninstall
+   ```
+
+* **Remove any object files from source dir**
+
+   ```bash
+   gmake clean
+   ```
+
+* **Remove all object files, binaries and created directories in source dir**
+
+   ```bash
+   gmake distclean
+   ```
+
+* **Show help**
+
+   ```bash
+   gmake help
    ```
 
 </details>
@@ -834,7 +1049,7 @@ graph_symbol_net = "default"
 # Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
 graph_symbol_proc = "default"
 
-#* Manually set which boxes to show. Available values are "cpu mem net proc", separate values with whitespace.
+#* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
 shown_boxes = "proc cpu mem net"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
