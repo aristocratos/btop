@@ -73,32 +73,9 @@ ifeq ($(CXX_IS_CLANG),true)
 	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt $(MIN_CLANG_VERSION); echo $$?),0)
 		CLANG_WORKS := true
 	endif
-endif
-ifeq ($(CLANG_WORKS),false)
-	#? Try to find a newer GCC version
-	ifeq ($(shell command -v g++-13 >/dev/null; echo $$?),0)
-		CXX := g++-13
-	else ifeq ($(shell command -v g++13 >/dev/null; echo $$?),0)
-		CXX := g++13
-	else ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
-		CXX := g++-12
-	else ifeq ($(shell command -v g++12 >/dev/null; echo $$?),0)
-		CXX := g++12
-	else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-		CXX := g++-11
-	else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
-		CXX := g++11
-	else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
-		CXX := g++
-	else
-		GCC_NOT_FOUND := true
-	endif
-	ifndef GCC_NOT_FOUND
-		override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-		override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
-		ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
-			GCC_WORKS := true
-		endif
+else
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
+		GCC_WORKS := true
 	endif
 endif
 
@@ -157,6 +134,12 @@ else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),openbsd)
+	PLATFORM_DIR := openbsd
+	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+	override ADDFLAGS += -lkvm
+	export MAKE = gmake
 	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))

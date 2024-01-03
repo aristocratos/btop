@@ -45,6 +45,7 @@ parts:
     source-type: git
     plugin: make
     make-parameters:
+      - CXX=g++-11
       - PREFIX=/usr/local
       - STATIC=true
       - ADDFLAGS="-D SNAPPED"

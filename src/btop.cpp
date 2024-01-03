@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <algorithm>
 #include <csignal>
 #include <clocale>
 #include <pthread.h>
@@ -51,6 +52,7 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_draw.hpp"
 #include "btop_menu.hpp"
+#include "fmt/core.h"
 
 using std::atomic;
 using std::cout;
@@ -109,15 +111,16 @@ namespace Global {
 	bool arg_tty{};         // defaults to false
 	bool arg_low_color{};   // defaults to false
 	int arg_preset = -1;
+	int arg_update = 0;
 }
 
 //* A simple argument parser
-void argumentParser(const int& argc, char **argv) {
+void argumentParser(const int argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
 			fmt::println(
-					"usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]\n\n"
+					"usage: btop [-h] [-v] [-/+t] [-p <id>] [-u <ms>] [--utf-force] [--debug]\n\n"
 					"optional arguments:\n"
 					"  -h, --help            show this help message and exit\n"
 					"  -v, --version         show version info and exit\n"
@@ -125,6 +128,7 @@ void argumentParser(const int& argc, char **argv) {
 					"  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
 					"  +t, --tty_off         force (OFF) tty mode\n"
 					"  -p, --preset <id>     start with preset, integer value between 0-9\n"
+					"  -u, --update <ms>     set the program update rate in milliseconds\n"
 					"  --utf-force           force start even if no UTF-8 locale was detected\n"
 					"  --debug               start in DEBUG mode: shows microsecond timer for information collect\n"
 					"                        and screen draw functions and sets loglevel to DEBUG"
@@ -159,6 +163,19 @@ void argumentParser(const int& argc, char **argv) {
 				exit(1);
 			}
 		}
+		else if (is_in(argument, "-u", "--update")) {
+			if (++i >= argc) {
+				fmt::println("ERROR: Update option needs an argument");
+				exit(1);
+			}
+			const std::string value = argv[i];
+			if (isint(value)) {
+				Global::arg_update = std::clamp(std::stoi(value), 100, Config::ONE_DAY_MILLIS);
+			} else {
+				fmt::println("ERROR: Invalid update rate");
+				exit(1);
+			}
+		}
 		else if (argument == "--utf-force")
 			Global::utf_force = true;
 		else if (argument == "--debug")
@@ -176,7 +193,7 @@ void term_resize(bool force) {
 	static atomic<bool> resizing (false);
 	if (Input::polling) {
 		Global::resized = true;
-		Input::interrupt = true;
+		Input::interrupt();
 		return;
 	}
 	atomic_lock lck(resizing, true);
@@ -246,7 +263,7 @@ void term_resize(bool force) {
 		else if (not Term::refresh()) break;
 	}
 
-	Input::interrupt = true;
+	Input::interrupt();
 }
 
 //* Exit handler; stops threads, restores terminal and saves config changes
@@ -255,7 +272,7 @@ void clean_quit(int sig) {
 	Global::quitting = true;
 	Runner::stop();
 	if (Global::_runner_started) {
-	#ifdef __APPLE__
+	#if defined __APPLE__ || defined __OpenBSD__
 		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
@@ -291,7 +308,7 @@ void clean_quit(int sig) {
 
 	const auto excode = (sig != -1 ? sig : 0);
 
-#ifdef __APPLE__
+#if defined __APPLE__ || defined __OpenBSD__
 	_Exit(excode);
 #else
 	quick_exit(excode);
@@ -321,7 +338,7 @@ void _signal_handler(const int sig) {
 			if (Runner::active) {
 				Global::should_quit = true;
 				Runner::stopping = true;
-				Input::interrupt = true;
+				Input::interrupt();
 			}
 			else {
 				clean_quit(0);
@@ -331,7 +348,7 @@ void _signal_handler(const int sig) {
 			if (Runner::active) {
 				Global::should_sleep = true;
 				Runner::stopping = true;
-				Input::interrupt = true;
+				Input::interrupt();
 			}
 			else {
 				_sleep();
@@ -342,6 +359,9 @@ void _signal_handler(const int sig) {
 			break;
 		case SIGWINCH:
 			term_resize();
+			break;
+		case SIGUSR1:
+			// Input::poll interrupt
 			break;
 	}
 }
@@ -477,7 +497,7 @@ namespace Runner {
 		if (pt_lck.status != 0) {
 			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
 			Global::thread_exception = true;
-			Input::interrupt = true;
+			Input::interrupt();
 			stopping = true;
 		}
 
@@ -488,7 +508,7 @@ namespace Runner {
 			if (active) {
 				Global::exit_error_msg = "Runner thread failed to get active lock!";
 				Global::thread_exception = true;
-				Input::interrupt = true;
+				Input::interrupt();
 				stopping = true;
 			}
 			if (stopping or Global::resized) {
@@ -558,7 +578,7 @@ namespace Runner {
 							coreNum_reset = false;
 							Cpu::core_mapping = Cpu::get_core_mapping();
 							Global::resized = true;
-							Input::interrupt = true;
+							Input::interrupt();
 							continue;
 						}
 
@@ -655,7 +675,7 @@ namespace Runner {
 			catch (const std::exception& e) {
 				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
 				Global::thread_exception = true;
-				Input::interrupt = true;
+				Input::interrupt();
 				stopping = true;
 			}
 
@@ -829,29 +849,23 @@ int main(int argc, char **argv) {
 	//? Call argument parser if launched with arguments
 	if (argc > 1) argumentParser(argc, argv);
 
-	//? Setup paths for config, log and user themes
-	for (const auto& env : {"XDG_CONFIG_HOME", "HOME"}) {
-		if (std::getenv(env) != nullptr and access(std::getenv(env), W_OK) != -1) {
-			Config::conf_dir = fs::path(std::getenv(env)) / (((string)env == "HOME") ? ".config/btop" : "btop");
-			break;
-		}
-	}
-	if (Config::conf_dir.empty()) {
-		fmt::println("WARNING: Could not get path user HOME folder.\n"
-				"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
-	}
-	else {
-		if (std::error_code ec; not fs::is_directory(Config::conf_dir) and not fs::create_directories(Config::conf_dir, ec)) {
-			fmt::println("WARNING: Could not create or access btop config directory. Logging and config saving disabled.\n"
-					"Make sure $XDG_CONFIG_HOME or $HOME environment variables is correctly set to fix this.");
-		}
-		else {
+	{
+		const auto config_dir = Config::get_config_dir();
+		if (config_dir.has_value()) {
+			Config::conf_dir = config_dir.value();
 			Config::conf_file = Config::conf_dir / "btop.conf";
 			Logger::logfile = Config::conf_dir / "btop.log";
 			Theme::user_theme_dir = Config::conf_dir / "themes";
-			if (not fs::exists(Theme::user_theme_dir) and not fs::create_directory(Theme::user_theme_dir, ec)) Theme::user_theme_dir.clear();
+
+			// If necessary create the user theme directory
+			std::error_code error;
+			if (not fs::exists(Theme::user_theme_dir, error) and not fs::create_directories(Theme::user_theme_dir, error)) {
+				Theme::user_theme_dir.clear();
+				Logger::warning("Failed to create user theme directory: " + error.message());
+			}
 		}
 	}
+
 	//? Try to find global btop theme path relative to binary path
 #ifdef __linux__
 	{ 	std::error_code ec;
@@ -931,7 +945,7 @@ int main(int argc, char **argv) {
 				catch (...) { found.clear(); }
 			}
 		}
-
+	//
 	#ifdef __APPLE__
 		if (found.empty()) {
 			CFLocaleRef cflocale = CFLocaleCopyCurrent();
@@ -975,7 +989,7 @@ int main(int argc, char **argv) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
-#ifndef __APPLE__
+#if not defined __APPLE__ && not defined __OpenBSD__
 	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
@@ -1014,6 +1028,12 @@ int main(int argc, char **argv) {
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
+	std::signal(SIGUSR1, _signal_handler);
+
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGUSR1);
+	pthread_sigmask(SIG_BLOCK, &mask, &Input::signal_mask);
 
 	//? Start runner thread
 	Runner::thread_sem_init();
@@ -1035,9 +1055,10 @@ int main(int argc, char **argv) {
 	{
 		const auto [x, y] = Term::get_min_size(Config::getS("shown_boxes"));
 		if (Term::height < y or Term::width < x) {
+			pthread_sigmask(SIG_SETMASK, &Input::signal_mask, &mask);
 			term_resize(true);
+			pthread_sigmask(SIG_SETMASK, &mask, nullptr);
 			Global::resized = false;
-			Input::interrupt = false;
 		}
 
 	}
@@ -1050,6 +1071,9 @@ int main(int argc, char **argv) {
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
+	if (Global::arg_update != 0) {
+		Config::set("update_ms", Global::arg_update);
+	}
 	uint64_t update_ms = Config::getI("update_ms");
 	auto future_time = time_ms();
 
