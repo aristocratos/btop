@@ -58,6 +58,8 @@ namespace Config {
 	extern vector<string> available_batteries;
 	extern int current_preset;
 
+	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
+
 	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
 
 	//* Check if string only contains space separated valid names for boxes
@@ -97,7 +99,7 @@ namespace Config {
 	}
 
 	//* Set config key <name> to int <value>
-	inline void set(const std::string_view name, const int& value) {
+	inline void set(const std::string_view name, const int value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		else ints.at(name) = value;
 	}

@@ -488,8 +488,8 @@ namespace Config {
 		if (name == "update_ms" and i_value < 100)
 			validError = "Config value update_ms set too low (<100).";
 
-		else if (name == "update_ms" and i_value > 86400000)
-			validError = "Config value update_ms set too high (>86400000).";
+		else if (name == "update_ms" and i_value > ONE_DAY_MILLIS)
+			validError = fmt::format("Config value update_ms set too high (>{}).", ONE_DAY_MILLIS);
 
 		else
 			return true;
