@@ -37,6 +37,7 @@ apps:
       - network-observe
       - home
       - removable-media
+      - opengl
 
 parts:
   btop:
@@ -44,10 +45,10 @@ parts:
     source-type: git
     plugin: make
     make-parameters:
+      - CXX=g++-11
       - PREFIX=/usr/local
       - STATIC=true
       - ADDFLAGS="-D SNAPPED"
-      
     build-packages:
       - coreutils
       - sed

@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #include <deque>
-#include <robin_hood.h>
+#include <unordered_map>
 #include <array>
 #include <signal.h>
 #include <errno.h>
@@ -31,7 +31,6 @@ tab-size = 4
 #include "btop_draw.hpp"
 #include "btop_shared.hpp"
 
-using robin_hood::unordered_flat_map;
 using std::array;
 using std::ceil;
 using std::max;
@@ -123,7 +122,7 @@ namespace Menu {
 #endif
 	};
 
-  unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+  std::unordered_map<string, Input::Mouse_loc> mouse_mappings;
 
    const array<array<string, 3>, 3> menu_normal = {
 		array<string, 3>{
@@ -173,6 +172,7 @@ namespace Menu {
 		{"2", "Toggle MEM box."},
 		{"3", "Toggle NET box."},
 		{"4", "Toggle PROC box."},
+		{"5", "Toggle GPU box."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},
@@ -271,6 +271,9 @@ namespace Menu {
 				"Manually set which boxes to show.",
 				"",
 				"Available values are \"cpu mem net proc\".",
+			#ifdef GPU_SUPPORT
+				"Or \"gpu0\" through \"gpu5\" for GPU boxes.",
+			#endif
 				"Separate values with whitespace.",
 				"",
 				"Toggle between presets with key \"p\"."},
@@ -373,23 +376,49 @@ namespace Menu {
 			{"cpu_graph_upper",
 				"Cpu upper graph.",
 				"",
-				"Sets the CPU stat shown in upper half of",
+				"Sets the CPU/GPU stat shown in upper half of",
 				"the CPU graph.",
 				"",
-				"\"total\" = Total cpu usage.",
+				"CPU:",
+				"\"total\" = Total cpu usage. (Auto)",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split by device.",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_graph_lower",
 				"Cpu lower graph.",
 				"",
-				"Sets the CPU stat shown in lower half of",
+				"Sets the CPU/GPU stat shown in lower half of",
 				"the CPU graph.",
 				"",
+				"CPU:",
 				"\"total\" = Total cpu usage.",
 				"\"user\" = User mode cpu usage.",
 				"\"system\" = Kernel mode cpu usage.",
-				"+ more depending on kernel."},
+				"+ more depending on kernel.",
+		#ifdef GPU_SUPPORT
+				"",
+				"GPU:",
+				"\"gpu-totals\" = GPU usage split/device. (Auto)",
+				"\"gpu-vram-totals\" = VRAM usage split by GPU.",
+				"\"gpu-pwr-totals\" = Power usage split by GPU.",
+				"\"gpu-average\" = Avg usage of all GPUs.",
+				"\"gpu-vram-total\" = VRAM usage of all GPUs.",
+				"\"gpu-pwr-total\" = Power usage of all GPUs.",
+				"Not all stats are supported on all devices."
+		#endif
+				},
 			{"cpu_invert_lower",
 					"Toggles orientation of the lower CPU graph.",
 					"",
@@ -401,12 +430,24 @@ namespace Menu {
 					"to fit to box height.",
 					"",
 					"True or False."},
+		#ifdef GPU_SUPPORT
+			{"show_gpu_info",
+					"Show gpu info in cpu box.",
+					"",
+					"Toggles gpu stats in cpu box and the",
+					"gpu graph (if \"cpu_graph_lower\" is set to",
+					"\"Auto\").",
+					"",
+					"\"Auto\" to show when no gpu box is shown.",
+					"\"On\" to always show.",
+					"\"Off\" to never show."},
+		#endif
 			{"check_temp",
 				"Enable cpu temperature reporting.",
 				"",
 				"True or False."},
 			{"cpu_sensor",
-				"Cpu temperature sensor",
+				"Cpu temperature sensor.",
 				"",
 				"Select the sensor that corresponds to",
 				"your cpu temperature.",
@@ -446,7 +487,7 @@ namespace Menu {
 				"Rankine, 0 = abosulte zero, 1 degree change",
 				"equals 1 degree change in Fahrenheit."},
 			{"show_cpu_freq",
-				"Show CPU frequency",
+				"Show CPU frequency.",
 				"",
 				"Can cause slowdowns on systems with many",
 				"cores and certain kernel versions."},
@@ -462,6 +503,50 @@ namespace Menu {
 				"",
 				"True or False."},
 		},
+	#ifdef GPU_SUPPORT
+		{
+			{"nvml_measure_pcie_speeds",
+				"Measure PCIe throughput on NVIDIA cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"graph_symbol_gpu",
+				"Graph symbol to use for graphs in gpu box.",
+				"",
+				"\"default\", \"braille\", \"block\" or \"tty\".",
+				"",
+				"\"default\" for the general default symbol.",},
+			{"gpu_mirror_graph",
+				"Horizontally mirror the GPU graph.",
+				"",
+				"True or False."},
+			{"custom_gpu_name0",
+				"Custom gpu0 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name1",
+				"Custom gpu1 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name2",
+				"Custom gpu2 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name3",
+				"Custom gpu3 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name4",
+				"Custom gpu4 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name5",
+				"Custom gpu5 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+		},
+	#endif
 		{
 			{"mem_below_net",
 				"Mem box location.",
@@ -1079,7 +1164,7 @@ namespace Menu {
 		static Draw::TextEdit editor;
 		static string warnings;
 		static bitset<8> selPred;
-		static const unordered_flat_map<string, std::reference_wrapper<const vector<string>>> optionsList = {
+		static const std::unordered_map<string, std::reference_wrapper<const vector<string>>> optionsList = {
 			{"color_theme", std::cref(Theme::themes)},
 			{"log_level", std::cref(Logger::log_levels)},
 			{"temp_scale", std::cref(Config::temp_scales)},
@@ -1093,6 +1178,10 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
+		#ifdef GPU_SUPPORT
+			{"show_gpu_info", std::cref(Config::show_gpu_values)},
+			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
+		#endif
 		};
 		auto tty_mode = Config::getB("tty_mode");
 		auto vim_keys = Config::getB("vim_keys");
@@ -1144,7 +1233,8 @@ namespace Menu {
 				const auto& option = categories[selected_cat][item_height * page + selected][0];
 				if (selPred.test(isString) and Config::stringValid(option, editor.text)) {
 					Config::set(option, editor.text);
-					if (option == "custom_cpu_name") screen_redraw = true;
+					if (option == "custom_cpu_name" or option.starts_with("custom_gpu_name"))
+						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
 						Config::current_preset = -1;
@@ -1225,7 +1315,7 @@ namespace Menu {
 			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
 			page = selected = 0;
 		}
-		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
 			selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
@@ -1277,7 +1367,7 @@ namespace Menu {
 					Logger::set(optList.at(i));
 					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
 			}
 			else
@@ -1323,11 +1413,19 @@ namespace Menu {
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
+		#ifdef GPU_SUPPORT
+			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
+		#else
 			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
+		#endif
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
 						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
+				#ifdef GPU_SUPPORT
+					+ Mv::r(7);
+				#else
 					+ Mv::r(10);
+				#endif
 				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;

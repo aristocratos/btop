@@ -12,10 +12,7 @@ else
 endif
 
 ifneq ($(QUIET),true)
-	override PRE := info info-quiet
 	override QUIET := false
-else
-	override PRE := info-quiet
 endif
 
 OLDCXX := $(CXXFLAGS)
@@ -39,6 +36,20 @@ endif
 
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
+#? GPU Support
+ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
+	ifneq ($(STATIC),true)
+		GPU_SUPPORT := true
+	endif
+endif
+ifneq ($(GPU_SUPPORT),true)
+	GPU_SUPPORT := false
+endif
+
+ifeq ($(GPU_SUPPORT),true)
+	override ADDFLAGS += -DGPU_SUPPORT
+endif
+
 #? Compiler and Linker
 ifeq ($(shell $(CXX) --version | grep clang >/dev/null 2>&1; echo $$?),0)
 	override CXX_IS_CLANG := true
@@ -48,38 +59,23 @@ override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
 
 CLANG_WORKS = false
 GCC_WORKS = false
+MIN_CLANG_VERSION = 16
+
+ifeq ($(DEBUG),true)
+	override ADDFLAGS += -DBTOP_DEBUG
+endif
 
 #? Supported is Clang 16.0.0 and later
 ifeq ($(CXX_IS_CLANG),true)
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 16; echo $$?),0)
+	ifeq ($(shell $(CXX) --version | grep Apple >/dev/null 2>&1; echo $$?),0)
+		MIN_CLANG_VERSION := 15
+	endif
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt $(MIN_CLANG_VERSION); echo $$?),0)
 		CLANG_WORKS := true
 	endif
-endif
-ifeq ($(CLANG_WORKS),false)
-	#? Try to find a newer GCC version
-	ifeq ($(shell command -v g++-13 >/dev/null; echo $$?),0)
-		CXX := g++-13
-	else ifeq ($(shell command -v g++13 >/dev/null; echo $$?),0)
-		CXX := g++13
-	else ifeq ($(shell command -v g++-12 >/dev/null; echo $$?),0)
-		CXX := g++-12
-	else ifeq ($(shell command -v g++12 >/dev/null; echo $$?),0)
-		CXX := g++12
-	else ifeq ($(shell command -v g++-11 >/dev/null; echo $$?),0)
-		CXX := g++-11
-	else ifeq ($(shell command -v g++11 >/dev/null; echo $$?),0)
-		CXX := g++11
-	else ifeq ($(shell command -v g++ >/dev/null; echo $$?),0)
-		CXX := g++
-	else
-		GCC_NOT_FOUND := true
-	endif
-	ifndef GCC_NOT_FOUND
-		override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
-		override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
-		ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
-			GCC_WORKS := true
-		endif
+else
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
+		GCC_WORKS := true
 	endif
 endif
 
@@ -138,6 +134,12 @@ else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),openbsd)
+	PLATFORM_DIR := openbsd
+	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+	override ADDFLAGS += -lkvm
+	export MAKE = gmake
 	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
@@ -206,24 +208,38 @@ endif
 
 P := %%
 
-#? Default Make
-all: $(PRE) directories btop
+ifeq ($(VERBOSE),true)
+	# Doesn't work with `&>`
+	override SUPPRESS := > /dev/null 2> /dev/null
+else
+	override SUPPRESS :=
+endif
 
+#? Default Make
+.ONESHELL:
+all: | info rocm_smi info-quiet directories btop
+
+ifneq ($(QUIET),true)
 info:
 	@printf " $(BANNER)\n"
-	@printf "\033[1;92mPLATFORM   \033[1;93m?| \033[0m$(PLATFORM)\n"
-	@printf "\033[1;96mARCH       \033[1;93m?| \033[0m$(ARCH)\n"
-	@printf "\033[1;93mCXX        \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS    \033[1;94m:| \033[0m$(THREADS)\n"
-	@printf "\033[1;92mREQFLAGS   \033[1;91m!| \033[0m$(REQFLAGS)\n"
-	@printf "\033[1;91mWARNFLAGS  \033[1;94m:| \033[0m$(WARNFLAGS)\n"
-	@printf "\033[1;94mOPTFLAGS   \033[1;94m:| \033[0m$(OPTFLAGS)\n"
-	@printf "\033[1;93mLDCXXFLAGS \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
-	@printf "\033[1;95mCXXFLAGS   \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
-	@printf "\033[1;95mLDFLAGS    \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
+	@printf "\033[1;92mPLATFORM     \033[1;93m?| \033[0m$(PLATFORM)\n"
+	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
+	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
+	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
+	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
+	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
+	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
+	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
+	@printf "\033[1;93mLDCXXFLAGS   \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
+	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
+	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
+else
+info:
+	 @true
+endif
 
-info-quiet:
-	@sleep 0.1 2>/dev/null || true
+
+info-quiet: | info rocm_smi
 	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
 
 help:
@@ -250,11 +266,13 @@ directories:
 clean:
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt objects...\033[0m\n"
 	@rm -rf $(BUILDDIR)
+	@test -e lib/rocm_smi_lib/build && cmake --build lib/rocm_smi_lib/build --target clean &> /dev/null || true
 
 #? Clean Objects and Binaries
 distclean: clean
 	@printf "\033[1;91mRemoving: \033[1;97mbuilt binaries...\033[0m\n"
 	@rm -rf $(TARGETDIR)
+	@test -e lib/rocm_smi_lib/build && rm -rf lib/rocm_smi_lib/build || true
 
 install:
 	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\n"
@@ -300,9 +318,35 @@ uninstall:
 #? Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
+#? Compile rocm_smi
+ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
+	ROCM_DIR ?= lib/rocm_smi_lib
+	ROCM_BUILD_DIR := $(ROCM_DIR)/build
+	ifeq ($(DEBUG),true)
+		BUILD_TYPE := Debug
+	else
+		BUILD_TYPE := Release
+	endif
+.ONESHELL:
+rocm_smi:
+	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
+	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
+	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
+	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
+	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
+	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
+	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37m$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a \033[1;93m(\033[1;97m$$(du -ah $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
+	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(eval override LDFLAGS += $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a -DRSMI_STATIC) # TODO: this seems to execute every time, no matter if the compilation failed or succeeded
+	@$(eval override CXXFLAGS += -DRSMI_STATIC)
+else
+rocm_smi:
+	@true
+endif
+
 #? Link
 .ONESHELL:
-btop: $(OBJECTS) | directories
+btop: $(OBJECTS) | rocm_smi directories
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
@@ -313,7 +357,7 @@ btop: $(OBJECTS) | directories
 
 #? Compile
 .ONESHELL:
-$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | directories
+$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"

@@ -16,10 +16,10 @@ indent = tab
 tab-size = 4
 */
 #include <arpa/inet.h>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <libproc.h>
 // man 3 getifaddrs: "BUGS: If	both <net/if.h>	and <ifaddrs.h>	are being included, <net/if.h> must be included before <ifaddrs.h>"
 #include <net/if.h>
 #include <ifaddrs.h>
@@ -29,12 +29,15 @@ tab-size = 4
 #include <netinet/tcp_fsm.h>
 #include <netinet/in.h> // for inet_ntop stuff
 #include <pwd.h>
-#include <sys/_timeval.h>
 #include <sys/endian.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
+#include <sys/sched.h>
+#include <sys/signal.h>
+#include <sys/siginfo.h>
+#include <sys/proc.h>
 #include <sys/types.h>
 #include <sys/user.h>
 #include <sys/param.h>
@@ -42,27 +45,29 @@ tab-size = 4
 #include <sys/mount.h>
 #include <sys/vmmeter.h>
 #include <sys/limits.h>
+#include <sys/sensors.h>
+#include <sys/disk.h>
 #include <vector>
-#include <vm/vm_param.h>
 #include <kvm.h>
 #include <paths.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <devstat.h>
 
 #include <stdexcept>
 #include <cmath>
 #include <fstream>
 #include <numeric>
 #include <ranges>
+#include <algorithm>
 #include <regex>
 #include <string>
 #include <memory>
-#include <utility>
 
 #include "../btop_config.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
+
+#include "./sysctlbyname.h"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -75,7 +80,7 @@ using namespace Tools;
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<string> available_fields = {"Auto", "total"};
+	vector<string> available_fields = {"total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	bool got_sensors = false, cpu_temp_only = false;
@@ -104,9 +109,6 @@ namespace Cpu {
 
 namespace Mem {
 	double old_uptime;
-	std::vector<string> zpools;
-
-	void get_zpools();
 }
 
 namespace Shared {
@@ -170,24 +172,17 @@ namespace Shared {
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
-		Logger::debug("Init -> Cpu::collect()");
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
-		Logger::debug("Init -> Cpu::get_cpuName()");
 		Cpu::cpuName = Cpu::get_cpuName();
-		Logger::debug("Init -> Cpu::get_sensors()");
 		Cpu::got_sensors = Cpu::get_sensors();
-		Logger::debug("Init -> Cpu::get_core_mapping()");
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
-		Logger::debug("Init -> Mem::collect()");
 		Mem::collect();
-		Logger::debug("Init -> Mem::get_zpools()");
-		Mem::get_zpools();
 	}
 
 	//* RAII wrapper for kvm_openfiles
@@ -266,57 +261,74 @@ namespace Cpu {
 		return name;
 	}
 
+	int64_t get_sensor(string device, sensor_type type, int num) {
+		int64_t temp = -1;
+		struct sensordev sensordev;
+		struct sensor sensor;
+		size_t sdlen, slen;
+		int dev;
+		int mib[] = {CTL_HW, HW_SENSORS, 0, 0, 0};
+
+		sdlen = sizeof(sensordev);
+		slen = sizeof(sensor);
+		for (dev = 0;; dev++) {
+			mib[2] = dev;
+			if (sysctl(mib, 3, &sensordev, &sdlen, NULL, 0) == -1) {
+				if (errno == ENXIO)
+					continue;
+				if (errno == ENOENT)
+					break;
+			}
+			if (strstr(sensordev.xname, device.c_str())) {
+				mib[3] = type;
+				mib[4] = num;
+				if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1) {
+					if (errno != ENOENT) {
+						Logger::warning("sysctl");
+						continue;
+					}
+				}
+				temp = sensor.value;
+			 	break;
+			}
+		}
+		return temp;
+	}
+
 	bool get_sensors() {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
-			int32_t temp;
-			size_t size = sizeof(temp);
-			if (sysctlbyname("dev.cpu.0.temperature", &temp, &size, nullptr, 0) < 0) {
-				Logger::warning("Could not get temp sensor - maybe you need to load the coretemp module");
-			} else {
+			if (get_sensor(string("cpu0") , SENSOR_TEMP, 0) > 0) {
 				got_sensors = true;
-				int temp;
-				size_t size = sizeof(temp);
-				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, nullptr, 0); //asuming the max temp is same for all cores
-				temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
-				current_cpu.temp_max = temp;
+				current_cpu.temp_max = 100; // we don't have this info
+			} else {
+				Logger::warning("Could not get temp sensor");
 			}
 		}
 		return got_sensors;
 	}
 
+#define MUKTOC(v) ((v - 273150000) / 1000000.0)
+
 	void update_sensors() {
 		int temp = 0;
 		int p_temp = 0;
-		int found = 0;
-		bool got_package = false;
-		size_t size = sizeof(p_temp);
-		if (sysctlbyname("hw.acpi.thermal.tz0.temperature", &p_temp, &size, nullptr, 0) >= 0) {
-			got_package = true;
-			p_temp = (p_temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
-		}
 
-		size = sizeof(temp);
-		for (int i = 0; i < Shared::coreCount; i++) {
-			string s = "dev.cpu." + std::to_string(i) + ".temperature";
-			if (sysctlbyname(s.c_str(), &temp, &size, nullptr, 0) >= 0) {
-				temp = (temp - 2732) / 10;
-				if (not got_package) {
-					p_temp += temp;
-					found++;
-				}
+		temp = get_sensor(string("cpu0"), SENSOR_TEMP, 0);
+		if (temp > -1) {
+			temp = MUKTOC(temp);
+			p_temp = temp;
+			for (int i = 0; i < Shared::coreCount; i++) {
 				if (cmp_less(i + 1, current_cpu.temp.size())) {
 					current_cpu.temp.at(i + 1).push_back(temp);
 					if (current_cpu.temp.at(i + 1).size() > 20)
 						current_cpu.temp.at(i + 1).pop_front();
 				}
 			}
+			current_cpu.temp.at(0).push_back(p_temp);
+			if (current_cpu.temp.at(0).size() > 20)
+				current_cpu.temp.at(0).pop_front();
 		}
-
-		if (not got_package) p_temp /= found;
-		current_cpu.temp.at(0).push_back(p_temp);
-		if (current_cpu.temp.at(0).size() > 20)
-			current_cpu.temp.at(0).pop_front();
 
 	}
 
@@ -324,7 +336,7 @@ namespace Cpu {
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
-		if (sysctlbyname("dev.cpu.0.freq", &freq, &size, nullptr, 0) < 0) {
+		if (sysctlbyname("hw.cpuspeed", &freq, &size, nullptr, 0) < 0) {
 			return "";
 		}
 		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
@@ -378,27 +390,30 @@ namespace Cpu {
 
 		long seconds = -1;
 		uint32_t percent = -1;
-		size_t size = sizeof(percent);
 		string status = "discharging";
-		if (sysctlbyname("hw.acpi.battery.life", &percent, &size, nullptr, 0) < 0) {
+		int64_t full, remaining;
+		full = get_sensor("acpibat0", SENSOR_AMPHOUR, 0);
+		remaining = get_sensor("acpibat0", SENSOR_AMPHOUR, 3);
+		int64_t state = get_sensor("acpibat0", SENSOR_INTEGER, 0);
+		if (full < 0) {
 			has_battery = false;
+			Logger::warning("failed to get battery");
 		} else {
+			float_t f = full / 1000;
+			float_t r = remaining / 1000;
 			has_battery = true;
-			size_t size = sizeof(seconds);
-			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, nullptr, 0) < 0) {
-				seconds = 0;
-			}
-			int state;
-			size = sizeof(state);
-			if (sysctlbyname("hw.acpi.battery.state", &state, &size, nullptr, 0) < 0) {
-				status = "unknown";
-			} else {
-				if (state == 2) {
-					status = "charging";
-				}
-			}
+			percent = r / f * 100;
 			if (percent == 100) {
 				status = "full";
+			}
+			switch (state) {
+				case 0:
+					status = "full";
+					percent = 100;
+					break;
+				case 2:
+					status = "charging";
+					break;
 			}
 		}
 
@@ -414,10 +429,16 @@ namespace Cpu {
 			Logger::error("failed to get load averages");
 		}
 
-		vector<array<long, CPUSTATES>> cpu_time(Shared::coreCount);
-		size_t size = sizeof(long) * CPUSTATES * Shared::coreCount;
-		if (sysctlbyname("kern.cp_times", &cpu_time[0], &size, nullptr, 0) == -1) {
-			Logger::error("failed to get CPU times");
+		auto cp_time = std::unique_ptr<struct cpustats[]>{
+			new struct cpustats[Shared::coreCount]
+		};
+		size_t size = Shared::coreCount * sizeof(struct cpustats);
+		static int cpustats_mib[] = {CTL_KERN, KERN_CPUSTATS, /*fillme*/0};
+		for (int i = 0; i < Shared::coreCount; i++) {
+			cpustats_mib[2] = i / 2;
+			if (sysctl(cpustats_mib, 3, &cp_time[i], &size, NULL, 0) == -1) {
+				Logger::error("sysctl kern.cpustats failed");
+			}
 		}
 		long long global_totals = 0;
 		long long global_idles = 0;
@@ -427,7 +448,7 @@ namespace Cpu {
 			vector<long long> times;
 			//? 0=user, 1=nice, 2=system, 3=idle
 			for (int x = 0; const unsigned int c_state : {CP_USER, CP_NICE, CP_SYS, CP_IDLE}) {
-				auto val = cpu_time[i][c_state];
+				auto val = cp_time[i].cs_time[c_state];
 				times.push_back(val);
 				times_summed.at(x++) += val;
 			}
@@ -539,92 +560,37 @@ namespace Mem {
 		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 	}
 
-	class PipeWrapper {
-		public:
-			PipeWrapper(const char *file, const char *mode) {fd = popen(file, mode);}
-			virtual ~PipeWrapper() {if (fd) pclose(fd);}
-			auto operator()() -> FILE* { return fd;};
-		private:
-			FILE *fd;
-	};
-
-	// find all zpools in the system. Do this only at startup.
-	void get_zpools() {
-		std::regex toReplace("\\.");
-		PipeWrapper poolPipe = PipeWrapper("zpool list -H -o name", "r");
-
-		while (not std::feof(poolPipe())) {
-			char poolName[512];
-			size_t len = 512;
-			if (fgets(poolName, len, poolPipe())) {
-				poolName[strcspn(poolName, "\n")] = 0;
-				Logger::debug("zpool found: " + string(poolName));
-				Mem::zpools.push_back(std::regex_replace(poolName, toReplace, "%25"));
-			}
-		}
-	}
-
 	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
-		// this bit is for 'regular' mounts
-		static struct statinfo cur;
-		long double etime = 0;
-		uint64_t total_bytes_read;
-		uint64_t total_bytes_write;
+		uint64_t total_bytes_read = 0;
+		uint64_t total_bytes_write = 0;
 
-		static std::unique_ptr<struct devinfo, decltype(std::free)*> curDevInfo (reinterpret_cast<struct devinfo*>(std::calloc(1, sizeof(struct devinfo))), std::free);
-		cur.dinfo = curDevInfo.get();
+		int num_drives = 0;
+		int mib[2] = { CTL_HW, HW_DISKCOUNT };
 
-		if (devstat_getdevs(nullptr, &cur) != -1) {
-			for (int i = 0; i < cur.dinfo->numdevs; i++) {
-				auto d = cur.dinfo->devices[i];
-				string devStatName = "/dev/" + string(d.device_name) + std::to_string(d.unit_number);
-				for (auto& [ignored, disk] : disks) { // find matching mountpoints - could be multiple as d.device_name is only ada (and d.unit_number is the device number), while the disk.dev is like /dev/ada0s1
-					if (disk.dev.string().rfind(devStatName, 0) == 0 and mapping.contains(disk.dev)) {
-						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
-						assign_values(disk, total_bytes_read, total_bytes_write);
+		size_t size;
+		if (sysctl(mib, 2, &num_drives, &size, NULL, 0) >= 0) {
+			mib[0] = CTL_HW;
+			mib[1] = HW_DISKSTATS;
+			size = num_drives * sizeof(struct diskstats);
+			auto p = std::unique_ptr<struct diskstats[], void(*)(void*)> {
+				reinterpret_cast<struct diskstats*>(malloc(size)),
+				free
+			};
+			if (sysctl(mib, 2, p.get(), &size, NULL, 0) == -1) {
+				Logger::error("failed to get disk stats");
+				return;
+			}
+			for (int i = 0; i < num_drives; i++) {
+				for (auto& [ignored, disk] : disks) {
+					if (disk.dev.string().find(p[i].ds_name) != string::npos) {
 						string mountpoint = mapping.at(disk.dev);
-						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
-					}
-				}
-
-			}
-		}
-
-		// this code is for ZFS mounts
-		for (const auto &poolName : Mem::zpools) {
-			char sysCtl[1024];
-			snprintf(sysCtl, sizeof(sysCtl), "sysctl kstat.zfs.%s.dataset | egrep \'dataset_name|nread|nwritten\'", poolName.c_str());
-			PipeWrapper f = PipeWrapper(sysCtl, "r");
-			if (f()) {
-				char buf[512];
-				size_t len = 512;
-				uint64_t nread = 0, nwritten = 0;
-				while (not std::feof(f())) {
-					if (fgets(buf, len, f())) {
-						char *name = std::strtok(buf, ": \n");
-						char *value = std::strtok(nullptr, ": \n");
-						if (string(name).find("dataset_name") != string::npos) {
-							// create entry if datasetname matches with anything in mapping
-							// relies on the fact that the dataset name is last value in the list
-							// alternatively you could parse the objset-0x... when this changes, you have a new entry
-							string datasetname = string(value);// this is the zfs volume, like 'zroot/usr/home' -> this maps onto the device we get back from getmntinfo(3)
-							if (mapping.contains(datasetname)) {
-								string mountpoint = mapping.at(datasetname);
-								if (disks.contains(mountpoint)) {
-									auto& disk = disks.at(mountpoint);
-									assign_values(disk, nread, nwritten);
-								}
-							}
-						} else if (string(name).find("nread") != string::npos) {
-							nread = atoll(value);
-						} else if (string(name).find("nwritten") != string::npos) {
-							nwritten = atoll(value);
-						}
+						total_bytes_read = p[i].ds_rbytes;
+						total_bytes_write = p[i].ds_wbytes;
+						assign_values(disk, total_bytes_read, total_bytes_write);
 					}
 				}
 			}
 		}
-
 	}
 
 	auto collect(bool no_update) -> mem_info & {
@@ -637,47 +603,38 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		int mib[4];
-		u_int memActive, memWire, cachedMem, freeMem;
-		size_t len;
-
-   		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
-		len = sizeof(memActive);
-		sysctl(mib, 4, &(memActive), &len, nullptr, 0);
-		memActive *= Shared::pageSize;
-
-		len = 4; sysctlnametomib("vm.stats.vm.v_wire_count", mib, &len);
-		len = sizeof(memWire);
-		sysctl(mib, 4, &(memWire), &len, nullptr, 0);
-		memWire *= Shared::pageSize;
-
-		mem.stats.at("used") = memWire + memActive;
+		u_int memActive, memWire, cachedMem;
+		// u_int freeMem;
+		size_t size;
+		static int uvmexp_mib[] = {CTL_VM, VM_UVMEXP};
+		static int bcstats_mib[] = {CTL_VFS, VFS_GENERIC, VFS_BCACHESTAT};
+		struct uvmexp uvmexp;
+		struct bcachestats bcstats;
+		size = sizeof(uvmexp);
+		if (sysctl(uvmexp_mib, 2, &uvmexp, &size, NULL, 0) == -1) {
+			Logger::error("sysctl failed");
+			bzero(&uvmexp, sizeof(uvmexp));
+		}
+		size = sizeof(bcstats);
+		if (sysctl(bcstats_mib, 3, &bcstats, &size, NULL, 0) == -1) {
+			Logger::error("sysctl failed");
+			bzero(&bcstats, sizeof(bcstats));
+		}
+		memActive = uvmexp.active * Shared::pageSize;
+		memWire = uvmexp.wired;
+		// freeMem = uvmexp.free * Shared::pageSize;
+		cachedMem = bcstats.numbufpages * Shared::pageSize;
+		mem.stats.at("used") = memActive;
 		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-
-		len = sizeof(cachedMem);
-   		len = 4; sysctlnametomib("vm.stats.vm.v_cache_count", mib, &len);
-   		sysctl(mib, 4, &(cachedMem), &len, nullptr, 0);
-   		cachedMem *= Shared::pageSize;
    		mem.stats.at("cached") = cachedMem;
-
-		len = sizeof(freeMem);
-   		len = 4; sysctlnametomib("vm.stats.vm.v_free_count", mib, &len);
-   		sysctl(mib, 4, &(freeMem), &len, nullptr, 0);
-   		freeMem *= Shared::pageSize;
-   		mem.stats.at("free") = freeMem;
+  		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
 
 		if (show_swap) {
-			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
-   			struct kvm_swap swap[16];
-   			int nswap = kvm_getswapinfo(kd(), swap, 16, 0);
-			int totalSwap = 0, usedSwap = 0;
-			for (int i = 0; i < nswap; i++) {
-				totalSwap += swap[i].ksw_total;
-				usedSwap += swap[i].ksw_used;
-			}
-			mem.stats.at("swap_total") = totalSwap * Shared::pageSize;
-			mem.stats.at("swap_used") = usedSwap * Shared::pageSize;
+			int total = uvmexp.swpages * Shared::pageSize;
+			mem.stats.at("swap_total") = total;
+			int swapped = uvmexp.swpgonly * Shared::pageSize;
+			mem.stats.at("swap_used") = swapped;
+			mem.stats.at("swap_free") = total - swapped;
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
@@ -1107,13 +1064,6 @@ namespace Proc {
 		}
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
-
-		// rusage_info_current rusage;
-		// if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
-		// 	// this fails for processes we don't own - same as in Linux
-		// 	detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
-		// 	detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
-		// }
 	}
 
 	//* Collects and sorts process information from /proc
@@ -1138,18 +1088,6 @@ namespace Proc {
 
 		static vector<size_t> found;
 
-		vector<array<long, CPUSTATES>> cpu_time(Shared::coreCount);
-		size_t size = sizeof(long) * CPUSTATES * Shared::coreCount;
-		if (sysctlbyname("kern.cp_times", &cpu_time[0], &size, nullptr, 0) == -1) {
-			Logger::error("failed to get CPU times");
-		}
-		cputimes = 0;
-		for (const auto core : cpu_time) {
-			for (const unsigned int c_state : {CP_USER, CP_NICE, CP_SYS, CP_IDLE}) {
-				cputimes += core[c_state];
-			}
-		}
-
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
@@ -1164,12 +1102,12 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
-   			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
+			Shared::kvm_openfiles_wrapper kd(nullptr, nullptr, nullptr, KVM_NO_FILES, buf);
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
 
-   			for (int i = 0; i < count; i++) {
-	  			const struct kinfo_proc* kproc = &kprocs[i];
-				const size_t pid = (size_t)kproc->ki_pid;
+			for (int i = 0; i < count; i++) {
+				const struct kinfo_proc* kproc = &kprocs[i];
+				const size_t pid = (size_t)kproc->p_pid;
 				if (pid < 1) continue;
 				found.push_back(pid);
 
@@ -1186,12 +1124,12 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
-					if (string(kproc->ki_comm) == "idle"s) {
+					if (string(kproc->p_comm) == "idle"s) {
 						current_procs.pop_back();
 						found.pop_back();
 						continue;
 					}
-					new_proc.name = kproc->ki_comm;
+					new_proc.name = kproc->p_comm;
 					char** argv = kvm_getargv(kd(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
@@ -1204,24 +1142,23 @@ namespace Proc {
 						new_proc.cmd.resize(1000);
 						new_proc.cmd.shrink_to_fit();
 					}
-					new_proc.ppid = kproc->ki_ppid;
-					new_proc.cpu_s = round(kproc->ki_start.tv_sec);
-					struct passwd *pwd = getpwuid(kproc->ki_uid);
+					new_proc.ppid = kproc->p_ppid;
+					new_proc.cpu_s = round(kproc->p_ustart_sec);
+					struct passwd *pwd = getpwuid(kproc->p_uid);
 					if (pwd)
 						new_proc.user = pwd->pw_name;
 				}
-				new_proc.p_nice = kproc->ki_nice;
-				new_proc.state = kproc->ki_stat;
+				new_proc.p_nice = kproc->p_nice;
+				new_proc.state = kproc->p_stat;
 
 				int cpu_t = 0;
-				cpu_t 	= kproc->ki_rusage.ru_utime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_utime.tv_usec
-						+ kproc->ki_rusage.ru_stime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_stime.tv_usec;
+				cpu_t 	= kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
 
-				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
-				new_proc.threads = kproc->ki_numthreads;
+				new_proc.mem = kproc->p_vm_rssize * Shared::pageSize;
+				new_proc.threads = 1; // can't seem to find this in kinfo_proc
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = clamp((100.0 * kproc->ki_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
+				new_proc.cpu_p = clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
