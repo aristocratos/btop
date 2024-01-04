@@ -1,0 +1,13 @@
+#
+# DEP-12: Per-package machine-readable metadata about Upstream
+#        Please check * https://dep-team.pages.debian.net/deps/dep12/
+#                     * https://wiki.debian.org/UpstreamMetadata
+#
+Bug-Database: https://github.com/aristocratos/btop/issues
+Bug-Submit: https://github.com/aristocratos/btop/issues/new
+Donation: https://github.com/sponsors/aristocratos
+Repository: https://github.com/aristocratos/btop
+Repository-Browse: https://github.com/aristocratos/btop
+Reference:
+  Author: Jakob P. Liljenberg
+  Year: 2022

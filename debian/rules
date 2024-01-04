@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+
+# See FEATURE AREAS/ENVIRONMENT in dpkg-buildflags(1)
+# Apply all hardening options
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+# Package maintainers to append CFLAGS
+export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# Package maintainers to append LDFLAGS
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1
+
+# According to Debian Policy version 4.2.0 builds should be as verbose as
+# possible unless 'terse' is specifically passed.
+ifeq (,$(filter terse,$(DEB_BUILD_OPTIONS)))
+    export DH_VERBOSE = 1
+		# See btop Makefile
+    export VERBOSE = true
+    export QUIET = false
+endif
+
+# Override default /usr/local with proper system path
+export PREFIX := /usr
+
+# Use system libfmt-dev provided library
+# @TODO: Does not seem to take effect as local include/fmt is found first
+export CXXFLAGS=-I/usr/include/fmt
+
+# From Debhelper 15 onwards this will be automatic, but until then
+# dh_auto_install defaults in a single package build in installing everything to
+# debian/btop which is undesired in this case, as we want to control the files
+# to be installed via btop.install
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp/
+
+# main packaging script based on post dh7 syntax
+%:
+	dh $@

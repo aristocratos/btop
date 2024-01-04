@@ -1,0 +1,21 @@
+Source: btop
+Section: utils
+Priority: optional
+Maintainer: Otto Kekäläinen <otto@debian.org>
+Build-Depends: debhelper-compat (= 13),
+               libfmt-dev,
+               lowdown
+Standards-Version: 4.6.2
+Homepage: https://github.com/aristocratos/btop
+Rules-Requires-Root: no
+Vcs-Git: https://github.com/aristocratos/btop.git
+Vcs-Browser: https://github.com/aristocratos/btop
+
+Package: btop
+Architecture: any
+Multi-Arch: foreign
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: Modern and colorful command line resource monitor that shows usage and stats
+ Resource monitor that shows usage and stats for processor, memory, disks,
+ network and processes. This C++ version is continuation of bashtop and bpytop.

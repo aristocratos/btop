@@ -1,0 +1,7 @@
+usr/bin/btop
+usr/share/applications/btop.desktop
+usr/share/btop/themes/*
+usr/share/doc/btop/README.md
+usr/share/icons/hicolor/48x48/apps/btop.png
+usr/share/icons/hicolor/scalable/apps/btop.svg
+usr/share/man/man1/btop.1
