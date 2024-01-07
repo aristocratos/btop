@@ -2010,7 +2010,7 @@ namespace Draw {
 		#ifdef GPU_SUPPORT
 			const bool show_gpu_on = Config::getS("show_gpu_info") == "On";
 			const bool gpus_shown_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
-				show_gpu_on or (Config::getS("cpu_graph_lower") == "Auto" and Gpu::shown == 0)
+				show_gpu_on or (Config::getS("show_gpu_info") == "Auto" and Gpu::shown == 0)
 			);
 			const int gpus_height_offset = (Gpu::gpu_names.size() - Gpu::shown)*gpus_shown_in_cpu_panel;
 			int gpus_extra_height = gpus_shown_in_cpu_panel ? Gpu::gpu_names.size() - (show_gpu_on ? 0 : Gpu::shown) : 0;
