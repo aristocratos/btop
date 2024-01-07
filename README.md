@@ -43,6 +43,15 @@
 
 ## News
 
+##### 7 January 2024
+
+Btop release v1.3.0
+
+Big release with GPU support added for Linux and platform support for OpenBSD. Big thanks to @romner-set (GPU support) and @joske (OpenBSD support) for contributions.
+And a multitude of bugfixes and small changes, see [CHANGES.md](CHANGES.md) and latest [release](https://github.com/aristocratos/btop/releases/latest) for detailed list and attributions.
+
+See news entry below for more information regarding GPU support.
+
 ##### 25 November 2023
 
 GPU monitoring added for Linux!
@@ -69,6 +78,9 @@ Big update with version bump to 1.3 coming soon.
 
 First release of btop4win available at https://github.com/aristocratos/btop4win
 
+<details>
+<summary>More...</summary>
+
 ##### 16 January 2022
 
 Release v1.2.0 with FreeBSD support. No release binaries for FreeBSD provided as of yet.
@@ -83,9 +95,6 @@ Release v1.1.0 with macOS support. Binaries in [continuous-build-macos](https://
 macOS binaries + installer are included for both x86 and ARM64 (Apple Silicon) in the releases.
 
 Big thank you to [@joske](https://github.com/joske) who wrote the vast majority of the implementation!
-
-<details>
-<summary>More...</summary>
 
 ##### 30 October 2021
 
