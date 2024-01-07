@@ -120,11 +120,12 @@ target_include_directories(btop SYSTEM PRIVATE include)
 # Enable pthreads
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-target_link_libraries(btop Threads::Threads dl)
+target_link_libraries(btop Threads::Threads)
 
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(btop PRIVATE GPU_SUPPORT)
+  target_link_libraries(btop dl)
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
