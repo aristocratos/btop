@@ -406,7 +406,7 @@ namespace Tools {
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
-		bool not_true{}; // defaults to false
+		bool not_true{};
 	public:
 		atomic_lock(atomic<bool>& atom, bool wait = false);
 		~atomic_lock();

@@ -65,8 +65,8 @@ namespace Draw {
 
 	//* An editable text field
 	class TextEdit {
-		size_t pos{};   // defaults to 0
-		size_t upos{};  // defaults to 0
+		size_t pos{};
+		size_t upos{};
 		bool numeric;
 	public:
 		string text;

@@ -307,8 +307,8 @@ namespace Draw {
 			{"/uptime", ""}
 		};
 
-		static time_t c_time{};     // defaults to 0
-		static size_t clock_len{};  // defaults to 0
+		static time_t c_time{};
+		static size_t clock_len{};
 		static string clock_str;
 
 		if (auto n_time = time(nullptr); not force and n_time == c_time)
