@@ -11,7 +11,7 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 project("btop"
-  VERSION 1.2.13
+  VERSION 1.3.0
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
   LANGUAGES CXX
@@ -97,7 +97,7 @@ if(BTOP_WERROR)
 endif()
 
 if(NOT APPLE)
- target_compile_options(btop PRIVATE -fstack-clash-protection)
+  target_compile_options(btop PRIVATE -fstack-clash-protection)
 endif()
 check_cxx_compiler_flag(-fstack-protector HAS_FSTACK_PROTECTOR)
 if(HAS_FSTACK_PROTECTOR)
