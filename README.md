@@ -224,6 +224,10 @@ Also needs a UTF8 locale and a font that covers:
 
 ### **Optional Dependencies (Needed for GPU monitoring)**
 
+GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
+
+See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
+
  * **NVIDIA**
 
 If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
