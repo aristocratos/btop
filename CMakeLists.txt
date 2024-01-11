@@ -41,6 +41,7 @@ option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
+option(BTOP_FORTIFY "Detect buffer overflows with _FORTIFY_SOURCE=3" ON)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -112,7 +113,7 @@ target_compile_definitions(btop PRIVATE
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
   # Only has an effect with optimizations enabled
-  $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
+  $<$<AND:$<NOT:$<CONFIG:Debug>>,$<BOOL:${BTOP_FORTIFY}>>:_FORTIFY_SOURCE=3>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
