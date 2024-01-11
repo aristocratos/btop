@@ -222,6 +222,22 @@ Also needs a UTF8 locale and a font that covers:
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
+### **Optional Dependencies (Needed for GPU monitoring)**
+
+GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
+
+See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
+
+ * **NVIDIA**
+
+If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
+
+In addition to that you must also have the nvidia-ml dynamic library installed, which should be included with the driver package of your distribution.
+
+ * **AMD**
+
+If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packaged for your distribution.
+
 ### **Notice (Text rendering issues)**
 
 * If you are having problems with the characters in the graphs not looking like they do in the screenshots, it's likely a problem with your systems configured fallback font not having support for braille characters.
