@@ -52,7 +52,7 @@ endif
 
 FORTIFY_SOURCE ?= true
 ifeq ($(FORTIFY_SOURCE),true)
-	override ADDFLAGS += -D_FORTIFY_SOURCE=3
+	override ADDFLAGS += -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 endif
 
 #? Compiler and Linker
