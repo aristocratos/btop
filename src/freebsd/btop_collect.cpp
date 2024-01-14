@@ -265,7 +265,7 @@ namespace Cpu {
 				got_sensors = true;
 				int temp;
 				size_t size = sizeof(temp);
-				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, nullptr, 0); //asuming the max temp is same for all cores
+				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, nullptr, 0); //assuming the max temp is same for all cores
 				temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
 				current_cpu.temp_max = temp;
 			}
@@ -907,7 +907,7 @@ namespace Net {
 				}
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto &iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);

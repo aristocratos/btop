@@ -452,7 +452,7 @@ namespace Runner {
 		}
 	};
 
-	//* Wrapper for raising priviliges when using SUID bit
+	//* Wrapper for raising privileges when using SUID bit
 	class gain_priv {
 		int status = -1;
 	public:
@@ -885,7 +885,7 @@ int main(int argc, char **argv) {
 
 	Global::start_time = time_s();
 
-	//? Save real and effective userid's and drop priviliges until needed if running with SUID bit set
+	//? Save real and effective userid's and drop privileges until needed if running with SUID bit set
 	Global::real_uid = getuid();
 	Global::set_uid = geteuid();
 	if (Global::real_uid != Global::set_uid) {

@@ -180,7 +180,7 @@ Fixed incorrect used and available memory for OSX | | 4461a43
 
 * Fixed: Wrong memory unit when shorten and size is less than 10, by @mohi001
 
-* Fixed: Use cpu cores avarage temp if missing cpu package temp for FreeBSD
+* Fixed: Use cpu cores average temp if missing cpu package temp for FreeBSD
 
 * Changed: Enter symbol to a more common variant
 
@@ -476,7 +476,7 @@ Fixed incorrect used and available memory for OSX | | 4461a43
 
 * Fixed: Sizing constraints bug on start and boxes can be toggled from size error screen
 
-* Fixed: UTF-8 check crashing if LANG was set to non existant locale
+* Fixed: UTF-8 check crashing if LANG was set to non existent locale
 
 ## v1.0.4
 
