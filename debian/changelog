@@ -1,4 +1,4 @@
-btop (1.x.y) UNRELEASED; urgency=low
+btop (1.3.0) UNRELEASED; urgency=low
 
   * Initial release for native upstream builds.
 

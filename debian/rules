@@ -24,19 +24,6 @@ export PREFIX := /usr
 # @TODO: Does not seem to take effect as local include/fmt is found first
 export CXXFLAGS=-I/usr/include/fmt
 
-# Automatic version from sources
-VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"")
-
-# This will affect the built .deb package but modifying debian/changelog during
-# build is too late for many tools and e.g. the .changes files will be using the
-# original version
-override_dh_auto_clean:
-	# Too complex, depends on devscripts
-	#dch --force-bad-version --newversion $(VERSION) "Automatic build"
-	# Simple sed on changelog (extra substvars does not seem to have effect)
-	sed "s/1.x.y/$(VERSION)/" -i debian/changelog debian/substvars
-	dh_auto_clean
-
 # From Debhelper 15 onwards this will be automatic, but until then
 # dh_auto_install defaults in a single package build in installing everything to
 # debian/btop which is undesired in this case, as we want to control the files
