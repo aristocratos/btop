@@ -32,7 +32,7 @@ namespace Theme {
 	extern std::filesystem::path theme_dir;
 	extern std::filesystem::path user_theme_dir;
 
-	//* Contains "Default" and "TTY" at indeces 0 and 1, otherwise full paths to theme files
+	//* Contains "Default" and "TTY" at indices 0 and 1, otherwise full paths to theme files
 	extern vector<string> themes;
 
 	//* Generate escape sequence for 24-bit or 256 color and return as a string

@@ -89,7 +89,7 @@ namespace Term {
 	}
 
 	bool refresh(bool only_check) {
-		// Query dimensions of '/dev/tty' of the 'STDOUT_FILENO' isn't avaiable.
+		// Query dimensions of '/dev/tty' of the 'STDOUT_FILENO' isn't available.
 		// This variable is set in those cases to avoid calls to ioctl
 		constinit static bool uses_dev_tty = false;
 		struct winsize wsize {};
@@ -644,7 +644,7 @@ namespace Logger {
 	size_t loglevel;
 	fs::path logfile;
 
-	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
+	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
 	class lose_priv {
 		int status = -1;
 	public:

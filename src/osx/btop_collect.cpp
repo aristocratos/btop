@@ -144,7 +144,7 @@ namespace Shared {
 
 		mach_timebase_info_data_t convf;
 		if (mach_timebase_info(&convf) == KERN_SUCCESS) {
-			machTck = convf.numer / convf.denom;
+			machTck = convf.number / convf.denom;
 		} else {
 			Logger::warning("Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be incorrect.");
 			machTck = 100;
@@ -606,7 +606,7 @@ namespace Mem {
 
 		mach_port_t libtop_master_port;
 		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("errot getting master port");
+			Logger::error("error getting master port");
 			return;
 		}
 		/* Get the list of all drive objects. */
@@ -940,7 +940,7 @@ namespace Net {
 				}
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto &iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);

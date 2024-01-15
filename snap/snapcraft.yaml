@@ -56,7 +56,7 @@ parts:
       - build-essential
       - gcc-11
       - g++-11
-      
+
     override-pull: |
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
