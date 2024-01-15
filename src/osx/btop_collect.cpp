@@ -144,7 +144,7 @@ namespace Shared {
 
 		mach_timebase_info_data_t convf;
 		if (mach_timebase_info(&convf) == KERN_SUCCESS) {
-			machTck = convf.number / convf.denom;
+			machTck = convf.numer / convf.denom;
 		} else {
 			Logger::warning("Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be incorrect.");
 			machTck = 100;
