@@ -362,7 +362,12 @@ void _signal_handler(const int sig) {
 			term_resize();
 			break;
 		case SIGUSR1:
-			// Input::poll interrupt
+			vector<string> warnings;
+			Config::load(Config::conf_file, warnings);
+			Theme::setTheme();
+			Draw::banner_gen(0, 0, false, true);
+			Draw::calcSizes();
+			Runner::run("all", false, true);
 			break;
 	}
 }
