@@ -362,6 +362,9 @@ void _signal_handler(const int sig) {
 			term_resize();
 			break;
 		case SIGUSR1:
+			// Input::poll interrupt
+			break;
+		case SIGUSR2:
 			vector<string> warnings;
 			Config::load(Config::conf_file, warnings);
 			Theme::setTheme();
@@ -1040,6 +1043,7 @@ int main(int argc, char **argv) {
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
 	std::signal(SIGUSR1, _signal_handler);
+	std::signal(SIGUSR2, _signal_handler);
 
 	sigset_t mask;
 	sigemptyset(&mask);
