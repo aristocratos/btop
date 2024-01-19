@@ -1501,11 +1501,11 @@ namespace Proc {
 			}
 			else selected++;
 		}
-		else if (cmd_key == "page_up") {
+		else if (cmd_key == "page_up" or (vim_keys and cmd_key == "ctrl+b")) {
 			if (selected > 0 and start == 0) selected = 0;
 			else start = max(0, start - select_max);
 		}
-		else if (cmd_key == "page_down") {
+		else if (cmd_key == "page_down" or (vim_keys and cmd_key == "ctrl+f")) {
 			if (selected > 0 and start >= numpids - select_max) selected = select_max;
 			else start = clamp(start + select_max, 0, max(0, numpids - select_max));
 		}
@@ -1516,6 +1516,21 @@ namespace Proc {
 		else if (cmd_key == "end" or (vim_keys and cmd_key == "G")) {
 			start = max(0, numpids - select_max);
 			if (selected > 0) selected = select_max;
+		}
+		else if (vim_keys and cmd_key == "ctrl+u") {
+			if (start > 0 and selected <= 10) {
+				start = max(0, start - 10);
+			}
+			else selected = max(0, selected - 10);
+			if (Config::getI("proc_last_selected") > 0) Config::set("proc_last_selected", 0);
+		}
+		else if (vim_keys and cmd_key == "ctrl+d") {
+			if (start < numpids - select_max and selected == select_max) start += 10;
+			else if (selected == 0 and last_selected > 0) {
+				selected = last_selected;
+				Config::set("proc_last_selected", 0);
+			}
+			else selected += 10;
 		}
 		else if (cmd_key.starts_with("mousey")) {
 			int mouse_y = std::stoi(cmd_key.substr(6));
