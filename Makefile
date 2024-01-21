@@ -47,7 +47,7 @@ ifneq ($(GPU_SUPPORT),true)
 endif
 
 ifeq ($(GPU_SUPPORT),true)
-	override ADDFLAGS += -DGPU_SUPPORT
+	override ADDFLAGS += -DGPU_SUPPORT -ldl
 endif
 
 FORTIFY_SOURCE ?= true

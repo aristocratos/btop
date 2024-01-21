@@ -126,6 +126,7 @@ target_link_libraries(btop Threads::Threads)
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(btop PRIVATE GPU_SUPPORT)
+  target_link_libraries(btop ${CMAKE_DL_LIBS})
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
