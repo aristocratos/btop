@@ -202,7 +202,7 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
