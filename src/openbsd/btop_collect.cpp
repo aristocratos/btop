@@ -385,8 +385,8 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		long seconds = -1;
 		uint32_t percent = -1;
@@ -417,7 +417,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		return {percent, -1, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
