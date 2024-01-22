@@ -11,7 +11,7 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 project("btop"
-  VERSION 1.2.13
+  VERSION 1.3.0
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
   LANGUAGES CXX
@@ -41,6 +41,7 @@ option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
+option(BTOP_FORTIFY "Detect buffer overflows with _FORTIFY_SOURCE=3" ON)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -97,7 +98,7 @@ if(BTOP_WERROR)
 endif()
 
 if(NOT APPLE)
- target_compile_options(btop PRIVATE -fstack-clash-protection)
+  target_compile_options(btop PRIVATE -fstack-clash-protection)
 endif()
 check_cxx_compiler_flag(-fstack-protector HAS_FSTACK_PROTECTOR)
 if(HAS_FSTACK_PROTECTOR)
@@ -112,7 +113,7 @@ target_compile_definitions(btop PRIVATE
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
   # Only has an effect with optimizations enabled
-  $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
+  $<$<AND:$<NOT:$<CONFIG:Debug>>,$<BOOL:${BTOP_FORTIFY}>>:_FORTIFY_SOURCE=3>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)

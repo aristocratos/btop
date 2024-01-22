@@ -1,6 +1,8 @@
 ## v1.3.0
 
-* Added Gpu Support | @romner-set | PR #529
+* Added Gpu Support Linux | @romner-set | PR #529
+
+* Added platform support for OpenBSD | @joske | PR #607
 
 * Enable macos clang | @muneebmahmed | PR #666
 
@@ -41,6 +43,16 @@
 * FreeBSD swap info | @rrveex | #560
 
 * Create adwaita.theme | @flipflop133 | #485
+
+* Try get terminal size of "/dev/tty" if stdout fails | @imwints | PR #627
+
+* Refresh rate program argument | @imwints | PR #640
+
+* Improved error handling when determining the config directory | @imwints | #652
+
+* Use native POSIX polling syscalls to read input | @lvxnull | #624
+
+* Conditional compile on Big Sur and up | @joske | PR #690
 
 + Various fixes by @imwints, @simplepad, @joske, @gwena, @cpalv, @iambeingtracked, @mattico, @NexAdn
 

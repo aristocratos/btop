@@ -46,12 +46,12 @@ namespace Menu {
 	//? Strings in content vector is not checked for box width overflow
 	class msgBox {
 		string box_contents, button_left, button_right;
-		int height{};       // defaults to 0
-		int width{};        // defaults to 0
-		int boxtype{};      // defaults to 0
-		int selected{};     // defaults to 0
-		int x{};            // defaults to 0
-		int y{};            // defaults to 0
+		int height{};
+		int width{};
+		int boxtype{};
+		int selected{};
+		int x{};
+		int y{};
 	public:
 		enum BoxTypes { OK, YES_NO, NO_YES };
 		enum msgReturn {

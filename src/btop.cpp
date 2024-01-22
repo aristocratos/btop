@@ -96,9 +96,9 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-	bool debuginit{};   // defaults to false
-	bool debug{};       // defaults to false
-	bool utf_force{};   // defaults to false
+	bool debuginit{};
+	bool debug{};
+	bool utf_force{};
 
 	uint64_t start_time;
 
@@ -107,9 +107,10 @@ namespace Global {
 	atomic<bool> should_quit (false);
 	atomic<bool> should_sleep (false);
 	atomic<bool> _runner_started (false);
+	atomic<bool> init_conf (false);
 
-	bool arg_tty{};         // defaults to false
-	bool arg_low_color{};   // defaults to false
+	bool arg_tty{};
+	bool arg_low_color{};
 	int arg_preset = -1;
 	int arg_update = 0;
 }
@@ -418,7 +419,7 @@ namespace Runner {
 
 	string output;
 	string empty_bg;
-	bool pause_output{}; // defaults to false
+	bool pause_output{};
 	sigset_t mask;
 	pthread_t runner_id;
 	pthread_mutex_t mtx;
@@ -894,10 +895,10 @@ int main(int argc, char **argv) {
 	}
 
 	//? Config init
-	{	vector<string> load_warnings;
+	{
+		atomic_lock lck(Global::init_conf);
+		vector<string> load_warnings;
 		Config::load(Config::conf_file, load_warnings);
-
-		if (Config::current_boxes.empty()) Config::check_boxes(Config::getS("shown_boxes"));
 		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
 
 		if (Global::debug) {
@@ -918,7 +919,7 @@ int main(int argc, char **argv) {
 	}
 	else {
 		string found;
-		bool set_failure{}; // defaults to false
+		bool set_failure{};
 		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
 			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
@@ -1016,6 +1017,11 @@ int main(int argc, char **argv) {
 	catch (const std::exception& e) {
 		Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
 		clean_quit(1);
+	}
+
+	if (not Config::check_boxes(Config::getS("shown_boxes"))) {
+		Config::check_boxes("cpu mem net proc");
+		Config::set("shown_boxes", "cpu mem net proc"s);
 	}
 
 	//? Update list of available themes and generate the selected theme

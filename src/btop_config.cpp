@@ -510,7 +510,7 @@ namespace Config {
 		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
 			validError = fmt::format("Invalid graph symbol identifier for {}: {}", name, value);
 
-		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
+		else if (name == "shown_boxes" and not Global::init_conf and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
 
 	#ifdef GPU_SUPPORT
@@ -622,8 +622,7 @@ namespace Config {
 			if (not v_contains(valid_boxes, box)) return false;
 		#ifdef GPU_SUPPORT
 			if (box.starts_with("gpu")) {
-				size_t gpu_num = stoi(box.substr(3));
-				if (gpu_num == 0) gpu_num = 5;
+				size_t gpu_num = stoi(box.substr(3)) + 1;
 				if (std::cmp_greater(gpu_num, Gpu::gpu_names.size())) return false;
 			}
 		#endif

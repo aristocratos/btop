@@ -54,6 +54,7 @@ namespace Global {
 	extern string overlay;
 	extern string clock;
 	extern uid_t real_uid, set_uid;
+	extern atomic<bool> init_conf;
 }
 
 namespace Runner {
@@ -228,11 +229,11 @@ namespace Mem {
 		string name;
 		string fstype{};                // defaults to ""
 		std::filesystem::path stat{};   // defaults to ""
-		int64_t total{};                // defaults to 0
-		int64_t used{};                 // defaults to 0
-		int64_t free{};                 // defaults to 0
-		int used_percent{};             // defaults to 0
-		int free_percent{};             // defaults to 0
+		int64_t total{};
+		int64_t used{};
+		int64_t free{};
+		int used_percent{};
+		int free_percent{};
 
 		array<int64_t, 3> old_io = {0, 0, 0};
 		deque<long long> io_read = {};
@@ -272,12 +273,12 @@ namespace Net {
 	extern std::unordered_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed{};       // defaults to 0
-		uint64_t top{};         // defaults to 0
-		uint64_t total{};       // defaults to 0
-		uint64_t last{};        // defaults to 0
-		uint64_t offset{};      // defaults to 0
-		uint64_t rollover{};    // defaults to 0
+		uint64_t speed{};
+		uint64_t top{};
+		uint64_t total{};
+		uint64_t last{};
+		uint64_t offset{};
+		uint64_t rollover{};
 	};
 
 	struct net_info {
@@ -285,7 +286,7 @@ namespace Net {
 		std::unordered_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
 		string ipv4{};      // defaults to ""
 		string ipv6{};      // defaults to ""
-		bool connected{};   // defaults to false
+		bool connected{};
 	};
 
 	extern std::unordered_map<string, net_info> current_net;
@@ -337,32 +338,32 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		size_t pid{};           // defaults to 0
+		size_t pid{};
 		string name{};          // defaults to ""
 		string cmd{};           // defaults to ""
 		string short_cmd{};     // defaults to ""
-		size_t threads{};       // defaults to 0
-		int name_offset{};      // defaults to 0
+		size_t threads{};
+		int name_offset{};
 		string user{};          // defaults to ""
-		uint64_t mem{};         // defaults to 0
+		uint64_t mem{};
 		double cpu_p{};         // defaults to = 0.0
 		double cpu_c{};         // defaults to = 0.0
 		char state = '0';
-		int64_t p_nice{};      // defaults to 0
-		uint64_t ppid{};        // defaults to 0
-		uint64_t cpu_s{};       // defaults to 0
-		uint64_t cpu_t{};       // defaults to 0
+		int64_t p_nice{};
+		uint64_t ppid{};
+		uint64_t cpu_s{};
+		uint64_t cpu_t{};
 		string prefix{};        // defaults to ""
-		size_t depth{};         // defaults to 0
-		size_t tree_index{};    // defaults to 0
-		bool collapsed{};       // defaults to false
-		bool filtered{};        // defaults to false
+		size_t depth{};
+		size_t tree_index{};
+		bool collapsed{};
+		bool filtered{};
 	};
 
 	//* Container for process info box
 	struct detail_container {
-		size_t last_pid{}; // defaults to 0
-		bool skip_smaps{}; // defaults to false
+		size_t last_pid{};
+		bool skip_smaps{};
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;

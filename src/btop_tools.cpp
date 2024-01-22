@@ -54,9 +54,9 @@ namespace rng = std::ranges;
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
 
-	atomic<bool> initialized{}; // defaults to false
-	atomic<int> width{};        // defaults to 0
-	atomic<int> height{};       // defaults to 0
+	atomic<bool> initialized{};
+	atomic<int> width{};
+	atomic<int> height{};
 	string current_tty;
 
 	namespace {

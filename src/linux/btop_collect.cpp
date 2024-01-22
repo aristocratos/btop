@@ -77,8 +77,8 @@ namespace Cpu {
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
-	bool got_sensors{};     // defaults to false
-	bool cpu_temp_only{};   // defaults to false
+	bool got_sensors{};
+	bool cpu_temp_only{};
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -92,9 +92,9 @@ namespace Cpu {
 	struct Sensor {
 		fs::path path;
 		string label;
-		int64_t temp{}; // defaults to 0
-		int64_t high{}; // defaults to 0
-		int64_t crit{}; // defaults to 0
+		int64_t temp{};
+		int64_t high{};
+		int64_t crit{};
 	};
 
 	std::unordered_map<string, Sensor> found_sensors;
@@ -542,14 +542,14 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		static int failed{}; // defaults to 0
+		static int failed{};
 
 		if (failed > 4)
 			return ""s;
 
 		string cpuhz;
 		try {
-			double hz{}; // defaults to 0.0
+			double hz{};
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
 			if (not freq_path.empty()) {
 				hz = stod(readfile(freq_path, "0.0")) / 1000;
@@ -605,9 +605,9 @@ namespace Cpu {
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
-			int cpu{};  // defaults to 0
-			int core{}; // defaults to 0
-			int n{};    // defaults to 0
+			int cpu{};
+			int core{};
+			int n{};
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -1554,10 +1554,10 @@ namespace Gpu {
 #endif
 
 namespace Mem {
-	bool has_swap{}; // defaults to false
+	bool has_swap{};
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
-	int disk_ios{}; // defaults to 0
+	int disk_ios{};
 	vector<string> last_found;
 
 	//?* Find the filepath to the specified ZFS object's stat file
@@ -2045,10 +2045,10 @@ namespace Mem {
 		int64_t bytes_read;
 		int64_t bytes_write;
 		int64_t io_ticks;
-		int64_t bytes_read_total{};     // defaults to 0
-		int64_t bytes_write_total{};    // defaults to 0
-		int64_t io_ticks_total{};       // defaults to 0
-		int64_t objects_read{};         // defaults to 0
+		int64_t bytes_read_total{};
+		int64_t bytes_write_total{};
+		int64_t io_ticks_total{};
+		int64_t objects_read{};
 
 		// looking through all files that start with 'objset'
 		for (const auto& file: fs::directory_iterator(disk.stat)) {
@@ -2124,11 +2124,11 @@ namespace Net {
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
-	int errors{}; // defaults to 0
+	int errors{};
 	std::unordered_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
 	std::unordered_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
 	bool rescale{true};
-	uint64_t timestamp{}; // defaults to 0
+	uint64_t timestamp{};
 
 	//* RAII wrapper for getifaddrs
 	class getifaddr_wrapper {
@@ -2217,7 +2217,7 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					uint64_t val{}; // defaults to 0
+					uint64_t val{};
 					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
@@ -2337,15 +2337,15 @@ namespace Proc {
 	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
-	bool current_rev{}; // defaults to false
+	bool current_rev{};
 
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
 	int collapse = -1, expand = -1;
-	uint64_t old_cputimes{};    // defaults to 0
-	atomic<int> numpids{};      // defaults to 0
-	int filter_found{};         // defaults to 0
+	uint64_t old_cputimes{};
+	atomic<int> numpids{};
+	int filter_found{};
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
@@ -2477,7 +2477,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		static size_t proc_clear_count{}; // defaults to 0
+		static size_t proc_clear_count{};
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -2552,7 +2552,7 @@ namespace Proc {
 
 				//? Check if pid already exists in current_procs
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-				bool no_cache{}; // defaults to false
+				bool no_cache{};
 				if (find_old == current_procs.end()) {
 					current_procs.push_back({pid});
 					find_old = current_procs.end() - 1;
