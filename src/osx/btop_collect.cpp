@@ -689,8 +689,9 @@ namespace Mem {
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
 			mem.stats.at("free") = p.free_count * Shared::pageSize;
 			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.inactive_count + p.wire_count) * Shared::pageSize;
-			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+			uint64_t used = (p.active_count + p.inactive_count + p.compressor_page_count + p.wire_count) * Shared::pageSize;
+			mem.stats.at("used") = used;
+			mem.stats.at("available") = Shared::totalMem - used;
 		}
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
