@@ -49,6 +49,8 @@ stage/
 build
 bin
 btop
+/obj/
+config.h
 .*/
 
 # Optional libraries

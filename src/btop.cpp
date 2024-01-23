@@ -52,6 +52,7 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_draw.hpp"
 #include "btop_menu.hpp"
+#include "config.h"
 #include "fmt/core.h"
 
 using std::atomic;
@@ -115,6 +116,19 @@ namespace Global {
 	int arg_update = 0;
 }
 
+static void print_version() {
+	if constexpr (GIT_COMMIT.empty()) {
+		fmt::print("btop version: {}\n", Global::Version);
+	} else {
+		fmt::print("btop version: {}+{}\n", Global::Version, GIT_COMMIT);
+	}
+}
+
+static void print_version_with_build_info() {
+	print_version();
+	fmt::print("Compiled with: {} ({})\nConfigured with: {}\n", COMPILER, COMPILER_VERSION, CONFIGURE_COMMAND);
+}
+
 //* A simple argument parser
 void argumentParser(const int argc, char **argv) {
 	for(int i = 1; i < argc; i++) {
@@ -136,8 +150,12 @@ void argumentParser(const int argc, char **argv) {
 			);
 			exit(0);
 		}
-		else if (is_in(argument, "-v", "--version")) {
-			fmt::println("btop version: {}", Global::Version);
+		else if (is_in(argument, "-v")) {
+			print_version();
+			exit(0);
+		}
+		else if (is_in(argument, "--version")) {
+			print_version_with_build_info();
 			exit(0);
 		}
 		else if (is_in(argument, "-lc", "--low-color")) {

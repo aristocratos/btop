@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include <string_view>
+
+constexpr std::string_view GIT_COMMIT        = "@GIT_COMMIT@";
+constexpr std::string_view COMPILER          = "@COMPILER@";
+constexpr std::string_view COMPILER_VERSION  = "@COMPILER_VERSION@";
+constexpr std::string_view CONFIGURE_COMMAND = "@CONFIGURE_COMMAND@";
