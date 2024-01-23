@@ -28,10 +28,9 @@ Any bug that can be solved by just reading the [prerequisites](https://github.co
 [If applicable, add screenshots to help explain your problem.]
 
 **Info (please complete the following information):**
- - btop++ version: `btop -v`
+ - btop++ version: `btop --version`
    - If using snap: `snap info btop`
  - Binary: [self compiled or static binary from release]
- - (If compiled) Compiler and version:
  - Architecture: [x86_64, aarch64, etc.] `uname -m`
  - Platform: [Linux, FreeBSD, OsX]
  - (Linux) Kernel: `uname -r`
