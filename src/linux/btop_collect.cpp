@@ -583,7 +583,7 @@ namespace Cpu {
 				cpuhz += " GHz";
 			}
 			else if (hz > 0)
-				cpuhz = to_string((int)round(hz)) + " MHz";
+				cpuhz = to_string((int)hz) + " MHz";
 
 		}
 		catch (const std::exception& e) {
