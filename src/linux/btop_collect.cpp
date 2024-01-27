@@ -160,14 +160,15 @@ namespace Gpu {
 	namespace Rsmi {
 	#if !defined(RSMI_STATIC)
 		//? RSMI defines, structs & typedefs
-		#define RSMI_MAX_NUM_FREQUENCIES  32
-		#define RSMI_STATUS_SUCCESS        0
-		#define RSMI_MEM_TYPE_VRAM         0
-		#define RSMI_TEMP_CURRENT          0
-		#define RSMI_TEMP_TYPE_EDGE        0
-		#define RSMI_CLK_TYPE_MEM          4
-		#define RSMI_CLK_TYPE_SYS          0
-		#define RSMI_TEMP_MAX              1
+		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
+		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
+		#define RSMI_STATUS_SUCCESS           0
+		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_TEMP_CURRENT             0
+		#define RSMI_TEMP_TYPE_EDGE           0
+		#define RSMI_CLK_TYPE_MEM             4
+		#define RSMI_CLK_TYPE_SYS             0
+		#define RSMI_TEMP_MAX                 1
 
 		typedef int rsmi_status_t,
 					rsmi_temperature_metric_t,
@@ -175,8 +176,8 @@ namespace Gpu {
 					rsmi_memory_type_t;
 
 		struct rsmi_version_t {uint32_t major,  minor,  patch; const char* build;};
-		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current, frequency[RSMI_MAX_NUM_FREQUENCIES];};
-		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current, frequency[RSMI_MAX_NUM_FREQUENCIES];};
+		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V5];};
+		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V6];};
 
 		//? Function pointers
 		rsmi_status_t (*rsmi_init)(uint64_t);
@@ -1265,6 +1266,7 @@ namespace Gpu {
 
 		    LOAD_SYM(rsmi_init);
 		    LOAD_SYM(rsmi_shut_down);
+			LOAD_SYM(rsmi_version_get);
 		    LOAD_SYM(rsmi_num_monitor_devices);
 		    LOAD_SYM(rsmi_dev_name_get);
 		    LOAD_SYM(rsmi_dev_power_cap_get);
