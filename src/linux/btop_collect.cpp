@@ -160,36 +160,43 @@ namespace Gpu {
 	namespace Rsmi {
 	#if !defined(RSMI_STATIC)
 		//? RSMI defines, structs & typedefs
-		#define RSMI_MAX_NUM_FREQUENCIES  32
-		#define RSMI_STATUS_SUCCESS        0
-		#define RSMI_MEM_TYPE_VRAM         0
-		#define RSMI_TEMP_CURRENT          0
-		#define RSMI_TEMP_TYPE_EDGE        0
-		#define RSMI_CLK_TYPE_MEM          4
-		#define RSMI_CLK_TYPE_SYS          0
-		#define RSMI_TEMP_MAX              1
+		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
+		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
+		#define RSMI_STATUS_SUCCESS           0
+		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_TEMP_CURRENT             0
+		#define RSMI_TEMP_TYPE_EDGE           0
+		#define RSMI_CLK_TYPE_MEM             4
+		#define RSMI_CLK_TYPE_SYS             0
+		#define RSMI_TEMP_MAX                 1
 
 		typedef int rsmi_status_t,
 					rsmi_temperature_metric_t,
 					rsmi_clk_type_t,
 					rsmi_memory_type_t;
 
-		struct rsmi_frequencies_t {uint32_t num_supported, current, frequency[RSMI_MAX_NUM_FREQUENCIES];};
+		struct rsmi_version_t {uint32_t major,  minor,  patch; const char* build;};
+		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V5];};
+		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V6];};
 
 		//? Function pointers
 		rsmi_status_t (*rsmi_init)(uint64_t);
 		rsmi_status_t (*rsmi_shut_down)();
+		rsmi_status_t (*rsmi_version_get)(rsmi_version_t*);
 		rsmi_status_t (*rsmi_num_monitor_devices)(uint32_t*);
 		rsmi_status_t (*rsmi_dev_name_get)(uint32_t, char*, size_t);
 		rsmi_status_t (*rsmi_dev_power_cap_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_temp_metric_get)(uint32_t, uint32_t, rsmi_temperature_metric_t, int64_t*);
 		rsmi_status_t (*rsmi_dev_busy_percent_get)(uint32_t, uint32_t*);
 		rsmi_status_t (*rsmi_dev_memory_busy_percent_get)(uint32_t, uint32_t*);
-		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t*);
+		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v5)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v5*);
+		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v6)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v6*);
 		rsmi_status_t (*rsmi_dev_power_ave_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_total_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_usage_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_pci_throughput_get)(uint32_t, uint64_t*, uint64_t*, uint64_t*);
+
+		uint32_t version_major = 0;
 
 		//? Data
 		void* rsmi_dl_handle;
@@ -1305,13 +1312,13 @@ namespace Gpu {
 
 		    LOAD_SYM(rsmi_init);
 		    LOAD_SYM(rsmi_shut_down);
+			LOAD_SYM(rsmi_version_get);
 		    LOAD_SYM(rsmi_num_monitor_devices);
 		    LOAD_SYM(rsmi_dev_name_get);
 		    LOAD_SYM(rsmi_dev_power_cap_get);
 		    LOAD_SYM(rsmi_dev_temp_metric_get);
 		    LOAD_SYM(rsmi_dev_busy_percent_get);
 		    LOAD_SYM(rsmi_dev_memory_busy_percent_get);
-		    LOAD_SYM(rsmi_dev_gpu_clk_freq_get);
 		    LOAD_SYM(rsmi_dev_power_ave_get);
 		    LOAD_SYM(rsmi_dev_memory_total_get);
 		    LOAD_SYM(rsmi_dev_memory_usage_get);
@@ -1326,6 +1333,26 @@ namespace Gpu {
 				Logger::debug("Failed to initialize ROCm SMI, AMD GPUs will not be detected");
 				return false;
 			}
+
+		#if !defined(RSMI_STATIC)
+			//? Check version
+			rsmi_version_t version;
+			result = rsmi_version_get(&version);
+			if (result != RSMI_STATUS_SUCCESS) {
+				Logger::warning("ROCm SMI: Failed to get version");
+				return false;
+			} else if (version.major == 5) {
+				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
+					return false;
+			} else if (version.major == 6) {
+				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
+					return false;
+			} else {
+				Logger::warning("ROCm SMI: Dynamic loading only supported for version 5 and 6");
+				return false;
+			}
+			version_major = version.major;
+		#endif
 
 			//? Device count
 			result = rsmi_num_monitor_devices(&device_count);
@@ -1410,7 +1437,46 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
     				} else gpus_slice[i].mem_utilization_percent.push_back((long long)utilization);
 				}
+			#if !defined(RSMI_STATIC)
+				//? Clock speeds
+				if (gpus_slice[i].supported_functions.gpu_clock) {
+					if (version_major == 5) {
+						rsmi_frequencies_t_v5 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_SYS, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+					else if (version_major == 6) {
+						rsmi_frequencies_t_v6 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_SYS, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+				}
 
+				if (gpus_slice[i].supported_functions.mem_clock) {
+					if (version_major == 5) {
+						rsmi_frequencies_t_v5 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_MEM, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+					else if (version_major == 6) {
+						rsmi_frequencies_t_v6 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_MEM, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+				}
+			#else
 				//? Clock speeds
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					rsmi_frequencies_t frequencies;
@@ -1429,6 +1495,7 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
     				} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
+			#endif
 
     			//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
