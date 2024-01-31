@@ -729,9 +729,9 @@ namespace Config {
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
-			cwrite << "#? Config file for btop v. " << Global::Version;
+			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
 			for (auto [name, description] : descriptions) {
-				cwrite 	<< "\n\n" << (description.empty() ? "" : description + "\n")
+				cwrite << "\n" << (description.empty() ? "" : description + "\n")
 						<< name << " = ";
 				if (strings.contains(name))
 					cwrite << "\"" << strings.at(name) << "\"";
@@ -739,6 +739,7 @@ namespace Config {
 					cwrite << ints.at(name);
 				else if (bools.contains(name))
 					cwrite << (bools.at(name) ? "True" : "False");
+				cwrite << "\n";
 			}
 		}
 	}
