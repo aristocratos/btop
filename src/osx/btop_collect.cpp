@@ -1212,10 +1212,14 @@ namespace Proc {
 					//? Get program name, command, username, parent pid, nice and status
 					if (no_cache) {
 						char fullname[PROC_PIDPATHINFO_MAXSIZE];
-						proc_pidpath(pid, fullname, sizeof(fullname));
-						const string f_name = std::string(fullname);
-						size_t lastSlash = f_name.find_last_of('/');
-						new_proc.name = f_name.substr(lastSlash + 1);
+						int rc = proc_pidpath(pid, fullname, sizeof(fullname));
+						string f_name = "<defunct>";
+						if (rc != 0) {
+							f_name = std::string(fullname);
+							size_t lastSlash = f_name.find_last_of('/');
+							f_name = f_name.substr(lastSlash + 1);
+						}
+						new_proc.name = f_name;
 						//? Get process arguments if possible, fallback to process path in case of failure
 						if (Shared::arg_max > 0) {
 							std::unique_ptr<char[]> proc_chars(new char[Shared::arg_max]);
