@@ -920,7 +920,7 @@ int main(int argc, char **argv) {
 	else {
 		string found;
 		bool set_failure{};
-		for (const auto loc_env : array{"LANG", "LC_ALL"}) {
+		for (const auto loc_env : array{"LANG", "LC_ALL", "LC_CTYPE"}) {
 			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
 				found = std::getenv(loc_env);
 				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
