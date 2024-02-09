@@ -307,6 +307,17 @@ namespace Net {
 		bool connected{};
 	};
 
+	class IfAddrsPtr {
+		struct ifaddrs* ifaddr;
+		int status;
+	public:
+		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
+		~IfAddrsPtr() { freeifaddrs(ifaddr); }
+		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
+	};
+
 	extern std::unordered_map<string, net_info> current_net;
 
 	//* Collect net upload/download stats

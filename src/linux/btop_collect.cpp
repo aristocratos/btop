@@ -2151,16 +2151,6 @@ namespace Net {
 	bool rescale{true};
 	uint64_t timestamp{};
 
-	//* RAII wrapper for getifaddrs
-	class getifaddr_wrapper {
-		struct ifaddrs* ifaddr;
-	public:
-		int status;
-		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
-		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs* { return ifaddr; }
-	};
-
 	auto collect(bool no_update) -> net_info& {
 		if (Runner::stopping) return empty_net;
 		auto& net = current_net;
@@ -2171,10 +2161,10 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap {};
-			if (if_wrap.status != 0) {
+			IfAddrsPtr if_addrs {};
+			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
 				redraw = true;
 				return empty_net;
 			}
@@ -2186,7 +2176,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto* ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto& iface = ifa->ifa_name;
