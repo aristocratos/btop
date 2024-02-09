@@ -25,9 +25,18 @@ tab-size = 4
 #include <string>
 #include <tuple>
 #include <vector>
-#include <ifaddrs.h>
 #include <unordered_map>
 #include <unistd.h>
+
+// From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
+// clang-format off
+#include <net/if.h>
+#include <ifaddrs.h>
+// clang-format on
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+# include <kvm.h>
+#endif
 
 using std::array;
 using std::atomic;
@@ -83,6 +92,15 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+	struct KvmDeleter {
+		void operator()(kvm_t* handle) {
+			kvm_close(handle);
+		}
+	};
+	using KvmPtr = std::unique_ptr<kvm_t, KvmDeleter>;
+#endif
 }
 
 

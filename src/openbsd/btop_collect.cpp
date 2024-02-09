@@ -184,18 +184,6 @@ namespace Shared {
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
 	}
-
-	//* RAII wrapper for kvm_openfiles
-	class kvm_openfiles_wrapper {
-		kvm_t* kd = nullptr;
-	public:
-		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
-			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
-		}
-		~kvm_openfiles_wrapper() { kvm_close(kd); }
-		auto operator()() -> kvm_t* { return kd; }
-	};
-
 }  // namespace Shared
 
 namespace Cpu {
@@ -1102,8 +1090,8 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, nullptr, nullptr, KVM_NO_FILES, buf);
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get() , KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
 
 			for (int i = 0; i < count; i++) {
 				const struct kinfo_proc* kproc = &kprocs[i];
@@ -1130,7 +1118,7 @@ namespace Proc {
 						continue;
 					}
 					new_proc.name = kproc->p_comm;
-					char** argv = kvm_getargv(kd(), kproc, 0);
+					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
 							new_proc.cmd += argv[i] + " "s;
