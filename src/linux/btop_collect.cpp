@@ -301,7 +301,7 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array time_names {
 		"user"s, "nice"s, "system"s, "idle"s, "iowait"s,
@@ -671,13 +671,14 @@ namespace Cpu {
 	}
 
 	struct battery {
-		fs::path base_dir, energy_now, energy_full, power_now, status, online;
+		fs::path base_dir, energy_now, charge_now, energy_full, charge_full, power_now, current_now, voltage_now, status, online;
 		string device_type;
-		bool use_energy = true;
+		bool use_energy_or_charge = true;
+		bool use_power = true;
 	};
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 		static string auto_sel;
 		static std::unordered_map<string, battery> batteries;
 
@@ -709,19 +710,27 @@ namespace Cpu {
 						}
 
 						if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
-						else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
-						else new_bat.use_energy = false;
+						else if (fs::exists(bat_dir / "charge_now")) new_bat.charge_now = bat_dir / "charge_now";
+						else new_bat.use_energy_or_charge = false;
 
 						if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
-						else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
-						else new_bat.use_energy = false;
+						else if (fs::exists(bat_dir / "charge_full")) new_bat.charge_full = bat_dir / "charge_full";
+						else new_bat.use_energy_or_charge = false;
 
-						if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
+						if (not new_bat.use_energy_or_charge and not fs::exists(bat_dir / "capacity")) {
 							continue;
 						}
 
-						if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
-						else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+						if (fs::exists(bat_dir / "power_now")) {
+							new_bat.power_now = bat_dir / "power_now";
+						}
+						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "current_now"))) { 
+							 new_bat.current_now = bat_dir / "current_now";
+							 new_bat.voltage_now = bat_dir / "voltage_now";
+						} 
+						else { 
+							new_bat.use_power = false; 
+						}
 
 						if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
 						else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
@@ -736,7 +745,7 @@ namespace Cpu {
 			}
 			if (batteries.empty()) {
 				has_battery = false;
-				return {0, 0, ""};
+				return {0, 0, 0, ""};
 			}
 		}
 
@@ -756,15 +765,9 @@ namespace Cpu {
 
 		int percent = -1;
 		long seconds = -1;
+		float watts = -1;
 
 		//? Try to get battery percentage
-		if (b.use_energy) {
-			try {
-				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
-			}
-			catch (const std::invalid_argument&) { }
-			catch (const std::out_of_range&) { }
-		}
 		if (percent < 0) {
 			try {
 				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
@@ -772,9 +775,23 @@ namespace Cpu {
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
+		if (b.use_energy_or_charge and percent < 0) {
+			try {
+				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
+		if (b.use_energy_or_charge and percent < 0) {
+			try {
+				percent = round(100.0 * stoll(readfile(b.charge_now, "-1")) / stoll(readfile(b.charge_full, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
 		if (percent < 0) {
 			has_battery = false;
-			return {0, 0, ""};
+			return {0, 0, 0, ""};
 		}
 
 		//? Get charging/discharging status
@@ -788,13 +805,23 @@ namespace Cpu {
 
 		//? Get seconds to empty
 		if (not is_in(status, "charging", "full")) {
-			if (b.use_energy and not b.power_now.empty()) {
-				try {
-					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+			if (b.use_energy_or_charge ) {
+				if (not b.power_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
 				}
-				catch (const std::invalid_argument&) { }
-				catch (const std::out_of_range&) { }
+				else if (not b.current_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
+				}
 			}
+
 			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
 				try {
 					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
@@ -804,7 +831,26 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		//? Get power draw
+		if (b.use_power) {
+			if (not b.power_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.energy_now, "-1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+			else if (not b.voltage_now.empty() and not b.current_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0 * stoll(readfile(b.voltage_now, "1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+
+		}
+
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info& {

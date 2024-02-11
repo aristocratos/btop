@@ -199,6 +199,8 @@ namespace Config {
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
+		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
+
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 	#ifdef GPU_SUPPORT
@@ -293,6 +295,7 @@ namespace Config {
 		{"net_auto", true},
 		{"net_sync", true},
 		{"show_battery", true},
+		{"show_battery_watts", true},
 		{"vim_keys", false},
 		{"tty_mode", false},
 		{"disk_free_priv", false},
