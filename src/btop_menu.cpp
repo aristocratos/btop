@@ -177,6 +177,7 @@ namespace Menu {
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},
 		{"ctrl + z", "Sleep program and put in background."},
+		{"ctrl + r", "Reloads config file from disk."},
 		{"q, ctrl + c", "Quits program."},
 		{"+, -", "Add/Subtract 100ms to/from update timer."},
 		{"Up, Down", "Select in process list."},
