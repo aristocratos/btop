@@ -706,6 +706,7 @@ namespace Cpu {
 		if (Config::getB("show_battery") and has_battery) {
 			static int old_percent{};   // defaults to = 0
 			static long old_seconds{};  // defaults to = 0
+			static float old_watts{};	// defaults to = 0
 			static string old_status;
 			static Draw::Meter bat_meter {10, "cpu", true};
 			static const std::unordered_map<string, string> bat_symbols = {
@@ -715,16 +716,18 @@ namespace Cpu {
 				{"unknown", "○"}
 			};
 
-			const auto& [percent, seconds, status] = current_bat;
+			const auto& [percent, watts, seconds, status] = current_bat;
 
-			if (redraw or percent != old_percent or seconds != old_seconds or status != old_status) {
+			if (redraw or percent != old_percent or (watts != old_watts and Config::getB("show_battery_watts")) or seconds != old_seconds or status != old_status) {
 				old_percent = percent;
+				old_watts = watts;
 				old_seconds = seconds;
 				old_status = status;
 				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, true, true) : "");
 				const string str_percent = to_string(percent) + '%';
+				const string str_watts = (watts != -1 and Config::getB("show_battery_watts") ? fmt::format("{:.2f}", watts) + 'W' : "");
 				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
-				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + to_string(Config::getI("update_ms")).size();
+				const int current_len = (Term::width >= 100 ? 11 : 0) + str_time.size() + str_percent.size() + str_watts.size() + to_string(Config::getI("update_ms")).size();
 				const int current_pos = Term::width - current_len - 17;
 
 				if ((bat_pos != current_pos or bat_len != current_len) and bat_pos > 0 and not redraw)
@@ -734,7 +737,7 @@ namespace Cpu {
 
 				out += Mv::to(y, bat_pos) + title_left + Theme::c("title") + Fx::b + "BAT" + bat_symbol + ' ' + str_percent
 					+ (Term::width >= 100 ? Fx::ub + ' ' + bat_meter(percent) + Fx::b : "")
-					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : " ") + Fx::ub + title_right;
+					+ (not str_time.empty() ? ' ' + Theme::c("title") + str_time : "") + (not str_watts.empty() ? " " + Theme::c("title") + Fx::b + str_watts : "") + Fx::ub + title_right;
 			}
 		}
 		else if (bat_pos > 0) {
@@ -1361,6 +1364,7 @@ namespace Net {
 	int x = 1, y, width = 20, height;
 	int b_x, b_y, b_width, b_height, d_graph_height, u_graph_height;
 	bool shown = true, redraw = true;
+	const int MAX_IFNAMSIZ = 15;
 	string old_ip;
 	std::unordered_map<string, Draw::Graph> graphs;
 	string box;
@@ -1381,7 +1385,7 @@ namespace Net {
 		out.reserve(width * height);
 		const string title_left = Theme::c("net_box") + Fx::ub + Symbols::title_left;
 		const string title_right = Theme::c("net_box") + Fx::ub + Symbols::title_right;
-		const int i_size = min((int)selected_iface.size(), 10);
+		const int i_size = min((int)selected_iface.size(), MAX_IFNAMSIZ);
 		const long long down_max = (net_auto ? safeVal(graph_max, "download"s) : ((long long)(Config::getI("net_download")) << 20) / 8);
 		const long long up_max = (net_auto ? safeVal(graph_max, "upload"s) : ((long long)(Config::getI("net_upload")) << 20) / 8);
 
@@ -1403,7 +1407,7 @@ namespace Net {
 			//? Interface selector and buttons
 
 			out += Mv::to(y, x+width - i_size - 9) + title_left + Fx::b + Theme::c("hi_fg") + "<b " + Theme::c("title")
-				+ uresize(selected_iface, 10) + Theme::c("hi_fg") + " n>" + title_right
+				+ uresize(selected_iface, MAX_IFNAMSIZ) + Theme::c("hi_fg") + " n>" + title_right
 				+ Mv::to(y, x+width - i_size - 15) + title_left + Theme::c("hi_fg") + (safeVal(net.stat, "download"s).offset + safeVal(net.stat, "upload"s).offset > 0 ? Fx::b : "") + 'z'
 				+ Theme::c("title") + "ero" + title_right;
 			Input::mouse_mappings["b"] = {y, x+width - i_size - 8, 1, 3};
@@ -2238,3 +2242,4 @@ namespace Draw {
 		}
 	}
 }
+

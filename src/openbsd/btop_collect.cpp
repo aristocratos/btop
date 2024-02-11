@@ -202,7 +202,7 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
@@ -385,8 +385,8 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		long seconds = -1;
 		uint32_t percent = -1;
@@ -417,7 +417,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		return {percent, -1, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {

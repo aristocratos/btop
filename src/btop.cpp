@@ -53,6 +53,7 @@ tab-size = 4
 #include "btop_draw.hpp"
 #include "btop_menu.hpp"
 #include "fmt/core.h"
+#include "fmt/ostream.h"
 
 using std::atomic;
 using std::cout;
