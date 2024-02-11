@@ -138,7 +138,7 @@ else ifeq ($(PLATFORM_LC),freebsd)
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	override ADDFLAGS += -framework IOKit -framework CoreFoundation -lIOReport -Wno-format-truncation
 	SU_GROUP := wheel
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
@@ -197,6 +197,9 @@ SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEX
 SOURCE_COUNT := $(words $(SOURCES))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
+ifeq ($(PLATFORM_LC),macos)
+OBJECTS += $(BUILDDIR)/osx/CpuFreq.o
+endif
 
 ifeq ($(shell find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o >/dev/null 2>&1; echo $$?),0)
 	ifneq ($(wildcard $(BUILDDIR)/.*),)
@@ -369,6 +372,13 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
 	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+
+
+ifeq ($(PLATFORM_LC),macos)
+.ONESHELL:
+$(BUILDDIR)/osx/CpuFreq.o: $(SRCDIR)/osx/CpuFreq.c
+	gcc -c -o $@ $(SRCDIR)/osx/CpuFreq.c
+endif
 
 #? Non-File Targets
 .PHONY: all msg help pre
