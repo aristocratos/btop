@@ -25,9 +25,18 @@ tab-size = 4
 #include <string>
 #include <tuple>
 #include <vector>
-#include <ifaddrs.h>
 #include <unordered_map>
 #include <unistd.h>
+
+// From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
+// clang-format off
+#include <net/if.h>
+#include <ifaddrs.h>
+// clang-format on
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+# include <kvm.h>
+#endif
 
 using std::array;
 using std::atomic;
@@ -83,6 +92,15 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+	struct KvmDeleter {
+		void operator()(kvm_t* handle) {
+			kvm_close(handle);
+		}
+	};
+	using KvmPtr = std::unique_ptr<kvm_t, KvmDeleter>;
+#endif
 }
 
 
@@ -287,6 +305,17 @@ namespace Net {
 		string ipv4{};      // defaults to ""
 		string ipv6{};      // defaults to ""
 		bool connected{};
+	};
+
+	class IfAddrsPtr {
+		struct ifaddrs* ifaddr;
+		int status;
+	public:
+		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
+		~IfAddrsPtr() { freeifaddrs(ifaddr); }
+		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
 	};
 
 	extern std::unordered_map<string, net_info> current_net;
