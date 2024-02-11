@@ -3,7 +3,7 @@
 # Find libkvm, the Kernel Data Access Library
 #
 
-if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+if(BSD)
   find_path(kvm_INCLUDE_DIR NAMES kvm.h)
   find_library(kvm_LIBRARY NAMES kvm)
 
