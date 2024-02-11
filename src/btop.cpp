@@ -109,6 +109,7 @@ namespace Global {
 	atomic<bool> should_sleep (false);
 	atomic<bool> _runner_started (false);
 	atomic<bool> init_conf (false);
+	atomic<bool> reload_conf (false);
 
 	bool arg_tty{};
 	bool arg_low_color{};
@@ -366,14 +367,35 @@ void _signal_handler(const int sig) {
 			// Input::poll interrupt
 			break;
 		case SIGUSR2:
-			vector<string> warnings;
-			Config::load(Config::conf_file, warnings);
-			Theme::setTheme();
-			Draw::banner_gen(0, 0, false, true);
-			Draw::calcSizes();
-			Runner::run("all", false, true);
+			Global::reload_conf = true;
+			Input::interrupt();
 			break;
 	}
+}
+
+//* Config init
+void init_config(){
+	atomic_lock lck(Global::init_conf);
+	vector<string> load_warnings;
+	Config::load(Config::conf_file, load_warnings);
+	Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
+
+	static bool first_init = true;
+
+	if (Global::debug and first_init) {
+		Logger::set("DEBUG");
+		Logger::debug("Running in DEBUG mode!");
+	}
+	else Logger::set(Config::getS("log_level"));
+
+	static string log_level;
+	if (const string current_level = Config::getS("log_level"); log_level != current_level) {
+		log_level = current_level;
+		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : log_level));
+	}
+
+	for (const auto& err_str : load_warnings) Logger::warning(err_str);
+	first_init = false;
 }
 
 //* Manages secondary thread for collection and drawing of boxes
@@ -904,22 +926,7 @@ int main(int argc, char **argv) {
 	}
 
 	//? Config init
-	{
-		atomic_lock lck(Global::init_conf);
-		vector<string> load_warnings;
-		Config::load(Config::conf_file, load_warnings);
-		Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
-
-		if (Global::debug) {
-			Logger::set("DEBUG");
-			Logger::debug("Starting in DEBUG mode!");
-		}
-		else Logger::set(Config::getS("log_level"));
-
-		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : Config::getS("log_level")));
-
-		for (const auto& err_str : load_warnings) Logger::warning(err_str);
-	}
+	init_config();
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
@@ -1096,9 +1103,27 @@ int main(int argc, char **argv) {
 	try {
 		while (not true not_eq not false) {
 			//? Check for exceptions in secondary thread and exit with fail signal if true
-			if (Global::thread_exception) clean_quit(1);
-			else if (Global::should_quit) clean_quit(0);
-			else if (Global::should_sleep) { Global::should_sleep = false; _sleep(); }
+			if (Global::thread_exception) {
+				clean_quit(1);
+			}
+			else if (Global::should_quit) {
+				clean_quit(0);
+			}
+			else if (Global::should_sleep) {
+				Global::should_sleep = false;
+				_sleep();
+			}
+			//? Hot reload config from CTRL + R or SIGUSR2
+			else if (Global::reload_conf) {
+				Global::reload_conf = false;
+				if (Runner::active) Runner::stop();
+				Config::unlock();
+				init_config();
+				Theme::updateThemes();
+				Theme::setTheme();
+				Draw::banner_gen(0, 0, false, true);
+				Global::resized = true;
+			}
 
 			//? Make sure terminal size hasn't changed (in case of SIGWINCH not working properly)
 			term_resize(Global::resized);
@@ -1133,9 +1158,9 @@ int main(int argc, char **argv) {
 					update_ms = Config::getI("update_ms");
 					future_time = time_ms() + update_ms;
 				}
-				else if (future_time - current_time > update_ms)
+				else if (future_time - current_time > update_ms) {
 					future_time = current_time;
-
+				}
 				//? Poll for input and process any input detected
 				else if (Input::poll(min((uint64_t)1000, future_time - current_time))) {
 					if (not Runner::active) Config::unlock();
