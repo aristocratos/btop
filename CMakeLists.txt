@@ -65,6 +65,8 @@ if(APPLE)
   target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+  target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
 else()
@@ -110,6 +112,7 @@ if(HAS_FCF_PROTECTION)
 endif()
 
 target_compile_definitions(btop PRIVATE
+  FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
   # Only has an effect with optimizations enabled
@@ -179,12 +182,18 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   endif()
 
   find_package(devstat REQUIRED)
-  target_link_libraries(btop devstat::devstat)
+  find_package(kvm REQUIRED)
+  target_link_libraries(btop devstat::devstat kvm::kvm)
   if(BTOP_STATIC)
     find_package(elf REQUIRED)
-    find_package(kvm REQUIRED)
-    target_link_libraries(btop elf::elf kvm::kvm)
+    target_link_libraries(btop elf::elf)
   endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(btop PRIVATE -static-libstdc++)
+  endif()
+  find_package(kvm REQUIRED)
+  target_link_libraries(btop kvm::kvm)
 endif()
 
 install(TARGETS btop RUNTIME)

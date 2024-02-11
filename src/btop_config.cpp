@@ -199,6 +199,8 @@ namespace Config {
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
+		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
+
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 	#ifdef GPU_SUPPORT
@@ -293,6 +295,7 @@ namespace Config {
 		{"net_auto", true},
 		{"net_sync", true},
 		{"show_battery", true},
+		{"show_battery_watts", true},
 		{"vim_keys", false},
 		{"tty_mode", false},
 		{"disk_free_priv", false},
@@ -729,9 +732,9 @@ namespace Config {
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
-			cwrite << "#? Config file for btop v. " << Global::Version;
+			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
 			for (auto [name, description] : descriptions) {
-				cwrite 	<< "\n\n" << (description.empty() ? "" : description + "\n")
+				cwrite << "\n" << (description.empty() ? "" : description + "\n")
 						<< name << " = ";
 				if (strings.contains(name))
 					cwrite << "\"" << strings.at(name) << "\"";
@@ -739,6 +742,7 @@ namespace Config {
 					cwrite << ints.at(name);
 				else if (bools.contains(name))
 					cwrite << (bools.at(name) ? "True" : "False");
+				cwrite << "\n";
 			}
 		}
 	}

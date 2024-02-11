@@ -41,6 +41,7 @@ namespace Input {
 	//* Map for translating key codes to readable values
 	const std::unordered_map<string, string> Key_escapes = {
 		{"\033",	"escape"},
+		{"\x12",	"ctrl_r"},
 		{"\n",		"enter"},
 		{" ",		"space"},
 		{"\x7f",	"backspace"},
@@ -258,8 +259,10 @@ namespace Input {
 					Draw::calcSizes();
 					Runner::run("all", false, true);
 					return;
-				}
-				else
+				} else if (is_in(key, "ctrl_r")) {
+					kill(getpid(), SIGUSR2);
+					return;
+				} else
 					keep_going = true;
 
 				if (not keep_going) return;
