@@ -1,0 +1,45 @@
+name: Continuous Build Gpu
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-gpu.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-gpu.yml'
+
+jobs:
+  gpu_build_linux:
+    runs-on: ubuntu-latest
+    container: alpine:edge
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: apk add --no-cache --update gcc g++ make
+
+      - name: Compile
+        run: make CXX=g++ GPU_SUPPORT=true
+
