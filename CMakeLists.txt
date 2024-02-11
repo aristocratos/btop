@@ -112,6 +112,7 @@ if(HAS_FCF_PROTECTION)
 endif()
 
 target_compile_definitions(btop PRIVATE
+  FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
   # Only has an effect with optimizations enabled

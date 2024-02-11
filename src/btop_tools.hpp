@@ -46,11 +46,9 @@ tab-size = 4
 		#define HOST_NAME_MAX 64
 	#endif
 #endif
-#define FMT_HEADER_ONLY
+
 #include "fmt/core.h"
 #include "fmt/format.h"
-#include "fmt/ostream.h"
-#include "fmt/ranges.h"
 
 using std::array;
 using std::atomic;
