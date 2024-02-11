@@ -47,8 +47,8 @@
 
 Btop release v1.3.0
 
-Big release with GPU support added for Linux and platform support for OpenBSD. Big thanks to @romner-set (GPU support) and @joske (OpenBSD support) for contributions.
-And a multitude of bugfixes and small changes, see [CHANGES.md](CHANGES.md) and latest [release](https://github.com/aristocratos/btop/releases/latest) for detailed list and attributions.
+Big release with GPU support added for Linux and platform support for OpenBSD. Big thanks to [@romner-set](https://github.com/romner-set) (GPU support) and [@joske](https://github.com/joske) (OpenBSD support) for contributions.
+And a multitude of bugfixes and small changes, see [CHANGELOG.md](CHANGELOG.md) and latest [release](https://github.com/aristocratos/btop/releases/latest) for detailed list and attributions.
 
 See news entry below for more information regarding GPU support.
 
