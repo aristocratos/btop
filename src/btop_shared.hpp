@@ -178,7 +178,7 @@ namespace Cpu {
 	extern string cpuName, cpuHz;
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
-	extern tuple<int, long, string> current_bat;
+	extern tuple<int, float, long, string> current_bat;
 
 	struct cpu_info {
 		std::unordered_map<string, deque<long long>> cpu_percent = {
@@ -213,7 +213,7 @@ namespace Cpu {
 	auto get_cpuHz() -> string;
 
 	//* Get battery info from /sys
-	auto get_battery() -> tuple<int, long, string>;
+	auto get_battery() -> tuple<int, float, long, string>;
 }
 
 namespace Mem {
