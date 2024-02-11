@@ -143,7 +143,7 @@ else ifeq ($(PLATFORM_LC),macos)
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -lkvm
+	override ADDFLAGS += -lkvm -static-libstdc++
 	export MAKE = gmake
 	SU_GROUP := wheel
 else

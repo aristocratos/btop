@@ -18,6 +18,10 @@ tab-size = 4
 
 #pragma once
 
+#if !defined(NDEBUG)
+# define BTOP_DEBUG
+#endif
+
 #include <algorithm>        // for std::ranges::count_if
 #include <array>
 #include <atomic>
