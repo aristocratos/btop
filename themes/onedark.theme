@@ -10,7 +10,7 @@ theme[main_fg]="#abb2bf"
 # Title color for boxes
 theme[title]="#abb2bf"
 
-# Higlight color for keyboard shortcuts
+# Highlight color for keyboard shortcuts
 theme[hi_fg]="#61afef"
 
 # Background color of selected item in processes box

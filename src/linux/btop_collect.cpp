@@ -2061,7 +2061,7 @@ namespace Mem {
 			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
 			} else {
-				Logger::debug("Cant access folder: " + zfs_pool_stat_path.string());
+				Logger::debug("Can't access folder: " + zfs_pool_stat_path.string());
 				return "";
 			}
 		}
@@ -2266,7 +2266,7 @@ namespace Net {
 				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto& iface : interfaces) {
 				if (net.at(iface).ipv4.empty() and net.at(iface).ipv6.empty())
 					net.at(iface).ipv4 = readfile("/sys/class/net/" + iface + "/address");

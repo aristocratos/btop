@@ -425,7 +425,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
    | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
    Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -596,7 +596,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `FORTIFY_SOURCE=false`          | Disable fortification with `_FORTIFY_SOURCE=3`                          |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -764,7 +764,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `FORTIFY_SOURCE=false`          | Disable fortification with `_FORTIFY_SOURCE=3`                          |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -945,7 +945,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `FORTIFY_SOURCE=false`          | Disable fortification with `_FORTIFY_SOURCE=3`                          |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manualy set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 

@@ -56,7 +56,7 @@ namespace Input {
 	//* Last entered key
 	extern deque<string> history;
 
-	//* Poll keyboard & mouse input for <timeout> ms and return input availabilty as a bool
+	//* Poll keyboard & mouse input for <timeout> ms and return input availability as a bool
 	bool poll(const uint64_t timeout=0);
 
 	//* Get a key or mouse action from input

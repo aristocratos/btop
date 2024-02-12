@@ -113,7 +113,7 @@ jobs:
           mkdir .artifacts
           mkdir .package
 
-      - name: Create binary atrifacts
+      - name: Create binary artifacts
         run: |
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")

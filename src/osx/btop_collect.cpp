@@ -606,7 +606,7 @@ namespace Mem {
 
 		mach_port_t libtop_master_port;
 		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("errot getting master port");
+			Logger::error("error getting master port");
 			return;
 		}
 		/* Get the list of all drive objects. */
@@ -940,7 +940,7 @@ namespace Net {
 				}
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto &iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);

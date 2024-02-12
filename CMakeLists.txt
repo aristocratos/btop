@@ -133,7 +133,7 @@ if(LINUX AND BTOP_GPU)
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
     # set
-    # We could also manully append ROCm's path here
+    # We could also manually append ROCm's path here
     set(_CMAKE_MODULE_PATH CMAKE_MODULE_PATH)
     unset(CMAKE_MODULE_PATH)
 
@@ -165,7 +165,7 @@ if(BTOP_STATIC)
   target_link_options(btop PRIVATE -static LINKER:--fatal-warnings)
 endif()
 
-# Other platform depdendent flags
+# Other platform dependent flags
 if(APPLE)
   target_link_libraries(btop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
@@ -173,7 +173,7 @@ if(APPLE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     string(REGEX MATCH "^[0-9]+" GCC_VERSION_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
     set_target_properties(btop PROPERTIES
       INSTALL_RPATH "/usr/local/lib/gcc${GCC_VERSION_MAJOR}"

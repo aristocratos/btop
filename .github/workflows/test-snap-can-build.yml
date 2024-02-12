@@ -5,7 +5,7 @@ on:
   push:
    branches: [ main ]
    tags-ignore:
-      - '*.*'     
+      - '*.*'
    paths:
       - 'src/**'
       - '!src/osx/**'
@@ -22,14 +22,14 @@ on:
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/test-snap-can-build.yml'
- 
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [16.x]
-        
+
     steps:
       - uses: actions/checkout@v2
 

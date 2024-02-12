@@ -18,7 +18,7 @@ theme[main_fg]="#a89984"
 # Title color for boxes
 theme[title]="#ebdbb2"
 
-# Higlight color for keyboard shortcuts
+# Highlight color for keyboard shortcuts
 theme[hi_fg]="#d79921"
 
 # Background color of selected items
