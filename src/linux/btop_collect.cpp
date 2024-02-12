@@ -1450,7 +1450,7 @@ namespace Gpu {
 							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
 						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
-					else if (version.major == 6 || version.major == 7) {
+					else if (version_major == 6 || version_major == 7) {
 						rsmi_frequencies_t_v6 frequencies;
 						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_SYS, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
@@ -1469,7 +1469,7 @@ namespace Gpu {
 							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
 						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
-					else if (version.major == 6 || version.major == 7) {
+					else if (version_major == 6 || version_major == 7) {
 						rsmi_frequencies_t_v6 frequencies;
 						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_MEM, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
