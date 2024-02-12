@@ -378,12 +378,12 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
  * **AMD**
 
-    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/rocm/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
 
     This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
 
    ```bash
-   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   git clone https://github.com/rocm/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
    ```
 
 <details>
