@@ -1,26 +1,24 @@
+## v1.3.2
+
+Description | Author(s) | References
+--- | --- | ---
+fix: Can't detect librocm 6.0.x | @imwints, @aristocratos | #761
+
 ## v1.3.1
 
-* GPU: Added support for dynamic loading of ROCm v6 libraries | @aristocratos @fxzjshm | CM #5511131 PR #737
-
-* Increase max network interface name to 15 | @tessus | PR #714
-
-* Fix OpenBSD UTF-8 locale detection | @lcheylus @imwints | PR #753 #717
-
-* Add hot-reloading of config file with CTRL+R or SIGUSR2 signal | @MartinPit | PR #722
-
-* Add battery power draw for linux and freebsd | @vsey | PR #689
-
-* Fix crash caused by string exception when cpu clock is exactly between 999.5 and 999.9 Mhz | @rkmcode | PR #735
-
-* Write newline at end of config file | @planet36 | PR #743
-
-* Add theme based on Everforest Dark Medium palette | @M-Sviridov | PR #746
-
-* fix: don't mangle memory for zombie processes | @joske | PR #747
-
-* Share common code from collect | @imwints | PR #756
-
-* Fixed incorrect used and available memory for OSX | CM #4461a43
+Description | Author(s) | References
+--- | --- | ---
+GPU: Added support for dynamic loading of ROCm v6 libraries | @aristocratos, @fxzjshm | 5511131, #737
+Increase max network interface name to 15 | @tessus | #714
+Fix OpenBSD UTF-8 locale detection | @lcheylus, @imwints | #753, #717
+Add hot-reloading of config file with CTRL+R or SIGUSR2 signal | @MartinPit | #722
+Add battery power draw for linux and freebsd | @vsey | #689
+Fix crash caused by string exception when cpu clock is exactly between 999.5 and 999.9 Mhz | @rkmcode | #735
+Write newline at end of config file | @planet36 | #743
+Add theme based on Everforest Dark Medium palette | @M-Sviridov | #746
+fix: don't mangle memory for zombie processes | @joske | #747
+Share common code from collect | @imwints | #756
+Fixed incorrect used and available memory for OSX | | 4461a43
 
 ## v1.3.0
 
