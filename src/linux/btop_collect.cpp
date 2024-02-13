@@ -835,7 +835,7 @@ namespace Cpu {
 		if (b.use_power) {
 			if (not b.power_now.empty()) {
 				try {
-					watts = (float)stoll(readfile(b.energy_now, "-1")) / 1000000.0;
+					watts = (float)stoll(readfile(b.power_now, "-1")) / 1000000.0;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
