@@ -124,11 +124,9 @@ endif
 #? Pull in platform specific source files and get thread count
 ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
-	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
 else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
-	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := wheel
 	override ADDFLAGS += -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc$(CXX_VERSION_MAJOR)
 	ifneq ($(STATIC),true)
@@ -137,12 +135,10 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
-	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
 	SU_GROUP := wheel
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
-	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -lkvm -static-libstdc++
 	export MAKE = gmake
 	SU_GROUP := wheel
@@ -150,17 +146,11 @@ else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
 endif
 
-#? Use all CPU cores (will only be set if using Make 4.3+)
-MAKEFLAGS := --jobs=$(THREADS)
-ifeq ($(THREADS),1)
-	override THREADS := auto
-endif
-
 #? LTO command line
 ifeq ($(CLANG_WORKS),true)
 	LTO := thin
 else
-	LTO := $(THREADS)
+	LTO := auto
 endif
 
 #? The Directories, Source, Includes, Objects and Binary
@@ -231,7 +221,6 @@ info:
 	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
 	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
 	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
 	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
 	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
