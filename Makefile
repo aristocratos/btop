@@ -245,7 +245,7 @@ endif
 
 
 info-quiet: | info rocm_smi
-	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
+	@$(QUIET) || printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
 
 help:
 	@printf " $(BANNER)\n"
@@ -334,14 +334,14 @@ ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
 	endif
 .ONESHELL:
 rocm_smi:
-	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
+	@$(QUIET) || printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
 	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
 	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
 	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
-	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37m$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a \033[1;93m(\033[1;97m$$(du -ah $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
-	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(QUIET) || printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37m$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a \033[1;93m(\033[1;97m$$(du -ah $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
+	@$(QUIET) || printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 	@$(eval override LDFLAGS += $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a -DRSMI_STATIC) # TODO: this seems to execute every time, no matter if the compilation failed or succeeded
 	@$(eval override CXXFLAGS += -DRSMI_STATIC)
 else
@@ -357,8 +357,8 @@ btop: $(OBJECTS) | rocm_smi directories
 	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
 	@$(VERBOSE) || printf "$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS)\n"
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
-	@printf "\033[1;92m100$(P) -> \033[1;37m$(TARGETDIR)/btop \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
-	@printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(QUIET) || printf "\033[1;92m100$(P) -> \033[1;37m$(TARGETDIR)/btop \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@$(QUIET) || printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
 
 #? Compile
 .ONESHELL:
@@ -368,7 +368,7 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
-	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@$(QUIET) || printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
 
 #? Non-File Targets
 .PHONY: all msg help pre
