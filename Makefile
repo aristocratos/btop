@@ -163,6 +163,12 @@ else
 	LTO := $(THREADS)
 endif
 
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2> /dev/null || true)
+CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC) FORTIFY_SOURCE=$(FORTIFY_SOURCE)
+ifeq ($(PLATFORM_LC),linux)
+	CONFIGURE_COMMAND +=  GPU_SUPPORT=$(GPU_SUPPORT) RSMI_STATIC=$(RSMI_STATIC)
+endif
+
 #? The Directories, Source, Includes, Objects and Binary
 SRCDIR		:= src
 INCDIRS		:= include $(wildcard lib/**/include)
@@ -182,7 +188,7 @@ OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
 LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
-INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR)
+INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR) -I$(BUILDDIR)
 SU_USER				:= root
 
 ifdef DEBUG
@@ -222,7 +228,7 @@ endif
 
 #? Default Make
 .ONESHELL:
-all: | info rocm_smi info-quiet directories btop
+all: | info rocm_smi info-quiet directories config.h btop
 
 ifneq ($(QUIET),true)
 info:
@@ -266,6 +272,13 @@ directories:
 	@mkdir -p $(TARGETDIR)
 	@$(VERBOSE) || printf "mkdir -p $(BUILDDIR)/$(PLATFORM_DIR)\n"
 	@mkdir -p $(BUILDDIR)/$(PLATFORM_DIR)
+
+config.h: $(BUILDDIR)/config.h
+
+$(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
+	@$(QUIET) || printf "\033[1mConfiguring $(BUILDDIR)/config.h\033[0m\n"
+	@$(VERBOSE) || printf 'sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null\n'
+	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
 
 #? Clean only Objects
 clean:
@@ -362,7 +375,7 @@ btop: $(OBJECTS) | rocm_smi directories
 
 #? Compile
 .ONESHELL:
-$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
+$(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories config.h
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
@@ -371,4 +384,4 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories
 	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
 
 #? Non-File Targets
-.PHONY: all msg help pre
+.PHONY: all config.h msg help pre
