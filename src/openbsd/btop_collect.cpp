@@ -184,25 +184,13 @@ namespace Shared {
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
 	}
-
-	//* RAII wrapper for kvm_openfiles
-	class kvm_openfiles_wrapper {
-		kvm_t* kd = nullptr;
-	public:
-		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
-			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
-		}
-		~kvm_openfiles_wrapper() { kvm_close(kd); }
-		auto operator()() -> kvm_t* { return kd; }
-	};
-
 }  // namespace Shared
 
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
@@ -385,8 +373,8 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		long seconds = -1;
 		uint32_t percent = -1;
@@ -417,7 +405,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		return {percent, -1, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -780,17 +768,6 @@ namespace Net {
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
-	//* RAII wrapper for getifaddrs
-	class getifaddr_wrapper {
-		struct ifaddrs *ifaddr;
-
-	   public:
-		int status;
-		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
-		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs * { return ifaddr; }
-	};
-
 	auto collect(bool no_update) -> net_info & {
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
@@ -800,10 +777,10 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap{};
-			if (if_wrap.status != 0) {
+			IfAddrsPtr if_addrs {};
+			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
 				redraw = true;
 				return empty_net;
 			}
@@ -815,7 +792,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto *ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto &iface = ifa->ifa_name;
@@ -1102,8 +1079,8 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, nullptr, nullptr, KVM_NO_FILES, buf);
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get() , KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
 
 			for (int i = 0; i < count; i++) {
 				const struct kinfo_proc* kproc = &kprocs[i];
@@ -1130,7 +1107,7 @@ namespace Proc {
 						continue;
 					}
 					new_proc.name = kproc->p_comm;
-					char** argv = kvm_getargv(kd(), kproc, 0);
+					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
 							new_proc.cmd += argv[i] + " "s;

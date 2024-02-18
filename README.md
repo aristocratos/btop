@@ -378,12 +378,12 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
  * **AMD**
 
-    AMDGPU data is queried using the [ROCm SMI](https://github.com/RadeonOpenCompute/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
+    AMDGPU data is queried using the [ROCm SMI](https://github.com/rocm/rocm_smi_lib) library, which may or may not be packaged for your distribution. If your distribution doesn't provide a package, btop++ is statically linked to ROCm SMI with the `RSMI_STATIC=true` make flag.
 
     This flag expects the ROCm SMI source code in `lib/rocm_smi_lib`, and compilation will fail if it's not there. The latest tested version is 5.6.x, which can be obtained with the following command:
 
    ```bash
-   git clone https://github.com/RadeonOpenCompute/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
+   git clone https://github.com/rocm/rocm_smi_lib.git --depth 1 -b rocm-5.6.x lib/rocm_smi_lib
    ```
 
 <details>
@@ -993,6 +993,74 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
    ```bash
    gmake help
+   ```
+
+</details>
+<details>
+<summary>
+
+### With CMake (Community maintained)
+</summary>
+
+1. **Install build dependencies**
+
+   Requires GCC, CMake, Ninja and Git
+
+   _**Note:** LLVM's libc++ shipped with OpenBSD 7.4 is too old and cannot compile btop._
+
+   ```bash
+   pkg_add cmake g++%11 git ninja
+   ```
+
+2. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/aristocratos/btop.git && cd btop
+   ```
+
+3. **Compile**
+
+   ```bash
+   # Configure
+   CXX=eg++ cmake -B build -G Ninja
+   # Build
+   cmake --build build
+   ```
+
+   This will automatically build a release version of btop.
+
+   Some useful options to pass to the configure step:
+
+   | Configure flag                  | Description                                                             |
+   |---------------------------------|-------------------------------------------------------------------------|
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
+   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
+   | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
+   | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
+   | `-DBTOP_FORTIFY=<ON\|OFF>`      | Detect buffer overflows with `_FORTIFY_SOURCE=3` (ON by default)        |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+
+   To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
+
+4. **Install**
+
+   ```bash
+   cmake --install build
+   ```
+
+   May require root privileges
+
+5. **Uninstall**
+
+   CMake doesn't generate an uninstall target by default. To remove installed files, run
+   ```
+   cat build/install_manifest.txt | xargs rm -irv
+   ```
+
+6. **Cleanup build directory**
+
+   ```bash
+   cmake --build build -t clean
    ```
 
 </details>

@@ -189,25 +189,13 @@ namespace Shared {
 		Logger::debug("Init -> Mem::get_zpools()");
 		Mem::get_zpools();
 	}
-
-	//* RAII wrapper for kvm_openfiles
-	class kvm_openfiles_wrapper {
-		kvm_t* kd = nullptr;
-	public:
-		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
-			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
-		}
-		~kvm_openfiles_wrapper() { kvm_close(kd); }
-		auto operator()() -> kvm_t* { return kd; }
-	};
-
 }  // namespace Shared
 
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
@@ -373,10 +361,11 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		long seconds = -1;
+		float watts = -1;
 		uint32_t percent = -1;
 		size_t size = sizeof(percent);
 		string status = "discharging";
@@ -387,6 +376,10 @@ namespace Cpu {
 			size_t size = sizeof(seconds);
 			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, nullptr, 0) < 0) {
 				seconds = 0;
+			}
+			size = sizeof(watts);
+			if (sysctlbyname("hw.acpi.battery.rate", &watts, &size, nullptr, 0) < 0) {
+				watts = -1;
 			}
 			int state;
 			size = sizeof(state);
@@ -402,7 +395,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -668,9 +661,9 @@ namespace Mem {
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)}; 
    			struct kvm_swap swap[16];
-   			int nswap = kvm_getswapinfo(kd(), swap, 16, 0);
+   			int nswap = kvm_getswapinfo(kd.get(), swap, 16, 0);
 			int totalSwap = 0, usedSwap = 0;
 			for (int i = 0; i < nswap; i++) {
 				totalSwap += swap[i].ksw_total;
@@ -823,17 +816,6 @@ namespace Net {
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
-	//* RAII wrapper for getifaddrs
-	class getifaddr_wrapper {
-		struct ifaddrs *ifaddr;
-
-	   public:
-		int status;
-		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
-		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs * { return ifaddr; }
-	};
-
 	auto collect(bool no_update) -> net_info & {
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
@@ -843,10 +825,10 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap{};
-			if (if_wrap.status != 0) {
+			IfAddrsPtr if_addrs {};
+			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
 				redraw = true;
 				return empty_net;
 			}
@@ -858,7 +840,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto *ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto &iface = ifa->ifa_name;
@@ -1164,8 +1146,8 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
-   			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)};
+   			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), KERN_PROC_PROC, 0, &count);
 
    			for (int i = 0; i < count; i++) {
 	  			const struct kinfo_proc* kproc = &kprocs[i];
@@ -1192,7 +1174,7 @@ namespace Proc {
 						continue;
 					}
 					new_proc.name = kproc->ki_comm;
-					char** argv = kvm_getargv(kd(), kproc, 0);
+					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
 							new_proc.cmd += argv[i] + " "s;

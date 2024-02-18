@@ -143,7 +143,7 @@ else ifeq ($(PLATFORM_LC),macos)
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -lkvm
+	override ADDFLAGS += -lkvm -static-libstdc++
 	export MAKE = gmake
 	SU_GROUP := wheel
 else
@@ -185,7 +185,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
 OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
-LDCXXFLAGS			:= -pthread -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
+LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR) -I$(BUILDDIR)

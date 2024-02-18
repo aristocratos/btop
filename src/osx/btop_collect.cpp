@@ -191,7 +191,7 @@ namespace Cpu {
 	string cpuHz;
 	bool has_battery = true;
 	bool macM1 = false;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
@@ -407,8 +407,8 @@ namespace Cpu {
 		~IOPSList_Wrap() { CFRelease(data); }
 	};
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		uint32_t percent = -1;
 		long seconds = -1;
@@ -447,7 +447,7 @@ namespace Cpu {
 				has_battery = false;
 			}
 		}
-		return {percent, seconds, status};
+		return {percent, -1, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -686,7 +686,7 @@ namespace Mem {
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
 			mem.stats.at("free") = p.free_count * Shared::pageSize;
 			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.inactive_count + p.wire_count) * Shared::pageSize;
+			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
 			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 		}
 
@@ -1212,10 +1212,14 @@ namespace Proc {
 					//? Get program name, command, username, parent pid, nice and status
 					if (no_cache) {
 						char fullname[PROC_PIDPATHINFO_MAXSIZE];
-						proc_pidpath(pid, fullname, sizeof(fullname));
-						const string f_name = std::string(fullname);
-						size_t lastSlash = f_name.find_last_of('/');
-						new_proc.name = f_name.substr(lastSlash + 1);
+						int rc = proc_pidpath(pid, fullname, sizeof(fullname));
+						string f_name = "<defunct>";
+						if (rc != 0) {
+							f_name = std::string(fullname);
+							size_t lastSlash = f_name.find_last_of('/');
+							f_name = f_name.substr(lastSlash + 1);
+						}
+						new_proc.name = f_name;
 						//? Get process arguments if possible, fallback to process path in case of failure
 						if (Shared::arg_max > 0) {
 							std::unique_ptr<char[]> proc_chars(new char[Shared::arg_max]);
