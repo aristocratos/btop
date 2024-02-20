@@ -1,0 +1,66 @@
+name: Continuous Build NetBSD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*.*'
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-netbsd.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '!src/linux/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-netbsd.yml'
+
+jobs:
+  build-netbsd:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Compile
+        uses: vmactions/netbsd-vm@v1
+
+        with:
+          release: '9.3'
+          usesh: true
+          prepare: |
+            PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
+            PKG_PATH="https://cdn.NetBSD.org/pub/pkgsrc/packages"
+            PKG_PATH="$PKG_PATH/NetBSD/amd64/9.3/All/"
+            export PATH PKG_PATH
+            pkg_add pkgin
+            pkgin install -y gmake gcc-10 coreutils git
+            git config --global --add safe.directory /home/runner/work/btop/btop
+          run: |
+            gmake CXX=/usr/pkg/gcc10/bin/g++ STATIC=true STRIP=true
+            GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+            mv bin/btop bin/btop-GCC10-"$GIT_HASH"
+            ls -alh bin
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-netbsd-9.3
+          path: 'bin/*'
+          if-no-files-found: error
+
