@@ -46,14 +46,13 @@ jobs:
           usesh: true
           prepare: |
             PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            PKG_PATH="https://cdn.NetBSD.org/pub/pkgsrc/packages"
-            PKG_PATH="$PKG_PATH/NetBSD/amd64/9.3/All/"
+            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/9.3/All/"
             export PATH PKG_PATH
-            pkg_add pkgin
-            pkgin install -y gmake gcc-10 coreutils git
+            /usr/sbin/pkg_add pkgin
+            pkgin -y install gmake gcc10 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=/usr/pkg/gcc10/bin/g++ STATIC=true STRIP=true
+            gmake CXX=/usr/pkg/gcc10/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' LDFLAGS=' -L/usr/pkg/gcc10/lib -R/usr/pkg/gcc10/lib -L/usr/pkg/gcc10/lib/gcc/x86_64--netbsd/10.5.0 -Wl,-R/usr/pkg/gcc10/lib/gcc/x86_64--netbsd/10.5.0 -Wl,-zrelro -L/usr/lib -Wl,-R/usr/lib -L/usr/pkg/lib -Wl,-R/usr/pkg/lib' STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
