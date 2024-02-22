@@ -118,6 +118,7 @@ namespace Shared {
 	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
 	int totalMem_len, kfscale;
 	long bootTime;
+	size_t size;
 
 	void init() {
 		//? Shared global variables init
@@ -132,8 +133,8 @@ namespace Shared {
 			coreCount = ncpu;
 		}
 
-		pageSize = sysconf(_SC_PAGE_SIZE);
-		if (pageSize <= 0) {
+		size = sizeof(pageSize);
+		if (sysctlbyname("hw.pagesize", &pageSize, &size, nullptr, 0) < 0) {
 			pageSize = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
 		}
@@ -144,12 +145,10 @@ namespace Shared {
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 
-		int64_t memsize = 0;
-		size_t size = sizeof(memsize);
-		if (sysctlbyname("hw.physmem", &memsize, &size, nullptr, 0) < 0) {
+		size = sizeof(totalMem);
+		if (sysctlbyname("hw.physmem", &totalMem, &size, nullptr, 0) < 0) {
 			Logger::warning("Could not get memory size");
 		}
-		totalMem = memsize;
 
 		struct timeval result;
 		size = sizeof(result);
@@ -599,9 +598,9 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		u_int memActive, memWire, cachedMem;
-		// u_int freeMem;
+		uint64_t memActive, memWired, memCached, memFree, memInactive;
 		size_t size;
+
 		static int uvmexp_mib[] = {CTL_VM, VM_UVMEXP2};
 		struct uvmexp_sysctl uvmexp;
 		size = sizeof(uvmexp);
@@ -609,21 +608,21 @@ namespace Mem {
 			Logger::error("uvmexp sysctl failed");
 			bzero(&uvmexp, sizeof(uvmexp));
 		}
-		memActive = (uvmexp.active + uvmexp.wired) * Shared::pageSize;
-		memWire = uvmexp.wired;
-		// freeMem = uvmexp.free * Shared::pageSize;
-		cachedMem = (uvmexp.filepages + uvmexp.execpages) * Shared::pageSize;
-		mem.stats.at("used") = memActive;
-		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-   		mem.stats.at("cached") = cachedMem;
-  		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
+
+		memActive = (uvmexp.active + uvmexp.bootpages) * Shared::pageSize;
+		memWired = uvmexp.wired * Shared::pageSize;
+		memInactive = uvmexp.inactive * Shared::pageSize;
+		memFree = uvmexp.free * Shared::pageSize;
+		memCached = (uvmexp.filepages + uvmexp.execpages + uvmexp.anonpages) * Shared::pageSize;
+		mem.stats.at("used") = memActive + memWired;
+		mem.stats.at("available") = memInactive + memCached;
+		mem.stats.at("cached") = memCached;
+		mem.stats.at("free") = memFree;
 
 		if (show_swap) {
-			uint64_t total = uvmexp.swpages * Shared::pageSize;
-			mem.stats.at("swap_total") = total;
-			uint64_t swapped = uvmexp.swpginuse * Shared::pageSize;
-			mem.stats.at("swap_used") = swapped;
-			mem.stats.at("swap_free") = total - swapped;
+			mem.stats.at("swap_total") = uvmexp.swpages * Shared::pageSize;
+			mem.stats.at("swap_used") = uvmexp.swpginuse * Shared::pageSize;
+			mem.stats.at("swap_free") = (uvmexp.swpages - uvmexp.swpginuse) * Shared::pageSize;
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
