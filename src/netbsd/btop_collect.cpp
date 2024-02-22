@@ -598,7 +598,7 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		uint64_t memActive, memWired, memCached, memFree, memInactive;
+		uint64_t memActive, memWired, memCached, memFree;
 		size_t size;
 
 		static int uvmexp_mib[] = {CTL_VM, VM_UVMEXP2};
@@ -609,13 +609,12 @@ namespace Mem {
 			bzero(&uvmexp, sizeof(uvmexp));
 		}
 
-		memActive = (uvmexp.active + uvmexp.bootpages) * Shared::pageSize;
+		memActive = uvmexp.active * Shared::pageSize;
 		memWired = uvmexp.wired * Shared::pageSize;
-		memInactive = uvmexp.inactive * Shared::pageSize;
 		memFree = uvmexp.free * Shared::pageSize;
 		memCached = (uvmexp.filepages + uvmexp.execpages + uvmexp.anonpages) * Shared::pageSize;
 		mem.stats.at("used") = memActive + memWired;
-		mem.stats.at("available") = memInactive + memCached;
+		mem.stats.at("available") = Shared::totalMem - (memActive + memWired);
 		mem.stats.at("cached") = memCached;
 		mem.stats.at("free") = memFree;
 
