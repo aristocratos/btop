@@ -146,7 +146,7 @@ namespace Shared {
 		}
 
 		size = sizeof(totalMem);
-		if (sysctlbyname("hw.physmem", &totalMem, &size, nullptr, 0) < 0) {
+		if (sysctlbyname("hw.physmem64", &totalMem, &size, nullptr, 0) < 0) {
 			Logger::warning("Could not get memory size");
 		}
 
