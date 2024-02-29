@@ -29,8 +29,10 @@ tab-size = 4
 #include <netinet/tcp_fsm.h>
 #include <netinet/in.h> // for inet_ntop stuff
 #include <pwd.h>
+#include <prop/proplib.h>
 #include <sys/endian.h>
 #include <sys/iostat.h>
+#include <sys/envsys.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
@@ -260,40 +262,6 @@ namespace Cpu {
 		return name;
 	}
 
-	int64_t get_sensor(string device, int num) {
-		int64_t temp = -1;
-//		struct sensordev sensordev;
-//		struct sensor sensor;
-//		size_t sdlen, slen;
-//		int dev;
-//		int mib[] = {CTL_HW, HW_SENSORS, 0, 0, 0};
-//
-//		sdlen = sizeof(sensordev);
-//		slen = sizeof(sensor);
-//		for (dev = 0;; dev++) {
-//			mib[2] = dev;
-//			if (sysctl(mib, 3, &sensordev, &sdlen, NULL, 0) == -1) {
-//				if (errno == ENXIO)
-//					continue;
-//				if (errno == ENOENT)
-//					break;
-//			}
-//			if (strstr(sensordev.xname, device.c_str())) {
-//				mib[3] = type;
-//				mib[4] = num;
-//				if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1) {
-//					if (errno != ENOENT) {
-//						Logger::warning("sysctl");
-//						continue;
-//					}
-//				}
-//				temp = sensor.value;
-//			 	break;
-//			}
-//		}
-		return temp;
-	}
-
 	bool get_sensors() {
 		got_sensors = false;
 //		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
@@ -387,36 +355,112 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, float, long, string> {
 		if (not has_battery) return {0, 0.0, 0, ""};
 
-		long seconds = -1;
-		uint32_t percent = -1;
-		string status = "discharging";
-		int64_t full, remaining;
-		full = get_sensor("acpibat0", 0);
-		remaining = get_sensor("acpibat0", 3);
-		int64_t state = get_sensor("acpibat0", 0);
-		if (full < 0) {
+		prop_dictionary_t dict, fields, props;
+
+		int64_t totalCharge = 0;
+		int64_t totalCapacity = 0;
+
+		int fd = open(_PATH_SYSMON, O_RDONLY);
+		if (fd == -1) {
+			Logger::warning("failed to open " + string(_PATH_SYSMON));
 			has_battery = false;
-			Logger::warning("failed to get battery");
-		} else {
-			float_t f = full / 1000;
-			float_t r = remaining / 1000;
-			has_battery = true;
-			percent = r / f * 100;
-			if (percent == 100) {
-				status = "full";
+			return {0, 0.0, 0, ""};
+		}
+
+		if (prop_dictionary_recv_ioctl(fd, ENVSYS_GETDICTIONARY, &dict) != 0) {
+			if (fd != -1) {
+				close(fd);
 			}
-			switch (state) {
-				case 0:
-					status = "full";
-					percent = 100;
-					break;
-				case 2:
-					status = "charging";
-					break;
+			has_battery = false;
+			Logger::warning("failed to open envsys dict");
+			return {0, 0.0, 0, ""};
+		}
+
+		if (prop_dictionary_count(dict) == 0) {
+			if (fd != -1) {
+				close(fd);
+			}
+			has_battery = false;
+			Logger::warning("no drivers registered for envsys");
+			return {0, 0.0, 0, ""};
+		}
+
+		prop_object_t fieldsArray = prop_dictionary_get(prop_dictionary_t(dict), "acpibat0");
+		if (prop_object_type(fieldsArray) != PROP_TYPE_ARRAY) {
+			if (fd != -1) {
+				close(fd);
+			}
+			has_battery = false;
+			Logger::warning("unknown device 'acpibat0'");
+			return {0, 0.0, 0, ""};
+		}
+
+		prop_object_iterator_t fieldsIter = prop_array_iterator(prop_array_t(fieldsArray));
+		if (fieldsIter == NULL) {
+			if (fd != -1) {
+				close(fd);
+			}
+			has_battery = false;
+			return {0, 0.0, 0, ""};
+		}
+
+		/* only assume battery is not present if explicitly stated */
+		bool isBattery = false;
+		int64_t isPresent = 1;
+		int64_t curCharge = 0;
+		int64_t maxCharge = 0;
+		string status = "unknown";
+		string prop_description = "no description";
+
+		while ((fields = (prop_dictionary_t) prop_object_iterator_next(prop_object_iterator_t(fieldsIter))) != NULL) {
+			props = (prop_dictionary_t) prop_dictionary_get(fields, "device-properties");
+			if (props != NULL) continue;
+
+			prop_object_t curValue = prop_dictionary_get(fields, "cur-value");
+			prop_object_t maxValue = prop_dictionary_get(fields, "max-value");
+			prop_object_t description = prop_dictionary_get(fields, "description");
+
+			if (description == NULL || curValue == NULL) {
+				continue;
+			}
+
+
+			prop_description = prop_string_cstring(prop_string_t(description));
+
+			if (prop_description == "charge") {
+				if (maxValue == NULL) {
+					continue;
+				}
+				curCharge = prop_number_integer_value(prop_number_t(curValue));
+				maxCharge = prop_number_integer_value(prop_number_t(maxValue));
+			}
+
+			if (prop_description == "present") {
+				isPresent = prop_number_integer_value(prop_number_t(curValue));
+			}
+
+			if (prop_description == "charging") {
+				status = prop_description;
+				string charging_type = prop_string_cstring(prop_string_t(prop_dictionary_get(fields, "type")));
+				isBattery = charging_type == "Battery charge" ? true : false;
+			}
+
+			if (isBattery && isPresent) {
+				totalCharge += curCharge;
+				totalCapacity += maxCharge;
 			}
 		}
 
-		return {percent, 0.0, seconds, status};
+		prop_object_iterator_release(fieldsIter);
+		prop_object_release(dict);
+
+		uint32_t percent = ((double)totalCharge / (double)totalCapacity) * 100.0;
+
+		if (percent == 100) {
+			status = "full";
+		}
+
+		return {percent, -1, -1, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -562,7 +606,7 @@ namespace Mem {
 
 		size_t size;
 		if (sysctl(mib, 3, NULL, &size, NULL, 0) == -1) {
-		        Logger::error("sysctl hw.drivestats failed");
+			Logger::error("sysctl hw.drivestats failed");
 			return;
 		}
 		num_drives = size / sizeof(struct io_sysctl);
@@ -573,12 +617,12 @@ namespace Mem {
 		};
 
 		if (sysctl(mib, 3, drives.get(), &size, NULL, 0) == -1) {
-		        Logger::error("sysctl hw.iostats failed");
+			Logger::error("sysctl hw.iostats failed");
 		}
 		for (int i = 0; i < num_drives; i++) {
 			for (auto& [ignored, disk] : disks) {
 				if (disk.dev.string().find(drives[i].name) != string::npos) {
-				        string mountpoint = mapping.at(disk.dev);
+					string mountpoint = mapping.at(disk.dev);
 					total_bytes_read = drives[i].rbytes;
 					total_bytes_write = drives[i].wbytes;
 					assign_values(disk, total_bytes_read, total_bytes_write);
@@ -771,7 +815,7 @@ namespace Net {
 	class getifaddr_wrapper {
 		struct ifaddrs *ifaddr;
 
-	   public:
+	public:
 		int status;
 		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
 		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
