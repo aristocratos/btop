@@ -218,10 +218,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_link_libraries(btop kvm::kvm)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(btop PRIVATE -static-libstdc++)
+    target_compile_options(btop PRIVATE -static-libstdc++ -std=c++20 -DNDEBUG)
   endif()
   find_package(kvm REQUIRED)
-  target_link_libraries(btop kvm::kvm)
+  find_package(proplib REQUIRED)
+  target_link_libraries(btop kvm::kvm proplib::proplib)
 endif()
 
 

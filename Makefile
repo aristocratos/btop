@@ -154,7 +154,7 @@ else ifeq ($(PLATFORM_LC),openbsd)
 else ifeq ($(PLATFORM_LC),netbsd)
 	PLATFORM_DIR := netbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -lkvm
+	override ADDFLAGS += -lkvm -lprop
 	export MAKE = gmake
 	SU_GROUP := wheel
 else
