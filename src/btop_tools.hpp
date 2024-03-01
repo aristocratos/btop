@@ -114,7 +114,7 @@ namespace Mv {
 	//* Save cursor position
 	const string save = Fx::e + "s";
 
-	//* Restore saved cursor postion
+	//* Restore saved cursor position
 	const string restore = Fx::e + "u";
 }
 
@@ -286,7 +286,7 @@ namespace Tools {
 		return is_in(str, "true", "True");
 	}
 
-	//* Check if a string is a valid integer value (only postive)
+	//* Check if a string is a valid integer value (only positive)
 	inline bool isint(const string& str) {
 		return all_of(str.begin(), str.end(), ::isdigit);
 	}

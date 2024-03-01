@@ -147,7 +147,7 @@ if(LINUX AND BTOP_GPU)
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
     # set
-    # We could also manully append ROCm's path here
+    # We could also manually append ROCm's path here
     set(_CMAKE_MODULE_PATH CMAKE_MODULE_PATH)
     unset(CMAKE_MODULE_PATH)
 
