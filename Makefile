@@ -79,7 +79,7 @@ ifeq ($(CXX_IS_CLANG),true)
 		CLANG_WORKS := true
 	endif
 else
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
+	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 11; echo $$?),0)
 		GCC_WORKS := true
 	endif
 endif
