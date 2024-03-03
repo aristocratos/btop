@@ -45,7 +45,7 @@ jobs:
           release: '14.0'
           usesh: true
           prepare: |
-            pkg install -y gmake gcc coreutils git
+            pkg install -y gmake gcc coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
             CXX=${{ matrix.compiler }} gmake STATIC=true STRIP=true
@@ -59,4 +59,3 @@ jobs:
           name: btop-x86_64-freebsd-14
           path: 'bin/*'
           if-no-files-found: error
-
