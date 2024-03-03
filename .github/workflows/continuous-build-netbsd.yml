@@ -52,7 +52,7 @@ jobs:
             pkgin -y install gmake gcc10 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=/usr/pkg/gcc10/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' LDFLAGS=' -L/usr/pkg/gcc10/lib -R/usr/pkg/gcc10/lib -L/usr/pkg/gcc10/lib/gcc/x86_64--netbsd/10.5.0 -Wl,-R/usr/pkg/gcc10/lib/gcc/x86_64--netbsd/10.5.0 -Wl,-zrelro -L/usr/lib -Wl,-R/usr/lib -L/usr/pkg/lib -Wl,-R/usr/pkg/lib' STATIC=true STRIP=true
+            gmake CXX=/usr/pkg/gcc10/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
