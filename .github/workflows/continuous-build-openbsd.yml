@@ -42,7 +42,7 @@ jobs:
           release: '7.4'
           usesh: true
           prepare: |
-            pkg_add gmake gcc%11 g++%11 coreutils git
+            pkg_add gmake gcc%11 g++%11 coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
             gmake CXX=eg++ STATIC=true STRIP=true
@@ -55,4 +55,3 @@ jobs:
           name: btop-x86_64-openbsd-7.4
           path: 'bin/*'
           if-no-files-found: error
-

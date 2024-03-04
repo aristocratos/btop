@@ -49,6 +49,8 @@ parts:
       - PREFIX=/usr/local
       - STATIC=true
       - ADDFLAGS="-D SNAPPED"
+    # Add 'lowdown' to build dependencies as soon at Snap builder updates from
+    # Ubuntu 20.04 "Focal" to something newer that has Lowdown included
     build-packages:
       - coreutils
       - sed
@@ -56,7 +58,7 @@ parts:
       - build-essential
       - gcc-11
       - g++-11
-      
+
     override-pull: |
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"

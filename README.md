@@ -106,7 +106,7 @@ If you want to help out, test for bugs/fix bugs or just try out the branches:
 **macOS / OSX**
 ```bash
 # Install and use Homebrew or MacPorts package managers for easy dependency installation
-brew install coreutils make gcc@11
+brew install coreutils make gcc@11 lowdown
 git clone https://github.com/aristocratos/btop.git
 cd btop
 git checkout OSX
@@ -115,7 +115,7 @@ gmake
 
 **FreeBSD**
 ```bash
-sudo pkg install gmake gcc11 coreutils git
+sudo pkg install gmake gcc11 coreutils git lowdown
 git clone https://github.com/aristocratos/btop.git
 cd btop
 git checkout freebsd
@@ -395,7 +395,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
 
    ```bash
-   sudo apt install coreutils sed git build-essential gcc-11 g++-11
+   sudo apt install coreutils sed git build-essential gcc-11 g++-11 lowdown
    ```
 
 2. **Clone repository**
@@ -486,12 +486,12 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 1. **Install build dependencies**
 
-   Requires Clang / GCC, CMake, Ninja and Git
+   Requires Clang / GCC, CMake, Ninja, Lowdown and Git
 
    For example, with Debian Bookworm:
 
    ```bash
-   sudo apt install cmake git g++ ninja-build
+   sudo apt install cmake git g++ ninja-build lowdown
    ```
 
 2. **Clone the repository**
@@ -569,7 +569,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 1. **Install dependencies (example for Homebrew)**
 
    ```bash
-   brew install coreutils make gcc@12
+   brew install coreutils make gcc@12 lowdown
    ```
 
 2. **Clone repository**
@@ -655,11 +655,11 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 1. **Install build dependencies**
 
-   Requires Clang, CMake, Ninja and Git
+   Requires Clang, CMake, Ninja, Lowdown and Git
 
    ```bash
    brew update --quiet
-   brew install cmake git llvm ninja
+   brew install cmake git llvm ninja lowdown
    ```
 
 2. **Clone the repository**
@@ -736,7 +736,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 1. **Install dependencies**
 
    ```bash
-   sudo pkg install gmake gcc11 coreutils git
+   sudo pkg install gmake gcc11 coreutils git lowdown
    ```
 
 2. **Clone repository**
@@ -823,18 +823,18 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 1. **Install build dependencies**
 
-   Requires Clang / GCC, CMake, Ninja and Git
+   Requires Clang / GCC, CMake, Ninja, Lowdown and Git
 
    _**Note:** LLVM's libc++ shipped with FreeBSD 13 is too old and cannot compile btop._
 
 	FreeBSD 14 and later:
    ```bash
-   pkg install cmake ninja
+   pkg install cmake ninja lowdown
    ```
 
 	FreeBSD 13:
    ```bash
-   pkg install cmake gcc13 ninja
+   pkg install cmake gcc13 ninja lowdown
    ```
 
 2. **Clone the repository**
@@ -917,7 +917,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 1. **Install dependencies**
 
    ```bash
-   pkg_add gmake gcc%11 g++%11 coreutils git
+   pkg_add gmake gcc%11 g++%11 coreutils git lowdown
    ```
 
 2. **Clone repository**
@@ -1004,12 +1004,12 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 1. **Install build dependencies**
 
-   Requires GCC, CMake, Ninja and Git
+   Requires GCC, CMake, Ninja, Lowdown and Git
 
    _**Note:** LLVM's libc++ shipped with OpenBSD 7.4 is too old and cannot compile btop._
 
    ```bash
-   pkg_add cmake g++%11 git ninja
+   pkg_add cmake g++%11 git ninja lowdown
    ```
 
 2. **Clone the repository**

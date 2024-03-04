@@ -33,8 +33,7 @@ jobs:
         with:
           release: '14.0'
           usesh: true
-          prepare: pkg install -y cmake ninja
+          prepare: pkg install -y cmake ninja lowdown
           run: |
             CXX=clang++ cmake -B build -G Ninja -DBTOP_STATIC=ON
             cmake --build build --verbose
-

@@ -228,7 +228,7 @@ endif
 
 #? Default Make
 .ONESHELL:
-all: | info rocm_smi info-quiet directories config.h btop
+all: | info rocm_smi info-quiet directories btop.1 config.h btop
 
 ifneq ($(QUIET),true)
 info:
@@ -248,7 +248,6 @@ else
 info:
 	 @true
 endif
-
 
 info-quiet: | info rocm_smi
 	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
@@ -279,6 +278,15 @@ $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
 	@$(QUIET) || printf "\033[1mConfiguring $(BUILDDIR)/config.h\033[0m\n"
 	@$(VERBOSE) || printf 'sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null\n'
 	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
+
+#? Man page
+btop.1: manpage.md | directories
+ifeq ($(shell command -v lowdown >/dev/null; echo $$?),0)
+	@printf "\n\033[1;92mGenerating man page $@\033[37m...\033[0m\n"
+	lowdown -s -Tman -o $@ $<
+else
+	@printf "\n\033[1;93mCommand 'lowdown' not found: skipping generating man page $@\033[0m\n"
+endif
 
 #? Clean only Objects
 clean:
@@ -311,7 +319,11 @@ install:
 	@printf "\033[1;92mInstalling SVG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	@cp -p Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
-
+ifneq ($(wildcard btop.1),)
+	@printf "\033[1;92mInstalling man page to: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
+	@cp -p btop.1 $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
+endif
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:
@@ -321,17 +333,20 @@ setuid:
 	@printf "\033[1;92mSetting SUID bit\033[0m\n"
 	@chmod u+s $(DESTDIR)$(PREFIX)/bin/btop
 
+# With 'rm -v' user will see what files (if any) got removed
 uninstall:
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
-	@rm -rf $(DESTDIR)$(PREFIX)/bin/btop
+	@rm -rfv $(DESTDIR)$(PREFIX)/bin/btop
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\033[0m\n"
-	@rm -rf $(DESTDIR)$(PREFIX)/share/btop
+	@rm -rfv $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
-	@rm -rf $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
+	@rm -rfv $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\033[0m\n"
-	@rm -rf $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
+	@rm -rfv $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
 	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\033[0m\n"
-	@rm -rf $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
+	@rm -rfv $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
+	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\033[0m\n"
+	@rm -rfv $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
 
 #? Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
