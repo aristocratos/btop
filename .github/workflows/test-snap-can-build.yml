@@ -1,5 +1,4 @@
 name: 🧪 Test snap can be built on x86_64
-
 on:
   push:
     branches: [ main ]
@@ -20,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x]
+        node-version: [20.x]
         
     steps:
       - uses: actions/checkout@v2
