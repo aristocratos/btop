@@ -26,24 +26,23 @@ tab-size = 4
 #include <utility>
 #include <ranges>
 
-#include <unistd.h>
-#include <termios.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
-#include "robin_hood.h"
+#include "unordered_map"
 #include "widechar_width.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
 
-using std::cin;
 using std::cout;
 using std::floor;
 using std::flush;
 using std::max;
 using std::string_view;
 using std::to_string;
-using robin_hood::unordered_flat_map;
 
 using namespace std::literals; // to use operator""s
 
@@ -55,9 +54,9 @@ namespace rng = std::ranges;
 //* Collection of escape codes and functions for terminal manipulation
 namespace Term {
 
-	atomic<bool> initialized{}; // defaults to false
-	atomic<int> width{};        // defaults to 0
-	atomic<int> height{};       // defaults to 0
+	atomic<bool> initialized{};
+	atomic<int> width{};
+	atomic<int> height{};
 	string current_tty;
 
 	namespace {
@@ -77,7 +76,11 @@ namespace Term {
 			struct termios settings;
 			if (tcgetattr(STDIN_FILENO, &settings)) return false;
 			if (on) settings.c_lflag |= ICANON;
-			else settings.c_lflag &= ~(ICANON);
+			else {
+				settings.c_lflag &= ~(ICANON);
+				settings.c_cc[VMIN] = 0;
+				settings.c_cc[VTIME] = 0;
+			}
 			if (tcsetattr(STDIN_FILENO, TCSANOW, &settings)) return false;
 			if (on) setlinebuf(stdin);
 			else setbuf(stdin, nullptr);
@@ -86,12 +89,27 @@ namespace Term {
 	}
 
 	bool refresh(bool only_check) {
-		struct winsize w;
-		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) return false;
-		if (width != w.ws_col or height != w.ws_row) {
+		// Query dimensions of '/dev/tty' of the 'STDOUT_FILENO' isn't available.
+		// This variable is set in those cases to avoid calls to ioctl
+		constinit static bool uses_dev_tty = false;
+		struct winsize wsize {};
+		if (uses_dev_tty || ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize) < 0 || (wsize.ws_col == 0 && wsize.ws_row == 0)) {
+			Logger::error(R"(Couldn't determine terminal size of "STDOUT_FILENO"!)");
+			auto dev_tty = open("/dev/tty", O_RDONLY);
+			if (dev_tty != -1) {
+				ioctl(dev_tty, TIOCGWINSZ, &wsize);
+				close(dev_tty);
+			}
+			else {
+				Logger::error(R"(Couldn't determine terminal size of "/dev/tty"!)");
+				return false;
+			}
+			uses_dev_tty = true;
+		}
+		if (width != wsize.ws_col or height != wsize.ws_row) {
 			if (not only_check) {
-				width = w.ws_col;
-				height = w.ws_row;
+				width = wsize.ws_col;
+				height = wsize.ws_row;
 			}
 			return true;
 		}
@@ -135,12 +153,12 @@ namespace Term {
 				tcgetattr(STDIN_FILENO, &initial_settings);
 				current_tty = (ttyname(STDIN_FILENO) != nullptr ? static_cast<string>(ttyname(STDIN_FILENO)) : "unknown");
 
-				//? Disable stream sync
-				cin.sync_with_stdio(false);
+				//? Disable stream sync - this does not seem to work on OpenBSD
+#ifndef __OpenBSD__
 				cout.sync_with_stdio(false);
+#endif
 
 				//? Disable stream ties
-				cin.tie(nullptr);
 				cout.tie(nullptr);
 				echo(false);
 				linebuffered(false);
@@ -626,7 +644,7 @@ namespace Logger {
 	size_t loglevel;
 	fs::path logfile;
 
-	//* Wrapper for lowering priviliges if using SUID bit and currently isn't using real userid
+	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
 	class lose_priv {
 		int status = -1;
 	public:
@@ -652,6 +670,7 @@ namespace Logger {
 		lose_priv neutered{};
 		std::error_code ec;
 		try {
+			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
 			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
 				auto old_log = logfile;
 				old_log += ".1";

@@ -17,7 +17,7 @@ tab-size = 4
 */
 
 #include <deque>
-#include <robin_hood.h>
+#include <unordered_map>
 #include <array>
 #include <signal.h>
 #include <errno.h>
@@ -31,7 +31,6 @@ tab-size = 4
 #include "btop_draw.hpp"
 #include "btop_shared.hpp"
 
-using robin_hood::unordered_flat_map;
 using std::array;
 using std::ceil;
 using std::max;
@@ -50,8 +49,8 @@ namespace Menu {
    bool redraw{true};
    int currentMenu = -1;
    msgBox messageBox;
-   int signalToSend{};  // defaults to 0
-   int signalKillRet{}; // defaults to 0
+   int signalToSend{};
+   int signalKillRet{};
 
    const array<string, 32> P_Signals = {
 	   "0",
@@ -123,7 +122,7 @@ namespace Menu {
 #endif
 	};
 
-  unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+  std::unordered_map<string, Input::Mouse_loc> mouse_mappings;
 
    const array<array<string, 3>, 3> menu_normal = {
 		array<string, 3>{
@@ -178,6 +177,7 @@ namespace Menu {
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},
 		{"ctrl + z", "Sleep program and put in background."},
+		{"ctrl + r", "Reloads config file from disk."},
 		{"q, ctrl + c", "Quits program."},
 		{"+, -", "Add/Subtract 100ms to/from update timer."},
 		{"Up, Down", "Select in process list."},
@@ -354,6 +354,11 @@ namespace Menu {
 				"Can be both batteries and UPS.",
 				"",
 				"\"Auto\" for auto detection."},
+			{"show_battery_watts",
+				"Show battery power.",
+				"",
+				"Show discharge power when discharging.",
+				"Show charging power when charging."},
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
@@ -485,7 +490,7 @@ namespace Menu {
 				"Kelvin, 0 = absolute zero, 1 degree change",
 				"equals 1 degree change in Celsius.",
 				"",
-				"Rankine, 0 = abosulte zero, 1 degree change",
+				"Rankine, 0 = absolute zero, 1 degree change",
 				"equals 1 degree change in Fahrenheit."},
 			{"show_cpu_freq",
 				"Show CPU frequency.",
@@ -646,7 +651,7 @@ namespace Menu {
 				"",
 				"Begin line with \"exclude=\" to change to",
 				"exclude filter.",
-				"Oterwise defaults to \"most include\" filter.",
+				"Otherwise defaults to \"most include\" filter.",
 				"",
 				"Example:",
 				"\"exclude=/boot /home/user\""},
@@ -869,8 +874,8 @@ namespace Menu {
 
 	int signalChoose(const string& key) {
 		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-		static int x{}; // defaults to 0
-		static int y{}; // defaults to 0
+		static int x{};
+		static int y{};
 		static int selected_signal = -1;
 
 		if (bg.empty()) selected_signal = -1;
@@ -1071,8 +1076,8 @@ namespace Menu {
 
 	int mainMenu(const string& key) {
 		enum MenuItems { Options, Help, Quit };
-		static int y{};         // defaults to 0
-		static int selected{};  // defaults to 0
+		static int y{};
+		static int selected{};
 		static vector<string> colors_selected;
 		static vector<string> colors_normal;
 		auto tty_mode = Config::getB("tty_mode");
@@ -1150,22 +1155,22 @@ namespace Menu {
 
 	int optionsMenu(const string& key) {
 		enum Predispositions { isBool, isInt, isString, is2D, isBrowseable, isEditable};
-		static int y{};                 // defaults to 0
-		static int x{};                 // defaults to 0
-		static int height{};            // defaults to 0
-		static int page{};              // defaults to 0
-		static int pages{};             // defaults to 0
-		static int selected{};          // defaults to 0
-		static int select_max{};        // defaults to 0
-		static int item_height{};       // defaults to 0
-		static int selected_cat{};      // defaults to 0
-		static int max_items{};         // defaults to 0
-		static int last_sel{};          // defaults to 0
-		static bool editing{};          // defaults to false
+		static int y{};
+		static int x{};
+		static int height{};
+		static int page{};
+		static int pages{};
+		static int selected{};
+		static int select_max{};
+		static int item_height{};
+		static int selected_cat{};
+		static int max_items{};
+		static int last_sel{};
+		static bool editing{};
 		static Draw::TextEdit editor;
 		static string warnings;
 		static bitset<8> selPred;
-		static const unordered_flat_map<string, std::reference_wrapper<const vector<string>>> optionsList = {
+		static const std::unordered_map<string, std::reference_wrapper<const vector<string>>> optionsList = {
 			{"color_theme", std::cref(Theme::themes)},
 			{"log_level", std::cref(Logger::log_levels)},
 			{"temp_scale", std::cref(Config::temp_scales)},
@@ -1197,9 +1202,9 @@ namespace Menu {
 			Theme::updateThemes();
 		}
 		int retval = Changed;
-		bool recollect{};       // defaults to false
-		bool screen_redraw{};   // defaults to false
-		bool theme_refresh{};   // defaults to false
+		bool recollect{};
+		bool screen_redraw{};
+		bool theme_refresh{};
 
 		//? Draw background if needed else process input
 		if (redraw) {
@@ -1501,11 +1506,11 @@ namespace Menu {
 	}
 
 	int helpMenu(const string& key) {
-		static int y{};         // defaults to 0
-		static int x{};         // defaults to 0
-		static int height{};    // defaults to 0
-		static int page{};      // defaults to 0
-		static int pages{};     // defaults to 0
+		static int y{};
+		static int x{};
+		static int height{};
+		static int page{};
+		static int pages{};
 
 		if (bg.empty()) page = 0;
 		int retval = Changed;

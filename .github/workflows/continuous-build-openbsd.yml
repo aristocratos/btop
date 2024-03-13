@@ -1,4 +1,4 @@
-name: Continuous Build FreeBSD
+name: Continuous Build OpenBSD
 
 on:
   workflow_dispatch:
@@ -11,10 +11,10 @@ on:
       - 'src/**'
       - '!src/linux/**'
       - '!src/osx/**'
-      - '!src/openbsd/**'
+      - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/continuous-build-freebsd.yml'
+      - '.github/workflows/continuous-build-openbsd.yml'
   pull_request:
     branches:
       - main
@@ -22,40 +22,36 @@ on:
       - 'src/**'
       - '!src/linux/**'
       - '!src/osx/**'
-      - '!src/openbsd/**'
+      - '!src/freebsd/**'
       - 'include/**'
       - 'Makefile'
-      - '.github/workflows/continuous-build-freebsd.yml'
+      - '.github/workflows/continuous-build-openbsd.yml'
 
 jobs:
-  build-freebsd:
+  build-openbsd:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
-    strategy:
-      matrix:
-        compiler: ["clang++", "g++"]
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Compile
-        uses: vmactions/freebsd-vm@v1
+        uses: vmactions/openbsd-vm@v1
         with:
-          release: '14.0'
+          release: '7.4'
           usesh: true
           prepare: |
-            pkg install -y gmake gcc coreutils git lowdown
+            pkg_add gmake gcc%11 g++%11 coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            CXX=${{ matrix.compiler }} gmake STATIC=true STRIP=true
+            gmake CXX=eg++ STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-            COMPILER=$(echo ${{ matrix.compiler }} | sed 's/clang++/llvm/' | sed 's/g++/gcc/')
-            mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
+            mv bin/btop bin/btop-GCC11-"$GIT_HASH"
             ls -alh bin
 
       - uses: actions/upload-artifact@v3
         with:
-          name: btop-x86_64-freebsd-14
+          name: btop-x86_64-openbsd-7.4
           path: 'bin/*'
           if-no-files-found: error

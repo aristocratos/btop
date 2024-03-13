@@ -58,6 +58,7 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+#include <utility>
 
 #include "../btop_config.hpp"
 #include "../btop_shared.hpp"
@@ -98,7 +99,7 @@ namespace Cpu {
 
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	std::unordered_map<int, int> core_mapping;
 }  // namespace Cpu
 
 namespace Mem {
@@ -169,42 +170,36 @@ namespace Shared {
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Logger::debug("Init -> Cpu::collect()");
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
+		Logger::debug("Init -> Cpu::get_cpuName()");
 		Cpu::cpuName = Cpu::get_cpuName();
+		Logger::debug("Init -> Cpu::get_sensors()");
 		Cpu::got_sensors = Cpu::get_sensors();
+		Logger::debug("Init -> Cpu::get_core_mapping()");
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
+		Logger::debug("Init -> Mem::collect()");
 		Mem::collect();
+		Logger::debug("Init -> Mem::get_zpools()");
 		Mem::get_zpools();
 	}
-
-	//* RAII wrapper for kvm_openfiles
-	class kvm_openfiles_wrapper {
-		kvm_t* kd = nullptr;
-	public:
-		kvm_openfiles_wrapper(const char* execf, const char* coref, const char* swapf, int flags, char* err) {
-			this->kd = kvm_openfiles(execf, coref, swapf, flags, err);
-		}
-		~kvm_openfiles_wrapper() { kvm_close(kd); }
-		auto operator()() -> kvm_t* { return kd; }
-	};
-
 }  // namespace Shared
 
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	std::unordered_map<string, long long> cpu_old = {
 		{"totals", 0},
 		{"idles", 0},
 		{"user", 0},
@@ -270,7 +265,7 @@ namespace Cpu {
 				got_sensors = true;
 				int temp;
 				size_t size = sizeof(temp);
-				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, nullptr, 0); //asuming the max temp is same for all cores
+				sysctlbyname("dev.cpu.0.coretemp.tjmax", &temp, &size, nullptr, 0); //assuming the max temp is same for all cores
 				temp = (temp - 2732) / 10; // since it's an int, it's multiplied by 10, and offset to absolute zero...
 				current_cpu.temp_max = temp;
 			}
@@ -323,8 +318,8 @@ namespace Cpu {
 		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> std::unordered_map<int, int> {
+		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		for (long i = 0; i < Shared::coreCount; i++) {
@@ -366,10 +361,11 @@ namespace Cpu {
 		return core_map;
 	}
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 
 		long seconds = -1;
+		float watts = -1;
 		uint32_t percent = -1;
 		size_t size = sizeof(percent);
 		string status = "discharging";
@@ -380,6 +376,10 @@ namespace Cpu {
 			size_t size = sizeof(seconds);
 			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, nullptr, 0) < 0) {
 				seconds = 0;
+			}
+			size = sizeof(watts);
+			if (sysctlbyname("hw.acpi.battery.rate", &watts, &size, nullptr, 0) < 0) {
+				watts = -1;
 			}
 			int state;
 			size = sizeof(state);
@@ -395,7 +395,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -557,7 +557,7 @@ namespace Mem {
 		}
 	}
 
-	void collect_disk(unordered_flat_map<string, disk_info> &disks, unordered_flat_map<string, string> &mapping) {
+	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
 		// this bit is for 'regular' mounts
 		static struct statinfo cur;
 		long double etime = 0;
@@ -572,7 +572,7 @@ namespace Mem {
 				auto d = cur.dinfo->devices[i];
 				string devStatName = "/dev/" + string(d.device_name) + std::to_string(d.unit_number);
 				for (auto& [ignored, disk] : disks) { // find matching mountpoints - could be multiple as d.device_name is only ada (and d.unit_number is the device number), while the disk.dev is like /dev/ada0s1
-					if (disk.dev.string().rfind(devStatName, 0) == 0) {
+					if (disk.dev.string().rfind(devStatName, 0) == 0 and mapping.contains(disk.dev)) {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
 						string mountpoint = mapping.at(disk.dev);
@@ -581,7 +581,6 @@ namespace Mem {
 				}
 
 			}
-			Logger::debug("");
 		}
 
 		// this code is for ZFS mounts
@@ -662,9 +661,9 @@ namespace Mem {
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)}; 
    			struct kvm_swap swap[16];
-   			int nswap = kvm_getswapinfo(kd(), swap, 16, 0);
+   			int nswap = kvm_getswapinfo(kd.get(), swap, 16, 0);
 			int totalSwap = 0, usedSwap = 0;
 			for (int i = 0; i < nswap; i++) {
 				totalSwap += swap[i].ksw_total;
@@ -691,7 +690,7 @@ namespace Mem {
 		}
 
 		if (show_disks) {
-			unordered_flat_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			std::unordered_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
@@ -807,26 +806,15 @@ namespace Mem {
 }  // namespace Mem
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	std::unordered_map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
 	int errors = 0;
-	unordered_flat_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
-	unordered_flat_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, uint64_t> graph_max = {{"download", {}}, {"upload", {}}};
+	std::unordered_map<string, array<int, 2>> max_count = {{"download", {}}, {"upload", {}}};
 	bool rescale = true;
 	uint64_t timestamp = 0;
-
-	//* RAII wrapper for getifaddrs
-	class getifaddr_wrapper {
-		struct ifaddrs *ifaddr;
-
-	   public:
-		int status;
-		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
-		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs * { return ifaddr; }
-	};
 
 	auto collect(bool no_update) -> net_info & {
 		auto &net = current_net;
@@ -837,10 +825,10 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap{};
-			if (if_wrap.status != 0) {
+			IfAddrsPtr if_addrs {};
+			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
 				redraw = true;
 				return empty_net;
 			}
@@ -852,7 +840,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto *ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto &iface = ifa->ifa_name;
@@ -892,7 +880,7 @@ namespace Net {
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
-			unordered_flat_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
+			std::unordered_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
 			int mib[] = {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST, 0};
 			size_t len;
 			if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0) {
@@ -919,7 +907,7 @@ namespace Net {
 				}
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto &iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
 					auto &saved_stat = net.at(iface).stat.at(dir);
@@ -966,7 +954,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -1037,7 +1024,7 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
 	bool current_rev = false;
@@ -1159,8 +1146,8 @@ namespace Proc {
 
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
-			Shared::kvm_openfiles_wrapper kd(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf);
-   			const struct kinfo_proc* kprocs = kvm_getprocs(kd(), KERN_PROC_PROC, 0, &count);
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)};
+   			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), KERN_PROC_PROC, 0, &count);
 
    			for (int i = 0; i < count; i++) {
 	  			const struct kinfo_proc* kproc = &kprocs[i];
@@ -1187,7 +1174,7 @@ namespace Proc {
 						continue;
 					}
 					new_proc.name = kproc->ki_comm;
-					char** argv = kvm_getargv(kd(), kproc, 0);
+					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
 							new_proc.cmd += argv[i] + " "s;

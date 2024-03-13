@@ -22,18 +22,17 @@ tab-size = 4
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <robin_hood.h>
+#include <unordered_map>
 
 using std::array;
 using std::string;
 using std::vector;
-using robin_hood::unordered_flat_map;
 
 namespace Theme {
 	extern std::filesystem::path theme_dir;
 	extern std::filesystem::path user_theme_dir;
 
-	//* Contains "Default" and "TTY" at indeces 0 and 1, otherwise full paths to theme files
+	//* Contains "Default" and "TTY" at indices 0 and 1, otherwise full paths to theme files
 	extern vector<string> themes;
 
 	//* Generate escape sequence for 24-bit or 256 color and return as a string
@@ -54,9 +53,9 @@ namespace Theme {
 	//* Set current theme from current "color_theme" value in config
 	void setTheme();
 
-	extern unordered_flat_map<string, string> colors;
-	extern unordered_flat_map<string, array<int, 3>> rgbs;
-	extern unordered_flat_map<string, array<string, 101>> gradients;
+	extern std::unordered_map<string, string> colors;
+	extern std::unordered_map<string, array<int, 3>> rgbs;
+	extern std::unordered_map<string, array<string, 101>> gradients;
 
 	//* Return escape code for color <name>
 	inline const string& c(const string& name) { return colors.at(name); }

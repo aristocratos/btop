@@ -11,7 +11,6 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 project("btop"
-  VERSION 1.2.13
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
   LANGUAGES CXX
@@ -41,6 +40,7 @@ option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
+option(BTOP_FORTIFY "Detect buffer overflows with _FORTIFY_SOURCE=3" ON)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -64,6 +64,8 @@ if(APPLE)
   target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+  target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
 else()
@@ -74,6 +76,21 @@ check_include_file_cxx(ranges CXX_HAVE_RANGES)
 if(NOT CXX_HAVE_RANGES)
   message(FATAL_ERROR "The compiler doesn't support <ranges>")
 endif()
+
+# Generate build info
+execute_process(
+  COMMAND "git" "rev-parse" "--short" "HEAD"
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_COMMIT
+  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+set(CONFIGURE_COMMAND
+    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_FORTIFY=${BTOP_FORTIFY} -DBTOP_GPU=${BTOP_GPU}"
+)
+get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
+set(COMPILER "${CXX_COMPILER_BASENAME}")
+set(COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY IMMEDIATE)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Check for and enable LTO
 check_ipo_supported(RESULT ipo_supported)
@@ -97,7 +114,7 @@ if(BTOP_WERROR)
 endif()
 
 if(NOT APPLE)
- target_compile_options(btop PRIVATE -fstack-clash-protection)
+  target_compile_options(btop PRIVATE -fstack-clash-protection)
 endif()
 check_cxx_compiler_flag(-fstack-protector HAS_FSTACK_PROTECTOR)
 if(HAS_FSTACK_PROTECTOR)
@@ -109,10 +126,11 @@ if(HAS_FCF_PROTECTION)
 endif()
 
 target_compile_definitions(btop PRIVATE
+  FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
   # Only has an effect with optimizations enabled
-  $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
+  $<$<AND:$<NOT:$<CONFIG:Debug>>,$<BOOL:${BTOP_FORTIFY}>>:_FORTIFY_SOURCE=3>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
@@ -129,7 +147,7 @@ if(LINUX AND BTOP_GPU)
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
     # set
-    # We could also manully append ROCm's path here
+    # We could also manually append ROCm's path here
     set(_CMAKE_MODULE_PATH CMAKE_MODULE_PATH)
     unset(CMAKE_MODULE_PATH)
 
@@ -178,12 +196,34 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   endif()
 
   find_package(devstat REQUIRED)
-  target_link_libraries(btop devstat::devstat)
+  find_package(kvm REQUIRED)
+  target_link_libraries(btop devstat::devstat kvm::kvm)
   if(BTOP_STATIC)
     find_package(elf REQUIRED)
-    find_package(kvm REQUIRED)
-    target_link_libraries(btop elf::elf kvm::kvm)
+    target_link_libraries(btop elf::elf)
   endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(btop PRIVATE -static-libstdc++)
+  endif()
+  find_package(kvm REQUIRED)
+  target_link_libraries(btop kvm::kvm)
+endif()
+
+
+# Check if lowdown is installed
+find_program(LOWDOWN_EXECUTABLE lowdown)
+
+if(LOWDOWN_EXECUTABLE)
+  # Custom target to compile Markdown to man page using lowdown
+  add_custom_target(btop.1 ALL
+      COMMAND lowdown -s -Tman -o btop.1 manpage.md
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  # Install the man page
+  install(FILES btop.1 DESTINATION "share/man/man1")
+else()
+  message(WARNING "Command 'lowdown' not found: skipping generating man page btop.1")
 endif()
 
 install(TARGETS btop RUNTIME)
@@ -191,4 +231,3 @@ install(FILES "btop.desktop" DESTINATION "share/applications")
 install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME "btop.png")
 install(FILES "Img/icon.svg" DESTINATION "share/icons/hicolor/scalable/apps" RENAME "btop.svg")
 install(DIRECTORY "themes" DESTINATION "share/btop")
-

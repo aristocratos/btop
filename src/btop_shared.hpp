@@ -25,11 +25,19 @@ tab-size = 4
 #include <string>
 #include <tuple>
 #include <vector>
-#include <ifaddrs.h>
-#include <robin_hood.h>
+#include <unordered_map>
 #include <unistd.h>
 
-using robin_hood::unordered_flat_map;
+// From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
+// clang-format off
+#include <net/if.h>
+#include <ifaddrs.h>
+// clang-format on
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+# include <kvm.h>
+#endif
+
 using std::array;
 using std::atomic;
 using std::deque;
@@ -55,6 +63,7 @@ namespace Global {
 	extern string overlay;
 	extern string clock;
 	extern uid_t real_uid, set_uid;
+	extern atomic<bool> init_conf;
 }
 
 namespace Runner {
@@ -83,6 +92,15 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+	struct KvmDeleter {
+		void operator()(kvm_t* handle) {
+			kvm_close(handle);
+		}
+	};
+	using KvmPtr = std::unique_ptr<kvm_t, KvmDeleter>;
+#endif
 }
 
 
@@ -98,7 +116,7 @@ namespace Gpu {
 	extern vector<int> gpu_b_height_offsets;
 	extern long long gpu_pwr_total_max;
 
-	extern unordered_flat_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
+	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
   const array mem_names { "used"s, "free"s };
 
@@ -124,7 +142,7 @@ namespace Gpu {
 
 	//* Per-device container for GPU info
 	struct gpu_info {
-		unordered_flat_map<string, deque<long long>> gpu_percent = {
+		std::unordered_map<string, deque<long long>> gpu_percent = {
 			{"gpu-totals", {}},
 			{"gpu-vram-totals", {}},
 			{"gpu-pwr-totals", {}},
@@ -178,10 +196,10 @@ namespace Cpu {
 	extern string cpuName, cpuHz;
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
-	extern tuple<int, long, string> current_bat;
+	extern tuple<int, float, long, string> current_bat;
 
 	struct cpu_info {
-		unordered_flat_map<string, deque<long long>> cpu_percent = {
+		std::unordered_map<string, deque<long long>> cpu_percent = {
 			{"total", {}},
 			{"user", {}},
 			{"nice", {}},
@@ -207,13 +225,13 @@ namespace Cpu {
     string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpu, bool force_redraw = false, bool data_same = false);
 
 	//* Parse /proc/cpu info for mapping of core ids
-	auto get_core_mapping() -> unordered_flat_map<int, int>;
-	extern unordered_flat_map<int, int> core_mapping;
+	auto get_core_mapping() -> std::unordered_map<int, int>;
+	extern std::unordered_map<int, int> core_mapping;
 
 	auto get_cpuHz() -> string;
 
 	//* Get battery info from /sys
-	auto get_battery() -> tuple<int, long, string>;
+	auto get_battery() -> tuple<int, float, long, string>;
 }
 
 namespace Mem {
@@ -229,11 +247,11 @@ namespace Mem {
 		string name;
 		string fstype{};                // defaults to ""
 		std::filesystem::path stat{};   // defaults to ""
-		int64_t total{};                // defaults to 0
-		int64_t used{};                 // defaults to 0
-		int64_t free{};                 // defaults to 0
-		int used_percent{};             // defaults to 0
-		int free_percent{};             // defaults to 0
+		int64_t total{};
+		int64_t used{};
+		int64_t free{};
+		int used_percent{};
+		int free_percent{};
 
 		array<int64_t, 3> old_io = {0, 0, 0};
 		deque<long long> io_read = {};
@@ -242,13 +260,13 @@ namespace Mem {
 	};
 
 	struct mem_info {
-		unordered_flat_map<string, uint64_t> stats =
+		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
-		unordered_flat_map<string, deque<long long>> percent =
+		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
-		unordered_flat_map<string, disk_info> disks;
+		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
 
@@ -270,26 +288,37 @@ namespace Net {
 	extern string selected_iface;
 	extern vector<string> interfaces;
 	extern bool rescale;
-	extern unordered_flat_map<string, uint64_t> graph_max;
+	extern std::unordered_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed{};       // defaults to 0
-		uint64_t top{};         // defaults to 0
-		uint64_t total{};       // defaults to 0
-		uint64_t last{};        // defaults to 0
-		uint64_t offset{};      // defaults to 0
-		uint64_t rollover{};    // defaults to 0
+		uint64_t speed{};
+		uint64_t top{};
+		uint64_t total{};
+		uint64_t last{};
+		uint64_t offset{};
+		uint64_t rollover{};
 	};
 
 	struct net_info {
-		unordered_flat_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
-		unordered_flat_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
+		std::unordered_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
+		std::unordered_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
 		string ipv4{};      // defaults to ""
 		string ipv6{};      // defaults to ""
-		bool connected{};   // defaults to false
+		bool connected{};
 	};
 
-	extern unordered_flat_map<string, net_info> current_net;
+	class IfAddrsPtr {
+		struct ifaddrs* ifaddr;
+		int status;
+	public:
+		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
+		~IfAddrsPtr() { freeifaddrs(ifaddr); }
+		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
+	};
+
+	extern std::unordered_map<string, net_info> current_net;
 
 	//* Collect net upload/download stats
 	auto collect(bool no_update=false) -> net_info&;
@@ -322,7 +351,7 @@ namespace Proc {
 	};
 
 	//? Translation from process state char to explanative string
-	const unordered_flat_map<char, string> proc_states = {
+	const std::unordered_map<char, string> proc_states = {
 		{'R', "Running"},
 		{'S', "Sleeping"},
 		{'D', "Waiting"},
@@ -338,32 +367,32 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		size_t pid{};           // defaults to 0
+		size_t pid{};
 		string name{};          // defaults to ""
 		string cmd{};           // defaults to ""
 		string short_cmd{};     // defaults to ""
-		size_t threads{};       // defaults to 0
-		int name_offset{};      // defaults to 0
+		size_t threads{};
+		int name_offset{};
 		string user{};          // defaults to ""
-		uint64_t mem{};         // defaults to 0
+		uint64_t mem{};
 		double cpu_p{};         // defaults to = 0.0
 		double cpu_c{};         // defaults to = 0.0
 		char state = '0';
-		int64_t p_nice{};      // defaults to 0
-		uint64_t ppid{};        // defaults to 0
-		uint64_t cpu_s{};       // defaults to 0
-		uint64_t cpu_t{};       // defaults to 0
+		int64_t p_nice{};
+		uint64_t ppid{};
+		uint64_t cpu_s{};
+		uint64_t cpu_t{};
 		string prefix{};        // defaults to ""
-		size_t depth{};         // defaults to 0
-		size_t tree_index{};    // defaults to 0
-		bool collapsed{};       // defaults to false
-		bool filtered{};        // defaults to false
+		size_t depth{};
+		size_t tree_index{};
+		bool collapsed{};
+		bool filtered{};
 	};
 
 	//* Container for process info box
 	struct detail_container {
-		size_t last_pid{}; // defaults to 0
-		bool skip_smaps{}; // defaults to false
+		size_t last_pid{};
+		bool skip_smaps{};
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;

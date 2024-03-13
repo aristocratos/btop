@@ -38,7 +38,7 @@ namespace Menu {
 	extern bool redraw;
 
 	//? line, col, height, width
-	extern unordered_flat_map<string, Input::Mouse_loc> mouse_mappings;
+	extern std::unordered_map<string, Input::Mouse_loc> mouse_mappings;
 
 	//* Creates a message box centered on screen
 	//? Height of box is determined by size of content vector
@@ -46,12 +46,12 @@ namespace Menu {
 	//? Strings in content vector is not checked for box width overflow
 	class msgBox {
 		string box_contents, button_left, button_right;
-		int height{};       // defaults to 0
-		int width{};        // defaults to 0
-		int boxtype{};      // defaults to 0
-		int selected{};     // defaults to 0
-		int x{};            // defaults to 0
-		int y{};            // defaults to 0
+		int height{};
+		int width{};
+		int boxtype{};
+		int selected{};
+		int x{};
+		int y{};
 	public:
 		enum BoxTypes { OK, YES_NO, NO_YES };
 		enum msgReturn {

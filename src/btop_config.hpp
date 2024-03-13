@@ -18,15 +18,15 @@ tab-size = 4
 
 #pragma once
 
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
-#include <filesystem>
 
-#include <robin_hood.h>
+#include <unordered_map>
 
 using std::string;
 using std::vector;
-using robin_hood::unordered_flat_map;
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -34,12 +34,12 @@ namespace Config {
 	extern std::filesystem::path conf_dir;
 	extern std::filesystem::path conf_file;
 
-	extern unordered_flat_map<std::string_view, string> strings;
-	extern unordered_flat_map<std::string_view, string> stringsTmp;
-	extern unordered_flat_map<std::string_view, bool> bools;
-	extern unordered_flat_map<std::string_view, bool> boolsTmp;
-	extern unordered_flat_map<std::string_view, int> ints;
-	extern unordered_flat_map<std::string_view, int> intsTmp;
+	extern std::unordered_map<std::string_view, string> strings;
+	extern std::unordered_map<std::string_view, string> stringsTmp;
+	extern std::unordered_map<std::string_view, bool> bools;
+	extern std::unordered_map<std::string_view, bool> boolsTmp;
+	extern std::unordered_map<std::string_view, int> ints;
+	extern std::unordered_map<std::string_view, int> intsTmp;
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
@@ -57,6 +57,10 @@ namespace Config {
 	extern vector<string> preset_list;
 	extern vector<string> available_batteries;
 	extern int current_preset;
+
+	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
+
+	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
 
 	//* Check if string only contains space separated valid names for boxes
 	bool check_boxes(const string& boxes);
@@ -95,7 +99,7 @@ namespace Config {
 	}
 
 	//* Set config key <name> to int <value>
-	inline void set(const std::string_view name, const int& value) {
+	inline void set(const std::string_view name, const int value) {
 		if (_locked(name)) intsTmp.insert_or_assign(name, value);
 		else ints.at(name) = value;
 	}

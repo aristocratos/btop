@@ -17,7 +17,8 @@ tab-size = 4
 */
 
 #include <cstdlib>
-#include <robin_hood.h>
+#include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 #include <ranges>
 #include <cmath>
@@ -31,6 +32,8 @@ tab-size = 4
 #include <filesystem>
 #include <future>
 #include <dlfcn.h>
+#include <unordered_map>
+#include <utility>
 
 #if defined(RSMI_STATIC)
 	#include <rocm_smi/rocm_smi.h>
@@ -74,8 +77,8 @@ namespace Cpu {
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
-	bool got_sensors{};     // defaults to false
-	bool cpu_temp_only{};   // defaults to false
+	bool got_sensors{};
+	bool cpu_temp_only{};
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -89,15 +92,15 @@ namespace Cpu {
 	struct Sensor {
 		fs::path path;
 		string label;
-		int64_t temp{}; // defaults to 0
-		int64_t high{}; // defaults to 0
-		int64_t crit{}; // defaults to 0
+		int64_t temp{};
+		int64_t high{};
+		int64_t crit{};
 	};
 
-	unordered_flat_map<string, Sensor> found_sensors;
+	std::unordered_map<string, Sensor> found_sensors;
 	string cpu_sensor;
 	vector<string> core_sensors;
-	unordered_flat_map<int, int> core_mapping;
+	std::unordered_map<int, int> core_mapping;
 }
 
 namespace Gpu {
@@ -157,36 +160,43 @@ namespace Gpu {
 	namespace Rsmi {
 	#if !defined(RSMI_STATIC)
 		//? RSMI defines, structs & typedefs
-		#define RSMI_MAX_NUM_FREQUENCIES  32
-		#define RSMI_STATUS_SUCCESS        0
-		#define RSMI_MEM_TYPE_VRAM         0
-		#define RSMI_TEMP_CURRENT          0
-		#define RSMI_TEMP_TYPE_EDGE        0
-		#define RSMI_CLK_TYPE_MEM          4
-		#define RSMI_CLK_TYPE_SYS          0
-		#define RSMI_TEMP_MAX              1
+		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
+		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
+		#define RSMI_STATUS_SUCCESS           0
+		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_TEMP_CURRENT             0
+		#define RSMI_TEMP_TYPE_EDGE           0
+		#define RSMI_CLK_TYPE_MEM             4
+		#define RSMI_CLK_TYPE_SYS             0
+		#define RSMI_TEMP_MAX                 1
 
 		typedef int rsmi_status_t,
 					rsmi_temperature_metric_t,
 					rsmi_clk_type_t,
 					rsmi_memory_type_t;
 
-		struct rsmi_frequencies_t {uint32_t num_supported, current, frequency[RSMI_MAX_NUM_FREQUENCIES];};
+		struct rsmi_version_t {uint32_t major,  minor,  patch; const char* build;};
+		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V5];};
+		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V6];};
 
 		//? Function pointers
 		rsmi_status_t (*rsmi_init)(uint64_t);
 		rsmi_status_t (*rsmi_shut_down)();
+		rsmi_status_t (*rsmi_version_get)(rsmi_version_t*);
 		rsmi_status_t (*rsmi_num_monitor_devices)(uint32_t*);
 		rsmi_status_t (*rsmi_dev_name_get)(uint32_t, char*, size_t);
 		rsmi_status_t (*rsmi_dev_power_cap_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_temp_metric_get)(uint32_t, uint32_t, rsmi_temperature_metric_t, int64_t*);
 		rsmi_status_t (*rsmi_dev_busy_percent_get)(uint32_t, uint32_t*);
 		rsmi_status_t (*rsmi_dev_memory_busy_percent_get)(uint32_t, uint32_t*);
-		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t*);
+		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v5)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v5*);
+		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v6)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v6*);
 		rsmi_status_t (*rsmi_dev_power_ave_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_total_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_usage_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_pci_throughput_get)(uint32_t, uint64_t*, uint64_t*, uint64_t*);
+
+		uint32_t version_major = 0;
 
 		//? Data
 		void* rsmi_dl_handle;
@@ -291,14 +301,14 @@ namespace Cpu {
 	string cpuName;
 	string cpuHz;
 	bool has_battery = true;
-	tuple<int, long, string> current_bat;
+	tuple<int, float, long, string> current_bat;
 
 	const array time_names {
 		"user"s, "nice"s, "system"s, "idle"s, "iowait"s,
 		"irq"s, "softirq"s, "steal"s, "guest"s, "guest_nice"s
 	};
 
-	unordered_flat_map<string, long long> cpu_old = {
+	std::unordered_map<string, long long> cpu_old = {
 			{"totals", 0},
 			{"idles", 0},
 			{"user", 0},
@@ -539,14 +549,14 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		static int failed{}; // defaults to 0
+		static int failed{};
 
 		if (failed > 4)
 			return ""s;
 
 		string cpuhz;
 		try {
-			double hz{}; // defaults to 0.0
+			double hz{};
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
 			if (not freq_path.empty()) {
 				hz = stod(readfile(freq_path, "0.0")) / 1000;
@@ -580,7 +590,7 @@ namespace Cpu {
 				cpuhz += " GHz";
 			}
 			else if (hz > 0)
-				cpuhz = to_string((int)round(hz)) + " MHz";
+				cpuhz = to_string((int)hz) + " MHz";
 
 		}
 		catch (const std::exception& e) {
@@ -595,16 +605,16 @@ namespace Cpu {
 		return cpuhz;
 	}
 
-	auto get_core_mapping() -> unordered_flat_map<int, int> {
-		unordered_flat_map<int, int> core_map;
+	auto get_core_mapping() -> std::unordered_map<int, int> {
+		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
-			int cpu{};  // defaults to 0
-			int core{}; // defaults to 0
-			int n{};    // defaults to 0
+			int cpu{};
+			int core{};
+			int n{};
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -661,15 +671,16 @@ namespace Cpu {
 	}
 
 	struct battery {
-		fs::path base_dir, energy_now, energy_full, power_now, status, online;
+		fs::path base_dir, energy_now, charge_now, energy_full, charge_full, power_now, current_now, voltage_now, status, online;
 		string device_type;
-		bool use_energy = true;
+		bool use_energy_or_charge = true;
+		bool use_power = true;
 	};
 
-	auto get_battery() -> tuple<int, long, string> {
-		if (not has_battery) return {0, 0, ""};
+	auto get_battery() -> tuple<int, float, long, string> {
+		if (not has_battery) return {0, 0, 0, ""};
 		static string auto_sel;
-		static unordered_flat_map<string, battery> batteries;
+		static std::unordered_map<string, battery> batteries;
 
 		//? Get paths to needed files and check for valid values on first run
 		if (batteries.empty() and has_battery) {
@@ -699,19 +710,27 @@ namespace Cpu {
 						}
 
 						if (fs::exists(bat_dir / "energy_now")) new_bat.energy_now = bat_dir / "energy_now";
-						else if (fs::exists(bat_dir / "charge_now")) new_bat.energy_now = bat_dir / "charge_now";
-						else new_bat.use_energy = false;
+						else if (fs::exists(bat_dir / "charge_now")) new_bat.charge_now = bat_dir / "charge_now";
+						else new_bat.use_energy_or_charge = false;
 
 						if (fs::exists(bat_dir / "energy_full")) new_bat.energy_full = bat_dir / "energy_full";
-						else if (fs::exists(bat_dir / "charge_full")) new_bat.energy_full = bat_dir / "charge_full";
-						else new_bat.use_energy = false;
+						else if (fs::exists(bat_dir / "charge_full")) new_bat.charge_full = bat_dir / "charge_full";
+						else new_bat.use_energy_or_charge = false;
 
-						if (not new_bat.use_energy and not fs::exists(bat_dir / "capacity")) {
+						if (not new_bat.use_energy_or_charge and not fs::exists(bat_dir / "capacity")) {
 							continue;
 						}
 
-						if (fs::exists(bat_dir / "power_now")) new_bat.power_now = bat_dir / "power_now";
-						else if (fs::exists(bat_dir / "current_now")) new_bat.power_now = bat_dir / "current_now";
+						if (fs::exists(bat_dir / "power_now")) {
+							new_bat.power_now = bat_dir / "power_now";
+						}
+						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "current_now"))) {
+							 new_bat.current_now = bat_dir / "current_now";
+							 new_bat.voltage_now = bat_dir / "voltage_now";
+						}
+						else {
+							new_bat.use_power = false;
+						}
 
 						if (fs::exists(bat_dir / "AC0/online")) new_bat.online = bat_dir / "AC0/online";
 						else if (fs::exists(bat_dir / "AC/online")) new_bat.online = bat_dir / "AC/online";
@@ -726,7 +745,7 @@ namespace Cpu {
 			}
 			if (batteries.empty()) {
 				has_battery = false;
-				return {0, 0, ""};
+				return {0, 0, 0, ""};
 			}
 		}
 
@@ -746,15 +765,9 @@ namespace Cpu {
 
 		int percent = -1;
 		long seconds = -1;
+		float watts = -1;
 
 		//? Try to get battery percentage
-		if (b.use_energy) {
-			try {
-				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
-			}
-			catch (const std::invalid_argument&) { }
-			catch (const std::out_of_range&) { }
-		}
 		if (percent < 0) {
 			try {
 				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
@@ -762,9 +775,23 @@ namespace Cpu {
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
+		if (b.use_energy_or_charge and percent < 0) {
+			try {
+				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
+		if (b.use_energy_or_charge and percent < 0) {
+			try {
+				percent = round(100.0 * stoll(readfile(b.charge_now, "-1")) / stoll(readfile(b.charge_full, "1")));
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+		}
 		if (percent < 0) {
 			has_battery = false;
-			return {0, 0, ""};
+			return {0, 0, 0, ""};
 		}
 
 		//? Get charging/discharging status
@@ -778,13 +805,23 @@ namespace Cpu {
 
 		//? Get seconds to empty
 		if (not is_in(status, "charging", "full")) {
-			if (b.use_energy and not b.power_now.empty()) {
-				try {
-					seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+			if (b.use_energy_or_charge ) {
+				if (not b.power_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
 				}
-				catch (const std::invalid_argument&) { }
-				catch (const std::out_of_range&) { }
+				else if (not b.current_now.empty()) {
+					try {
+						seconds = round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
+				}
 			}
+
 			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
 				try {
 					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
@@ -794,7 +831,26 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, seconds, status};
+		//? Get power draw
+		if (b.use_power) {
+			if (not b.power_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.power_now, "-1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+			else if (not b.voltage_now.empty() and not b.current_now.empty()) {
+				try {
+					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0 * stoll(readfile(b.voltage_now, "1")) / 1000000.0;
+				}
+				catch (const std::invalid_argument&) { }
+				catch (const std::out_of_range&) { }
+			}
+
+		}
+
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info& {
@@ -946,16 +1002,27 @@ namespace Gpu {
 			if (initialized) return false;
 
 			//? Dynamic loading & linking
-			nvml_dl_handle = dlopen("libnvidia-ml.so", RTLD_LAZY);
-			if (!nvml_dl_handle) {
-				Logger::info(std::string("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: ") + dlerror());
-				return false;
+			//? Try possible library names for libnvidia-ml.so
+			const array libNvAlts = {
+				"libnvidia-ml.so",
+				"libnvidia-ml.so.1",
+			};
+
+			for (const auto& l : libNvAlts) {
+				nvml_dl_handle = dlopen(l, RTLD_LAZY);
+				if (nvml_dl_handle != nullptr) {
+					break;
+				}
 			}
+ 			if (!nvml_dl_handle) {
+				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: "s + dlerror());
+ 				return false;
+ 			}
 
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("NVML: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
@@ -1211,19 +1278,32 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 		#if !defined(RSMI_STATIC)
-			rsmi_dl_handle = dlopen("/opt/rocm/lib/librocm_smi64.so", RTLD_LAZY); // first try /lib and /usr/lib, then /opt/rocm/lib if that fails
-			if (dlerror() != NULL) {
-				rsmi_dl_handle = dlopen("librocm_smi64.so", RTLD_LAZY);
-			}
+
+			//? Try possible library paths and names for librocm_smi64.so
+			const array libRocAlts = {
+				"/opt/rocm/lib/librocm_smi64.so",
+				"librocm_smi64.so",
+				"librocm_smi64.so.5", // fedora
+				"librocm_smi64.so.1.0", // debian
+				"librocm_smi64.so.6"
+			};
+
+			for (const auto& l : libRocAlts) {
+				rsmi_dl_handle = dlopen(l, RTLD_LAZY);
+				if (rsmi_dl_handle != nullptr) {
+					break;
+				}
+ 			}
+
 			if (!rsmi_dl_handle) {
-				Logger::debug(std::string("Failed to load librocm_smi64.so, AMD GPUs will not be detected: ") + dlerror());
+				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: "s + dlerror());
 				return false;
 			}
 
 			auto load_rsmi_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(rsmi_dl_handle, sym_name);
 				auto err = dlerror();
-				if (err != NULL) {
+				if (err != nullptr) {
 					Logger::error(string("ROCm SMI: Couldn't find function ") + sym_name + ": " + err);
 					return (void*)nullptr;
 				} else return sym;
@@ -1233,13 +1313,13 @@ namespace Gpu {
 
 		    LOAD_SYM(rsmi_init);
 		    LOAD_SYM(rsmi_shut_down);
+			LOAD_SYM(rsmi_version_get);
 		    LOAD_SYM(rsmi_num_monitor_devices);
 		    LOAD_SYM(rsmi_dev_name_get);
 		    LOAD_SYM(rsmi_dev_power_cap_get);
 		    LOAD_SYM(rsmi_dev_temp_metric_get);
 		    LOAD_SYM(rsmi_dev_busy_percent_get);
 		    LOAD_SYM(rsmi_dev_memory_busy_percent_get);
-		    LOAD_SYM(rsmi_dev_gpu_clk_freq_get);
 		    LOAD_SYM(rsmi_dev_power_ave_get);
 		    LOAD_SYM(rsmi_dev_memory_total_get);
 		    LOAD_SYM(rsmi_dev_memory_usage_get);
@@ -1254,6 +1334,27 @@ namespace Gpu {
 				Logger::debug("Failed to initialize ROCm SMI, AMD GPUs will not be detected");
 				return false;
 			}
+
+		#if !defined(RSMI_STATIC)
+			//? Check version
+			rsmi_version_t version;
+			result = rsmi_version_get(&version);
+			if (result != RSMI_STATUS_SUCCESS) {
+				Logger::warning("ROCm SMI: Failed to get version");
+				return false;
+			} else if (version.major == 5) {
+				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
+					return false;
+			// In the release tarballs of rocm 6.0.0 and 6.0.2 the version queried with rsmi_version_get is 7.0.0.0
+			} else if (version.major == 6 || version.major == 7) {
+				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
+					return false;
+			} else {
+				Logger::warning("ROCm SMI: Dynamic loading only supported for version 5 and 6");
+				return false;
+			}
+			version_major = version.major;
+		#endif
 
 			//? Device count
 			result = rsmi_num_monitor_devices(&device_count);
@@ -1338,7 +1439,46 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
     				} else gpus_slice[i].mem_utilization_percent.push_back((long long)utilization);
 				}
+			#if !defined(RSMI_STATIC)
+				//? Clock speeds
+				if (gpus_slice[i].supported_functions.gpu_clock) {
+					if (version_major == 5) {
+						rsmi_frequencies_t_v5 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_SYS, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+					else if (version_major == 6 || version_major == 7) {
+						rsmi_frequencies_t_v6 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_SYS, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+				}
 
+				if (gpus_slice[i].supported_functions.mem_clock) {
+					if (version_major == 5) {
+						rsmi_frequencies_t_v5 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_MEM, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+					else if (version_major == 6 || version_major == 7) {
+						rsmi_frequencies_t_v6 frequencies;
+						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_MEM, &frequencies);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					}
+				}
+			#else
 				//? Clock speeds
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					rsmi_frequencies_t frequencies;
@@ -1357,6 +1497,7 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
     				} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
+			#endif
 
     			//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
@@ -1482,10 +1623,10 @@ namespace Gpu {
 #endif
 
 namespace Mem {
-	bool has_swap{}; // defaults to false
+	bool has_swap{};
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
-	int disk_ios{}; // defaults to 0
+	int disk_ios{};
 	vector<string> last_found;
 
 	//?* Find the filepath to the specified ZFS object's stat file
@@ -1613,7 +1754,7 @@ namespace Mem {
 				auto only_physical = Config::getB("only_physical");
 				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
 				auto& disks = mem.disks;
-				static unordered_flat_map<string, future<pair<disk_info, int>>> disks_stats_promises;
+				static std::unordered_map<string, future<pair<disk_info, int>>> disks_stats_promises;
 				ifstream diskread;
 
 				vector<string> filter;
@@ -1920,7 +2061,7 @@ namespace Mem {
 			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
 			} else {
-				Logger::debug("Cant access folder: " + zfs_pool_stat_path.string());
+				Logger::debug("Can't access folder: " + zfs_pool_stat_path.string());
 				return "";
 			}
 		}
@@ -1973,10 +2114,10 @@ namespace Mem {
 		int64_t bytes_read;
 		int64_t bytes_write;
 		int64_t io_ticks;
-		int64_t bytes_read_total{};     // defaults to 0
-		int64_t bytes_write_total{};    // defaults to 0
-		int64_t io_ticks_total{};       // defaults to 0
-		int64_t objects_read{};         // defaults to 0
+		int64_t bytes_read_total{};
+		int64_t bytes_write_total{};
+		int64_t io_ticks_total{};
+		int64_t objects_read{};
 
 		// looking through all files that start with 'objset'
 		for (const auto& file: fs::directory_iterator(disk.stat)) {
@@ -2048,25 +2189,15 @@ namespace Mem {
 }
 
 namespace Net {
-	unordered_flat_map<string, net_info> current_net;
+	std::unordered_map<string, net_info> current_net;
 	net_info empty_net = {};
 	vector<string> interfaces;
 	string selected_iface;
-	int errors{}; // defaults to 0
-	unordered_flat_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
-	unordered_flat_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
+	int errors{};
+	std::unordered_map<string, uint64_t> graph_max = { {"download", {}}, {"upload", {}} };
+	std::unordered_map<string, array<int, 2>> max_count = { {"download", {}}, {"upload", {}} };
 	bool rescale{true};
-	uint64_t timestamp{}; // defaults to 0
-
-	//* RAII wrapper for getifaddrs
-	class getifaddr_wrapper {
-		struct ifaddrs* ifaddr;
-	public:
-		int status;
-		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
-		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs* { return ifaddr; }
-	};
+	uint64_t timestamp{};
 
 	auto collect(bool no_update) -> net_info& {
 		if (Runner::stopping) return empty_net;
@@ -2078,10 +2209,10 @@ namespace Net {
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap {};
-			if (if_wrap.status != 0) {
+			IfAddrsPtr if_addrs {};
+			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_wrap.status));
+				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
 				redraw = true;
 				return empty_net;
 			}
@@ -2093,7 +2224,7 @@ namespace Net {
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto* ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
 				const auto& iface = ifa->ifa_name;
@@ -2135,7 +2266,7 @@ namespace Net {
 				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
 			}
 
-			//? Get total recieved and transmitted bytes + device address if no ip was found
+			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto& iface : interfaces) {
 				if (net.at(iface).ipv4.empty() and net.at(iface).ipv6.empty())
 					net.at(iface).ipv4 = readfile("/sys/class/net/" + iface + "/address");
@@ -2145,7 +2276,7 @@ namespace Net {
 					auto& saved_stat = net.at(iface).stat.at(dir);
 					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 
-					uint64_t val{}; // defaults to 0
+					uint64_t val{};
 					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
@@ -2193,7 +2324,6 @@ namespace Net {
 					else
 						it++;
 				}
-				net.compact();
 			}
 
 			timestamp = new_timestamp;
@@ -2263,22 +2393,22 @@ namespace Net {
 namespace Proc {
 
 	vector<proc_info> current_procs;
-	unordered_flat_map<string, string> uid_user;
+	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
-	bool current_rev{}; // defaults to false
+	bool current_rev{};
 
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
 	int collapse = -1, expand = -1;
-	uint64_t old_cputimes{};    // defaults to 0
-	atomic<int> numpids{};      // defaults to 0
-	int filter_found{};         // defaults to 0
+	uint64_t old_cputimes{};
+	atomic<int> numpids{};
+	int filter_found{};
 
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
-	static robin_hood::unordered_set<size_t> kernels_procs = {KTHREADD};
+	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
 	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
@@ -2406,7 +2536,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		static size_t proc_clear_count{}; // defaults to 0
+		static size_t proc_clear_count{};
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -2481,7 +2611,7 @@ namespace Proc {
 
 				//? Check if pid already exists in current_procs
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
-				bool no_cache{}; // defaults to false
+				bool no_cache{};
 				if (find_old == current_procs.end()) {
 					current_procs.push_back({pid});
 					find_old = current_procs.end() - 1;

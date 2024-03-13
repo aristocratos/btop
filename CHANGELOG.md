@@ -1,6 +1,30 @@
+## v1.3.2
+
+Description | Author(s) | References
+--- | --- | ---
+fix: Can't detect librocm 6.0.x | @imwints, @aristocratos | #761
+
+## v1.3.1
+
+Description | Author(s) | References
+--- | --- | ---
+GPU: Added support for dynamic loading of ROCm v6 libraries | @aristocratos, @fxzjshm | 5511131, #737
+Increase max network interface name to 15 | @tessus | #714
+Fix OpenBSD UTF-8 locale detection | @lcheylus, @imwints | #753, #717
+Add hot-reloading of config file with CTRL+R or SIGUSR2 signal | @MartinPit | #722
+Add battery power draw for linux and freebsd | @vsey | #689
+Fix crash caused by string exception when cpu clock is exactly between 999.5 and 999.9 Mhz | @rkmcode | #735
+Write newline at end of config file | @planet36 | #743
+Add theme based on Everforest Dark Medium palette | @M-Sviridov | #746
+fix: don't mangle memory for zombie processes | @joske | #747
+Share common code from collect | @imwints | #756
+Fixed incorrect used and available memory for OSX | | 4461a43
+
 ## v1.3.0
 
-* Added Gpu Support | @romner-set | PR #529
+* Added Gpu Support Linux | @romner-set | PR #529
+
+* Added platform support for OpenBSD | @joske | PR #607
 
 * Enable macos clang | @muneebmahmed | PR #666
 
@@ -41,6 +65,16 @@
 * FreeBSD swap info | @rrveex | #560
 
 * Create adwaita.theme | @flipflop133 | #485
+
+* Try get terminal size of "/dev/tty" if stdout fails | @imwints | PR #627
+
+* Refresh rate program argument | @imwints | PR #640
+
+* Improved error handling when determining the config directory | @imwints | #652
+
+* Use native POSIX polling syscalls to read input | @lvxnull | #624
+
+* Conditional compile on Big Sur and up | @joske | PR #690
 
 + Various fixes by @imwints, @simplepad, @joske, @gwena, @cpalv, @iambeingtracked, @mattico, @NexAdn
 
@@ -146,7 +180,7 @@
 
 * Fixed: Wrong memory unit when shorten and size is less than 10, by @mohi001
 
-* Fixed: Use cpu cores avarage temp if missing cpu package temp for FreeBSD
+* Fixed: Use cpu cores average temp if missing cpu package temp for FreeBSD
 
 * Changed: Enter symbol to a more common variant
 
@@ -442,7 +476,7 @@
 
 * Fixed: Sizing constraints bug on start and boxes can be toggled from size error screen
 
-* Fixed: UTF-8 check crashing if LANG was set to non existant locale
+* Fixed: UTF-8 check crashing if LANG was set to non existent locale
 
 ## v1.0.4
 

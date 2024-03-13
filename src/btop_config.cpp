@@ -21,8 +21,10 @@ tab-size = 4
 #include <fstream>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 #include <fmt/core.h>
+#include <sys/statvfs.h>
 
 #include "btop_config.hpp"
 #include "btop_shared.hpp"
@@ -197,6 +199,8 @@ namespace Config {
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
 
+		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
+
 		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 	#ifdef GPU_SUPPORT
@@ -215,7 +219,7 @@ namespace Config {
 	#endif
 	};
 
-	unordered_flat_map<std::string_view, string> strings = {
+	std::unordered_map<std::string_view, string> strings = {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
@@ -251,9 +255,9 @@ namespace Config {
 		{"show_gpu_info", "Auto"}
 	#endif
 	};
-	unordered_flat_map<std::string_view, string> stringsTmp;
+	std::unordered_map<std::string_view, string> stringsTmp;
 
-	unordered_flat_map<std::string_view, bool> bools = {
+	std::unordered_map<std::string_view, bool> bools = {
 		{"theme_background", true},
 		{"truecolor", true},
 		{"rounded_corners", true},
@@ -291,6 +295,7 @@ namespace Config {
 		{"net_auto", true},
 		{"net_sync", true},
 		{"show_battery", true},
+		{"show_battery_watts", true},
 		{"vim_keys", false},
 		{"tty_mode", false},
 		{"disk_free_priv", false},
@@ -304,9 +309,9 @@ namespace Config {
 		{"gpu_mirror_graph", true},
 	#endif
 	};
-	unordered_flat_map<std::string_view, bool> boolsTmp;
+	std::unordered_map<std::string_view, bool> boolsTmp;
 
-	unordered_flat_map<std::string_view, int> ints = {
+	std::unordered_map<std::string_view, int> ints = {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
@@ -317,7 +322,66 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 	};
-	unordered_flat_map<std::string_view, int> intsTmp;
+	std::unordered_map<std::string_view, int> intsTmp;
+
+	// Returns a valid config dir or an empty optional
+	// The config dir might be read only, a warning is printed, but a path is returned anyway
+	[[nodiscard]] std::optional<fs::path> get_config_dir() noexcept {
+		fs::path config_dir;
+		{
+			std::error_code error;
+			if (const auto xdg_config_home = std::getenv("XDG_CONFIG_HOME"); xdg_config_home != nullptr) {
+				if (fs::exists(xdg_config_home, error)) {
+					config_dir = fs::path(xdg_config_home) / "btop";
+				}
+			} else if (const auto home = std::getenv("HOME"); home != nullptr) {
+				error.clear();
+				if (fs::exists(home, error)) {
+					config_dir = fs::path(home) / ".config" / "btop";
+				}
+				if (error) {
+					fmt::print(stderr, "\033[0;31mWarning: \033[0m{} could not be accessed: {}\n", config_dir.string(), error.message());
+					config_dir = "";
+				}
+			}
+		}
+
+		// FIXME: This warnings can be noisy if the user deliberately has a non-writable config dir
+		//  offer an alternative | disable messages by default | disable messages if config dir is not writable | disable messages with a flag
+		// FIXME: Make happy path not branch
+		if (not config_dir.empty()) {
+			std::error_code error;
+			if (fs::exists(config_dir, error)) {
+				if (fs::is_directory(config_dir, error)) {
+					struct statvfs stats {};
+					if ((fs::status(config_dir, error).permissions() & fs::perms::owner_write) == fs::perms::owner_write and
+						statvfs(config_dir.c_str(), &stats) == 0 and (stats.f_flag & ST_RDONLY) == 0) {
+						return config_dir;
+					} else {
+						fmt::print(stderr, "\033[0;31mWarning: \033[0m`{}` is not writable\n", fs::absolute(config_dir).string());
+						// If the config is readable we can still use the provided config, but changes will not be persistent
+						if ((fs::status(config_dir, error).permissions() & fs::perms::owner_read) == fs::perms::owner_read) {
+							fmt::print(stderr, "\033[0;31mWarning: \033[0mLogging is disabled, config changes are not persistent\n");
+							return config_dir;
+						}
+					}
+				} else {
+					fmt::print(stderr, "\033[0;31mWarning: \033[0m`{}` is not a directory\n", fs::absolute(config_dir).string());
+				}
+			} else {
+				// Doesn't exist
+				if (fs::create_directories(config_dir, error)) {
+					return config_dir;
+				} else {
+					fmt::print(stderr, "\033[0;31mWarning: \033[0m`{}` could not be created: {}\n", fs::absolute(config_dir).string(), error.message());
+				}
+			}
+		} else {
+			fmt::print(stderr, "\033[0;31mWarning: \033[0mCould not determine config path: Make sure `$XDG_CONFIG_HOME` or `$HOME` is set\n");
+		}
+		fmt::print(stderr, "\033[0;31mWarning: \033[0mLogging is disabled, config changes are not persistent\n");
+		return {};
+	}
 
 	bool _locked(const std::string_view name) {
 		atomic_wait(writelock, true);
@@ -427,8 +491,8 @@ namespace Config {
 		if (name == "update_ms" and i_value < 100)
 			validError = "Config value update_ms set too low (<100).";
 
-		else if (name == "update_ms" and i_value > 86400000)
-			validError = "Config value update_ms set too high (>86400000).";
+		else if (name == "update_ms" and i_value > ONE_DAY_MILLIS)
+			validError = fmt::format("Config value update_ms set too high (>{}).", ONE_DAY_MILLIS);
 
 		else
 			return true;
@@ -446,7 +510,7 @@ namespace Config {
 		else if (name.starts_with("graph_symbol_") and (value != "default" and not v_contains(valid_graph_symbols, value)))
 			validError = fmt::format("Invalid graph symbol identifier for {}: {}", name, value);
 
-		else if (name == "shown_boxes" and not value.empty() and not check_boxes(value))
+		else if (name == "shown_boxes" and not Global::init_conf and not value.empty() and not check_boxes(value))
 			validError = "Invalid box name(s) in shown_boxes!";
 
 	#ifdef GPU_SUPPORT
@@ -558,8 +622,7 @@ namespace Config {
 			if (not v_contains(valid_boxes, box)) return false;
 		#ifdef GPU_SUPPORT
 			if (box.starts_with("gpu")) {
-				size_t gpu_num = stoi(box.substr(3));
-				if (gpu_num == 0) gpu_num = 5;
+				size_t gpu_num = stoi(box.substr(3)) + 1;
 				if (std::cmp_greater(gpu_num, Gpu::gpu_names.size())) return false;
 			}
 		#endif
@@ -593,12 +656,17 @@ namespace Config {
 	}
 
 	void load(const fs::path& conf_file, vector<string>& load_warnings) {
+		std::error_code error;
 		if (conf_file.empty())
 			return;
-		else if (not fs::exists(conf_file)) {
+		else if (not fs::exists(conf_file, error)) {
 			write_new = true;
 			return;
 		}
+		if (error) {
+			return;
+		}
+
 		std::ifstream cread(conf_file);
 		if (cread.good()) {
 			vector<string> valid_names;
@@ -664,9 +732,9 @@ namespace Config {
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
-			cwrite << "#? Config file for btop v. " << Global::Version;
+			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
 			for (auto [name, description] : descriptions) {
-				cwrite 	<< "\n\n" << (description.empty() ? "" : description + "\n")
+				cwrite << "\n" << (description.empty() ? "" : description + "\n")
 						<< name << " = ";
 				if (strings.contains(name))
 					cwrite << "\"" << strings.at(name) << "\"";
@@ -674,6 +742,7 @@ namespace Config {
 					cwrite << ints.at(name);
 				else if (bools.contains(name))
 					cwrite << (bools.at(name) ? "True" : "False");
+				cwrite << "\n";
 			}
 		}
 	}
