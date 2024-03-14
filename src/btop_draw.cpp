@@ -694,7 +694,7 @@ namespace Cpu {
 			if (show_temps) {
 				temp_graphs.clear();
 				temp_graphs.emplace_back(5, 1, "temp", safeVal(cpu.temp, 0), graph_symbol, false, false, cpu.temp_max, -23);
-				if (not hide_cores and b_column_size > 1) {
+				if (not hide_cores) {
 					for (const auto& i : iota((size_t)1, cpu.temp.size())) {
 						temp_graphs.emplace_back(5, 1, "temp", safeVal(cpu.temp, i), graph_symbol, false, false, cpu.temp_max, -23);
 					}
