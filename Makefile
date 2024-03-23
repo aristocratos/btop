@@ -91,9 +91,12 @@ $(error $(shell printf "\033[1;91mERROR: \033[97mCompiler too old. (Requires Cla
 endif
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
-override TESTFLAGS := -fexceptions -fstack-clash-protection -fcf-protection
+override TESTFLAGS := -fexceptions -fcf-protection
 ifneq ($(PLATFORM) $(ARCH),macos arm64)
 	override TESTFLAGS += -fstack-protector
+endif
+ifneq ($(PLATFORM_LC) $(CXX_IS_CLANG),openbsd true)
+	override TESTFLAGS += -fstack-clash-protection
 endif
 
 ifeq ($(STATIC),true)
@@ -143,7 +146,11 @@ else ifeq ($(PLATFORM_LC),macos)
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -lkvm -static-libstdc++
+	ifeq ($(CXX_IS_CLANG) $(CLANG_WORKS),true true)
+		override LDFLAGS += -lkvm
+	else
+		override ADDFLAGS += -lkvm -static-libstdc++
+	endif
 	export MAKE = gmake
 	SU_GROUP := wheel
 else
