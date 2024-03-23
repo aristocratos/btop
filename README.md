@@ -339,6 +339,18 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
     sudo dnf install epel-release
 	sudo dnf install btop
 	```
+* **Ubuntu**
+    ```bash
+    sudo apt install btop
+	```
+* **Arch Linux**
+    ```bash
+    sudo pacman -S btop
+	```
+* **Void Linux**
+    ```bash
+    sudo xbps-install btop
+	```
 * **FreeBSD**
 	```sh
 	pkg install btop
