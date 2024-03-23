@@ -160,6 +160,7 @@ namespace Gpu {
 	namespace Rsmi {
 	#if !defined(RSMI_STATIC)
 		//? RSMI defines, structs & typedefs
+        #define RSMI_DEVICE_NAME_BUFFER_SIZE 128
 		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
@@ -1396,8 +1397,8 @@ namespace Gpu {
 			for (uint32_t i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
 					//? Device name
-					char name[NVML_DEVICE_NAME_BUFFER_SIZE]; // ROCm SMI does not provide a constant for this as far as I can tell, this should be good enough
-    				result = rsmi_dev_name_get(i, name, NVML_DEVICE_NAME_BUFFER_SIZE);
+					char name[RSMI_DEVICE_NAME_BUFFER_SIZE];
+    				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
         			if (result != RSMI_STATUS_SUCCESS)
     					Logger::warning("ROCm SMI: Failed to get device name");
         			else gpu_names[Nvml::device_count + i] = string(name);
