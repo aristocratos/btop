@@ -1,0 +1,3 @@
+# The build puts all files directly into debiam/btop/usr.. so there is nothing
+# for dh_install to do, thus just keep this file empty.
+# https://manpages.debian.org/unstable/debhelper/dh_install.1.en.html
