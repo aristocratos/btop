@@ -17,6 +17,8 @@ tab-size = 4
 */
 
 #include <ranges>
+#include <regex>
+#include <string>
 
 #include "btop_config.hpp"
 #include "btop_shared.hpp"
@@ -111,6 +113,22 @@ namespace Proc {
 		}
 	}
 
+	bool matches_filter(const proc_info& proc, const std::string& filter) {
+		if (filter.starts_with("!")) {
+			if (filter.size() == 1) {
+				return true;
+			}
+			std::regex regex{filter.substr(1), std::regex::extended};
+			return std::regex_search(std::to_string(proc.pid), regex) ||
+				   std::regex_search(proc.name, regex) || std::regex_match(proc.cmd, regex) ||
+				   std::regex_search(proc.user, regex);
+		} else {
+			return s_contains(std::to_string(proc.pid), filter) ||
+				   s_contains_ic(proc.name, filter) || s_contains_ic(proc.cmd, filter) ||
+				   s_contains_ic(proc.user, filter);
+		}
+	}
+
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
 		auto cur_pos = out_procs.size();
@@ -118,10 +136,7 @@ namespace Proc {
 
 		//? If filtering, include children of matching processes
 		if (not found and (should_filter or not filter.empty())) {
-			if (not s_contains(std::to_string(cur_proc.pid), filter)
-			and not s_contains_ic(cur_proc.name, filter)
-			and not s_contains_ic(cur_proc.cmd, filter)
-			and not s_contains_ic(cur_proc.user, filter)) {
+			if (!matches_filter(cur_proc, filter)) {
 				filtering = true;
 				cur_proc.filtered = true;
 				filter_found++;
