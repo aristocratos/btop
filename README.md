@@ -324,25 +324,39 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 **Binary release (from native os repo)**
 
-* **openSUSE**
+<details><summary>openSUSE</summary><p>
+
   * **Tumbleweed:**
     ```bash
     sudo zypper in btop
     ```
   * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
-* **Fedora**
+</p></details>
+<details><summary>Fedora</summary><p>
+
     ```bash
     sudo dnf install btop
 	```
-* **RHEL/AlmaLinux 8+**
+</p></details>
+<details><summary>RHEL/AlmaLinux 8+</summary><p>
+
     ```bash
     sudo dnf install epel-release
 	sudo dnf install btop
 	```
-* **FreeBSD**
+</p></details>
+<details><summary>FreeBSD</summary><p>
+
 	```sh
 	pkg install btop
 	```
+</p></details>
+<details><summary>Ubuntu</summary><p>
+
+   ```sh
+     sudo apt install btop
+   ```
+</p></details>
 
 
 **Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
