@@ -1507,7 +1507,10 @@ namespace Gpu {
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU power usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+    				} else {
+							gpus_slice[i].pwr_usage = (long long)power / 1000;
+							gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+						}
 
 					if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
 				}
