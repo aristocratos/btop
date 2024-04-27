@@ -1252,7 +1252,7 @@ namespace Proc {
                         if (pwd != nullptr) {
                             new_proc.user = pwd->pw_name;
                         } else {
-                            new_proc.user = "unknown";
+                            new_proc.user = std::to_string(kproc.kp_eproc.e_ucred.cr_uid);
                             Logger::warning("Could not retrieve user information for user ID:" + std::to_string(kproc.kp_eproc.e_ucred.cr_uid) + " (pid:" + std::to_string(pid) + ")");
                         }
 					}
