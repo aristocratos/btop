@@ -723,7 +723,7 @@ namespace Cpu {
 				old_watts = watts;
 				old_seconds = seconds;
 				old_status = status;
-				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, true, true) : "");
+				const string str_time = (seconds > 0 ? sec_to_dhms(seconds, false, true) : "");
 				const string str_percent = to_string(percent) + '%';
 				const string str_watts = (watts != -1 and Config::getB("show_battery_watts") ? fmt::format("{:.2f}", watts) + 'W' : "");
 				const auto& bat_symbol = bat_symbols.at((bat_symbols.contains(status) ? status : "unknown"));
