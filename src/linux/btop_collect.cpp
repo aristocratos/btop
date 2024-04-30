@@ -725,7 +725,7 @@ namespace Cpu {
 						if (fs::exists(bat_dir / "power_now")) {
 							new_bat.power_now = bat_dir / "power_now";
 						}
-						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "current_now"))) {
+						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "voltage_now"))) {
 							 new_bat.current_now = bat_dir / "current_now";
 							 new_bat.voltage_now = bat_dir / "voltage_now";
 						}
