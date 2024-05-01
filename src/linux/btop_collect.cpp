@@ -158,9 +158,11 @@ namespace Gpu {
 
 	//? AMD data collection
 	namespace Rsmi {
+
+	//? RSMI defines, structs & typedefs
+	#define RSMI_DEVICE_NAME_BUFFER_SIZE 128
+
 	#if !defined(RSMI_STATIC)
-		//? RSMI defines, structs & typedefs
-        #define RSMI_DEVICE_NAME_BUFFER_SIZE 128
 		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
