@@ -31,11 +31,11 @@ jobs:
       - name: Compile
         uses: vmactions/netbsd-vm@v1
         with:
-          release: '9.3'
+          release: '10.0'
           usesh: true
           prepare: |
             PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/9.3/All/"
+            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0/All/"
             export PATH PKG_PATH
             /usr/sbin/pkg_add pkgin
             pkgin -y install cmake ninja-build gcc10 coreutils git
