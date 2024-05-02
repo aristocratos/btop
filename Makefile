@@ -97,17 +97,18 @@ ifneq ($(PLATFORM) $(ARCH),macos arm64)
 endif
 
 ifeq ($(STATIC),true)
-	ifeq ($(CXX_IS_CLANG) $(CLANG_WORKS),true true)
+	ifeq ($(CXX_IS_CLANG),true)
 		ifeq ($(shell $(CXX) -print-target-triple | grep gnu >/dev/null; echo $$?),0)
 $(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link glibc\033[0m"))
 		endif
-	else
-		override ADDFLAGS += -static-libgcc -static-libstdc++
 	endif
-	ifeq ($(PLATFORM_LC),linux)
-		override ADDFLAGS += -DSTATIC_BUILD -static -Wl,--fatal-warnings
-	else ifeq ($(PLATFORM_LC),freebsd)
-		override ADDFLAGS += -DSTATIC_BUILD
+
+	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux))
+		override ADDFLAGS += -DSTATIC_BUILD -static
+	else
+		ifeq ($(CXX_IS_CLANG),false)
+			override ADDFLAGS += -static-libgcc -static-libstdc++
+		endif
 	endif
 endif
 
@@ -130,9 +131,13 @@ else ifeq ($(PLATFORM_LC),freebsd)
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := wheel
-	override ADDFLAGS += -lm -lkvm -ldevstat -Wl,-rpath=/usr/local/lib/gcc$(CXX_VERSION_MAJOR)
-	ifneq ($(STATIC),true)
-		override ADDFLAGS += -lstdc++
+	override ADDFLAGS += -lm -lkvm -ldevstat
+	ifeq ($(STATIC),true)
+		override ADDFLAGS += -lelf -Wl,--eh-frame-hdr
+	endif
+
+ 	ifeq ($(CXX_IS_CLANG),false)
+		override ADDFLAGS += -lstdc++ -Wl,rpath=/usr/local/lib/gcc$(CXX_VERSION_MAJOR)
 	endif
 	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),macos)
