@@ -41,5 +41,5 @@ jobs:
             pkgin -y install cmake ninja-build gcc10 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc10/bin/g++" -B build -G Ninja -DBTOP_STATIC=ON
+            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc10/bin/g++" -B build -G Ninja -DBTOP_STATIC=OFF
             cmake --build build --verbose

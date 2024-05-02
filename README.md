@@ -1038,7 +1038,6 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
    | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
