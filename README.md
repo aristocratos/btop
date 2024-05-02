@@ -348,7 +348,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 	```
 * **NetBSD**
 	```sh
-	pkg_add install btop
+	pkg_add btop
 	```
 
 
@@ -924,7 +924,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 1. **Install dependencies**
 
    ```bash
-   pkg_add install gmake gcc10 coreutils git
+   pkg_add gmake gcc10 coreutils git
    ```
 
 2. **Clone repository**
@@ -1014,7 +1014,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
    Requires GCC, CMake, Ninja and Git
 
    ```bash
-   pkg_add install cmake ninja-build gcc10 coreutils git
+   pkg_add cmake ninja-build gcc10 coreutils git
    ```
 
 2. **Clone the repository**
