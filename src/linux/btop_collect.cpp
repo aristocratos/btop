@@ -448,7 +448,7 @@ namespace Cpu {
 						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
 						string file_path = file.path();
 
-						if (!s_contains(file_path, file_suffix)) {
+						if (!s_contains(file_path, file_suffix) or s_contains(file_path, "nvme")) {
 							continue;
 						}
 
