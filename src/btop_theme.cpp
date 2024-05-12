@@ -381,11 +381,16 @@ namespace Theme {
 			if (themefile.good()) {
 				Logger::debug("Loading theme file: " + filename);
 				while (not themefile.bad()) {
+					if (themefile.peek() == '#') {
+						themefile.ignore(SSmax, '\n');
+						continue;
+					}
 					themefile.ignore(SSmax, '[');
 					if (themefile.eof()) break;
 					string name, value;
 					getline(themefile, name, ']');
 					if (not Default_theme.contains(name)) {
+						themefile.ignore(SSmax, '\n');
 						continue;
 					}
 					themefile.ignore(SSmax, '=');
@@ -394,6 +399,7 @@ namespace Theme {
 					if (themefile.peek() == '"') {
 						themefile.ignore(1);
 						getline(themefile, value, '"');
+						themefile.ignore(SSmax, '\n');
 					}
 					else getline(themefile, value, '\n');
 
