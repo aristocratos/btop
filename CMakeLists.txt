@@ -193,6 +193,12 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
       INSTALL_RPATH "/usr/local/lib/gcc${GCC_VERSION_MAJOR}"
       BUILD_WITH_INSTALL_RPATH TRUE
     )
+
+    # The gcc compiler wrapper doesn't add '--eh-frame-hdr' on FreeBSD with static builds
+    # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=278551
+    if(BTOP_STATIC)
+      target_link_options(btop PRIVATE LINKER:--eh-frame-hdr)
+    endif()
   endif()
 
   find_package(devstat REQUIRED)
