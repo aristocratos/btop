@@ -343,6 +343,10 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 	```sh
 	pkg install btop
 	```
+* **Ubuntu/Debian**
+	```bash
+	sudo apt install -y btop
+	```
 
 
 **Binary release on Homebrew (macOS (x86_64 & ARM64) / Linux (x86_64))**
