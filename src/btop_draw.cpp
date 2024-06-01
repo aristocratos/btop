@@ -1184,8 +1184,7 @@ namespace Mem {
 								deque<long long> combined(disk.io_read.size(), 0);
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
 								io_graphs[name] = Draw::Graph{
-									disks_width - (io_mode ? 0 : 6),
-									disks_io_h, "available", combined,
+									disks_width, disks_io_h, "available", combined,
 									graph_symbol, false, true, speed};
 							}
 							else {
@@ -1290,8 +1289,8 @@ namespace Mem {
 						+ Mv::l(disks_width - 6) + io_graphs.at(mount + "_activity")(disk.io_activity, redraw or data_same) + Theme::c("main_fg");
 					}
 					if (++cy > height - 3) break;
-					if (not io_graphs.contains(mount)) continue;
 					if (io_graph_combined) {
+						if (not io_graphs.contains(mount)) continue;
 						auto comb_val = disk.io_read.back() + disk.io_write.back();
 						const string humanized = (disk.io_write.back() > 0 ? "▼"s : ""s) + (disk.io_read.back() > 0 ? "▲"s : ""s)
 												+ (comb_val > 0 ? Mv::r(1) + floating_humanizer(comb_val, true) : "RW");
@@ -1301,6 +1300,7 @@ namespace Mem {
 						cy += disks_io_h;
 					}
 					else {
+						if (not io_graphs.contains(mount + "_read") or not io_graphs.contains(mount + "_write")) continue;
 						const string human_read = (disk.io_read.back() > 0 ? "▲" + floating_humanizer(disk.io_read.back(), true) : "R");
 						const string human_write = (disk.io_write.back() > 0 ? "▼" + floating_humanizer(disk.io_write.back(), true) : "W");
 						if (disks_io_h <= 3) out += Mv::to(y+1+cy, x+1+cx) + string(5, ' ') + Mv::to(y+cy + disks_io_h, x+1+cx) + string(5, ' ');
