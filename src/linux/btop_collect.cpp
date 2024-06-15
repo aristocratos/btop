@@ -1936,8 +1936,13 @@ namespace Mem {
 						disk.total = vfs.f_blocks * vfs.f_frsize;
 						disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
 						disk.used = disk.total - disk.free;
-						disk.used_percent = round((double)disk.used * 100 / disk.total);
-						disk.free_percent = 100 - disk.used_percent;
+						if (disk.total != 0) {
+							disk.used_percent = round((double)disk.used * 100 / disk.total);
+							disk.free_percent = 100 - disk.used_percent;
+						} else {
+							disk.used_percent = 0;
+							disk.free_percent = 0;
+						}
 						return pair{disk, -1};
 					});
 					++it;
