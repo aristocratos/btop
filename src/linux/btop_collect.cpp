@@ -2476,6 +2476,9 @@ namespace Proc {
 			catch (const std::out_of_range&) {}
 			d_read.close();
 		}
+		// Get working directory of process
+		detailed.entry.working_dir = std::filesystem::read_symlink(pid_path/"cwd");
+
 		if (detailed.memory.empty()) {
 			detailed.mem_bytes.push_back(detailed.entry.mem);
 			detailed.memory = floating_humanizer(detailed.entry.mem);
