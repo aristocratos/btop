@@ -2476,8 +2476,11 @@ namespace Proc {
 			catch (const std::out_of_range&) {}
 			d_read.close();
 		}
+
 		// Get working directory of process
-		detailed.entry.working_dir = std::filesystem::read_symlink(pid_path/"cwd");
+		ifstream working_dir(pid_path/"cwd");
+		if(working_dir.good()) 
+			detailed.entry.working_dir = fs::read_symlink(pid_path/"cwd");
 
 		if (detailed.memory.empty()) {
 			detailed.mem_bytes.push_back(detailed.entry.mem);
