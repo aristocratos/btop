@@ -28,25 +28,6 @@ on:
       - '.github/workflows/continuous-build-macos.yml'
 
 jobs:
-  build-macos11:
-    runs-on: macos-11
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
-      - name: Compile
-        run: |
-          make CXX=g++-11 ARCH=x86_64 STATIC=true STRIP=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-BigSur-$GIT_HASH
-          ls -alh bin
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: btop-x86_64-macos11-BigSur
-          path: 'bin/*'
-
   build-macos12:
     runs-on: macos-12
     steps:
@@ -68,4 +49,50 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: btop-x86_64-macos12-Monterey
+          path: 'bin/*'
+
+  build-macos13:
+    runs-on: macos-13
+    steps:
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Compile
+        run: |
+          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop bin/btop-x86_64-Ventura-$GIT_HASH
+          ls -alh bin
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-macos13-Ventura
+          path: 'bin/*'
+
+  build-macos14:
+    runs-on: macos-14
+    steps:
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Compile
+        run: |
+          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          mv bin/btop bin/btop-x86_64-Sonoma-$GIT_HASH
+          ls -alh bin
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: btop-x86_64-macos14-Sonoma
           path: 'bin/*'
