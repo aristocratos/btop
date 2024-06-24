@@ -8,9 +8,9 @@
 
 * Split up multiple unrelated changes in multiple pull requests.
 
-* If it's a fix for a unreported bug, make a bug report and link the pull request.
+* If it's a fix for an unreported bug, make a bug report and link the pull request.
 
-* Purely cosmetic changes won't be accepted without a very good explanation of its value.
+* Pure cosmetic changes won't be accepted without a very good explanation of its value.
 
 ## Formatting
 
@@ -26,7 +26,7 @@
 
 ## General guidelines
 
-* Don't force a programming style. Use object oriented, functional, data oriented, etc., where it's suitable.
+* Don't force a programming style. Use object-oriented, functional, data-oriented, etc., where it's suitable.
 
 * Use [RAII](https://en.cppreference.com/w/cpp/language/raii).
 
@@ -38,7 +38,7 @@
 
 * Use descriptive names for variables.
 
-* Use comments if not very obvious what your code is doing.
+* Use comments if it is not very obvious what your code is doing.
 
 * Add comments as labels for what's currently happening in bigger sections of code for better readability.
 
@@ -48,6 +48,6 @@
 
 * Benchmark your code and look for alternatives if they cause a noticeable negative impact.
 
-For questions open a new discussion thread or send a mail to jakob@qvantnet.com
+For questions open a new discussion thread or send an email to jakob@qvantnet.com
 
 For proposing changes to this document create a [new issue](https://github.com/aristocratos/btop/issues/new/choose).
