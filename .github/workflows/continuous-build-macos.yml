@@ -73,26 +73,3 @@ jobs:
         with:
           name: btop-x86_64-macos13-Ventura
           path: 'bin/*'
-
-  build-macos14:
-    runs-on: macos-14
-    steps:
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
-      - name: Compile
-        run: |
-          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-Sonoma-$GIT_HASH
-          ls -alh bin
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: btop-x86_64-macos14-Sonoma
-          path: 'bin/*'
