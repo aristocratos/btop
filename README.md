@@ -352,6 +352,31 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
   brew install btop
   ```
 
+**Binary release on Nix (macOS (x86_64 & ARM64) / Linux (x86_64 & ARM64))**
+
+* **[nixpkgs](https://github.com/NixOS/nixpkgs/blob/nixos-24.05/pkgs/tools/system/btop/default.nix#L54)**
+   * **non-flake systems**
+   ```console
+   $ # For a system-wide install
+   $ nix-env --file '<nixpkgs>' --install --attr btop
+   $ # For a temporary shell
+   $ nix-shell '<nixpkgs>' --attr btop
+   ```
+   * **flake enabled systems**
+   ```console
+   $ # For a profile-wide install
+   $ nix profile install nixpkgs#btop
+   $ # For a temporary shell
+   $ nix shell nixpkgs#btop
+   ```
+
+**Binary release on Flox (macOS (x86_64 & ARM64) / Linux (x86_64 & ARM64))**
+
+* **[Flox](https://flox.dev)**
+  ```bash
+  flox install btop
+  ```
+
 ## Compilation Linux
 
    Requires at least GCC 10 or Clang 16.
