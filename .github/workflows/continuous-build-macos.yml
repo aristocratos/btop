@@ -35,7 +35,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -46,7 +46,7 @@ jobs:
           mv bin/btop bin/btop-x86_64-Monterey-$GIT_HASH
           ls -alh bin
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: btop-x86_64-macos12-Monterey
           path: 'bin/*'
@@ -58,7 +58,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -69,7 +69,7 @@ jobs:
           mv bin/btop bin/btop-x86_64-Ventura-$GIT_HASH
           ls -alh bin
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: btop-x86_64-macos13-Ventura
           path: 'bin/*'
