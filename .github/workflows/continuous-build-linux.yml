@@ -95,7 +95,7 @@ jobs:
         run: git config --global --add safe.directory /__w/btop/btop
 
       - name: Checkout source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -121,7 +121,7 @@ jobs:
           cp bin/btop .artifacts/$FILENAME
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: btop-${{ matrix.toolchain }}
           path: '.artifacts/**'

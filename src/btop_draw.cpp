@@ -1162,7 +1162,7 @@ namespace Mem {
 						if (not Config::getS("io_graph_speeds").empty()) {
 							auto split = ssplit(Config::getS("io_graph_speeds"));
 							for (const auto& entry : split) {
-								auto vals = ssplit(entry);
+								auto vals = ssplit(entry, ':');
 								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
 									try {
 										custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
