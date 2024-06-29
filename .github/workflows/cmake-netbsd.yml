@@ -1,0 +1,45 @@
+name: NetBSD CMake
+
+on:
+  push:
+    branches: main
+    tags-ignore: '*.*'
+    paths:
+      - '.github/workflows/cmake-netbsd.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/netbsd/*pp'
+  pull_request:
+    branches: main
+    paths:
+      - '.github/workflows/cmake-netbsd.yml'
+      - 'CMakeLists.txt'
+      - 'include/**'
+      - 'src/*pp'
+      - 'src/netbsd/*pp'
+
+jobs:
+  cmake_build_on_netbsd:
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: '10.0'
+          usesh: true
+          prepare: |
+            PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
+            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0/All/"
+            export PATH PKG_PATH
+            /usr/sbin/pkg_add pkgin
+            pkgin -y install cmake ninja-build gcc10 coreutils git
+            git config --global --add safe.directory /home/runner/work/btop/btop
+          run: |
+            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc10/bin/g++" -B build -G Ninja -DBTOP_STATIC=OFF
+            cmake --build build --verbose
