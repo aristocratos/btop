@@ -47,7 +47,7 @@ tab-size = 4
 #include "../btop_config.hpp"
 #include "../btop_tools.hpp"
 
-#if defined(GPU_SUPPORT) && defined(__x86_64__)
+#if defined(GPU_SUPPORT)
 	#define class class_
 extern "C" {
 	#include "./intel_gpu_top/intel_gpu_top.h"
@@ -220,7 +220,6 @@ namespace Gpu {
 	}
 
 
-	#ifdef __x86_64__
 	//? Intel data collection
 	namespace Intel {
 		const char* device = "i915";
@@ -232,7 +231,6 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
-	#endif
 #endif
 }
 
@@ -1594,7 +1592,6 @@ namespace Gpu {
 		}
 	}
 
-	#ifdef __x86_64__
 	namespace Intel {
 		bool init() {
 			if (initialized) return false;
@@ -1704,7 +1701,6 @@ namespace Gpu {
 			return true;
 		}
 	}
-	#endif
 
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {

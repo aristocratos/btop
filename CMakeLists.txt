@@ -68,7 +68,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
-  if(BTOP_GPU AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  if(BTOP_GPU)
     target_sources(btop PRIVATE
       src/linux/intel_gpu_top/intel_gpu_top.c
       src/linux/intel_gpu_top/igt_perf.c
