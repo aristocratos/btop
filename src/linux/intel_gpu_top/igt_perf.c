@@ -12,6 +12,7 @@
 #endif
 #include <time.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "igt_perf.h"
 
