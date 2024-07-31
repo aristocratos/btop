@@ -1665,7 +1665,7 @@ namespace Gpu {
 				gpus_slice->supported_functions = {
 					.gpu_utilization = true,
 					.mem_utilization = false,
-					.gpu_clock = false,
+					.gpu_clock = true,
 					.mem_clock = false,
 					.pwr_usage = true,
 					.pwr_state = false,
@@ -1691,12 +1691,14 @@ namespace Gpu {
 
 			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
 			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
-
 			if (gpus_slice->pwr_usage > 0) {
 				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(100);
 			} else {
 				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
 			}
+
+			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
+			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
 
 			return true;
 		}
