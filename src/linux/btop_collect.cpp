@@ -1670,7 +1670,7 @@ namespace Gpu {
 					.mem_utilization = false,
 					.gpu_clock = false,
 					.mem_clock = false,
-					.pwr_usage = false,
+					.pwr_usage = true,
 					.pwr_state = false,
 					.temp_info = false,
 					.mem_total = false,
@@ -1680,10 +1680,9 @@ namespace Gpu {
 			}
 
 			pmu_sample(engines);
-
 			double t = (double)(engines->ts.cur - engines->ts.prev) / 1e9;
-			double max_util = 0;
 
+			double max_util = 0;
 			for (unsigned int i = 0; i < engines->num_engines; i++) {
 				struct engine *engine = &(&engines->engine)[i];
 				double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
@@ -1691,8 +1690,17 @@ namespace Gpu {
 					max_util = util;
 				}
 			}
+			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
 
-			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)max_util);
+			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
+			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
+
+			if (gpus_slice->pwr_usage > 0) {
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(100);
+			} else {
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
+			}
+
 			return true;
 		}
 	}
