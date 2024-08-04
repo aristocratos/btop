@@ -41,9 +41,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install build tools
+        run: |
+          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+          brew update --quiet
+          brew install --force --overwrite llvm lowdown
+
       - name: Compile
         run: |
-          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+          make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-Monterey-$GIT_HASH
           ls -alh bin
@@ -64,9 +70,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install build tools
+        run: |
+          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+          brew update --quiet
+          brew install --force --overwrite llvm lowdown
+
       - name: Compile
         run: |
-          make CXX=g++-12 ARCH=x86_64 STATIC=true STRIP=true
+          make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-Ventura-$GIT_HASH
           ls -alh bin
