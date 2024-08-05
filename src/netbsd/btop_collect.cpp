@@ -64,6 +64,7 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+#include <utility>
 
 #include "../btop_config.hpp"
 #include "../btop_shared.hpp"
