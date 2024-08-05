@@ -13,7 +13,7 @@ endif()
 project("btop"
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX
+  LANGUAGES CXX C
 )
 
 include(CheckCXXCompilerFlag)
@@ -70,6 +70,14 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(btop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
+  if(BTOP_GPU)
+    target_sources(btop PRIVATE
+      src/linux/intel_gpu_top/intel_gpu_top.c
+      src/linux/intel_gpu_top/igt_perf.c
+      src/linux/intel_gpu_top/intel_device_info.c
+      src/linux/intel_gpu_top/intel_name_lookup_shim.c
+    )
+  endif()
 else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
