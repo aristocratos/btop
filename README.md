@@ -361,7 +361,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 ## Compilation Linux
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 11 or Clang 16.
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
@@ -559,7 +559,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 ## Compilation macOS OSX
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 11 or Clang 16.
 
    With GCC, version 12 (or better) is needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
@@ -730,7 +730,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 ## Compilation FreeBSD
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 11 or Clang 16.
 
    Note that GNU make (`gmake`) is required to compile on FreeBSD.
 
@@ -1072,7 +1072,7 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
 
 ## Compilation OpenBSD
 
-   Requires at least GCC 10.
+   Requires at least GCC 11.
 
    Note that GNU make (`gmake`) is required to compile on OpenBSD.
 
