@@ -151,6 +151,12 @@ else ifeq ($(PLATFORM_LC),openbsd)
 	override ADDFLAGS += -lkvm -static-libstdc++
 	export MAKE = gmake
 	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),netbsd)
+	PLATFORM_DIR := netbsd
+	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
+	override ADDFLAGS += -lkvm -lprop
+	export MAKE = gmake
+	SU_GROUP := wheel
 else
 $(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
 endif
