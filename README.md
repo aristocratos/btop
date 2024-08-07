@@ -337,6 +337,10 @@ If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packa
     ```bash
     sudo dnf install btop
 	```
+* **deepin**
+    ```bash
+    sudo apt install btop
+	```
 * **RHEL/AlmaLinux 8+**
     ```bash
     sudo dnf install epel-release
