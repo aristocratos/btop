@@ -1640,6 +1640,7 @@ namespace Proc {
 				if (item_fit >= 6) out += cjust("User:", item_width);
 				if (item_fit >= 7) out += cjust("Threads:", item_width);
 				if (item_fit >= 8) out += cjust("Nice:", item_width);
+				if (item_fit >= 9) out += cjust("Working Directory:", item_width);
 
 
 				//? Command line
@@ -1738,7 +1739,7 @@ namespace Proc {
 		//? Draw details box if shown
 		if (show_detailed) {
 			bool alive = detailed.status != "Dead";
-			const int item_fit = floor((double)(d_width - 2) / 10);
+			const int item_fit = floor((double)(d_width - 2) / 11);
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
 			//? Graph part of box
@@ -1763,6 +1764,7 @@ namespace Proc {
 			if (item_fit >= 6) out += cjust(detailed.entry.user, item_width, true);
 			if (item_fit >= 7) out += cjust(to_string(detailed.entry.threads), item_width);
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
+			if (item_fit >= 9) out += cjust(detailed.entry.working_dir, item_width);
 
 
 			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
