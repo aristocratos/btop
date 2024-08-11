@@ -241,6 +241,11 @@ else()
   message(WARNING "Command 'lowdown' not found: skipping generating man page btop.1")
 endif()
 
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
+
 install(TARGETS btop RUNTIME)
 install(FILES "btop.desktop" DESTINATION "share/applications")
 install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME "btop.png")
