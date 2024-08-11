@@ -43,6 +43,7 @@ tab-size = 4
 	#include <pwd.h>
 #endif
 
+#include "parse_cpu_names.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_config.hpp"
 #include "../btop_tools.hpp"
@@ -350,6 +351,11 @@ namespace Cpu {
 					else return capitalize(name_vec.at(1)) + (name_vec.size() > 2 ? ' ' + capitalize(name_vec.at(2)) : "");
 				}
 
+			}
+
+			auto xeon_name = parse_xeon_name(name); 
+			if (xeon_name) {
+				return xeon_name.value();
 			}
 
 			auto name_vec = ssplit(name, ' ');
