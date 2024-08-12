@@ -637,13 +637,13 @@ namespace Tools {
 		report_buffer.clear();
 	}
 
-	uint64_t DebugTimer::elapsed() {
+	uint64_t DebugTimer::elapsed() const {
 		if (running)
 			return time_micros() - start_time;
 		return elapsed_time;
 	}
 
-	bool DebugTimer::is_running() {
+	bool DebugTimer::is_running() const {
 		return running;
 	}
 }

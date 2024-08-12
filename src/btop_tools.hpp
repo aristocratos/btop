@@ -458,8 +458,8 @@ namespace Tools {
 		void stop_rename_reset(const string& new_name, bool report = true, bool restart = true);
 		void report();
 		void force_report();
-		uint64_t elapsed();
-		bool is_running();
+		[[nodiscard]] uint64_t elapsed() const;
+		[[nodiscard]] bool is_running() const;
 	};
 
 }
