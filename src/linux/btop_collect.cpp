@@ -1226,6 +1226,8 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
     				} else {
     					gpus_slice[i].pwr_usage = (long long)power;
+						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
+								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
     					gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
     				}
     			}
@@ -1534,6 +1536,8 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
     				} else {
 							gpus_slice[i].pwr_usage = (long long)power / 1000;
+							if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
+								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
 							gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
 						}
 
@@ -1675,6 +1679,8 @@ namespace Gpu {
 					.mem_used = false,
 					.pcie_txrx = false
 				};
+
+				gpus_slice->pwr_max_usage = 20'000; //? 20W
 			}
 
 			pmu_sample(engines);
@@ -1692,11 +1698,10 @@ namespace Gpu {
 
 			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
 			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
-			if (gpus_slice->pwr_usage > 0) {
-				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(100);
-			} else {
-				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
-			}
+			if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
+				gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
+
+			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
 
 			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
 			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);

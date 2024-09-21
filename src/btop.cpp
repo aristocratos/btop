@@ -289,7 +289,7 @@ void term_resize(bool force) {
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = stoi(key);
 				#ifdef GPU_SUPPORT
-					if ((intKey == 0 and Gpu::gpu_names.size() >= 5) or (intKey >= 5 and std::cmp_greater_equal(Gpu::gpu_names.size(), intKey - 4))) {
+					if ((intKey == 0 and Gpu::count >= 5) or (intKey >= 5 and intKey - 4 <= Gpu::count)) {
 				#else
 					if (intKey > 0 and intKey < 5) {
 				#endif
@@ -1075,8 +1075,8 @@ int main(int argc, char **argv) {
 		clean_quit(1);
 	}
 
-	if (not Config::check_boxes(Config::getS("shown_boxes"))) {
-		Config::check_boxes("cpu mem net proc");
+	if (not Config::set_boxes(Config::getS("shown_boxes"))) {
+		Config::set_boxes("cpu mem net proc");
 		Config::set("shown_boxes", "cpu mem net proc"s);
 	}
 
