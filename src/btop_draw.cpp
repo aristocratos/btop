@@ -750,7 +750,8 @@ namespace Cpu {
 		auto draw_graphs = [&](vector<Draw::Graph>& graphs, const int graph_height, const int graph_width, const string& graph_field) {
 		#ifdef GPU_SUPPORT
 			if (graph_field.starts_with("gpu"))
-				if (graph_field.find("totals") != string::npos)
+				if (graph_field.ends_with("totals")) {
+					int gpu_drawn = 0;
 					for (size_t i = 0; i < gpus.size(); i++) {
 						if (gpu_auto and v_contains(Gpu::shown_panels, i))
 							continue;
@@ -761,9 +762,10 @@ namespace Cpu {
 								+ Mv::d(graph_height/2) + Mv::r(graph_width - 1 - (graph_width > 5)*3 - i_str.size());
 						}
 
-						if (i + 1 < graphs.size())
+						if (++gpu_drawn < (Gpu::count - Gpu::shown))
 							out += Theme::c("div_line") + (Symbols::v_line + Mv::l(1) + Mv::u(1))*graph_height + Mv::r(1) + Mv::d(1);
 					}
+				}
 				else
 					out += graphs[0](safeVal(Gpu::shared_gpu_percent, graph_field), (data_same or redraw));
 			else

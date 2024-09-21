@@ -1680,7 +1680,7 @@ namespace Gpu {
 					.pcie_txrx = false
 				};
 
-				gpus_slice->pwr_max_usage = 20'000; //? 20W
+				gpus_slice->pwr_max_usage = 10'000; //? 10W
 			}
 
 			pmu_sample(engines);
