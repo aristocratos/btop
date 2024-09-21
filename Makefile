@@ -420,8 +420,8 @@ $(BUILDDIR)/%.c.o: $(SRCDIR)/$(PLATFORM_DIR)/intel_gpu_top/%.c | directories
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
 	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
-	@$(VERBOSE) || printf "$(CC) -c -o $@ $<\n"
-	@$(CC) -w -c -o $@ $< || exit 1
+	@$(VERBOSE) || printf "$(CC) $(INC) -c -o $@ $<\n"
+	@$(CC) $(INC) -w -c -o $@ $< || exit 1
 	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
 
 
