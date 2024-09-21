@@ -40,6 +40,7 @@ override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
 	ifneq ($(STATIC),true)
 		GPU_SUPPORT := true
+		INTEL_GPU_SUPPORT := true
 	endif
 endif
 ifneq ($(GPU_SUPPORT),true)
@@ -208,12 +209,21 @@ endif
 
 SOURCES	:= $(sort $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
 
-SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -type f -name *.$(SRCEXT)))
-
-#? Setup percentage progress
-SOURCE_COUNT := $(words $(SOURCES))
+SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
+
+ifeq ($(GPU_SUPPORT)$(INTEL_GPU_SUPPORT),truetrue)
+	IGT_OBJECTS := $(BUILDDIR)/igt_perf.c.o $(BUILDDIR)/intel_device_info.c.o $(BUILDDIR)/intel_name_lookup_shim.c.o $(BUILDDIR)/intel_gpu_top.c.o
+	OBJECTS += $(IGT_OBJECTS)
+	SHOW_CC_INFO = false
+	CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion || echo 0)
+else
+	SHOW_CC_INFO = true
+endif
+
+#? Setup percentage progress
+SOURCE_COUNT := $(words $(OBJECTS))
 
 ifeq ($(shell find $(BUILDDIR) -type f -newermt "$(DATESTAMP)" -name *.o >/dev/null 2>&1; echo $$?),0)
 	ifneq ($(wildcard $(BUILDDIR)/.*),)
@@ -248,7 +258,8 @@ info:
 	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
 	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
 	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
+	@$(SHOW_CC_INFO) || printf "\033[1;93mCC           \033[1;93m?| \033[0m$(CC) \033[1;93m(\033[97m$(CC_VERSION)\033[93m)\n"
+	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n" gcc -dumpfullversion -dumpversion
 	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
 	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
@@ -408,6 +419,17 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories config.h
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
 	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+
+#? Compile intel_gpu_top C sources for Intel GPU support
+.ONESHELL:
+$(BUILDDIR)/%.c.o: $(SRCDIR)/$(PLATFORM_DIR)/intel_gpu_top/%.c | directories
+	@sleep 0.3 2>/dev/null || true
+	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
+	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
+	@$(VERBOSE) || printf "$(CC) $(INC) -c -o $@ $<\n"
+	@$(CC) $(INC) -w -c -o $@ $< || exit 1
+	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+
 
 #? Non-File Targets
 .PHONY: all config.h msg help pre

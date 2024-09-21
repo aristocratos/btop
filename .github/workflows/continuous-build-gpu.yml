@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: apk add --no-cache --update gcc g++ make
+        run: apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Compile
         run: make CXX=g++ GPU_SUPPORT=true

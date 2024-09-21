@@ -47,6 +47,14 @@ tab-size = 4
 #include "../btop_config.hpp"
 #include "../btop_tools.hpp"
 
+#if defined(GPU_SUPPORT)
+	#define class class_
+extern "C" {
+	#include "./intel_gpu_top/intel_gpu_top.h"
+}
+	#undef class
+#endif
+
 using std::clamp;
 using std::cmp_greater;
 using std::cmp_less;
@@ -210,6 +218,19 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+
+
+	//? Intel data collection
+	namespace Intel {
+		const char* device = "i915";
+		struct engines *engines = nullptr;
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+	}
 #endif
 }
 
@@ -276,6 +297,7 @@ namespace Shared {
 	#ifdef GPU_SUPPORT
 		Gpu::Nvml::init();
 		Gpu::Rsmi::init();
+		Gpu::Intel::init();
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -1570,7 +1592,117 @@ namespace Gpu {
 		}
 	}
 
-	// TODO: Intel
+	namespace Intel {
+		bool init() {
+			if (initialized) return false;
+
+			char *gpu_path = find_intel_gpu_dir();
+			if (!gpu_path) {
+				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
+				return false;
+			}
+
+			char *gpu_device_id = get_intel_device_id(gpu_path);
+			if (!gpu_device_id) {
+				Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
+				return false;
+			}
+
+			char *gpu_device_name = get_intel_device_name(gpu_device_id);
+			if (!gpu_device_name) {
+				Logger::warning("Failed to find Intel GPU device name in internal database");
+			}
+
+			free(gpu_device_id);
+
+			engines = discover_engines(device);
+			if (!engines) {
+				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
+				return false;
+			}
+
+			int ret = pmu_init(engines);
+			if (ret) {
+				Logger::warning("Intel GPU: Failed to initialize PMU");
+				return false;
+			}
+
+			pmu_sample(engines);
+
+			device_count = 1;
+
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size() + device_count);
+
+			if (gpu_device_name) {
+				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+			} else {
+				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
+			}
+
+			free(gpu_device_name);
+
+			initialized = true;
+			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			if (engines) {
+				free_engines(engines);
+				engines = nullptr;
+			}
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			if constexpr(is_init) {
+				gpus_slice->supported_functions = {
+					.gpu_utilization = true,
+					.mem_utilization = false,
+					.gpu_clock = true,
+					.mem_clock = false,
+					.pwr_usage = true,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = false,
+					.mem_used = false,
+					.pcie_txrx = false
+				};
+			}
+
+			pmu_sample(engines);
+			double t = (double)(engines->ts.cur - engines->ts.prev) / 1e9;
+
+			double max_util = 0;
+			for (unsigned int i = 0; i < engines->num_engines; i++) {
+				struct engine *engine = &(&engines->engine)[i];
+				double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
+				if (util > max_util) {
+					max_util = util;
+				}
+			}
+			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
+
+			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
+			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
+			if (gpus_slice->pwr_usage > 0) {
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(100);
+			} else {
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
+			}
+
+			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
+			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
+
+			return true;
+		}
+	}
 
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
@@ -1581,6 +1713,7 @@ namespace Gpu {
 		//* Collect data
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
+		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
