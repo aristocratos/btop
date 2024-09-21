@@ -305,6 +305,7 @@ namespace Shared {
 				Cpu::available_fields.push_back(key);
 
 			using namespace Gpu;
+			count = gpus.size();
 			gpu_b_height_offsets.resize(gpus.size());
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
@@ -1575,7 +1576,7 @@ namespace Gpu {
 				}
 
 				//? PCIe link speeds
-				if (gpus_slice[i].supported_functions.pcie_txrx) {
+				if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) {
 					uint64_t tx, rx;
 					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, 0);
     				if (result != RSMI_STATUS_SUCCESS) {
@@ -1755,6 +1756,8 @@ namespace Gpu {
 			while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) shared_gpu_percent.at("gpu-pwr-total").pop_front();
 			while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) shared_gpu_percent.at("gpu-vram-total").pop_front();
 		}
+
+		count = gpus.size();
 
 		return gpus;
 	}

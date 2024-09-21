@@ -306,7 +306,8 @@ namespace Config {
 		{"proc_aggregate", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
-		{"gpu_mirror_graph", true},
+		{"rsmi_measure_pcie_speeds", true},
+		{"gpu_mirror_graph", true}
 	#endif
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
@@ -320,7 +321,7 @@ namespace Config {
 		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
-		{"proc_last_selected", 0},
+		{"proc_last_selected", 0}
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 

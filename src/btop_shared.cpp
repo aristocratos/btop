@@ -36,7 +36,7 @@ namespace Gpu {
 		{"gpu-vram-total", {}},
 		{"gpu-pwr-total", {}},
 	};
-	long long gpu_pwr_total_max;
+	long long gpu_pwr_total_max = 0;
 }
 #endif
 
