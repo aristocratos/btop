@@ -867,8 +867,8 @@ namespace Menu {
 		button_left.shrink_to_fit();
 		button_right.clear();
 		button_right.shrink_to_fit();
-		if (mouse_mappings.contains("button1")) mouse_mappings.erase("button1");
-		if (mouse_mappings.contains("button2")) mouse_mappings.erase("button2");
+		mouse_mappings.erase("button1");
+		mouse_mappings.erase("button2");
 	}
 
 	enum menuReturnCodes {
