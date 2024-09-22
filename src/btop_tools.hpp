@@ -435,10 +435,10 @@ namespace Tools {
 		bool running{};
 		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
 		vector<string> report_buffer{};
-	public:
 		string name{};
 		bool delayed_report{};
 		Logger::Level log_level = Logger::DEBUG;
+	public:
 		DebugTimer() = default;
 		explicit DebugTimer(const string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
