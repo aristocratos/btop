@@ -184,7 +184,8 @@ void term_resize(bool force) {
 				}
 			}
 			min_size = Term::get_min_size(boxes);
-			minWidth = min_size.at(0), minHeight = min_size.at(1);
+			minWidth = min_size.at(0);
+			minHeight = min_size.at(1);
 		}
 		else if (not Term::refresh()) break;
 	}
