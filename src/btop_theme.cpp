@@ -372,13 +372,13 @@ namespace Theme {
 
 		//* Load a .theme file from disk
 		auto loadFile(const string& filename) {
-			std::unordered_map<string, string> theme_out;
 			const fs::path filepath = filename;
 			if (not fs::exists(filepath))
 				return Default_theme;
 
 			std::ifstream themefile(filepath);
 			if (themefile.good()) {
+				std::unordered_map<string, string> theme_out;
 				Logger::debug("Loading theme file: " + filename);
 				while (not themefile.bad()) {
 					if (themefile.peek() == '#') {
