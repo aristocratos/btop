@@ -466,7 +466,8 @@ namespace Cpu {
 					const string sensor_name = "thermal" + to_string(i) + "/" + label;
 					const int64_t temp = stol(readfile(basepath / "temp", "0")) / 1000;
 
-					int64_t high, crit;
+					int64_t high = 0;
+					int64_t crit = 0;
 					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
 						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
 						if (not is_in(trip_type, "high", "critical")) continue;
@@ -1746,7 +1747,7 @@ namespace Mem {
 
 	uint64_t get_totalMem() {
 		ifstream meminfo(Shared::procPath / "meminfo");
-		int64_t totalMem;
+		int64_t totalMem = 0;
 		if (meminfo.good()) {
 			meminfo.ignore(SSmax, ':');
 			meminfo >> totalMem;
