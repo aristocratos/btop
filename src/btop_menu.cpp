@@ -787,7 +787,7 @@ namespace Menu {
 	};
 
 	msgBox::msgBox() {}
-	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
+	msgBox::msgBox(int width, int boxtype, const vector<string>& content, string title)
 	: width(width), boxtype(boxtype) {
 		auto tty_mode = Config::getB("tty_mode");
 		auto rounded = Config::getB("rounded_corners");
