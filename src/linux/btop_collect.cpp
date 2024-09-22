@@ -2466,8 +2466,10 @@ namespace Net {
 				selected_iface.clear();
 				//? Try to set to a connected interface
 				for (const auto& iface : sorted_interfaces) {
-					if (net.at(iface).connected) selected_iface = iface;
-					break;
+					if (net.at(iface).connected) {
+						selected_iface = iface;
+						break;
+					}
 				}
 				//? If no interface is connected set to first available
 				if (selected_iface.empty() and not sorted_interfaces.empty()) selected_iface = sorted_interfaces.at(0);
