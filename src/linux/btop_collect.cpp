@@ -395,7 +395,7 @@ namespace Cpu {
 						got_coretemp = true;
 
 					for (const auto & file : fs::directory_iterator(add_path)) {
-						if (string(file.path().filename()) == "device") {
+						if (file.path().filename() == "device") {
 							for (const auto & dev_file : fs::directory_iterator(file.path())) {
 								string dev_filename = dev_file.path().filename();
 								if (dev_filename.starts_with("temp") and dev_filename.ends_with("_input")) {
