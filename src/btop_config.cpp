@@ -586,12 +586,12 @@ namespace Config {
 	}
 
 	string getAsString(const std::string_view name) {
-		if (bools.contains(name))
-			return (bools.at(name) ? "True" : "False");
-		else if (ints.contains(name))
-			return to_string(ints.at(name));
-		else if (strings.contains(name))
-			return strings.at(name);
+		if (auto it = bools.find(name); it != bools.end())
+			return it->second ? "True" : "False";
+		if (auto it = ints.find(name); it != ints.end())
+			return to_string(it->second);
+		if (auto it = strings.find(name); it != strings.end())
+			return it->second;
 		return "";
 	}
 

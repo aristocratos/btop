@@ -177,8 +177,8 @@ namespace Input {
 				}
 
 			}
-			else if (Key_escapes.contains(key))
-				key = Key_escapes.at(key);
+			else if (auto it = Key_escapes.find(key); it != Key_escapes.end())
+				key = it->second;
 			else if (ulen(key) > 1)
 				key.clear();
 

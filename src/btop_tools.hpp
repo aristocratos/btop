@@ -342,8 +342,8 @@ namespace Tools {
 	template <typename K, typename T>
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
 			return fallback;
@@ -351,8 +351,8 @@ namespace Tools {
 	};
 #else
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
 			return fallback;
