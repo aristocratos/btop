@@ -556,8 +556,7 @@ namespace Cpu {
 		if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
 
 		if (Config::getB("show_coretemp") and not cpu_temp_only) {
-			vector<string> done;
-			for (const auto& sensor : core_sensors) {
+			for (vector<string_view> done; const auto& sensor : core_sensors) {
 				if (v_contains(done, sensor)) continue;
 				found_sensors.at(sensor).temp = stol(readfile(found_sensors.at(sensor).path, "0")) / 1000;
 				done.push_back(sensor);
