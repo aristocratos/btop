@@ -2385,13 +2385,14 @@ namespace Net {
 
 			//? Get total received and transmitted bytes + device address if no ip was found
 			for (const auto& iface : interfaces) {
-				if (net.at(iface).ipv4.empty() and net.at(iface).ipv6.empty())
-					net.at(iface).ipv4 = readfile("/sys/class/net/" + iface + "/address");
+				auto& netif = net.at(iface);
+				if (netif.ipv4.empty() and netif.ipv6.empty())
+					netif.ipv4 = readfile("/sys/class/net/" + iface + "/address");
 
 				for (const string dir : {"download", "upload"}) {
 					const fs::path sys_file = "/sys/class/net/" + iface + "/statistics/" + (dir == "download" ? "rx_bytes" : "tx_bytes");
-					auto& saved_stat = net.at(iface).stat.at(dir);
-					auto& bandwidth = net.at(iface).bandwidth.at(dir);
+					auto& saved_stat = netif.stat.at(dir);
+					auto& bandwidth = netif.bandwidth.at(dir);
 
 					uint64_t val{};
 					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
@@ -2419,7 +2420,7 @@ namespace Net {
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
-						if (net_sync and saved_stat.speed < net.at(iface).stat.at(dir == "download" ? "upload" : "download").speed) continue;
+						if (net_sync and saved_stat.speed < netif.stat.at(dir == "download" ? "upload" : "download").speed) continue;
 						if (saved_stat.speed > graph_max[dir]) {
 							++max_count[dir][0];
 							if (max_count[dir][1] > 0) --max_count[dir][1];
