@@ -30,6 +30,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -54,6 +55,7 @@ using std::array;
 using std::atomic;
 using std::string;
 using std::to_string;
+using std::string_view;
 using std::tuple;
 using std::vector;
 using namespace fmt::literals;
@@ -292,13 +294,13 @@ namespace Tools {
 	}
 
 	//* Left-trim <t_str> from <str> and return new string
-	string ltrim(const string& str, const string& t_str = " ");
+	string_view ltrim(string_view str, string_view t_str = " ");
 
 	//* Right-trim <t_str> from <str> and return new string
-	string rtrim(const string& str, const string& t_str = " ");
+	string_view rtrim(string_view str, string_view t_str = " ");
 
 	//* Left/right-trim <t_str> from <str> and return new string
-	inline string trim(const string& str, const string& t_str = " ") {
+	inline string_view trim(string_view str, string_view t_str = " ") {
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
