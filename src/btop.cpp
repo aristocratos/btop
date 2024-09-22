@@ -205,8 +205,7 @@ void clean_quit(int sig) {
 			pthread_cancel(Runner::runner_id);
 		}
 	#else
-		struct timespec ts;
-		ts.tv_sec = 5;
+		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
 		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
