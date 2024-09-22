@@ -568,6 +568,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
+		host[HOST_NAME_MAX - 1] = '\0';
 		return string{host};
 	}
 
