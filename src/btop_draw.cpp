@@ -361,8 +361,8 @@ namespace Draw {
 	//* Meter class ------------------------------------------------------------------------------------------------------------>
 	Meter::Meter() {}
 
-	Meter::Meter(const int width, const string& color_gradient, bool invert)
-		: width(width), color_gradient(color_gradient), invert(invert) {}
+	Meter::Meter(const int width, string color_gradient, bool invert)
+		: width(width), color_gradient(std::move(color_gradient)), invert(invert) {}
 
 	string Meter::operator()(int value) {
 		if (width < 1) return "";
