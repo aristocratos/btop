@@ -2144,7 +2144,7 @@ namespace Mem {
 
 							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 							diskread >> io_ticks;
-							if (disk.io_activity.empty())
+							if (uptime == old_uptime || disk.io_activity.empty())
 								disk.io_activity.push_back(0);
 							else
 								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
