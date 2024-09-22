@@ -366,7 +366,7 @@ namespace Tools {
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
 			return fallback;
@@ -375,7 +375,7 @@ namespace Tools {
 #else
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
 			return fallback;
