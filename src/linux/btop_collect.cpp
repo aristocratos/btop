@@ -99,9 +99,7 @@ namespace Cpu {
 
 	struct Sensor {
 		fs::path path;
-		string label;
 		int64_t temp{};
-		int64_t high{};
 		int64_t crit{};
 	};
 
@@ -444,10 +442,9 @@ namespace Cpu {
 						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
 						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
-						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
 						const int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
 
-						found_sensors[sensor_name] = {fs::path(basepath + "input"), label, temp, high, crit};
+						found_sensors[sensor_name] = {fs::path(basepath + "input"), temp, crit};
 
 						if (not got_cpu and (label.starts_with("Package id") or label.starts_with("Tdie"))) {
 							got_cpu = true;
@@ -480,7 +477,7 @@ namespace Cpu {
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
 
-					found_sensors[sensor_name] = {basepath / "temp", label, temp, high, crit};
+					found_sensors[sensor_name] = {basepath / "temp", temp, crit};
 				}
 			}
 
