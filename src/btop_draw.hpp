@@ -67,7 +67,7 @@ namespace Draw {
 	class TextEdit {
 		size_t pos{};
 		size_t upos{};
-		bool numeric;
+		bool numeric = false;
 	public:
 		string text;
 		TextEdit();
