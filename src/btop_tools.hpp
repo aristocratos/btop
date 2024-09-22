@@ -455,6 +455,3 @@ namespace Tools {
 	};
 
 }
-
-
-
