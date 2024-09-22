@@ -46,6 +46,16 @@
 
 ## News
 
+##### 22 September 2024
+
+Btop release v1.4.0
+
+Intel GPU support added, note that only GPU utilization, power usage and clock speed available to monitor. Thanks to [@bjia56](https://github.com/bjia56) for contributions.
+
+NetBSD support added. Thanks to [@fraggerfox](https://github.com/fraggerfox) for contributions.
+
+See [CHANGELOG.md](CHANGELOG.md) and latest [release](https://github.com/aristocratos/btop/releases/latest) for detailed list of new features, bug fixes and new themes.
+
 ##### 7 January 2024
 
 Btop release v1.3.0
@@ -299,7 +309,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 2. **Install (from created folder)**
 
-   * **Run install.sh or:**
+   * **Run:**
 
    ```bash
    # use "make install PREFIX=/target/dir" to set target, default: /usr/local
@@ -329,7 +339,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 * **Uninstall**
 
-  * **Run uninstall.sh or:**
+  * **Run:**
 
    ```bash
    sudo make uninstall
