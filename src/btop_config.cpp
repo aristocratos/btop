@@ -460,9 +460,13 @@ namespace Config {
 
 		for (const auto& box : ssplit(preset, ',')) {
 			const auto& vals = ssplit(box, ':');
-			if (vals.at(0) == "cpu") set("cpu_bottom", (vals.at(1) == "0" ? false : true));
-			else if (vals.at(0) == "mem") set("mem_below_net", (vals.at(1) == "0" ? false : true));
-			else if (vals.at(0) == "proc") set("proc_left", (vals.at(1) == "0" ? false : true));
+			if (vals.at(0) == "cpu") {
+				set("cpu_bottom", (vals.at(1) != "0"));
+			} else if (vals.at(0) == "mem") {
+				set("mem_below_net", (vals.at(1) != "0"));
+			} else if (vals.at(0) == "proc") {
+				set("proc_left", (vals.at(1) != "0"));
+			}
 			set("graph_symbol_" + vals.at(0), vals.at(2));
 		}
 
