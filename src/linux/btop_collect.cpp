@@ -1543,7 +1543,7 @@ namespace Gpu {
 				//? PCIe link speeds
 				if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) {
 					uint64_t tx, rx;
-					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, 0);
+					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, nullptr);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get PCIe throughput");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
