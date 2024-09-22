@@ -283,6 +283,7 @@ help:
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
+	@printf "  setcap       Set extended capabilities on binary (preferable to setuid)\n"
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
 	@printf "  info         Display information about Environment,compiler and linker flags\n"
@@ -354,6 +355,12 @@ setuid:
 	@chown $(SU_USER):$(SU_GROUP) $(DESTDIR)$(PREFIX)/bin/btop
 	@printf "\033[1;92mSetting SUID bit\033[0m\n"
 	@chmod u+s $(DESTDIR)$(PREFIX)/bin/btop
+
+#? Run setcap on btop for extended capabilities
+setcap:
+	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
+	@printf "\033[1;92mSetting capabilities...\033[0m\n"
+	@setcap cap_perfmon=+ep $(DESTDIR)$(PREFIX)/bin/btop
 
 # With 'rm -v' user will see what files (if any) got removed
 uninstall:
