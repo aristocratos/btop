@@ -243,23 +243,23 @@ void clean_quit(int sig) {
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
-void _sleep() {
+static void _sleep() {
 	Runner::stop();
 	Term::restore();
 	std::raise(SIGSTOP);
 }
 
 //* Handler for SIGCONT; re-initialize terminal and force a resize event
-void _resume() {
+static void _resume() {
 	Term::init();
 	term_resize(true);
 }
 
-void _exit_handler() {
+static void _exit_handler() {
 	clean_quit(-1);
 }
 
-void _signal_handler(const int sig) {
+static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
 			if (Runner::active) {
@@ -407,7 +407,7 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
-	void debug_timer(const char* name, const int action) {
+	static void debug_timer(const char* name, const int action) {
 		switch (action) {
 			case collect_begin:
 				debug_times[name].at(collect) = time_micros();
@@ -432,7 +432,7 @@ namespace Runner {
 	}
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-	void * _runner(void *) {
+	static void * _runner(void *) {
 		//? Block some signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		sigemptyset(&mask);
 		// sigaddset(&mask, SIGINT);

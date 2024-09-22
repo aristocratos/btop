@@ -509,7 +509,7 @@ namespace Cpu {
 		return not found_sensors.empty();
 	}
 
-	void update_sensors() {
+	static void update_sensors() {
 		if (cpu_sensor.empty()) return;
 
 		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
@@ -2526,7 +2526,7 @@ namespace Proc {
 	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
+	static void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
 		fs::path pid_path = Shared::procPath / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
