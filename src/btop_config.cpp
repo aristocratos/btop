@@ -753,7 +753,7 @@ namespace Config {
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
-			for (auto [name, description] : descriptions) {
+			for (const auto& [name, description] : descriptions) {
 				cwrite << "\n" << (description.empty() ? "" : description + "\n")
 						<< name << " = ";
 				if (strings.contains(name))
