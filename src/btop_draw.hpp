@@ -92,7 +92,7 @@ namespace Draw {
 		array<string, 101> cache;
 	public:
 		Meter();
-		Meter(const int width, const string& color_gradient, bool invert = false);
+		Meter(const int width, string color_gradient, bool invert = false);
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value);
