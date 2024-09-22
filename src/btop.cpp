@@ -341,7 +341,7 @@ namespace Runner {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
+		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
 			pthread_mutex_init(&pt_mutex, nullptr);
 			status = pthread_mutex_lock(&pt_mutex);
 		}
