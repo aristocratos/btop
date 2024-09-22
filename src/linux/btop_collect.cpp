@@ -2028,7 +2028,7 @@ namespace Mem {
 						disk.used_percent = updated_stats.used_percent;
 						disk.free_percent = updated_stats.free_percent;
 					}
-					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
+					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, free_priv]() -> pair<disk_info, int> {
 						struct statvfs vfs;
 						disk_info disk;
 						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
