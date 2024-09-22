@@ -413,7 +413,11 @@ namespace Tools {
 		bool not_true{};
 	public:
 		explicit atomic_lock(atomic<bool>& atom, bool wait = false);
-		~atomic_lock();
+		~atomic_lock() noexcept;
+		atomic_lock(const atomic_lock& other) = delete;
+		atomic_lock& operator=(const atomic_lock& other) = delete;
+		atomic_lock(atomic_lock&& other) = delete;
+		atomic_lock& operator=(atomic_lock&& other) = delete;
 	};
 
 	//* Read a complete file and return as a string
@@ -442,6 +446,10 @@ namespace Tools {
 		DebugTimer() = default;
 		explicit DebugTimer(const string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
+		DebugTimer(const DebugTimer& other) = delete;
+		DebugTimer& operator=(const DebugTimer& other) = delete;
+		DebugTimer(DebugTimer&& other) = delete;
+		DebugTimer& operator=(DebugTimer&& other) = delete;
 
 		void start();
 		void stop(bool report = true);

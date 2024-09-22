@@ -344,10 +344,14 @@ namespace Runner {
 			pthread_mutex_init(&pt_mutex, nullptr);
 			status = pthread_mutex_lock(&pt_mutex);
 		}
-		~thread_lock() {
+		~thread_lock() noexcept {
 			if (status == 0)
 				pthread_mutex_unlock(&pt_mutex);
 		}
+		thread_lock(const thread_lock& other) = delete;
+		thread_lock& operator=(const thread_lock& other) = delete;
+		thread_lock(thread_lock&& other) = delete;
+		thread_lock& operator=(thread_lock&& other) = delete;
 	};
 
 	//* Wrapper for raising privileges when using SUID bit
@@ -358,10 +362,14 @@ namespace Runner {
 			if (Global::real_uid != Global::set_uid)
 				this->status = seteuid(Global::set_uid);
 		}
-		~gain_priv() {
+		~gain_priv() noexcept {
 			if (status == 0)
 				status = seteuid(Global::real_uid);
 		}
+		gain_priv(const gain_priv& other) = delete;
+		gain_priv& operator=(const gain_priv& other) = delete;
+		gain_priv(gain_priv&& other) = delete;
+		gain_priv& operator=(gain_priv&& other) = delete;
 	};
 
 	string output;

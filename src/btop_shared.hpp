@@ -315,7 +315,11 @@ namespace Net {
 		int status;
 	public:
 		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
-		~IfAddrsPtr() { freeifaddrs(ifaddr); }
+		~IfAddrsPtr() noexcept { freeifaddrs(ifaddr); }
+		IfAddrsPtr(const IfAddrsPtr &) = delete;
+		IfAddrsPtr& operator=(IfAddrsPtr& other) = delete;
+		IfAddrsPtr(IfAddrsPtr &&) = delete;
+		IfAddrsPtr& operator=(IfAddrsPtr&& other) = delete;
 		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
 		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
 		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
