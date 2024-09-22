@@ -535,7 +535,7 @@ namespace Tools {
 		else this->atom.store(true);
 	}
 
-	atomic_lock::~atomic_lock() {
+	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
 	}
 
@@ -666,11 +666,15 @@ namespace Logger {
 				this->status = seteuid(Global::real_uid);
 			}
 		}
-		~lose_priv() {
+		~lose_priv() noexcept {
 			if (status == 0) {
 				status = seteuid(Global::set_uid);
 			}
 		}
+		lose_priv(const lose_priv& other) = delete;
+		lose_priv& operator=(const lose_priv& other) = delete;
+		lose_priv(lose_priv&& other) = delete;
+		lose_priv& operator=(lose_priv&& other) = delete;
 	};
 
 	void set(const string& level) {
