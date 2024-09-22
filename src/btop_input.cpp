@@ -317,7 +317,7 @@ namespace Input {
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
-					Proc::filter = { Config::getS("proc_filter") };
+					Proc::filter = Draw::TextEdit{Config::getS("proc_filter")};
 					old_filter = Proc::filter.text;
 				}
 				else if (key == "e") {

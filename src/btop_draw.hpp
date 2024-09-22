@@ -71,7 +71,7 @@ namespace Draw {
 	public:
 		string text;
 		TextEdit();
-		TextEdit(string text, bool numeric=false);
+		explicit TextEdit(string text, bool numeric=false);
 		bool command(const string& key);
 		string operator()(const size_t limit=0);
 		void clear();
