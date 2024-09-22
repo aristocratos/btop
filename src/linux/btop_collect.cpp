@@ -32,7 +32,6 @@ tab-size = 4
 #include <filesystem>
 #include <future>
 #include <dlfcn.h>
-#include <unordered_map>
 #include <utility>
 
 #if defined(RSMI_STATIC)
