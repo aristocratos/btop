@@ -18,20 +18,20 @@ tab-size = 4
 
 #include <cmath>
 #include <codecvt>
-#include <iostream>
-#include <fstream>
 #include <ctime>
-#include <sstream>
+#include <fstream>
 #include <iomanip>
-#include <utility>
+#include <iostream>
 #include <ranges>
+#include <sstream>
+#include <unordered_map>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
-#include "unordered_map"
 #include "widechar_width.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
