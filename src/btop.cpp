@@ -33,16 +33,12 @@ tab-size = 4
 #include <tuple>
 #include <regex>
 #include <chrono>
+#include <semaphore>
 #include <utility>
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
 	#include <mach-o/dyld.h>
 	#include <limits.h>
-#endif
-#if !defined(__clang__) && __GNUC__ < 11
-	#include <semaphore.h>
-#else
-	#include <semaphore>
 #endif
 
 #include "btop_shared.hpp"
@@ -446,18 +442,7 @@ namespace Runner {
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
 
-	//* Setup semaphore for triggering thread to do work
-#if !defined(__clang__) && __GNUC__ < 11
-	sem_t do_work;
-	inline void thread_sem_init() { sem_init(&do_work, 0, 0); }
-	inline void thread_wait() { sem_wait(&do_work); }
-	inline void thread_trigger() { sem_post(&do_work); }
-#else
-	std::binary_semaphore do_work(0);
-	inline void thread_sem_init() { ; }
-	inline void thread_wait() { do_work.acquire(); }
-	inline void thread_trigger() { do_work.release(); }
-#endif
+	std::binary_semaphore sem { 0 };
 
 	//* RAII wrapper for pthread_mutex locking
 	class thread_lock {
@@ -575,7 +560,7 @@ namespace Runner {
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
-			thread_wait();
+			sem.acquire();
 			atomic_wait_for(active, true, 5000);
 			if (active) {
 				Global::exit_error_msg = "Runner thread failed to get active lock!";
@@ -862,7 +847,7 @@ namespace Runner {
 
 			if (Menu::active and not current_conf.background_update) Global::overlay.clear();
 
-			thread_trigger();
+			sem.release();
 			atomic_wait_for(active, false, 10);
 		}
 
@@ -890,7 +875,7 @@ namespace Runner {
 					clean_quit(1);
 				}
 			}
-			thread_trigger();
+			sem.release();
 			atomic_wait_for(active, false, 100);
 			atomic_wait_for(active, true, 100);
 		}
@@ -1099,7 +1084,6 @@ int main(int argc, char **argv) {
 	pthread_sigmask(SIG_BLOCK, &mask, &Input::signal_mask);
 
 	//? Start runner thread
-	Runner::thread_sem_init();
 	if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		clean_quit(1);
