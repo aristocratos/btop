@@ -66,6 +66,8 @@ namespace Config {
 		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
 								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
+		{"copy_command",		"#* Command to copy to the system clipboard. Clipboard contents are piped into stdin."},
+
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
 		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
@@ -224,6 +226,7 @@ namespace Config {
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
+ 		{"copy_command", ""},
 		{"graph_symbol_cpu", "default"},
 		{"graph_symbol_gpu", "default"},
 		{"graph_symbol_mem", "default"},
@@ -245,6 +248,7 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+ 		{"selected_cmd", ""},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
 		{"custom_gpu_name1", ""},
@@ -606,6 +610,7 @@ namespace Config {
 			if (Proc::shown) {
 				ints.at("selected_pid") = Proc::selected_pid;
 				strings.at("selected_name") = Proc::selected_name;
+				strings.at("selected_cmd") = Proc::selected_cmd;
 				ints.at("proc_start") = Proc::start;
 				ints.at("proc_selected") = Proc::selected;
 				ints.at("selected_depth") = Proc::selected_depth;
