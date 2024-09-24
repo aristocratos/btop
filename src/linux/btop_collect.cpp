@@ -1978,6 +1978,21 @@ namespace Mem {
 						size_t zfs_dataset_name_start = 0;
 						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
 
+						//? skip BtrFS subvolumes
+						if (fstype == "btrfs") {
+							bool other_subvol_found = false;
+							string devname = fs::canonical(dev, ec).filename();
+							for (auto& [mp, info] : disks) {
+								if (info.dev.filename() == devname and mp != mountpoint) {
+									other_subvol_found = true;
+									break;
+								}
+							}
+							if (other_subvol_found) {
+								continue;
+							}
+						}
+
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))
 						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
