@@ -32,7 +32,6 @@ tab-size = 4
 #include <filesystem>
 #include <future>
 #include <dlfcn.h>
-#include <unordered_map>
 #include <utility>
 
 #if defined(RSMI_STATIC)
@@ -482,7 +481,7 @@ namespace Cpu {
 						const int64_t high = stol(readfile(fs::path(basepath + "max"), "80000")) / 1000;
 						const int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
 
-						found_sensors[sensor_name] = {fs::path(basepath + "input"), label, temp, high, crit};
+						found_sensors[sensor_name] = Sensor{fs::path(basepath + "input"), label, temp, high, crit};
 
 						if (not got_cpu and (label.starts_with("Package id") or label.starts_with("Tdie"))) {
 							got_cpu = true;
@@ -515,7 +514,7 @@ namespace Cpu {
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
 
-					found_sensors[sensor_name] = {basepath / "temp", label, temp, high, crit};
+					found_sensors[sensor_name] = Sensor{basepath / "temp", label, temp, high, crit};
 				}
 			}
 
@@ -548,7 +547,7 @@ namespace Cpu {
 		return not found_sensors.empty();
 	}
 
-	void update_sensors() {
+	static void update_sensors() {
 		if (cpu_sensor.empty()) return;
 
 		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
@@ -1582,7 +1581,7 @@ namespace Gpu {
 				//? PCIe link speeds
 				if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) {
 					uint64_t tx, rx;
-					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, 0);
+					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, nullptr);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get PCIe throughput");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
@@ -2563,7 +2562,7 @@ namespace Proc {
 	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
+	static void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
 		fs::path pid_path = Shared::procPath / std::to_string(pid);
 
 		if (pid != detailed.last_pid) {
