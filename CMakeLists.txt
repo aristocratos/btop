@@ -178,6 +178,9 @@ if(LINUX AND BTOP_GPU)
 
     target_link_libraries(btop ROCm)
   endif()
+  if(NOT BTOP_STATIC)
+    target_link_libraries(btop ${CMAKE_DL_LIBS})
+  endif()
 endif()
 
 if(BTOP_USE_MOLD)
