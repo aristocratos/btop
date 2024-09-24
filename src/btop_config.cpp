@@ -207,9 +207,9 @@ namespace Config {
 
 		{"nvml_measure_pcie_speeds",
 								"#* Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards."},
-
+		{"rsmi_measure_pcie_speeds",
+								"#* Measure PCIe throughput on AMD cards, may impact performance on certain cards."},
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
-
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
 		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
