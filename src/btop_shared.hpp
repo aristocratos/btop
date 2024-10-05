@@ -444,4 +444,7 @@ namespace Proc {
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 				   int cur_depth, bool collapsed, const string& filter,
 				   bool found = false, bool no_update = false, bool should_filter = false);
+
+	//* Build prefixes for tree view
+	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
 }
