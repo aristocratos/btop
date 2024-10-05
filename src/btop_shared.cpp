@@ -181,7 +181,6 @@ namespace Proc {
 
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
-		auto cur_pos = out_procs.size();
 		bool filtering = false;
 
 		//? If filtering, include children of matching processes
@@ -241,17 +240,18 @@ namespace Proc {
 				cur_proc.threads += p.threads;
 			}
 		}
-		if (collapsed or filtering) {
-			return;
-		}
-
-		//? Add tree terminator symbol if it's the last child in a sub-tree
-		if (out_procs.back().children.size() > 0 and out_procs.back().children.back().entry.get().prefix.size() >= 8 and not out_procs.back().children.back().entry.get().prefix.ends_with("]─"))
-			out_procs.back().children.back().entry.get().prefix.replace(out_procs.back().children.back().entry.get().prefix.size() - 8, 8, " └─ ");
-
-		//? Add collapse/expand symbols if process have any children
-		out_procs.at(cur_pos).entry.get().prefix = " │ "s * cur_depth + (out_procs.at(cur_pos).children.size() > 0 ? (cur_proc.collapsed ? "[+]─" : "[-]─") : " ├─ ");
-
 	}
 
+	void _collect_prefixes(tree_proc &t, const bool is_last, const string &header) {
+		const bool is_filtered = t.entry.get().filtered;
+		if (is_filtered) t.entry.get().depth = 0;
+
+		if (!t.children.empty()) t.entry.get().prefix = header + (t.entry.get().collapsed ? "[+]─": "[-]─");
+		else t.entry.get().prefix = header + (is_last ? " └─": " ├─");
+
+		for (auto child = t.children.begin(); child != t.children.end(); ++child) {
+			_collect_prefixes(*child, child == (t.children.end() - 1),
+				is_filtered ? "": header + (is_last ? "   ": " │ "));
+		}
+	}
 }
