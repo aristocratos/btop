@@ -56,7 +56,7 @@ namespace Symbols {
 	const string down = "↓";
 	const string left = "←";
 	const string right = "→";
-	const string enter = "↵";
+	const string enter = "󰌑 ";
 }
 
 namespace Draw {
