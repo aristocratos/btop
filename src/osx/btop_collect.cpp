@@ -1363,17 +1363,13 @@ namespace Proc {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
 			}
 
+			for (auto t = tree_procs.begin(); t != tree_procs.end(); ++t) {
+				_collect_prefixes(*t, t == tree_procs.end() - 1, "");
+			}
+
 			//? Recursive sort over tree structure to account for collapsed processes in the tree
 			int index = 0;
 			tree_sort(tree_procs, sorting, reverse, index, current_procs.size());
-
-			//? Add tree begin symbol to first item if childless
-			if (tree_procs.front().children.empty())
-				tree_procs.front().entry.get().prefix.replace(tree_procs.front().entry.get().prefix.size() - 8, 8, " ┌─ ");
-
-			//? Add tree terminator symbol to last item if childless
-			if (tree_procs.back().children.empty())
-				tree_procs.back().entry.get().prefix.replace(tree_procs.back().entry.get().prefix.size() - 8, 8, " └─ ");
 
 			//? Final sort based on tree index
 			rng::sort(current_procs, rng::less{}, & proc_info::tree_index);
