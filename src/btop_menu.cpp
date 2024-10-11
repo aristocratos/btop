@@ -990,7 +990,7 @@ namespace Menu {
 		if (redraw) {
 			vector<string> cont_vec;
 			cont_vec.push_back(Fx::b + Theme::g("used")[100] + "Error:" + Theme::c("main_fg") + Fx::ub);
-			cont_vec.push_back("Terminal size to small to" + Fx::reset);
+			cont_vec.push_back("Terminal size too small to" + Fx::reset);
 			cont_vec.push_back("display menu or box!" + Fx::reset);
 
 			messageBox = Menu::msgBox{45, 0, cont_vec, "error"};
