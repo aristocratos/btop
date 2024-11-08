@@ -492,7 +492,7 @@ static int get_num_gts(uint64_t type)
 
 	errno = 0;
 	for (cnt = 0; cnt < MAX_GTS; cnt++) {
-		fd = igt_perf_open(type, __I915_PMU_REQUESTED_FREQUENCY(cnt));
+		fd = igt_perf_open(type, __I915_PMU_INTERRUPTS(cnt));
 		if (fd < 0)
 			break;
 
