@@ -67,11 +67,11 @@ namespace Draw {
 	class TextEdit {
 		size_t pos{};
 		size_t upos{};
-		bool numeric;
+		bool numeric = false;
 	public:
 		string text;
 		TextEdit();
-		TextEdit(string text, bool numeric=false);
+		explicit TextEdit(string text, bool numeric=false);
 		bool command(const string& key);
 		string operator()(const size_t limit=0);
 		void clear();
@@ -92,7 +92,7 @@ namespace Draw {
 		array<string, 101> cache;
 	public:
 		Meter();
-		Meter(const int width, const string& color_gradient, bool invert = false);
+		Meter(const int width, string color_gradient, bool invert = false);
 
 		//* Return a string representation of the meter with given value
 		string operator()(int value);
