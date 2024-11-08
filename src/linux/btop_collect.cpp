@@ -505,7 +505,7 @@ namespace Cpu {
 					const string sensor_name = "thermal" + to_string(i) + "/" + label;
 					const int64_t temp = stol(readfile(basepath / "temp", "0")) / 1000;
 
-					int64_t high, crit;
+					int64_t high = 0, crit = 0;
 					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
 						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
 						if (not is_in(trip_type, "high", "critical")) continue;
@@ -1786,7 +1786,7 @@ namespace Mem {
 
 	uint64_t get_totalMem() {
 		ifstream meminfo(Shared::procPath / "meminfo");
-		int64_t totalMem;
+		int64_t totalMem = 0;
 		if (meminfo.good()) {
 			meminfo.ignore(SSmax, ':');
 			meminfo >> totalMem;
@@ -2068,7 +2068,7 @@ namespace Mem {
 						disk.used_percent = updated_stats.used_percent;
 						disk.free_percent = updated_stats.free_percent;
 					}
-					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
+					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, free_priv]() -> pair<disk_info, int> {
 						struct statvfs vfs;
 						disk_info disk;
 						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
@@ -2184,7 +2184,7 @@ namespace Mem {
 
 							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
 							diskread >> io_ticks;
-							if (disk.io_activity.empty())
+							if (uptime == old_uptime || disk.io_activity.empty())
 								disk.io_activity.push_back(0);
 							else
 								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
