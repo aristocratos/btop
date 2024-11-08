@@ -363,6 +363,10 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
     ```bash
     sudo dnf install btop
 	```
+* **deepin**
+    ```bash
+    sudo apt install btop
+	```
 * **RHEL/AlmaLinux 8+**
     ```bash
     sudo dnf install epel-release
