@@ -315,9 +315,19 @@ namespace Shared {
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
-		Gpu::Nvml::init();
-		Gpu::Rsmi::init();
-		Gpu::Intel::init();
+		auto shown_gpus = Config::getS("shown_gpus");
+		if (s_contains(shown_gpus, "nvidia")) {
+		    Gpu::Nvml::init();
+		}
+
+		if (s_contains(shown_gpus, "amd")) {
+			Gpu::Rsmi::init();
+		}
+
+		if (s_contains(shown_gpus, "intel")) {
+			Gpu::Intel::init();
+		}
+
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
