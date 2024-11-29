@@ -38,6 +38,7 @@ tab-size = 4
 #include <net/if.h>
 #include <netdb.h>
 #include <sys/statvfs.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <fmt/format.h>
@@ -90,6 +91,7 @@ using std::vector;
 using std::future;
 using std::async;
 using std::pair;
+using std::optional;
 
 
 namespace fs = std::filesystem;
@@ -282,6 +284,19 @@ namespace Gpu {
 		uint32_t device_count = 0;
 	}
 
+	namespace IntelNPU {
+		std::ifstream npu_util_sysfs;
+		optional<std::ifstream> npu_freq_sysfs;
+		optional<std::ifstream> npu_memory_util_sysfs;
+		using NpuSample = pair<double, uint64_t>;
+		NpuSample initial_sample;
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+	}
 
 	//? Intel data collection
 	namespace Intel {
@@ -403,7 +418,9 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+			Gpu::IntelNPU::init();
 		}
+
 
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
@@ -1993,7 +2010,8 @@ namespace Gpu {
 					.mem_used = false,
 					.pcie_txrx = false,
 					.encoder_utilization = false,
-					.decoder_utilization = false
+					.decoder_utilization = false,
+					.is_npu_device = false,
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
@@ -2022,6 +2040,131 @@ namespace Gpu {
 			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
 			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
 
+			return true;
+		}
+	}
+	namespace IntelNPU {
+		bool init() {
+			if (initialized) return false;
+
+			bool busy_file_found = false;
+
+			const fs::path npu_driver_path = "/sys/bus/pci/drivers/intel_vpu";
+			if (not fs::exists(npu_driver_path))
+				return false;
+
+			for (auto const& driver_dir_entry: fs::directory_iterator(npu_driver_path)) {
+				if (not driver_dir_entry.is_directory())
+					continue;
+				for (auto const& dir_entry: fs::directory_iterator(driver_dir_entry)) {
+					const auto fname = dir_entry.path().filename();
+					if (not dir_entry.is_regular_file()) continue;
+
+					if (fname == "npu_busy_time_us") {
+						npu_util_sysfs = ifstream(dir_entry.path());
+						if (!npu_util_sysfs) {
+							Logger::info("NPU: Failed opening npu_busy_time_us");
+							return false;
+						}
+						busy_file_found = true;
+					} else if (fname == "npu_current_frequency_mhz") {
+						npu_freq_sysfs = ifstream(dir_entry.path());
+						if (!npu_freq_sysfs) npu_freq_sysfs.reset();
+					} else if (fname == "npu_memory_utilization") {
+						npu_memory_util_sysfs = ifstream(dir_entry.path());
+						if (!npu_memory_util_sysfs) npu_memory_util_sysfs.reset();
+					}
+				}
+			}
+
+			if (not busy_file_found)
+				return false;
+
+			Logger::info("Found Intel NPU device");
+
+			if (not npu_memory_util_sysfs.has_value())
+				Logger::info("NPU memory utilization function is not present. Use newer driver.");
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + device_count);
+
+			gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count] = "Intel NPU";
+
+			initialized = true;
+			IntelNPU::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count);
+
+			return true;
+		}
+
+		NpuSample npu_read_util_value() {
+			ssize_t val;
+			npu_util_sysfs >> val;
+			npu_util_sysfs.seekg(0);
+			return {val * 1.0, Tools::time_ms()};
+		}
+
+		ssize_t npu_read_memory_usage() {
+			ssize_t val = 0;
+			if (npu_memory_util_sysfs.has_value()) {
+				npu_memory_util_sysfs->seekg(0);
+				*npu_memory_util_sysfs >> val;
+			}
+			return val;
+		}
+
+		unsigned int npu_read_frequency() {
+			unsigned int val = 0;
+			if (npu_freq_sysfs.has_value()) {
+				npu_freq_sysfs->seekg(0);
+				*npu_freq_sysfs >> val;
+			}
+			return val;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			npu_util_sysfs.close();
+			if (npu_freq_sysfs.has_value()) npu_freq_sysfs->close();
+			if (npu_memory_util_sysfs.has_value()) npu_memory_util_sysfs->close();
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			if constexpr(is_init) {
+				IntelNPU::initial_sample = IntelNPU::npu_read_util_value();
+
+				gpus_slice->supported_functions = {
+					.gpu_utilization = true,
+					.mem_utilization = false,
+					.gpu_clock = npu_freq_sysfs.has_value(),
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = false,
+					.mem_used = npu_memory_util_sysfs.has_value(),
+					.pcie_txrx = false,
+					.is_npu_device = true
+				};
+			}
+
+			NpuSample curr_sample = npu_read_util_value();
+			const double value_delta = curr_sample.first - initial_sample.first;
+			const double time_delta = curr_sample.second - initial_sample.second;
+
+			// npu_busy_time_us is cumulative µs; time_delta is in ms → divide by 10 for %
+			const long long utilization = (time_delta > 0)
+				? clamp((long long)round(value_delta / time_delta / 10.0), 0LL, 100LL)
+				: 0;
+
+			gpus_slice->gpu_percent.at("gpu-totals").push_back(utilization);
+			gpus_slice->gpu_clock_speed = npu_read_frequency();
+			gpus_slice->mem_used = npu_read_memory_usage();
+			IntelNPU::initial_sample = std::move(curr_sample);
 			return true;
 		}
 	}
@@ -2222,21 +2365,26 @@ namespace Gpu {
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		IntelNPU::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count); // size = IntelNPU::device_count
 
-		//* Calculate average usage
+		//* Calculate average usage (NPU devices are excluded from GPU-aggregate stats)
 		long long avg = 0;
 		long long mem_usage_total = 0;
 		long long mem_total = 0;
 		long long pwr_total = 0;
+		long long gpu_count = 0;
 		for (auto& gpu : gpus) {
-			if (gpu.supported_functions.gpu_utilization)
-				avg += gpu.gpu_percent.at("gpu-totals").back();
-			if (gpu.supported_functions.mem_used)
-				mem_usage_total += gpu.mem_used;
-			if (gpu.supported_functions.mem_total)
-				mem_total += gpu.mem_total;
-			if (gpu.supported_functions.pwr_usage)
-				pwr_total += gpu.pwr_usage;
+			if (not gpu.supported_functions.is_npu_device) {
+				if (gpu.supported_functions.gpu_utilization)
+					avg += gpu.gpu_percent.at("gpu-totals").back();
+				if (gpu.supported_functions.mem_used)
+					mem_usage_total += gpu.mem_used;
+				if (gpu.supported_functions.mem_total)
+					mem_total += gpu.mem_total;
+				if (gpu.supported_functions.pwr_usage)
+					pwr_total += gpu.pwr_usage;
+				++gpu_count;
+			}
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
@@ -2252,7 +2400,7 @@ namespace Gpu {
 			}
 		}
 
-		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
+		shared_gpu_percent.at("gpu-average").push_back(gpu_count > 0 ? avg / gpu_count : 0);
 		if (mem_total != 0)
 			shared_gpu_percent.at("gpu-vram-total").push_back(static_cast<long long>(round(mem_usage_total * 100.0 / mem_total)));
 		if (gpu_pwr_total_max != 0)
