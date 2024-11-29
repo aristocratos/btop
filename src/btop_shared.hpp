@@ -44,6 +44,7 @@ using std::deque;
 using std::string;
 using std::tuple;
 using std::vector;
+using std::string_view;
 
 using namespace std::literals; // for operator""s
 
@@ -130,15 +131,16 @@ namespace Gpu {
 	//* Container for supported Gpu::*::collect() functions
 	struct gpu_info_supported {
 		bool gpu_utilization = true,
-		   	 mem_utilization = true,
-				 gpu_clock = true,
-				 mem_clock = true,
-				 pwr_usage = true,
-				 pwr_state = true,
-				 temp_info = true,
-				 mem_total = true,
-				 mem_used = true,
-				 pcie_txrx = true;
+		mem_utilization = true,
+		gpu_clock = true,
+		mem_clock = true,
+		pwr_usage = true,
+		pwr_state = true,
+		temp_info = true,
+		mem_total = true,
+		mem_used = true,
+		pcie_txrx = true,
+		is_npu_device = true;
 	};
 
 	//* Per-device container for GPU info
@@ -167,6 +169,19 @@ namespace Gpu {
 
 		gpu_info_supported supported_functions;
 
+		string get_device_label() const {
+			return supported_functions.is_npu_device ? "npu" : "gpu";
+		}
+
+		string get_device_type() const {
+			return supported_functions.is_npu_device ? "NPU" : "GPU";
+		}
+
+		string get_memory_type() const {
+			// TODO: This should be set per device - GPU may use RAM and discrete NPU may have VRAM.
+			return supported_functions.is_npu_device ? "RAM" : "VRAM";
+		}
+
 		// vector<proc_info> graphics_processes = {}; // TODO
 		// vector<proc_info> compute_processes = {};
 	};
@@ -175,6 +190,14 @@ namespace Gpu {
 		extern bool shutdown();
 	}
 	namespace Rsmi {
+		extern bool shutdown();
+	}
+
+	namespace Intel {
+		extern bool shutdown();
+	}
+
+	namespace IntelNPU {
 		extern bool shutdown();
 	}
 
