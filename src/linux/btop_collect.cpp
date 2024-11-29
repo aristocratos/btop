@@ -295,9 +295,9 @@ namespace Shared {
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
-	        auto shown_gpus = Config::getS("shown_gpus");
-	        if (s_contains(shown_gpus, "nvidia"))
-	        	Gpu::Nvml::init();
+        auto shown_gpus = Config::getS("shown_gpus");
+        if (s_contains(shown_gpus, "nvidia"))
+        	Gpu::Nvml::init();
 		if (s_contains(shown_gpus, "amd"))
 			Gpu::Rsmi::init();
 		if (s_contains(shown_gpus, "intel"))
