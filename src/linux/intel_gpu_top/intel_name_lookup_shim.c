@@ -84,8 +84,12 @@ char *get_intel_device_name(const char *device_id) {
     char full_name[256];
     const struct intel_device_info *info = intel_get_device_info(devid);
     if (info) {
-        strcpy(dev_name, info->codename);
-        dev_name[0] = toupper(dev_name[0]);
+        if (info->codename == NULL) {
+            strcpy(dev_name, "(unknown)");
+        } else {
+            strcpy(dev_name, info->codename);
+            dev_name[0] = toupper(dev_name[0]);
+        }
         snprintf(full_name, sizeof(full_name), "Intel %s (Gen%u)", dev_name, info->graphics_ver);
         return strdup(full_name);
     }
