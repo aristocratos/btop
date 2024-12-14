@@ -1327,8 +1327,12 @@ namespace Menu {
 			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
 			page = selected = 0;
 		}
+#ifdef GPU_SUPPORT
 		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
-			selected_cat = key.back() - '0' - 1;
+#else
+		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+#endif
+		selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
 		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
