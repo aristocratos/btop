@@ -25,6 +25,7 @@ tab-size = 4
 #include <unistd.h>
 #include <numeric>
 #include <sys/statvfs.h>
+#include <sys/types.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -34,6 +35,7 @@ tab-size = 4
 #include <dlfcn.h>
 #include <unordered_map>
 #include <utility>
+#include <optional>
 
 #if defined(RSMI_STATIC)
 	#include <rocm_smi/rocm_smi.h>
@@ -68,6 +70,7 @@ using std::vector;
 using std::future;
 using std::async;
 using std::pair;
+using std::optional;
 
 
 namespace fs = std::filesystem;
@@ -219,6 +222,19 @@ namespace Gpu {
 		uint32_t device_count = 0;
 	}
 
+	namespace IntelNPU {
+		std::ifstream npu_util_sysfs;
+		optional<std::ifstream> npu_memory_util_sysfs;
+		using NpuSample = pair<double, uint64_t>;
+		NpuSample initial_sample;
+
+		bool initialized = false;
+		NpuSample read_util_value();
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+	}
 
 	//? Intel data collection
 	namespace Intel {
@@ -298,6 +314,7 @@ namespace Shared {
 		Gpu::Nvml::init();
 		Gpu::Rsmi::init();
 		Gpu::Intel::init();
+		Gpu::IntelNPU::init();
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -1126,7 +1143,7 @@ namespace Gpu {
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
     					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
-    					gpus[i].supported_functions = {false, false, false, false, false, false, false, false};
+						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
     					continue;
         			}
 
@@ -1677,7 +1694,8 @@ namespace Gpu {
 					.temp_info = false,
 					.mem_total = false,
 					.mem_used = false,
-					.pcie_txrx = false
+					.pcie_txrx = false,
+					.is_npu_device = false,
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
@@ -1709,6 +1727,121 @@ namespace Gpu {
 			return true;
 		}
 	}
+	namespace IntelNPU {
+		bool init() {
+			if (initialized) return false;
+
+			bool busy_file_found = false;
+			bool memory_util_found = false;
+
+			// Intel NPU driver is called 'intel-vpu'
+			for (auto const& driver_dir_entry: fs::directory_iterator(fs::path("/sys/bus/pci/drivers/intel_vpu/"))) {
+				if (not driver_dir_entry.is_directory())
+					continue;
+				for (auto const& dir_entry: fs::directory_iterator(driver_dir_entry)) {
+					if (dir_entry.is_regular_file() and dir_entry.path().filename() == "npu_busy_time_us") {
+						npu_util_sysfs = ifstream(dir_entry.path());
+						if (!npu_util_sysfs) {
+							Logger::info("NPU: Failed opening npu_busy_time_us sysfs file for NPU utilization");
+							return false;
+						}
+
+						busy_file_found = true;
+					}
+
+					if (dir_entry.is_regular_file() and dir_entry.path().filename() == "npu_memory_utilization") {
+						npu_memory_util_sysfs = ifstream(dir_entry.path());
+						if (!npu_memory_util_sysfs) {
+							Logger::info("NPU: Failed opening npu_memory_utilization sysfs file for NPU memory usage");
+							return false;
+						}
+
+						memory_util_found = true;
+					}
+
+					if (busy_file_found and memory_util_found) {
+						break;
+					}
+				}
+			}
+
+			if (not busy_file_found) // memory_util_found is optional
+				return false;
+
+			Logger::info("Found Intel NPU device");
+
+			if (not npu_memory_util_sysfs.has_value())
+				Logger::info("NPU memory utilization function is not present. Use newer driver.");
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size() + device_count);
+
+			gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count] = "Intel NPU";
+
+			initialized = true;
+			IntelNPU::collect<1>(gpus.data() + Intel::device_count + Nvml::device_count + Rsmi::device_count);
+
+			return true;
+		}
+
+		NpuSample npu_read_util_value() {
+			ssize_t val;
+			npu_util_sysfs >> val;
+			npu_util_sysfs.seekg(0);
+			return {val * 1.0, Tools::time_ms()};
+		}
+
+		ssize_t npu_read_memory_usage() {
+			ssize_t val = 0;
+			if (npu_memory_util_sysfs.has_value()) {
+				npu_memory_util_sysfs->seekg(0);
+				*npu_memory_util_sysfs >> val;
+			}
+			return val;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			npu_util_sysfs.close();
+			if (npu_memory_util_sysfs.has_value())
+				npu_memory_util_sysfs->close();
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			if constexpr(is_init) {
+				IntelNPU::initial_sample = IntelNPU::npu_read_util_value();
+
+				gpus_slice->supported_functions = {
+					.gpu_utilization = true,
+					.mem_utilization = false,
+					.gpu_clock = false,
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = false,
+					.mem_used = npu_memory_util_sysfs.has_value(),
+					.pcie_txrx = false,
+					.is_npu_device = true
+				};
+			}
+
+			NpuSample curr_sample = npu_read_util_value();
+			ssize_t npu_mem_usage = npu_read_memory_usage();
+			const double value_delta = curr_sample.first - initial_sample.first;
+			const double time_delta = curr_sample.second - initial_sample.second;
+
+			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(value_delta / time_delta / 10.0));
+			gpus_slice->mem_used = npu_mem_usage;
+			IntelNPU::initial_sample = std::move(curr_sample);
+			return true;
+		}
+	}
 
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
@@ -1720,6 +1853,7 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		IntelNPU::collect<0>(gpus.data() + Intel::device_count + Nvml::device_count + Rsmi::device_count); // size = IntelNPU::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
