@@ -42,11 +42,11 @@ jobs:
         uses: vmactions/netbsd-vm@v1
 
         with:
-          release: '10.0'
+          release: '10.1'
           usesh: true
           prepare: |
             PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0/All/"
+            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All/"
             export PATH PKG_PATH
             /usr/sbin/pkg_add pkgin
             pkgin -y install gmake gcc10 coreutils git
