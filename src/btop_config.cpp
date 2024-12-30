@@ -607,31 +607,31 @@ namespace Config {
             if (ints.count("selected_pid") && strings.count("selected_name")
                   && ints.count("proc_start") && ints.count("proc_selected")
                   && ints.count("selected_depth")) {
-				   ints.at("selected_pid") = Proc::selected_pid;
-				   strings.at("selected_name") = Proc::selected_name;
-				   ints.at("proc_start") = Proc::start;
-				   ints.at("proc_selected") = Proc::selected;
-				   ints.at("selected_depth") = Proc::selected_depth;
+				    ints.at("selected_pid") = Proc::selected_pid;
+				    strings.at("selected_name") = Proc::selected_name;
+				    ints.at("proc_start") = Proc::start;
+				    ints.at("proc_selected") = Proc::selected;
+				    ints.at("selected_depth") = Proc::selected_depth;
             }
 			}
 
 			for (auto& item : stringsTmp) {
             if (strings.count(item.first)) {
-				   strings.at(item.first) = item.second;
+				    strings.at(item.first) = item.second;
             }
 			}
 			stringsTmp.clear();
 
 			for (auto& item : intsTmp) {
 				if (ints.count(item.first)) {
-               ints.at(item.first) = item.second;
+                ints.at(item.first) = item.second;
 			   }
          }
 			intsTmp.clear();
 
 			for (auto& item : boolsTmp) {
             if (bools.count(item.first)) {
-				   bools.at(item.first) = item.second;
+				    bools.at(item.first) = item.second;
             }
 			}
 			boolsTmp.clear();
