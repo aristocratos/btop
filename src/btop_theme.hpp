@@ -63,6 +63,8 @@ namespace Theme {
 	inline const string& c(const string& name) { return colors.at(name); }
 
 	//* Return array of escape codes for color gradient <name>
+   template<size_t N>
+   inline const array<string, 101>& g(const char (&name)[N]) { return gradients.at(name); }
 	inline const array<string, 101>& g(string name) { return gradients.at(name); }
 
 	//* Return array of red, green and blue in decimal for color <name>
