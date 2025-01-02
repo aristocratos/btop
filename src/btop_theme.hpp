@@ -58,6 +58,8 @@ namespace Theme {
 	extern std::unordered_map<string, array<string, 101>> gradients;
 
 	//* Return escape code for color <name>
+   template<size_t N>
+   inline const string& c(const char (&name)[N]) { return colors.at(name); }
 	inline const string& c(const string& name) { return colors.at(name); }
 
 	//* Return array of escape codes for color gradient <name>
