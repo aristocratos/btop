@@ -311,8 +311,11 @@ void term_resize(bool force) {
 
 //* Exit handler; stops threads, restores terminal and saves config changes
 void clean_quit(int sig) {
-	if (Global::quitting) return;
-	Global::quitting = true;
+   bool expected = false;
+   if (!Global::quitting.compare_exchange_strong(expected, true))
+   {
+      return;
+   }
 	Runner::stop();
 	if (Global::_runner_started) {
 	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
