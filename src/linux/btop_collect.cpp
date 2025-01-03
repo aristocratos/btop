@@ -46,6 +46,7 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_config.hpp"
 #include "../btop_tools.hpp"
+#include "intrin.hpp"
 
 #if defined(GPU_SUPPORT)
 	#define class class_
@@ -95,7 +96,7 @@ namespace Cpu {
 	string get_cpuHz();
 
 	//* Search /proc/cpuinfo for a cpu name
-	string get_cpuName();
+	string get_cpu_name();
 
 	struct Sensor {
 		fs::path path;
@@ -286,7 +287,7 @@ namespace Shared {
 		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
 		}
-		Cpu::cpuName = Cpu::get_cpuName();
+		Cpu::cpuName = Cpu::get_cpu_name();
 		Cpu::got_sensors = Cpu::get_sensors();
 		for (const auto& [sensor, ignored] : Cpu::found_sensors) {
 			Cpu::available_sensors.push_back(sensor);
@@ -349,71 +350,33 @@ namespace Cpu {
 			{"guest_nice", 0}
 	};
 
-	string get_cpuName() {
-		string name;
-		ifstream cpuinfo(Shared::procPath / "cpuinfo");
-		if (cpuinfo.good()) {
-			for (string instr; getline(cpuinfo, instr, ':') and not instr.starts_with("model name");)
-				cpuinfo.ignore(SSmax, '\n');
-			if (cpuinfo.bad()) return name;
-			else if (not cpuinfo.eof()) {
-				cpuinfo.ignore(1);
-				getline(cpuinfo, name);
-			}
-			else if (fs::exists("/sys/devices")) {
-				for (const auto& d : fs::directory_iterator("/sys/devices")) {
-					if (string(d.path().filename()).starts_with("arm")) {
-						name = d.path().filename();
-						break;
-					}
-				}
-				if (not name.empty()) {
-					auto name_vec = ssplit(name, '_');
-					if (name_vec.size() < 2) return capitalize(name);
-					else return capitalize(name_vec.at(1)) + (name_vec.size() > 2 ? ' ' + capitalize(name_vec.at(2)) : "");
-				}
+   string get_cpu_name() {
+      std::string name;
+      int r[4] = {0};
+      for (unsigned int i = 0; i < 3; i++) {
+         __cpuid__(0x80000002 + i, &r[0], &r[1], &r[2], &r[3]);
+         name.append(reinterpret_cast<char*>(r), 16);
+      }
+      auto name_vec = ssplit(name, ' ');
+      name.clear();
 
-			}
-
-			auto name_vec = ssplit(name, ' ');
-
-			if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
-				auto cpu_pos = v_index(name_vec, "CPU"s);
-				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
-					name = name_vec.at(cpu_pos + 1);
-				else
-					name.clear();
-			}
-			else if (v_contains(name_vec, "Ryzen"s)) {
-				auto ryz_pos = v_index(name_vec, "Ryzen"s);
-				name = "Ryzen"	+ (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "")
-								+ (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
-			}
-			else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
-				auto cpu_pos = v_index(name_vec, "CPU"s);
-				if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1).size() != 1)
-					name = name_vec.at(cpu_pos + 1);
-				else
-					name.clear();
-			}
-			else
-				name.clear();
-
-			if (name.empty() and not name_vec.empty()) {
-				for (const auto& n : name_vec) {
-					if (n == "@") break;
-					name += n + ' ';
-				}
-				name.pop_back();
-				for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
-					name = s_replace(name, replace, "");
-					name = s_replace(name, "  ", " ");
-				}
-				name = trim(name);
-			}
-		}
-
-		return name;
+      if (name.empty() and not name_vec.empty()) {
+         for (const auto& n : name_vec) {
+            if (n == "@") break;
+            name += n + ' ';
+         }
+         name.pop_back();
+         for (const auto& replace : { "Processor", "CPU", "(R)", "(TM)",
+                                      "Intel", "AMD", "Core" }) {
+            name = s_replace(name, replace, "");
+            name = s_replace(name, "  ", " ");
+         }
+         name = trim(name);
+      }
+      else {
+         name = "Unknown";
+      }
+      return name;
 	}
 
 	bool get_sensors() {
