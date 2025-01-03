@@ -24,6 +24,8 @@ tab-size = 4
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
+#include "intrin.hpp"
+
 namespace rng = std::ranges;
 using namespace Tools;
 
@@ -204,4 +206,36 @@ namespace Proc {
 
 	}
 
+}
+
+namespace Cpu {
+   std::string get_cpu_name() {
+      std::string name;
+      int r[4] = {0};
+      for (unsigned int i = 0; i < 3; i++) {
+         __cpuid__(0x80000002 + i, &r[0], &r[1], &r[2], &r[3]);
+         name.append(reinterpret_cast<char*>(r), 16);
+      }
+      auto name_vec = ssplit(name, ' ');
+      name.clear();
+
+      if (name.empty() and not name_vec.empty()) {
+         for (const auto& n : name_vec) {
+            if (n == "@") break;
+            name += n + ' ';
+         }
+         name.pop_back();
+         for (const auto& replace : { "Processor", "CPU", "(R)", "(TM)",
+                                      "Intel", "AMD", "Core" }) {
+            name = s_replace(name, replace, "");
+            name = s_replace(name, "  ", " ");
+         }
+         name = trim(name);
+      }
+      else {
+         name = "Unknown";
+      }
+      return name;
+
+   }
 }

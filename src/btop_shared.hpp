@@ -230,6 +230,7 @@ namespace Cpu {
 	extern std::unordered_map<int, int> core_mapping;
 
 	auto get_cpuHz() -> string;
+   auto get_cpu_name() -> string;
 
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, float, long, string>;
