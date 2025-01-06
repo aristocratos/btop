@@ -606,7 +606,7 @@ namespace Mem {
 
 		mach_port_t libtop_master_port;
 		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("errot getting master port");
+			Logger::error("error getting master port");
 			return;
 		}
 		/* Get the list of all drive objects. */
