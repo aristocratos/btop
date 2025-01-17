@@ -79,13 +79,21 @@ using namespace std::literals; // for operator""s
 using namespace std::chrono_literals;
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
+namespace Paths {
+   const char* CPUFREQ = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
+   const char* PASSWD = "/etc/passwd";
+   const char* PROC = "/proc";
+   const char* HWMON = "/sys/class/hwmon";
+   const char* THERMAL = "/sys/class/thermal";
+}
+
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
 	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
-	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
+	fs::path freqPath = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors{};
 	bool cpu_temp_only{};
 
@@ -238,43 +246,53 @@ namespace Mem {
 
 namespace Shared {
 
-	fs::path procPath, passwd_path;
+	fs::path procPath, passwdPath;
 	long pageSize, clkTck, coreCount;
+
+   bool dir_accessible(const char* dir) {
+      return fs::is_directory(fs::path(dir)) and access(dir, R_OK) != -1;
+   }
+
+   bool file_accessible(const char* file) {
+      return fs::is_regular_file(fs::path(file)) and access(file, R_OK) != -1;
+   }
+
+   bool path_exists(const char* path) {
+      return fs::exists(fs::path(path)) and access(path, R_OK) != -1;
+   }
+
+   bool path_readable(const char* path) {
+      return path_exists(path) and access(path, R_OK) != -1;
+   }
 
 	void init() {
 
-		//? Shared global variables init
-		procPath = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
-		if (procPath.empty())
-			throw std::runtime_error("Proc filesystem not found or no permission to read from it!");
+      if (!dir_accessible(Paths::PROC)) {
+         throw std::runtime_error("Failed to access Proc filesystem.");
+      } procPath = Paths::PROC;
 
-		passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
-		if (passwd_path.empty())
-			Logger::warning("Could not read /etc/passwd, will show UID instead of username.");
+      if (file_accessible(Paths::PASSWD)) {
+         passwdPath = Paths::PASSWD;
+      } else { Logger::warning("Failed to read /etc/passwd, using UID."); }
 
-		coreCount = sysconf(_SC_NPROCESSORS_ONLN);
-		if (coreCount < 1) {
-			coreCount = sysconf(_SC_NPROCESSORS_CONF);
-			if (coreCount < 1) {
-				coreCount = 1;
-				Logger::warning("Could not determine number of cores, defaulting to 1.");
-			}
-		}
+      if ((coreCount = sysconf(_SC_NPROCESSORS_ONLN)) < 1
+            and (coreCount = sysconf(_SC_NPROCESSORS_CONF) < 1)) {
+         coreCount = 1;
+         Logger::warning("Failed to determine core count, defaulting to 1");
+      }
 
-		pageSize = sysconf(_SC_PAGE_SIZE);
-		if (pageSize <= 0) {
-			pageSize = 4096;
-			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
-		}
+      if ((pageSize = sysconf(_SC_PAGE_SIZE)) <= 0) {
+         pageSize = 4096;
+         Logger::warning("Failed to get system page szie, defaulting to 4096");
+      }
 
-		clkTck = sysconf(_SC_CLK_TCK);
-		if (clkTck <= 0) {
-			clkTck = 100;
-			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
-		}
+      if ((clkTck = sysconf(_SC_CLK_TCK)) <= 0) {
+         clkTck = 100;
+         Logger::warning("Could not get system clock ticks, defaulting to 100");
+      }
 
 		//? Init for namespace Cpu
-		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
+      if (!path_readable(Paths::CPUFREQ)) Cpu::freqPath.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
@@ -352,7 +370,7 @@ namespace Cpu {
 		vector<fs::path> search_paths;
 		try {
 			//? Setup up paths to search for sensors
-			if (fs::exists(fs::path("/sys/class/hwmon")) and access("/sys/class/hwmon", R_OK) != -1) {
+			if (Shared::path_readable(Paths::HWMON)) {
 				for (const auto& dir : fs::directory_iterator(fs::path("/sys/class/hwmon"))) {
 					fs::path add_path = fs::canonical(dir.path());
 					if (v_contains(search_paths, add_path) or v_contains(search_paths, add_path / "device")) continue;
@@ -427,7 +445,7 @@ namespace Cpu {
 				}
 			}
 			//? If no good candidate for cpu temp has been found scan /sys/class/thermal
-			if (not got_cpu and fs::exists(fs::path("/sys/class/thermal"))) {
+			if (not got_cpu and Shared::path_exists(Paths::THERMAL)) {
 				const string rootpath = fs::path("/sys/class/thermal/thermal_zone");
 				for (int i = 0; fs::exists(fs::path(rootpath + to_string(i))); i++) {
 					const fs::path basepath = rootpath + to_string(i);
@@ -515,10 +533,10 @@ namespace Cpu {
 		try {
 			double hz{};
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
-			if (not freq_path.empty()) {
-				hz = stod(readfile(freq_path, "0.0")) / 1000;
+			if (not freqPath.empty()) {
+				hz = stod(readfile(freqPath, "0.0")) / 1000;
 				if (hz <= 0.0 and ++failed >= 2)
-					freq_path.clear();
+					freqPath.clear();
 			}
 			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
 			if (hz <= 0.0) {
@@ -2643,11 +2661,11 @@ namespace Proc {
 			int totalMem_len = to_string(totalMem >> 10).size();
 
 			//? Update uid_user map if /etc/passwd changed since last run
-			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
+			if (not Shared::passwdPath.empty() and fs::last_write_time(Shared::passwdPath) != passwd_time) {
 				string r_uid, r_user;
-				passwd_time = fs::last_write_time(Shared::passwd_path);
+				passwd_time = fs::last_write_time(Shared::passwdPath);
 				uid_user.clear();
-				pread.open(Shared::passwd_path);
+				pread.open(Shared::passwdPath);
 				if (pread.good()) {
 					while (pread.good()) {
 						getline(pread, r_user, ':');
@@ -2659,7 +2677,7 @@ namespace Proc {
 					}
 				}
 				else {
-					Shared::passwd_path.clear();
+					Shared::passwdPath.clear();
 				}
 				pread.close();
 			}
