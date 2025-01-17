@@ -85,6 +85,9 @@ namespace Paths {
    const char* PROC = "/proc";
    const char* HWMON = "/sys/class/hwmon";
    const char* THERMAL = "/sys/class/thermal";
+   const char* CORETEMP_HWMON = "/sys/devices/platform/coretemp.0/hwmon";
+   const char* MTAB = "/etc/mtab";
+   const char* PROCMOUNTS = "/proc/self/mounts";
 }
 
 namespace Cpu {
@@ -371,7 +374,7 @@ namespace Cpu {
 		try {
 			//? Setup up paths to search for sensors
 			if (Shared::path_readable(Paths::HWMON)) {
-				for (const auto& dir : fs::directory_iterator(fs::path("/sys/class/hwmon"))) {
+				for (const auto& dir : fs::directory_iterator(fs::path(Paths::HWMON))) {
 					fs::path add_path = fs::canonical(dir.path());
 					if (v_contains(search_paths, add_path) or v_contains(search_paths, add_path / "device")) continue;
 
@@ -397,8 +400,8 @@ namespace Cpu {
 					}
 				}
 			}
-			if (not got_coretemp and fs::exists(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
-				for (auto& d : fs::directory_iterator(fs::path("/sys/devices/platform/coretemp.0/hwmon"))) {
+			if (not got_coretemp and Shared::path_exists(Paths::CORETEMP_HWMON)) {
+				for (auto& d : fs::directory_iterator(fs::path(Paths::CORETEMP_HWMON))) {
 					fs::path add_path = fs::canonical(d.path());
 
 					for (const auto & file : fs::directory_iterator(add_path)) {
@@ -499,8 +502,9 @@ namespace Cpu {
 
 	void update_sensors() {
 		if (cpu_sensor.empty()) return;
+      string cpu_sensor_conf = Config::getS("cpu_sensor");
 
-		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
+		const auto& cpu_sensor = (not cpu_sensor_conf.empty() and found_sensors.contains(cpu_sensor_conf) ? cpu_sensor_conf : Cpu::cpu_sensor);
 
 		found_sensors.at(cpu_sensor).temp = stol(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
 		current_cpu.temp.at(0).push_back(found_sensors.at(cpu_sensor).temp);
@@ -1719,6 +1723,16 @@ namespace Gpu {
 #endif
 
 namespace Mem {
+   constexpr std::size_t hashString(const char* str, std::size_t hash = 14695981039346656037ULL) {
+    return (str[0] == '\0') ? hash : hashString(str + 1, (hash ^ static_cast<std::size_t>(str[0])) * 1099511628211ULL);
+   }
+
+   constexpr size_t mem_free_h = hashString("MemFree:");
+   constexpr size_t mem_avail_h = hashString("MemAvail:");
+   constexpr size_t cached_h = hashString("Cached:");
+   constexpr size_t swap_total_h = hashString("SwapTotal:");
+   constexpr size_t swap_free_h = hashString("SwapFree:");
+
 	bool has_swap{};
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
@@ -1777,48 +1791,53 @@ namespace Mem {
 		}
 
 		//? Read memory info from /proc/meminfo
-		ifstream meminfo(Shared::procPath / "meminfo");
-		if (meminfo.good()) {
-			bool got_avail = false;
-			for (string label; meminfo.peek() != 'D' and meminfo >> label;) {
-				if (label == "MemFree:") {
-					meminfo >> mem.stats.at("free");
-					mem.stats.at("free") <<= 10;
-				}
-				else if (label == "MemAvailable:") {
-					meminfo >> mem.stats.at("available");
-					mem.stats.at("available") <<= 10;
-					got_avail = true;
-				}
-				else if (label == "Cached:") {
-					meminfo >> mem.stats.at("cached");
-					mem.stats.at("cached") <<= 10;
-					if (not show_swap and not swap_disk) break;
-				}
-				else if (label == "SwapTotal:") {
-					meminfo >> mem.stats.at("swap_total");
-					mem.stats.at("swap_total") <<= 10;
-				}
-				else if (label == "SwapFree:") {
-					meminfo >> mem.stats.at("swap_free");
-					mem.stats.at("swap_free") <<= 10;
-					break;
-				}
-				meminfo.ignore(SSmax, '\n');
-			}
-			if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
-			if (zfs_arc_cached) {
-				mem.stats.at("cached") += arc_size;
-				// The ARC will not shrink below arc_min_size, so that memory is not available
-				if (arc_size > arc_min_size)
-					mem.stats.at("available") += arc_size - arc_min_size;
-			}
-			mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
+		ifstream meminfo("/proc/meminfo");
+		if (!meminfo.good()) {
+         throw std::runtime_error("Failed to read /proc/meminfo");
+      }
 
-			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
+      bool got_avail = false, breakout = false;
+      std::string label;
+      while (meminfo.peek() != 'D' && meminfo >> label && !breakout) {
+         switch (hashString(label.c_str())) {
+            case mem_free_h:
+               meminfo >> mem.stats["free"];
+               mem.stats["free"] <<= 10;
+               break;
+            case mem_avail_h:
+               meminfo >> mem.stats["available"];
+               mem.stats["available"] <<= 10;
+               break;
+            case cached_h:
+               meminfo >> mem.stats["cached"];
+               mem.stats["cached"] <<= 10;
+               if (not show_swap and not swap_disk) breakout = true;
+               break;
+            case swap_total_h:
+               meminfo >> mem.stats["swap_total"];
+               mem.stats["swap_total"] <<= 10;
+               break;
+            case swap_free_h:
+               meminfo >> mem.stats["swap_free"];
+               mem.stats["swap_free"] <<= 10;
+               breakout = true;
+               break;
+            default:
+               break;
+         }
+			meminfo.ignore(SSmax, '\n');
+      }
+
+		if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
+		if (zfs_arc_cached) {
+			mem.stats.at("cached") += arc_size;
+			// The ARC will not shrink below arc_min_size, so that memory is not available
+			if (arc_size > arc_min_size)
+				mem.stats.at("available") += arc_size - arc_min_size;
 		}
-		else
-			throw std::runtime_error("Failed to read /proc/meminfo");
+		mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
+
+		if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
 
 		meminfo.close();
 
@@ -1903,257 +1922,267 @@ namespace Mem {
 					diskread.close();
 				}
 
-				//? Get mounts from /etc/mtab or /proc/self/mounts
-				diskread.open((fs::exists("/etc/mtab") ? fs::path("/etc/mtab") : Shared::procPath / "self/mounts"));
-				if (diskread.good()) {
-					vector<string> found;
-					found.reserve(last_found.size());
-					string dev, mountpoint, fstype;
-					while (not diskread.eof()) {
-						std::error_code ec;
-						diskread >> dev >> mountpoint >> fstype;
-						diskread.ignore(SSmax, '\n');
+            /// /etc/mtab is good enough, as even on systemd systems, it will
+            /// be present as a symlink to /proc/self/mounts.
+            const char *procDir;
+            if (!(procDir = Shared::path_exists(Paths::MTAB)
+               ? Paths::MTAB 
+               : Shared::path_exists(Paths::PROCMOUNTS)
+               ? Paths::PROCMOUNTS
+               : nullptr)) {
+               throw std::runtime_error("Failed to access mount files");
+            }
+            diskread.open(procDir);
+            if (!diskread.good()) {
+               diskread.close();
+               throw std::runtime_error("Bad disk read");
+            }
 
-						if (v_contains(ignore_list, mountpoint) or v_contains(found, mountpoint)) continue;
+				vector<string> found;
+				found.reserve(last_found.size());
+				string dev, mountpoint, fstype;
+				while (not diskread.eof()) {
+					std::error_code ec;
+					diskread >> dev >> mountpoint >> fstype;
+					diskread.ignore(SSmax, '\n');
 
-						//? Match filter if not empty
-						if (not filter.empty()) {
-							bool match = v_contains(filter, mountpoint);
-							if ((filter_exclude and match) or (not filter_exclude and not match))
-								continue;
-						}
+					if (v_contains(ignore_list, mountpoint) or v_contains(found, mountpoint)) continue;
 
-						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
-						size_t zfs_dataset_name_start = 0;
-						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
+					//? Match filter if not empty
+					if (not filter.empty()) {
+						bool match = v_contains(filter, mountpoint);
+						if ((filter_exclude and match) or (not filter_exclude and not match))
+							continue;
+					}
 
-						if ((not use_fstab and not only_physical)
-						or (use_fstab and v_contains(fstab, mountpoint))
-						or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
-							found.push_back(mountpoint);
-							if (not v_contains(last_found, mountpoint)) redraw = true;
+					//? Skip ZFS datasets if zfs_hide_datasets option is enabled
+					size_t zfs_dataset_name_start = 0;
+					if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
 
-							//? Save mountpoint, name, fstype, dev path and path to /sys/block stat file
-							if (not disks.contains(mountpoint)) {
-								disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename(), fstype};
-								if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
-								#ifdef SNAPPED
-									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
-								#endif
-								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
-								string devname = disks.at(mountpoint).dev.filename();
-								int c = 0;
-								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
-										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
-											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
-										else
-											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
-										break;
-									//? Set ZFS stat filepath
-									} else if (fstype == "zfs") {
-										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
-										if (disks.at(mountpoint).stat.empty()) {
-											Logger::debug("Failed to get ZFS stat file for device " + dev);
-										}
-										break;
+					if ((not use_fstab and not only_physical)
+					or (use_fstab and v_contains(fstab, mountpoint))
+					or (not use_fstab and only_physical and v_contains(fstypes, fstype))) {
+						found.push_back(mountpoint);
+						if (not v_contains(last_found, mountpoint)) redraw = true;
+
+						//? Save mountpoint, name, fstype, dev path and path to /sys/block stat file
+						if (not disks.contains(mountpoint)) {
+							disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename(), fstype};
+							if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
+							#ifdef SNAPPED
+								if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
+							#endif
+							if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+							string devname = disks.at(mountpoint).dev.filename();
+							int c = 0;
+							while (devname.size() >= 2) {
+								if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
+									if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
+										disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+									else
+										disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+									break;
+								//? Set ZFS stat filepath
+								} else if (fstype == "zfs") {
+									disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+									if (disks.at(mountpoint).stat.empty()) {
+										Logger::debug("Failed to get ZFS stat file for device " + dev);
 									}
-									devname.resize(devname.size() - 1);
-									c++;
+									break;
 								}
+								devname.resize(devname.size() - 1);
+								c++;
 							}
+						}
 
-							//? If zfs_hide_datasets option was switched, refresh stat filepath
-							if (fstype == "zfs" && ((zfs_hide_datasets && !is_directory(disks.at(mountpoint).stat))
-								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
-								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
-								if (disks.at(mountpoint).stat.empty()) {
-									Logger::debug("Failed to get ZFS stat file for device " + dev);
-								}
+						//? If zfs_hide_datasets option was switched, refresh stat filepath
+						if (fstype == "zfs" && ((zfs_hide_datasets && !is_directory(disks.at(mountpoint).stat))
+							|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
+							disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+							if (disks.at(mountpoint).stat.empty()) {
+								Logger::debug("Failed to get ZFS stat file for device " + dev);
 							}
 						}
 					}
-
-					//? Remove disks no longer mounted or filtered out
-					if (swap_disk and has_swap) found.push_back("swap");
-					for (auto it = disks.begin(); it != disks.end();) {
-						if (not v_contains(found, it->first))
-							it = disks.erase(it);
-						else
-							it++;
-					}
-					if (found.size() != last_found.size()) redraw = true;
-					last_found = std::move(found);
 				}
-				else
-					throw std::runtime_error("Failed to get mounts from /etc/mtab and /proc/self/mounts");
-				diskread.close();
 
-				//? Get disk/partition stats
-				for (auto it = disks.begin(); it != disks.end(); ) {
-					auto &[mountpoint, disk] = *it;
-					if (v_contains(ignore_list, mountpoint) or disk.name == "swap") {
+				//? Remove disks no longer mounted or filtered out
+				if (swap_disk and has_swap) found.push_back("swap");
+				for (auto it = disks.begin(); it != disks.end();) {
+					if (not v_contains(found, it->first))
+						it = disks.erase(it);
+					else
+						it++;
+				}
+				if (found.size() != last_found.size()) redraw = true;
+				last_found = std::move(found);
+			diskread.close();
+
+			//? Get disk/partition stats
+			for (auto it = disks.begin(); it != disks.end(); ) {
+				auto &[mountpoint, disk] = *it;
+				if (v_contains(ignore_list, mountpoint) or disk.name == "swap") {
+					it = disks.erase(it);
+					continue;
+				}
+				if(auto promises_it = disks_stats_promises.find(mountpoint); promises_it != disks_stats_promises.end()){
+					auto& promise = promises_it->second;
+					if(promise.valid() &&
+						promise.wait_for(0s) == std::future_status::timeout) {
+						++it;
+						continue;
+					}
+					auto promise_res = promises_it->second.get();
+					if(promise_res.second != -1){
+						ignore_list.push_back(mountpoint);
+						Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(promise_res.second) + ". Ignoring...");
 						it = disks.erase(it);
 						continue;
 					}
-					if(auto promises_it = disks_stats_promises.find(mountpoint); promises_it != disks_stats_promises.end()){
-						auto& promise = promises_it->second;
-						if(promise.valid() &&
-						   promise.wait_for(0s) == std::future_status::timeout) {
-							++it;
-							continue;
-						}
-						auto promise_res = promises_it->second.get();
-						if(promise_res.second != -1){
-							ignore_list.push_back(mountpoint);
-							Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(promise_res.second) + ". Ignoring...");
-							it = disks.erase(it);
-							continue;
-						}
-						auto &updated_stats = promise_res.first;
-						disk.total = updated_stats.total;
-						disk.free = updated_stats.free;
-						disk.used = updated_stats.used;
-						disk.used_percent = updated_stats.used_percent;
-						disk.free_percent = updated_stats.free_percent;
-					}
-					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
-						struct statvfs vfs;
-						disk_info disk;
-						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-							return pair{disk, errno};
-						}
-						disk.total = vfs.f_blocks * vfs.f_frsize;
-						disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
-						disk.used = disk.total - disk.free;
-						if (disk.total != 0) {
-							disk.used_percent = round((double)disk.used * 100 / disk.total);
-							disk.free_percent = 100 - disk.used_percent;
-						} else {
-							disk.used_percent = 0;
-							disk.free_percent = 0;
-						}
-						return pair{disk, -1};
-					});
-					++it;
+					auto &updated_stats = promise_res.first;
+					disk.total = updated_stats.total;
+					disk.free = updated_stats.free;
+					disk.used = updated_stats.used;
+					disk.used_percent = updated_stats.used_percent;
+					disk.free_percent = updated_stats.free_percent;
 				}
-
-				//? Setup disks order in UI and add swap if enabled
-				mem.disks_order.clear();
-				#ifdef SNAPPED
-					if (disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
-				#else
-					if (disks.contains("/")) mem.disks_order.push_back("/");
-				#endif
-				if (swap_disk and has_swap) {
-					mem.disks_order.push_back("swap");
-					if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
-					disks.at("swap").total = mem.stats.at("swap_total");
-					disks.at("swap").used = mem.stats.at("swap_used");
-					disks.at("swap").free = mem.stats.at("swap_free");
-					disks.at("swap").used_percent = mem.percent.at("swap_used").back();
-					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
-				}
-				for (const auto& name : last_found)
-					#ifdef SNAPPED
-						if (not is_in(name, "/mnt", "swap")) mem.disks_order.push_back(name);
-					#else
-						if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
-					#endif
-
-				//? Get disks IO
-				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
-				disk_ios = 0;
-				for (auto& [ignored, disk] : disks) {
-					if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
-					if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
-						disk_ios++;
-						continue;
+				disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, &free_priv]() -> pair<disk_info, int> {
+					struct statvfs vfs;
+               disk_info disk;
+					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+						return pair{disk, errno};
 					}
-					diskread.open(disk.stat);
-					if (diskread.good()) {
-						disk_ios++;
-						//? ZFS Pool Support
-						if (disk.fstype == "zfs") {
-							// skip first three lines
-							for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
-							// skip characters until '4' is reached, indicating data type 4, next value will be out target
-							diskread.ignore(numeric_limits<streamsize>::max(), '4');
-							diskread >> io_ticks;
-
-							// skip characters until '4' is reached, indicating data type 4, next value will be out target
-							diskread.ignore(numeric_limits<streamsize>::max(), '4');
-							diskread >> sectors_write; // nbytes written
-							if (disk.io_write.empty())
-								disk.io_write.push_back(0);
-							else
-								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1))));
-							disk.old_io.at(1) = sectors_write;
-							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-
-							// skip characters until '4' is reached, indicating data type 4, next value will be out target
-							diskread.ignore(numeric_limits<streamsize>::max(), '4');
-							diskread >> io_ticks_temp;
-							io_ticks += io_ticks_temp;
-
-							// skip characters until '4' is reached, indicating data type 4, next value will be out target
-							diskread.ignore(numeric_limits<streamsize>::max(), '4');
-							diskread >> sectors_read; // nbytes read
-							if (disk.io_read.empty())
-								disk.io_read.push_back(0);
-							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
-							disk.old_io.at(0) = sectors_read;
-							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-
-							if (disk.io_activity.empty())
-								disk.io_activity.push_back(0);
-							else
-								disk.io_activity.push_back(max((int64_t)0, (io_ticks - disk.old_io.at(2))));
-							disk.old_io.at(2) = io_ticks;
-							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
-						} else {
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> sectors_read;
-							if (disk.io_read.empty())
-								disk.io_read.push_back(0);
-							else
-								disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
-							disk.old_io.at(0) = sectors_read;
-							while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-
-							for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> sectors_write;
-							if (disk.io_write.empty())
-								disk.io_write.push_back(0);
-							else
-								disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
-							disk.old_io.at(1) = sectors_write;
-							while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-
-							for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
-							diskread >> io_ticks;
-							if (disk.io_activity.empty())
-								disk.io_activity.push_back(0);
-							else
-								disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
-							disk.old_io.at(2) = io_ticks;
-							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
-						}
+					disk.total = vfs.f_blocks * vfs.f_frsize;
+					disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
+					disk.used = disk.total - disk.free;
+					if (disk.total != 0) {
+						disk.used_percent = round((double)disk.used * 100 / disk.total);
+						disk.free_percent = 100 - disk.used_percent;
 					} else {
-						Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
+						disk.used_percent = 0;
+						disk.free_percent = 0;
 					}
-					diskread.close();
-				}
-				old_uptime = uptime;
+					return pair{disk, -1};
+				});
+				++it;
 			}
-			catch (const std::exception& e) {
-				Logger::warning("Error in Mem::collect() : " + string{e.what()});
-			}
-		}
 
-		return mem;
+			//? Setup disks order in UI and add swap if enabled
+			mem.disks_order.clear();
+			#ifdef SNAPPED
+				if (disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+			#else
+				if (disks.contains("/")) mem.disks_order.push_back("/");
+			#endif
+			if (swap_disk and has_swap) {
+				mem.disks_order.push_back("swap");
+				if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
+				disks.at("swap").total = mem.stats.at("swap_total");
+				disks.at("swap").used = mem.stats.at("swap_used");
+				disks.at("swap").free = mem.stats.at("swap_free");
+				disks.at("swap").used_percent = mem.percent.at("swap_used").back();
+            disks.at("swap").free_percent = mem.percent.at("swap_free").back();
+			}
+			for (const auto& name : last_found)
+				#ifdef SNAPPED
+					if (not is_in(name, "/mnt", "swap")) mem.disks_order.push_back(name);
+				#else
+					if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+				#endif
+
+			//? Get disks IO
+			int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
+			disk_ios = 0;
+			for (auto& [ignored, disk] : disks) {
+				if (disk.stat.empty() or access(disk.stat.c_str(), R_OK) != 0) continue;
+				if (disk.fstype == "zfs" && zfs_hide_datasets && zfs_collect_pool_total_stats(disk)) {
+					disk_ios++;
+					continue;
+				}
+				diskread.open(disk.stat);
+				if (diskread.good()) {
+					disk_ios++;
+               //? ZFS Pool Support
+				   if (disk.fstype == "zfs") {
+					   // skip first three lines
+						for (int i = 0; i < 3; i++) diskread.ignore(numeric_limits<streamsize>::max(), '\n');
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> sectors_write; // nbytes written
+						if (disk.io_write.empty())
+							disk.io_write.push_back(0);
+						else
+							disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1))));
+						disk.old_io.at(1) = sectors_write;
+						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> io_ticks_temp;
+						io_ticks += io_ticks_temp;
+
+						// skip characters until '4' is reached, indicating data type 4, next value will be out target
+						diskread.ignore(numeric_limits<streamsize>::max(), '4');
+						diskread >> sectors_read; // nbytes read
+						if (disk.io_read.empty())
+							disk.io_read.push_back(0);
+						else
+							disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0))));
+						disk.old_io.at(0) = sectors_read;
+						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+						if (disk.io_activity.empty())
+							disk.io_activity.push_back(0);
+						else
+							disk.io_activity.push_back(max((int64_t)0, (io_ticks - disk.old_io.at(2))));
+						disk.old_io.at(2) = io_ticks;
+						while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+					} else {
+						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> sectors_read;
+						if (disk.io_read.empty())
+							disk.io_read.push_back(0);
+						else
+							disk.io_read.push_back(max((int64_t)0, (sectors_read - disk.old_io.at(0)) * 512));
+						disk.old_io.at(0) = sectors_read;
+						while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+						for (int i = 0; i < 3; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> sectors_write;
+						if (disk.io_write.empty())
+							disk.io_write.push_back(0);
+						else
+							disk.io_write.push_back(max((int64_t)0, (sectors_write - disk.old_io.at(1)) * 512));
+						disk.old_io.at(1) = sectors_write;
+						while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+						for (int i = 0; i < 2; i++) { diskread >> std::ws; diskread.ignore(SSmax, ' '); }
+						diskread >> io_ticks;
+						if (disk.io_activity.empty())
+							disk.io_activity.push_back(0);
+						else
+							disk.io_activity.push_back(clamp((long)round((double)(io_ticks - disk.old_io.at(2)) / (uptime - old_uptime) / 10), 0l, 100l));
+						disk.old_io.at(2) = io_ticks;
+						while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+					}
+				} else {
+					Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
+				}
+				diskread.close();
+			}
+			old_uptime = uptime;
+		}
+		catch (const std::exception& e) {
+			Logger::warning("Error in Mem::collect() : " + string{e.what()});
+		}
 	}
+
+	return mem;
+}
 
 	fs::path get_zfs_stat_file(const string& device_name, size_t dataset_name_start, bool zfs_hide_datasets) {
 		fs::path zfs_pool_stat_path;
