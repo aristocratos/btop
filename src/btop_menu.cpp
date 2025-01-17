@@ -15,7 +15,8 @@
 indent = tab
 tab-size = 4
 */
-
+#include <iostream>
+#include <fstream>
 #include <deque>
 #include <unordered_map>
 #include <array>
@@ -23,6 +24,10 @@ tab-size = 4
 #include <errno.h>
 #include <cmath>
 #include <filesystem>
+#include <stdlib.h>
+#include <dirent.h>
+#include <ctype.h>
+#include <string.h>
 
 #include "btop_menu.hpp"
 #include "btop_tools.hpp"
@@ -1008,12 +1013,43 @@ namespace Menu {
 		return NoChange;
 	}
 
+   void get_children(pid_t parent_pid, int signalToSend) {
+      struct dirent **namelist;
+      int n = scandir("/proc", &namelist, NULL, alphasort);
+      if (n < 0) { perror("scandir"); return; }
+      while (n--) {
+         if (isdigit(namelist[n]->d_name[0])) {
+            pid_t pid = atoi(namelist[n]->d_name);
+            char path[256];
+            snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+            FILE *stat_file = fopen(path, "r");
+            if (stat_file) {
+               char buffer[1024];
+               if (fgets(buffer, sizeof(buffer), stat_file)) {
+                  pid_t ppid;
+                  sscanf(buffer, "%*d %*s %*c %d", &ppid);
+                  if (ppid == parent_pid) {
+                     kill(pid, signalToSend); 
+                  }
+               }
+               fclose(stat_file);
+            }
+         }
+         free(namelist[n]);
+      }
+      free(namelist);
+   }
+
 	int signalSend(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+      const auto detailedPid = Config::getI("detailed_pid");
+      const auto selectedPid = Config::getI("selected_pid");
+		auto s_pid = (Config::getB("show_detailed") and selectedPid == 0 
+         ? detailedPid 
+         : selectedPid);
 		if (s_pid == 0) return Closed;
 		if (redraw) {
 			atomic_wait(Runner::active);
-			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
+			auto& p_name = (s_pid == detailedPid ? Proc::detailed.entry.name : Config::getS("selected_name"));
 			vector<string> cont_vec = {
 				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend)
 				+ (signalToSend > 0 and signalToSend <= 32 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')' : ""),
@@ -1027,6 +1063,7 @@ namespace Menu {
 		auto ret = messageBox.input(key);
 		if (ret == msgBox::Ok_Yes) {
 			signalKillRet = 0;
+         get_children(s_pid, signalToSend);
 			if (kill(s_pid, signalToSend) != 0) {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);

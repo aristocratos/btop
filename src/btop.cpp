@@ -128,7 +128,9 @@ static void print_version() {
 
 static void print_version_with_build_info() {
 	print_version();
-	fmt::println("Compiled with: {} ({})\nConfigured with: {}", COMPILER, COMPILER_VERSION, CONFIGURE_COMMAND);
+	fmt::println("Compiled with: {} ({})\nConfigured with: {}",
+                COMPILER, COMPILER_VERSION, 
+                CONFIGURE_COMMAND);
 }
 
 static void print_usage() {

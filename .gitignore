@@ -1,6 +1,6 @@
 # gitginore template for creating Snap packages
 # website: https://snapcraft.io/
-
+tests/
 parts/
 prime/
 stage/
