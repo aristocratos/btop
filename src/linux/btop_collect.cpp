@@ -1723,15 +1723,15 @@ namespace Gpu {
 #endif
 
 namespace Mem {
-   constexpr std::size_t hashString(const char* str, std::size_t hash = 14695981039346656037ULL) {
-    return (str[0] == '\0') ? hash : hashString(str + 1, (hash ^ static_cast<std::size_t>(str[0])) * 1099511628211ULL);
+   constexpr std::size_t fnv1a(const char* str, std::size_t hash = 14695981039346656037ULL) {
+    return (str[0] == '\0') ? hash : fnv1a(str + 1, (hash ^ static_cast<std::size_t>(str[0])) * 1099511628211ULL);
    }
 
-   constexpr size_t mem_free_h = hashString("MemFree:");
-   constexpr size_t mem_avail_h = hashString("MemAvail:");
-   constexpr size_t cached_h = hashString("Cached:");
-   constexpr size_t swap_total_h = hashString("SwapTotal:");
-   constexpr size_t swap_free_h = hashString("SwapFree:");
+   constexpr size_t mem_free_h = fnv1a("MemFree:");
+   constexpr size_t mem_avail_h = fnv1a("MemAvail:");
+   constexpr size_t cached_h = fnv1a("Cached:");
+   constexpr size_t swap_total_h = fnv1a("SwapTotal:");
+   constexpr size_t swap_free_h = fnv1a("SwapFree:");
 
 	bool has_swap{};
 	vector<string> fstab;
@@ -1757,7 +1757,6 @@ namespace Mem {
 		}
 		if (not meminfo.good() or totalMem == 0)
 			throw std::runtime_error("Could not get total memory size from /proc/meminfo");
-
 		return totalMem;
 	}
 
@@ -1799,7 +1798,7 @@ namespace Mem {
       bool got_avail = false, breakout = false;
       std::string label;
       while (meminfo.peek() != 'D' && meminfo >> label && !breakout) {
-         switch (hashString(label.c_str())) {
+         switch (fnv1a(label.c_str())) {
             case mem_free_h:
                meminfo >> mem.stats["free"];
                mem.stats["free"] <<= 10;
@@ -1807,6 +1806,7 @@ namespace Mem {
             case mem_avail_h:
                meminfo >> mem.stats["available"];
                mem.stats["available"] <<= 10;
+               got_avail = true;
                break;
             case cached_h:
                meminfo >> mem.stats["cached"];
@@ -1828,16 +1828,17 @@ namespace Mem {
 			meminfo.ignore(SSmax, '\n');
       }
 
-		if (not got_avail) mem.stats.at("available") = mem.stats.at("free") + mem.stats.at("cached");
+		if (!got_avail) mem.stats["available"] = mem.stats["free"] 
+                                             + mem.stats["cached"];
 		if (zfs_arc_cached) {
-			mem.stats.at("cached") += arc_size;
+			mem.stats["cached"] += arc_size;
 			// The ARC will not shrink below arc_min_size, so that memory is not available
 			if (arc_size > arc_min_size)
 				mem.stats.at("available") += arc_size - arc_min_size;
 		}
-		mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
+		mem.stats["used"] = totalMem - (mem.stats["available"] <= totalMem ? mem.stats["available"] : mem.stats["free"]);
 
-		if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
+		if (mem.stats["swap_total"] > 0) mem.stats["swap_used"] = mem.stats["swap_total"] - mem.stats["swap_free"];
 
 		meminfo.close();
 
