@@ -104,14 +104,31 @@ namespace Symbols {
 
 namespace Draw {
 
+   using BannerStr = std::string;
+
+   struct BannerCache {
+      BannerStr data;
+      size_t width = 0;
+
+      void clear() {
+         data.clear();
+         width = 0;
+      }
+   };
+
+   class BannerGenerator {
+   private:
+      static inline BannerCache cache_;
+   };
+
 	string banner_gen(int y, int x, bool centered, bool redraw) {
 		static string banner;
 		static size_t width = 0;
 		if (redraw) banner.clear();
 		if (banner.empty()) {
 			string b_color, bg, fg, oc, letter;
-			auto lowcolor = Config::getB("lowcolor");
-			auto tty_mode = Config::getB("tty_mode");
+         auto lowcolor = g_CfgMgr.get<CfgBool>("lowcolor").value();
+         auto tty_mode = Config::getB("tty_mode");
 			for (size_t z = 0; const auto& line : Global::Banner_src) {
 				if (const auto w = ulen(line[1]); w > width) width = w;
 				if (tty_mode) {
@@ -1546,7 +1563,7 @@ namespace Proc {
 		if (Runner::stopping) return "";
 		auto proc_tree = Config::getB("proc_tree");
 		bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
-		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
+		bool proc_gradient = (Config::getB("proc_gradient") and not g_CfgMgr.get<CfgBool>("lowcolor").value() and Theme::gradients.contains("proc"));
 		auto proc_colors = Config::getB("proc_colors");
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));

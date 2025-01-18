@@ -147,7 +147,7 @@ namespace Input {
 				else
 					key.clear();
 
-				if (Config::getB("proc_filtering")) {
+				if (g_CfgMgr.get<bool>("proc_filtering").value()) {
 					if (mouse_event == "mouse_click") return mouse_event;
 					else return "";
 				}
@@ -190,6 +190,7 @@ namespace Input {
 		return key;
 	}
 
+   /// TODO: Figure out where this shit's actually called, if at all
 	string wait() {
 		while(not poll(std::numeric_limits<uint64_t>::max())) {}
 		return get();

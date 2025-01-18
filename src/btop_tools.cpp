@@ -30,6 +30,7 @@ tab-size = 4
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include "unordered_map"
 #include "widechar_width.hpp"
@@ -399,7 +400,7 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
-		bool mega = Config::getB("base_10_sizes");
+		bool mega = g_CfgMgr.get<bool>("base_10_sizes").value();
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
@@ -510,7 +511,7 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
+		while (atom.load(std::memory_order_relaxed) == old ) bsy_wait();
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
@@ -542,27 +543,40 @@ namespace Tools {
 	}
 
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string> {
-		if (scale == "celsius")
-			return {celsius, "°C"};
-		else if (scale == "fahrenheit")
-			return {(long long)round((double)celsius * 1.8 + 32), "°F"};
-		else if (scale == "kelvin")
-			return {(long long)round((double)celsius + 273.15), "K "};
-		else if (scale == "rankine")
-			return {(long long)round((double)celsius * 1.8 + 491.67), "°R"};
-		return {0, ""};
-	}
+      /*switch (scale) {
+      case TempScale::Celsius:
+         return { celsius, "°C" };
+      case TempScale::Fahrenheit:
+         return { (long long)round((double)celsius * 1.8 + 32), "°F" };
+      case TempScale::Kelvin:
+         return { (long long)round((double)celsius + 273.15), "K " };
+      case TempScale::Rankine:
+         return { (long long)round((double)celsius * 1.8 + 491.67), "°R" };
+      default:
+         return { 0, "" };
+      }*/
+      if (scale == "celsius")
+         return { celsius, "°C" };
+	   else if (scale == "fahrenheit")
+         return { (long long)round((double)celsius * 1.8 + 32), "°F" };
+      else if (scale == "kelvin")
+          return { (long long)round((double)celsius + 273.15), "K " };
+      else if (scale == "Rankine")
+         return { (long long)round((double)celsius * 1.8 + 491.67), "°R" };
+      else
+         return { 0, "" };
+   }
 
-	string hostname() {
+   std::string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
-		return string{host};
+		return std::string(host);
 	}
 
-	string username() {
-		auto user = getenv("LOGNAME");
-		if (user == nullptr or strlen(user) == 0) user = getenv("USER");
-		return (user != nullptr ? user : "");
+   std::string username() {
+      auto uid = geteuid();
+      struct passwd *pw = getpwuid(uid);
+      return pw->pw_name;
 	}
 
 	DebugTimer::DebugTimer(const string name, bool start, bool delayed_report) : name(name), delayed_report(delayed_report) {

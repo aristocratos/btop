@@ -420,17 +420,20 @@ void _signal_handler(const int sig) {
 //* Config init
 void init_config(){
 	atomic_lock lck(Global::init_conf);
-	vector<string> load_warnings;
-	Config::load(Config::conf_file, load_warnings);
-	Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
+   
+   g_CfgMgr.load();
+	(void)g_CfgMgr.set<CfgBool>("lowcolor", Global::arg_low_color 
+         ? true 
+         : !g_CfgMgr.get<CfgBool>("truecolor").value());
 
 	static bool first_init = true;
 
 	if (Global::debug and first_init) {
 		Logger::set("DEBUG");
 		Logger::debug("Running in DEBUG mode!");
-	}
-	else Logger::set(Config::getS("log_level"));
+	} else {
+      Logger::set(Config::getS("log_level"));
+   }
 
 	static string log_level;
 	if (const string current_level = Config::getS("log_level"); log_level != current_level) {
@@ -438,8 +441,7 @@ void init_config(){
 		Logger::info("Logger set to " + (Global::debug ? "DEBUG" : log_level));
 	}
 
-	for (const auto& err_str : load_warnings) Logger::warning(err_str);
-	first_init = false;
+   first_init = false;
 }
 
 //* Manages secondary thread for collection and drawing of boxes
@@ -859,7 +861,8 @@ namespace Runner {
 			current_conf = {
 				(box == "all" ? Config::current_boxes : vector{box}),
 				no_update, force_redraw,
-				(not Config::getB("tty_mode") and Config::getB("background_update")),
+				(!g_CfgMgr.get<CfgBool>("tty_mode").value()
+             && g_CfgMgr.get<CfgBool>("background_update").value()),
 				Global::overlay,
 				Global::clock
 			};
@@ -906,9 +909,14 @@ namespace Runner {
 
 //* --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(int argc, char **argv) {
+   if (!g_CfgMgr.init()) {
+      std::cout << "Failed to load default configuration" << std::endl;
+      return 1;
+   }
+   g_CfgMgr.load();
 
 	//? ------------------------------------------------ INIT ---------------------------------------------------------
-
+   
 	Global::start_time = time_s();
 
 	//? Save real and effective userid's and drop privileges until needed if running with SUID bit set
@@ -1046,7 +1054,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
-	if (not Global::arg_tty and Config::getB("force_tty")) {
+	if (not Global::arg_tty && g_CfgMgr.get<CfgBool>("force_tty").value()) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
@@ -1079,7 +1087,7 @@ int main(int argc, char **argv) {
 		clean_quit(1);
 	}
 
-	if (not Config::set_boxes(Config::getS("shown_boxes"))) {
+	if (!Config::set_boxes(g_CfgMgr.get<CfgString>("shown_boxes").value())) {
 		Config::set_boxes("cpu mem net proc");
 		Config::set("shown_boxes", "cpu mem net proc"s);
 	}
@@ -1141,7 +1149,7 @@ int main(int argc, char **argv) {
 	if (Global::arg_update != 0) {
 		Config::set("update_ms", Global::arg_update);
 	}
-	uint64_t update_ms = Config::getI("update_ms");
+	uint64_t update_ms = g_CfgMgr.get<CfgInt>("update_ms").value();
 	auto future_time = time_ms();
 
 	try {

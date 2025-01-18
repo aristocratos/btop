@@ -794,8 +794,8 @@ namespace Menu {
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
 	: width(width), boxtype(boxtype) {
-		auto tty_mode = Config::getB("tty_mode");
-		auto rounded = Config::getB("rounded_corners");
+      auto tty_mode = g_CfgMgr.get<CfgBool>("tty_mode").value();
+      auto rounded = g_CfgMgr.get<CfgBool>("rounded_corners").value();
 		const auto& right_up = (tty_mode or not rounded ? Symbols::right_up : Symbols::round_right_up);
 		const auto& left_up = (tty_mode or not rounded ? Symbols::left_up : Symbols::round_left_up);
 		const auto& right_down = (tty_mode or not rounded ? Symbols::right_down : Symbols::round_right_down);

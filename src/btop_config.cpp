@@ -22,6 +22,7 @@ tab-size = 4
 #include <ranges>
 #include <string_view>
 #include <utility>
+#include <iostream>
 
 #include <fmt/core.h>
 #include <sys/statvfs.h>
@@ -39,6 +40,122 @@ namespace rng = std::ranges;
 
 using namespace std::literals;
 using namespace Tools;
+
+//////////////////// TEMPORARY UTILITY ROUTINES ///////////////////////////////
+
+static std::string trim_str(std::string str) {
+   str.erase(str.begin(), 
+            std::find_if(str.begin(), 
+            str.end(), 
+            [](unsigned char ch) { return !std::isspace(ch); }));
+   str.erase(std::find_if(str.rbegin(), 
+            str.rend(),
+            [](unsigned char ch) { return !std::isspace(ch); }).base(), 
+            str.end());
+   return str;
+}
+///////////////////////////////////////////////////////////////////////////////
+
+CfgManager g_CfgMgr("conf.ini");
+
+CfgManager::CfgManager(const std::string& cfg_path) {
+   cfg_file = std::filesystem::path(cfg_path);
+   setup_validators();
+}
+
+bool CfgManager::load() {
+   auto is_valid = [](const std::string& line) {
+      return !line.empty() && !line.starts_with(';') && !line.starts_with('#');
+   };
+
+   auto key_present = [&](const std::string& key) {
+      return cfg_keys.find(key) != cfg_keys.end();
+   };
+
+   std::ifstream file(cfg_file);
+   if (!file) {
+      return false;
+   }
+
+   bool tainted = false;
+   std::string line;
+   size_t line_num = 0;
+
+   while (std::getline(file, line)) {
+      ++line_num;
+      line = trim_str(line);
+
+      if (!is_valid(line)) {
+         continue;
+      }
+
+      auto eq = line.find('=');
+      if (eq == std::string::npos) {
+         continue;
+      }
+
+      std::string k = trim_str(line.substr(0, eq));
+      std::string v = trim_str(line.substr(eq + 1));
+
+      if (k.empty() || v.empty()) {
+         continue;
+      }
+
+      if (!key_present(k)) {
+         continue;
+      }
+
+      auto it = cfg_keys.find(k);
+      CfgResult<bool> result = [this, &k, &v, type = it->second.type]() -> CfgResult<bool> {
+         switch(type) {
+            case CString:
+               return try_set<CfgString>(k, v);
+            case CBool:
+               return try_set<CfgBool>(k, v);
+            case CInt:
+               return try_set<CfgInt>(k, v);
+            default:
+               return CfgResult<bool>("Unknown configuration type");
+         }
+      }();
+
+      if (result.is_error()) {
+         std::cerr << "Error on line " << line_num << ": "
+            << result.error() << " (key: " << k << ", val: " << v << ")"
+            << std::endl;
+         tainted = true;
+      }
+   }
+   return tainted;
+}
+
+bool CfgManager::init() {
+   bool success = true;
+
+   for (const auto& [k, i] : cfg_keys) {
+      auto set_result = std::visit([this, &k](const auto& def) -> CfgResult<bool> {
+         using T = std::decay_t<decltype(def)>;
+                
+         if constexpr (std::is_same_v<T, CfgString>) {
+            return set<CfgString>(k, def);
+         } else if constexpr (std::is_same_v<T, CfgBool>) {
+            return set<CfgBool>(k, def);
+         } else if constexpr (std::is_same_v<T, CfgInt>) {
+            return set<CfgInt>(k, def);
+         } else {
+            return CfgResult<bool>("Unsupported configuration type");
+         }
+      }, i.def);
+
+      if (set_result.is_error()) {
+         std::cerr << "Error setting default value for key '" << k
+                   << "': " << set_result.error() << '\n';
+         success = false;
+      }
+   }
+   return success;
+}
+
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {

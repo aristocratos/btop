@@ -227,7 +227,7 @@ namespace Theme {
 		void generateColors(const std::unordered_map<string, string>& source) {
 			vector<string> t_rgb;
 			string depth;
-			bool t_to_256 = Config::getB("lowcolor");
+         bool t_to_256 = g_CfgMgr.get<CfgBool>("lowcolor").value();
 			colors.clear(); rgbs.clear();
 			for (const auto& [name, color] : Default_theme) {
 				if (name == "main_bg" and not Config::getB("theme_background")) {
@@ -290,7 +290,7 @@ namespace Theme {
 		//* Generate color gradients from two or three colors, 101 values indexed 0-100
 		void generateGradients() {
 			gradients.clear();
-			bool t_to_256 = Config::getB("lowcolor");
+			bool t_to_256 = g_CfgMgr.get<CfgBool>("lowcolor").value();
 
 			//? Insert values for processes greyscale gradient and processes color gradient
 			rgbs.insert({

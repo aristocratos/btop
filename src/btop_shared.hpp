@@ -52,6 +52,27 @@ void banner_gen();
 
 extern void clean_quit(int sig);
 
+/// TEMPORARILY PLACED HERE, WILL BE MOVED LATER
+/*
+enum TempScale {
+   Celsius = 0,
+   Fahrenheit,
+   Kelvin,
+   Rankine,
+};
+
+struct TempScaleMap : public std::map<std::string, TempScale>
+{
+   TempScaleMap() {
+      this->operator[]("celsius") = Celsius;
+      this->operator[]("fahrenheit") = Fahrenheit;
+      this->operator[]("kelvin") = Kelvin;
+      this->operator[]("rankine") = Rankine;
+   };
+   ~TempScaleMap(){}
+}
+*/
+
 namespace Global {
 	extern const vector<array<string, 2>> Banner_src;
 	extern const string Version;
