@@ -452,8 +452,13 @@ namespace Cpu {
 
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
-				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
-				const long long calc_idles = max(0ll, idles - core_old_idles.at(i));
+				long long calc_totals = max(0ll, totals - core_old_totals.at(i));
+				long long calc_idles = max(0ll, idles - core_old_idles.at(i));
+				if (calc_totals == 0) {
+					//? No changes for this core, simulate 1 idle
+					calc_totals = 1;
+					calc_idles = 1;
+				}
 				core_old_totals.at(i) = totals;
 				core_old_idles.at(i) = idles;
 
@@ -469,8 +474,13 @@ namespace Cpu {
 
 		}
 
-		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
-		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
+		long long calc_totals = max(0ll, global_totals - cpu_old.at("totals"));
+		long long calc_idles = max(0ll, global_idles - cpu_old.at("idles"));
+		if (calc_totals == 0) {
+			//? No changes, simulate 1 idle
+			calc_totals = 1;
+			calc_idles = 1;
+		}
 
 		//? Populate cpu.cpu_percent with all fields from syscall
 		for (int ii = 0; const auto &val : times_summed) {
