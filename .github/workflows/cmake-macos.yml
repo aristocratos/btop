@@ -32,14 +32,15 @@ jobs:
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           brew update --quiet
-          brew install --force --overwrite cmake llvm ninja lowdown
+          brew install --force --overwrite cmake llvm lld ninja lowdown
 
       - name: Configure
         run: |
           export LLVM_PREFIX="$(brew --prefix llvm)"
+          export LLD_PREFIX="$(brew --prefix lld)"
           export CXX="$LLVM_PREFIX/bin/clang++"
           export CPPFLAGS="-I$LLVM_PREFIX/include"
-          export LDFLAGS="-L$LLVM_PREFIX/lib -L$LLVM_PREFIX/lib/c++ -Wl,-rpath,$LLVM_PREFIX/lib/c++ -fuse-ld=$LLVM_PREFIX/bin/ld64.lld"
+          export LDFLAGS="-L$LLVM_PREFIX/lib -L$LLVM_PREFIX/lib/c++ -Wl,-rpath,$LLVM_PREFIX/lib/c++ -fuse-ld=$LLD_PREFIX/bin/ld64.lld"
           cmake -B build -G Ninja
 
       - name: Compile
