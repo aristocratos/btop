@@ -56,8 +56,8 @@ jobs:
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: btop-x86_64-freebsd-14
+          name: btop-x86_64-freebsd-14-${{ matrix.compiler }}
           path: 'bin/*'
           if-no-files-found: error
