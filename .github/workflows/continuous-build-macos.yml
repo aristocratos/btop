@@ -30,8 +30,14 @@ on:
       - '.github/workflows/continuous-build-macos.yml'
 
 jobs:
-  build-macos12:
-    runs-on: macos-12
+  build-macos:
+    strategy:
+      matrix:
+        os:
+          - {runner: 'macos-13', version: 'Ventura'}
+          - {runner: 'macos-14', version: 'Sonoma'}
+          - {runner: 'macos-15', version: 'Sequoia'}
+    runs-on: ${{ matrix.os.runner }}
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -45,45 +51,16 @@ jobs:
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           brew update --quiet
-          brew install --force --overwrite llvm lowdown
+          brew install --force --overwrite llvm lld lowdown
 
       - name: Compile
         run: |
           make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-Monterey-$GIT_HASH
+          mv bin/btop bin/btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin
 
       - uses: actions/upload-artifact@v4
         with:
-          name: btop-x86_64-macos12-Monterey
-          path: 'bin/*'
-
-  build-macos13:
-    runs-on: macos-13
-    steps:
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install build tools
-        run: |
-          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          brew update --quiet
-          brew install --force --overwrite llvm lowdown
-
-      - name: Compile
-        run: |
-          make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
-          GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-Ventura-$GIT_HASH
-          ls -alh bin
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: btop-x86_64-macos13-Ventura
+          name: btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}
           path: 'bin/*'
