@@ -368,6 +368,18 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
     sudo dnf install epel-release
 	sudo dnf install btop
 	```
+* **Ubuntu**
+    ```bash
+    sudo apt install btop
+	```
+* **Arch Linux**
+    ```bash
+    sudo pacman -S btop
+	```
+* **Void Linux**
+    ```bash
+    sudo xbps-install btop
+	```
 * **FreeBSD**
 	```sh
 	pkg install btop
