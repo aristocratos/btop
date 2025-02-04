@@ -296,20 +296,18 @@ namespace Tools {
 		return out;
 	}
 
-	string ltrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.starts_with(t_str))
-			str_v.remove_prefix(t_str.size());
+	string_view ltrim(string_view str, const string_view t_str) {
+		while (str.starts_with(t_str))
+			str.remove_prefix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
-	string rtrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.ends_with(t_str))
-			str_v.remove_suffix(t_str.size());
+	string_view rtrim(string_view str, const string_view t_str) {
+		while (str.ends_with(t_str))
+			str.remove_suffix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {

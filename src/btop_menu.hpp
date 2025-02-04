@@ -61,7 +61,7 @@ namespace Menu {
 			Select
 		};
 		msgBox();
-		msgBox(int width, int boxtype, vector<string> content, string title);
+		msgBox(int width, int boxtype, const vector<string>& content, string title);
 
 		//? Draw and return box as a string
 		string operator()();

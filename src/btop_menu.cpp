@@ -787,7 +787,7 @@ namespace Menu {
 	};
 
 	msgBox::msgBox() {}
-	msgBox::msgBox(int width, int boxtype, vector<string> content, string title)
+	msgBox::msgBox(int width, int boxtype, const vector<string>& content, string title)
 	: width(width), boxtype(boxtype) {
 		auto tty_mode = Config::getB("tty_mode");
 		auto rounded = Config::getB("rounded_corners");
@@ -867,8 +867,8 @@ namespace Menu {
 		button_left.shrink_to_fit();
 		button_right.clear();
 		button_right.shrink_to_fit();
-		if (mouse_mappings.contains("button1")) mouse_mappings.erase("button1");
-		if (mouse_mappings.contains("button2")) mouse_mappings.erase("button2");
+		mouse_mappings.erase("button1");
+		mouse_mappings.erase("button2");
 	}
 
 	enum menuReturnCodes {
@@ -988,10 +988,10 @@ namespace Menu {
 
 	int sizeError(const string& key) {
 		if (redraw) {
-			vector<string> cont_vec;
-			cont_vec.push_back(Fx::b + Theme::g("used")[100] + "Error:" + Theme::c("main_fg") + Fx::ub);
-			cont_vec.push_back("Terminal size to small to" + Fx::reset);
-			cont_vec.push_back("display menu or box!" + Fx::reset);
+			vector<string> cont_vec {
+				Fx::b + Theme::g("used")[100] + "Error:" + Theme::c("main_fg") + Fx::ub,
+				"Terminal size to small to" + Fx::reset,
+				"display menu or box!" + Fx::reset };
 
 			messageBox = Menu::msgBox{45, 0, cont_vec, "error"};
 			Global::overlay = messageBox();
