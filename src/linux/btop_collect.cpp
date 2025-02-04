@@ -241,7 +241,7 @@ namespace Mem {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	long pageSize, clkTck, coreCount;
+	long pageSize, clkTck, coreCount, arg_max;
 
 	void init() {
 
@@ -274,6 +274,9 @@ namespace Shared {
 			clkTck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
+
+		//* Get maximum length of process arguments
+		arg_max = sysconf(_SC_ARG_MAX);
 
 		//? Init for namespace Cpu
 		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
@@ -2786,8 +2789,8 @@ namespace Proc {
 					long_string.clear();
 					while(getline(pread, long_string, '\0')) {
 						new_proc.cmd += long_string + ' ';
-						if (new_proc.cmd.size() > 1000) {
-							new_proc.cmd.resize(1000);
+						if (new_proc.cmd.size() > static_cast<size_t>(Shared::arg_max)) {
+							new_proc.cmd.resize(Shared::arg_max);
 							break;
 						}
 					}
