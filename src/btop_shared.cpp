@@ -39,7 +39,14 @@ namespace Cpu {
 				name.clear();
 		} else if (v_contains(name_vec, "Ryzen"s)) {
 			auto ryz_pos = v_index(name_vec, "Ryzen"s);
-			name = "Ryzen" + (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "") + (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
+			name = "Ryzen";
+			int tokens = 0;
+			for (auto i = ryz_pos + 1; i < name_vec.size() && tokens < 2; i++) {
+				string p = name_vec.at(i);
+				if (p != "AI" && p != "PRO")
+					tokens++;
+				name += " " + p;
+			}
 		} else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
 			auto cpu_pos = v_index(name_vec, "CPU"s);
 			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
