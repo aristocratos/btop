@@ -233,6 +233,8 @@ namespace Cpu {
 
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, float, long, string>;
+
+	string trim_name(string);
 }
 
 namespace Mem {
