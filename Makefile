@@ -1,3 +1,5 @@
+#!/usr/bin/make -f
+#
 #* Btop++ makefile v1.6
 
 BANNER  = \n \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m████████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗ \033[38;5;196m██████\033[38;5;240m╗\n \033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗╚══\033[38;5;160m██\033[38;5;239m╔══╝\033[38;5;160m██\033[38;5;239m╔═══\033[38;5;160m██\033[38;5;239m╗\033[38;5;160m██\033[38;5;239m╔══\033[38;5;160m██\033[38;5;239m╗   \033[38;5;160m██\033[38;5;239m╗    \033[38;5;160m██\033[38;5;239m╗\n \033[38;5;124m██████\033[38;5;238m╔╝   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║   \033[38;5;124m██\033[38;5;238m║\033[38;5;124m██████\033[38;5;238m╔╝ \033[38;5;124m██████\033[38;5;238m╗\033[38;5;124m██████\033[38;5;238m╗\n \033[38;5;88m██\033[38;5;237m╔══\033[38;5;88m██\033[38;5;237m╗   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║   \033[38;5;88m██\033[38;5;237m║\033[38;5;88m██\033[38;5;237m╔═══╝  ╚═\033[38;5;88m██\033[38;5;237m╔═╝╚═\033[38;5;88m██\033[38;5;237m╔═╝\n \033[38;5;52m██████\033[38;5;236m╔╝   \033[38;5;52m██\033[38;5;236m║   ╚\033[38;5;52m██████\033[38;5;236m╔╝\033[38;5;52m██\033[38;5;236m║        ╚═╝    ╚═╝\n \033[38;5;235m╚═════╝    ╚═╝    ╚═════╝ ╚═╝      \033[1;3;38;5;240mMakefile v1.6\033[0m
@@ -328,10 +330,11 @@ install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -p $(TARGETDIR)/btop $(DESTDIR)$(PREFIX)/bin/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\n"
-	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
-	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
+	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/doc/btop\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/btop
+	@cp -p README.md $(DESTDIR)$(PREFIX)/share/doc/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
