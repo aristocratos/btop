@@ -95,7 +95,7 @@ namespace Term {
 		struct winsize wsize {};
 		if (uses_dev_tty || ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize) < 0 || (wsize.ws_col == 0 && wsize.ws_row == 0)) {
 			Logger::error(R"(Couldn't determine terminal size of "STDOUT_FILENO"!)");
-			auto dev_tty = open("/dev/tty", O_RDONLY);
+			auto dev_tty = open("/dev/tty", O_RDONLY | O_CLOEXEC);
 			if (dev_tty != -1) {
 				ioctl(dev_tty, TIOCGWINSZ, &wsize);
 				close(dev_tty);
@@ -523,7 +523,7 @@ namespace Tools {
 		else this->atom.store(true);
 	}
 
-	atomic_lock::~atomic_lock() {
+	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
 	}
 
@@ -556,6 +556,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
+		host[HOST_NAME_MAX - 1] = '\0';
 		return string{host};
 	}
 
@@ -653,11 +654,15 @@ namespace Logger {
 				this->status = seteuid(Global::real_uid);
 			}
 		}
-		~lose_priv() {
+		~lose_priv() noexcept {
 			if (status == 0) {
 				status = seteuid(Global::set_uid);
 			}
 		}
+		lose_priv(const lose_priv& other) = delete;
+		lose_priv& operator=(const lose_priv& other) = delete;
+		lose_priv(lose_priv&& other) = delete;
+		lose_priv& operator=(lose_priv&& other) = delete;
 	};
 
 	void set(const string& level) {
