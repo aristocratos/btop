@@ -1676,7 +1676,7 @@ namespace Proc {
 			}
 
 			//? per-core, reverse, tree and sorting
-			const auto& sorting = Config::getS("proc_sorting");
+			const auto& sorting = ljust(Config::getS("proc_sorting"),10);
 			const int sort_len = sorting.size();
 			const int sort_pos = x + width - sort_len - 8;
 
