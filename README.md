@@ -267,11 +267,11 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 * See comments by @sgleizes [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-684036827) and @XenHat [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-691585587) in issue #100 for possible solutions.
 
-* If text are misaligned and you are using Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
+* If text is misaligned and you use Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
 
-* Characters clipping in to each other or text/border misalignments is not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
+* Characters clipping into each other or text/border misalignments are not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
 
-* Look to the creators of the terminal emulator you use to fix these issues if the previous mentioned fixes don't work for you.
+* Look to the creators of the terminal emulator you use to fix these issues if the previously mentioned fixes don't work for you.
 
 ## Screenshots
 
