@@ -1236,6 +1236,11 @@ namespace Proc {
 						cpu_t = pti.pti_total_user + pti.pti_total_system;
 
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
+					} else {
+						// Reset memory value if process info cannot be accessed (bad permissions or zombie processes)
+						new_proc.threads = 0;
+						new_proc.mem = 0;
+						cpu_t = new_proc.cpu_t;
 					}
 
 					//? Process cpu usage since last update
