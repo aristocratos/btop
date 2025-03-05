@@ -1314,10 +1314,12 @@ namespace Menu {
 		else if (pages > 1 and key == "page_down") {
 			if (++page >= pages) page = 0;
 			selected = 0;
+			last_sel = -1;
 		}
 		else if (pages > 1 and key == "page_up") {
 			if (--page < 0) page = pages - 1;
 			selected = 0;
+			last_sel = -1;
 		}
 		else if (key == "tab") {
 			if (++selected_cat >= (int)categories.size()) selected_cat = 0;
