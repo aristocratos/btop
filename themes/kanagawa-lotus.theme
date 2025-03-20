@@ -1,0 +1,86 @@
+# Bashtop Kanagawa-lotus (https://github.com/rebelot/kanagawa.nvim) theme
+# By: philikarus
+
+# Main bg
+theme[main_bg]="#F2ECBC"
+
+# Main text color
+theme[main_fg]="#545464"
+
+# Title color for boxes
+theme[title]="#545464"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#C84053"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#c9cbd1"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#43436c"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#8A8980"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#597B75"
+
+# Cpu box outline color
+theme[cpu_box]="#8A8980"
+
+# Memory/disks box outline color
+theme[mem_box]="#8A8980"
+
+# Net up/down box outline color
+theme[net_box]="#8A8980"
+
+# Processes box outline color
+theme[proc_box]="#8A8980"
+
+# Box divider line and small boxes line color
+theme[div_line]="#8A8980"
+
+# Temperature graph colors
+theme[temp_start]="#6E915F"
+theme[temp_mid]="#CC6D00"
+theme[temp_end]="#D7474B"
+
+# CPU graph colors
+theme[cpu_start]="#6E915F"
+theme[cpu_mid]="#CC6D00"
+theme[cpu_end]="#D7474B"
+
+# Mem/Disk free meter
+theme[free_start]="#D7474B"
+theme[free_mid]="#C84053"
+theme[free_end]="#FF5D62"
+
+# Mem/Disk cached meter
+theme[cached_start]="#77713F"
+theme[cached_mid]="#CC6D00"
+theme[cached_end]="#FF9E3B"
+
+# Mem/Disk available meter
+theme[available_start]="#766b90"
+theme[available_mid]="#624c83"
+theme[available_end]="#9fb5c9"
+
+# Mem/Disk used meter
+theme[used_start]="#B5CBD2"
+theme[used_mid]="#4d699b"
+theme[used_end]="#4e8ca2"
+
+# Download graph colors
+theme[download_start]="#4d699b"
+theme[download_mid]="#624c83"
+theme[download_end]="#766b90"
+
+# Upload graph colors
+theme[upload_start]="#CC6D00"
+theme[upload_mid]="#E98A00"
+theme[upload_end]="#D7474B"
+
+# Process box color gradient for threads, mem and cpu usage
+theme[process_start]="#6E915F"
+theme[process_mid]="#CC6D00"
+theme[process_end]="#C84053"
