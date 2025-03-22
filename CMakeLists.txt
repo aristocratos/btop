@@ -143,10 +143,29 @@ if(HAS_FCF_PROTECTION)
   target_compile_options(btop PRIVATE -fcf-protection)
 endif()
 
+check_cxx_source_compiles(
+  "
+  #include <algorithm>
+
+  #if !defined(__clang__) || !defined(_LIBCPP_VERSION)
+  # error \"This is not clang with libcxx by llvm\"
+  #endif
+
+  int main() {
+    return 0;
+  }
+  "
+  IS_CLANG_LIBCPP
+  FAIL_REGEX "This is not clang with libcxx by llvm"
+)
+
 target_compile_definitions(btop PRIVATE
   FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
-  $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
+  # LLVM's clang in combination with libc++
+  $<$<AND:$<CONFIG:Debug>,$<BOOL:${IS_CLANG_LIBCPP}>>:_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG>
+  # LLVM's clang or gcc in combination with libstdc++ (GNU)
+  $<$<AND:$<CONFIG:Debug>,$<NOT:$<BOOL:${IS_CLANG_LIBCPP}>>>:_GLIBCXX_ASSERTIONS>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
