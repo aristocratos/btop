@@ -581,12 +581,12 @@ namespace Config {
 	}
 
 	string getAsString(const std::string_view name) {
-		if (bools.contains(name))
-			return (bools.at(name) ? "True" : "False");
-		else if (ints.contains(name))
-			return to_string(ints.at(name));
-		else if (strings.contains(name))
-			return strings.at(name);
+		if (auto it = bools.find(name); it != bools.end())
+			return it->second ? "True" : "False";
+		if (auto it = ints.find(name); it != ints.end())
+			return to_string(it->second);
+		if (auto it = strings.find(name); it != strings.end())
+			return it->second;
 		return "";
 	}
 
@@ -689,7 +689,8 @@ namespace Config {
 		std::ifstream cread(conf_file);
 		if (cread.good()) {
 			vector<string> valid_names;
-			for (auto &n : descriptions)
+			valid_names.reserve(descriptions.size());
+			for (const auto &n : descriptions)
 				valid_names.push_back(n[0]);
 			if (string v_string; cread.peek() != '#' or (getline(cread, v_string, '\n') and not s_contains(v_string, Global::Version)))
 				write_new = true;
@@ -752,7 +753,7 @@ namespace Config {
 		std::ofstream cwrite(conf_file, std::ios::trunc);
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
-			for (auto [name, description] : descriptions) {
+			for (const auto& [name, description] : descriptions) {
 				cwrite << "\n" << (description.empty() ? "" : description + "\n")
 						<< name << " = ";
 				if (strings.contains(name))
