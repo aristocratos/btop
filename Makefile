@@ -75,7 +75,7 @@ $(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link gl
 		endif
 	endif
 
-	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux))
+	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux midnightbsd))
 		override ADDFLAGS += -DSTATIC_BUILD -static
 	else
 		ifeq ($(CXX_IS_CLANG),false)
@@ -99,7 +99,7 @@ ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
-else ifeq ($(PLATFORM_LC),freebsd)
+else ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd midnightbsd))
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := wheel
