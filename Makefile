@@ -104,7 +104,7 @@ $(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link gl
 		endif
 	endif
 
-	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux))
+	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux midnightbsd))
 		override ADDFLAGS += -DSTATIC_BUILD -static
 	else
 		ifeq ($(CXX_IS_CLANG),false)
@@ -146,6 +146,19 @@ else ifeq ($(PLATFORM_LC),macos)
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
 	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),midnightbsd)
+	PLATFORM_DIR := freebsd
+	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
+	SU_GROUP := wheel
+	override ADDFLAGS += -lm -lkvm -ldevstat
+	ifeq ($(STATIC),true)
+		override ADDFLAGS += -lelf -Wl,--eh-frame-hdr
+	endif
+
+ 	ifeq ($(CXX_IS_CLANG),false)
+		override ADDFLAGS += -lstdc++ -Wl,rpath=/usr/local/lib/gcc$(CXX_VERSION_MAJOR)
+	endif
+	export MAKE = gmake
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
