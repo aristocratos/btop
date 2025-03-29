@@ -62,7 +62,7 @@ add_executable(btop
 
 if(APPLE)
   target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
@@ -194,7 +194,7 @@ if(APPLE)
   target_link_libraries(btop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
   if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
