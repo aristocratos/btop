@@ -1229,7 +1229,7 @@ namespace Proc {
 					new_proc.state = kproc.kp_proc.p_stat;
 
 					//? Get threads, mem and cpu usage
-					struct proc_taskinfo pti;
+					struct proc_taskinfo pti{};
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
