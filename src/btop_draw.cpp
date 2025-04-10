@@ -1410,8 +1410,8 @@ namespace Net {
 
 			//? Interface selector and buttons
 
-			out += Mv::to(y, x+width - i_size - 9) + title_left + Fx::b + Theme::c("hi_fg") + "<b " + Theme::c("title")
-				+ uresize(selected_iface, MAX_IFNAMSIZ) + Theme::c("hi_fg") + " n>" + title_right
+			out += Mv::to(y, x+width - i_size - 9) + title_left + Fx::b + Theme::c("hi_fg") + Symbols::left + "b " + Theme::c("title")
+				+ uresize(selected_iface, MAX_IFNAMSIZ) + Theme::c("hi_fg") + " n" + Symbols::right + title_right
 				+ Mv::to(y, x+width - i_size - 15) + title_left + Theme::c("hi_fg") + (safeVal(net.stat, "download"s).offset + safeVal(net.stat, "upload"s).offset > 0 ? Fx::b : "") + 'z'
 				+ Theme::c("title") + "ero" + title_right;
 			Input::mouse_mappings["b"] = {y, x+width - i_size - 8, 1, 3};
