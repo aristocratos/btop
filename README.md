@@ -224,7 +224,7 @@ Any support is greatly appreciated!
 
 For best experience, a terminal with support for:
 
-* 24-bit truecolor ([See list of terminals with truecolor support](https://github.com//termstandard/colors))
+* 24-bit truecolor ([See list of terminals with truecolor support](https://github.com/termstandard/colors))
 * 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" arguments.
 * 16 color TTY mode will be activated if a real tty device is detected. Can be forced with "-t/--tty_on" arguments.
 * Wide characters (Are sometimes problematic in web-based terminals)
@@ -263,15 +263,15 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 * If you are having problems with the characters in the graphs not looking like they do in the screenshots, it's likely a problem with your systems configured fallback font not having support for braille characters.
 
-* See [Terminess Powerline](https://github.com/ryanoasis/nerd-fonts/tree/master/patched-fonts/Terminus/terminus-ttf-4.40.1) for an example of a font that includes the braille symbols.
+* See [Terminess Powerline](https://github.com/ryanoasis/nerd-fonts/blob/master/patched-fonts/Terminus/TerminessNerdFontMono-Regular.ttf) for an example of a font that includes the braille symbols.
 
 * See comments by @sgleizes [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-684036827) and @XenHat [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-691585587) in issue #100 for possible solutions.
 
-* If text are misaligned and you are using Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
+* If text is misaligned and you use Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
 
-* Characters clipping in to each other or text/border misalignments is not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
+* Characters clipping into each other or text/border misalignments are not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
 
-* Look to the creators of the terminal emulator you use to fix these issues if the previous mentioned fixes don't work for you.
+* Look to the creators of the terminal emulator you use to fix these issues if the previously mentioned fixes don't work for you.
 
 ## Screenshots
 
