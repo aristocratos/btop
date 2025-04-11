@@ -287,6 +287,8 @@ namespace Input {
 						Config::set("proc_filtering", false);
 						old_filter.clear();
 						if(key == "down"){
+							Config::unlock();
+							Config::lock();
 							process("down");
 							return;
 						}
