@@ -21,7 +21,7 @@ on:
 
 jobs:
   cmake_build_on_freebsd:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
