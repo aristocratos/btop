@@ -3,7 +3,7 @@
 # CMake configuration for btop
 #
 
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 # Disable in-source builds since they would override the Makefile
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
