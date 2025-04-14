@@ -21,7 +21,7 @@ on:
 
 jobs:
   cmake_build_on_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: alpine:edge
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
