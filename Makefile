@@ -51,11 +51,6 @@ ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
 endif
 
-FORTIFY_SOURCE ?= true
-ifeq ($(FORTIFY_SOURCE),true)
-	override ADDFLAGS += -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
-endif
-
 #? Compiler and Linker
 ifeq ($(shell $(CXX) --version | grep clang >/dev/null 2>&1; echo $$?),0)
 	override CXX_IS_CLANG := true
@@ -176,7 +171,7 @@ else
 endif
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2> /dev/null || true)
-CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC) FORTIFY_SOURCE=$(FORTIFY_SOURCE)
+CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC)
 ifeq ($(PLATFORM_LC),linux)
 	CONFIGURE_COMMAND +=  GPU_SUPPORT=$(GPU_SUPPORT) RSMI_STATIC=$(RSMI_STATIC)
 endif
