@@ -18,13 +18,15 @@ tab-size = 4
 
 #include <cmath>
 #include <codecvt>
-#include <iostream>
-#include <fstream>
 #include <ctime>
-#include <sstream>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
-#include <utility>
+#include <iostream>
+#include <optional>
 #include <ranges>
+#include <sstream>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -642,7 +644,7 @@ namespace Logger {
 	const string tdf = "%Y/%m/%d (%T) | ";
 
 	size_t loglevel;
-	fs::path logfile;
+	std::optional<std::filesystem::path> logfile;
 
 	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
 	class lose_priv {
@@ -665,34 +667,37 @@ namespace Logger {
 	}
 
 	void log_write(const Level level, const string& msg) {
-		if (loglevel < level or logfile.empty()) return;
+		if (loglevel < level or !logfile.has_value()) {
+			return;
+		}
+		auto& log_file = logfile.value();
 		atomic_lock lck(busy, true);
 		lose_priv neutered{};
 		std::error_code ec;
 		try {
 			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
-			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
-				auto old_log = logfile;
+			if (fs::exists(log_file) and fs::file_size(log_file, ec) > 1024 << 10 and not ec) {
+				auto old_log = log_file;
 				old_log += ".1";
 
 				if (fs::exists(old_log))
 					fs::remove(old_log, ec);
 
 				if (not ec)
-					fs::rename(logfile, old_log, ec);
+					fs::rename(log_file, old_log, ec);
 			}
 			if (not ec) {
-				std::ofstream lwrite(logfile, std::ios::app);
+				std::ofstream lwrite(log_file, std::ios::app);
 				if (first) {
 					first = false;
 					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
 				}
 				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
 			}
-			else logfile.clear();
+			else log_file.clear();
 		}
 		catch (const std::exception& e) {
-			logfile.clear();
+			log_file.clear();
 			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
 		}
 	}

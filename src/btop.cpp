@@ -926,7 +926,7 @@ int main(int argc, char **argv) {
 		if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
 			Config::conf_file = Config::conf_dir / "btop.conf";
-			Logger::logfile = Config::conf_dir / "btop.log";
+			Logger::logfile = Config::get_log_file();
 			Theme::user_theme_dir = Config::conf_dir / "themes";
 
 			// If necessary create the user theme directory

@@ -126,4 +126,6 @@ namespace Config {
 
 	//* Write the config file to disk
 	void write();
+
+	auto get_log_file() -> std::optional<std::filesystem::path>;
 }
