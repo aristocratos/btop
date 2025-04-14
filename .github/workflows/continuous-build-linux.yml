@@ -86,7 +86,7 @@ jobs:
     # - sh4-linux-musl
     # - sh4eb-linux-musl
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: muslcc/x86_64:${{ matrix.toolchain }}
 
     steps:
