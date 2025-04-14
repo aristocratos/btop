@@ -18,7 +18,9 @@ tab-size = 4
 
 #include <array>
 #include <atomic>
+#include <filesystem>
 #include <fstream>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -764,5 +766,39 @@ namespace Config {
 				cwrite << "\n";
 			}
 		}
+	}
+
+	static auto get_xdg_state_dir() -> std::optional<std::filesystem::path> {
+		std::optional<std::filesystem::path> xdg_state_home;
+
+		{
+			const auto xdg_state_home_ptr = std::getenv("XDG_STATE_HOME");
+			if (xdg_state_home_ptr != nullptr) {
+				xdg_state_home = std::make_optional(fs::path(xdg_state_home_ptr));
+			} else {
+				const auto home_ptr = std::getenv("HOME");
+				if (home_ptr != nullptr) {
+					xdg_state_home = std::make_optional(std::filesystem::path(home_ptr) / ".local" / "state");
+				}
+			}
+		}
+
+		if (xdg_state_home.has_value()) {
+			std::error_code err;
+			std::filesystem::create_directories(xdg_state_home.value(), err);
+			if (err) {
+				return std::nullopt;
+			}
+			return std::make_optional(xdg_state_home.value());
+		}
+		return std::nullopt;
+	}
+
+	auto get_log_file() -> std::optional<std::filesystem::path> {
+		auto xdg_state_home = get_xdg_state_dir();
+		if (xdg_state_home.has_value()) {
+			return std::make_optional(std::filesystem::path(xdg_state_home.value()) / "btop.log");
+		}
+		return std::nullopt;
 	}
 }

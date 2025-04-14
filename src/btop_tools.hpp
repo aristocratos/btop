@@ -161,7 +161,7 @@ namespace Logger {
 		"INFO",
 		"DEBUG",
 	};
-	extern std::filesystem::path logfile;
+	extern std::optional<std::filesystem::path> logfile;
 
 	enum Level : size_t {
 		DISABLED = 0,
