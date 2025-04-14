@@ -20,18 +20,24 @@ on:
       - 'src/freebsd/*pp'
 
 jobs:
-  cmake_build_on_freebsd:
+  build:
+    name: freebsd-${{ matrix.version}}-${{ matrix.arch}}
     runs-on: ubuntu-24.04
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.arch }}-${{ matrix.version }}
       cancel-in-progress: true
+    strategy:
+      matrix:
+        arch: ['aarch64', 'x86_64']
+        version: ['14.2', '15.0']
     steps:
       - uses: actions/checkout@v4
 
       - name: Compile
         uses: vmactions/freebsd-vm@v1
         with:
-          release: '14.2'
+          arch: ${{ matrix.arch }}
+          release: ${{ matrix.version }}
           usesh: true
           prepare: pkg install -y cmake ninja lowdown
           run: |
