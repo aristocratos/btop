@@ -20,20 +20,48 @@ on:
       - 'src/linux/*pp'
 
 jobs:
-  cmake_build_on_linux:
+  build:
+    name: ${{ matrix.compiler }}-${{ matrix.version }}
     runs-on: ubuntu-24.04
-    container: alpine:edge
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.compiler }}-${{ matrix.version }}
       cancel-in-progress: true
+    strategy:
+      matrix:
+        include:
+          - compiler: clang
+            version: 18
+          - compiler: clang
+            version: 19
+          - compiler: clang
+            version: 20
+          - compiler: gcc
+            version: 12
+          - compiler: gcc
+            version: 13
+          - compiler: gcc
+            version: 14
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
-        run: apk add --no-cache --update clang cmake lld ninja lowdown linux-headers
+      - name: Install clang ${{ matrix.version }}
+        if: ${{ matrix.compiler == 'clang' }}
+        run: |
+          wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
+          type -P clang++-${{ matrix.version }}
 
       - name: Configure
-        run: CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build -G Ninja -DBTOP_STATIC=ON
+        run: |
+          if [[ "${{ matrix.compiler }}" == "clang" ]]; then
+            export CC=clang-${{ matrix.version }}
+            export CXX=clang++-${{ matrix.version }}
+            export CXXFLAGS="-rtlib=compiler-rt -stdlib=libc++ -unwindlib=libunwind"
+            export LDFLAGS=-fuse-ld=lld
+          else
+            export CC=gcc-${{ matrix.version }}
+            export CXX=g++-${{ matrix.version }}
+          fi
+          cmake -B build -G Ninja
 
       - name: Compile
         run: cmake --build build --verbose
