@@ -34,7 +34,7 @@ tab-size = 4
 #include <ifaddrs.h>
 // clang-format on
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 # include <kvm.h>
 #endif
 
@@ -93,7 +93,7 @@ namespace Shared {
 
 	extern long coreCount, page_size, clk_tck;
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
 		void operator()(kvm_t* handle) {
 			kvm_close(handle);
@@ -111,14 +111,15 @@ namespace Gpu {
 	extern vector<int> x_vec, y_vec;
 	extern vector<bool> redraw;
 	extern int shown;
-	extern vector<char> shown_panels;
+	extern int count;
+	extern vector<int> shown_panels;
 	extern vector<string> gpu_names;
 	extern vector<int> gpu_b_height_offsets;
 	extern long long gpu_pwr_total_max;
 
 	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
-  const array mem_names { "used"s, "free"s };
+	const array mem_names { "used"s, "free"s };
 
 	//* Container for process information // TODO
 	/*struct proc_info {
@@ -232,6 +233,8 @@ namespace Cpu {
 
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, float, long, string>;
+
+	string trim_name(string);
 }
 
 namespace Mem {

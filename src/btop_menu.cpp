@@ -150,7 +150,7 @@ namespace Menu {
 		},
 		{
 			"╦ ╦╔═╗╦  ╔═╗",
-			"╠═╣║╣ ║  ╠═╝",
+			"╠═╣╠╣ ║  ╠═╝",
 			"╩ ╩╚═╝╩═╝╩  "
 		},
 		{
@@ -513,6 +513,12 @@ namespace Menu {
 		{
 			{"nvml_measure_pcie_speeds",
 				"Measure PCIe throughput on NVIDIA cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"rsmi_measure_pcie_speeds",
+				"Measure PCIe throughput on AMD cards.",
 				"",
 				"May impact performance on certain cards.",
 				"",
@@ -1308,10 +1314,12 @@ namespace Menu {
 		else if (pages > 1 and key == "page_down") {
 			if (++page >= pages) page = 0;
 			selected = 0;
+			last_sel = -1;
 		}
 		else if (pages > 1 and key == "page_up") {
 			if (--page < 0) page = pages - 1;
 			selected = 0;
+			last_sel = -1;
 		}
 		else if (key == "tab") {
 			if (++selected_cat >= (int)categories.size()) selected_cat = 0;
@@ -1321,8 +1329,12 @@ namespace Menu {
 			if (--selected_cat < 0) selected_cat = (int)categories.size() - 1;
 			page = selected = 0;
 		}
+#ifdef GPU_SUPPORT
 		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
-			selected_cat = key.back() - '0' - 1;
+#else
+		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+#endif
+		selected_cat = key.back() - '0' - 1;
 			page = selected = 0;
 		}
 		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {

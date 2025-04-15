@@ -12,6 +12,7 @@ on:
       - '!src/linux/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build-openbsd.yml'
@@ -23,13 +24,14 @@ on:
       - '!src/linux/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/continuous-build-openbsd.yml'
 
 jobs:
   build-openbsd:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +41,7 @@ jobs:
       - name: Compile
         uses: vmactions/openbsd-vm@v1
         with:
-          release: '7.4'
+          release: '7.6'
           usesh: true
           prepare: |
             pkg_add gmake gcc%11 g++%11 coreutils git lowdown
@@ -50,8 +52,8 @@ jobs:
             mv bin/btop bin/btop-GCC11-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: btop-x86_64-openbsd-7.4
+          name: btop-x86_64-openbsd-7.6
           path: 'bin/*'
           if-no-files-found: error

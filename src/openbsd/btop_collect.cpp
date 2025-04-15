@@ -211,42 +211,7 @@ namespace Cpu {
 			Logger::error("Failed to get CPU name");
 			return name;
 		}
-		name = string(buffer);
-
-		auto name_vec = ssplit(name);
-
-		if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
-			auto cpu_pos = v_index(name_vec, "CPU"s);
-			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
-				name = name_vec.at(cpu_pos + 1);
-			else
-				name.clear();
-		} else if (v_contains(name_vec, "Ryzen"s)) {
-			auto ryz_pos = v_index(name_vec, "Ryzen"s);
-			name = "Ryzen" + (ryz_pos < name_vec.size() - 1 ? ' ' + name_vec.at(ryz_pos + 1) : "") + (ryz_pos < name_vec.size() - 2 ? ' ' + name_vec.at(ryz_pos + 2) : "");
-		} else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
-			auto cpu_pos = v_index(name_vec, "CPU"s);
-			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
-				name = name_vec.at(cpu_pos + 1);
-			else
-				name.clear();
-		} else
-			name.clear();
-
-		if (name.empty() and not name_vec.empty()) {
-			for (const auto &n : name_vec) {
-				if (n == "@") break;
-				name += n + ' ';
-			}
-			name.pop_back();
-			for (const auto& replace : {"Processor", "CPU", "(R)", "(TM)", "Intel", "AMD", "Core"}) {
-				name = s_replace(name, replace, "");
-				name = s_replace(name, "  ", " ");
-			}
-			name = trim(name);
-		}
-
-		return name;
+		return trim_name(string(buffer));
 	}
 
 	int64_t get_sensor(string device, sensor_type type, int num) {
@@ -723,8 +688,13 @@ namespace Mem {
 				disk.total = vfs.f_blocks * vfs.f_frsize;
 				disk.free = vfs.f_bfree * vfs.f_frsize;
 				disk.used = disk.total - disk.free;
-				disk.used_percent = round((double)disk.used * 100 / disk.total);
-				disk.free_percent = 100 - disk.used_percent;
+				if (disk.total != 0) {
+					disk.used_percent = round((double)disk.used * 100 / disk.total);
+					disk.free_percent = 100 - disk.used_percent;
+				} else {
+					disk.used_percent = 0;
+					disk.free_percent = 0;
+				}
 			}
 
 			//? Setup disks order in UI and add swap if enabled

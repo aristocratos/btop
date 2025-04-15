@@ -3,7 +3,7 @@
 # CMake configuration for btop
 #
 
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 # Disable in-source builds since they would override the Makefile
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
@@ -13,7 +13,7 @@ endif()
 project("btop"
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX
+  LANGUAGES CXX C
 )
 
 include(CheckCXXCompilerFlag)
@@ -40,7 +40,6 @@ option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
-option(BTOP_FORTIFY "Detect buffer overflows with _FORTIFY_SOURCE=3" ON)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -66,8 +65,18 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
+  target_sources(btop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
+  if(BTOP_GPU)
+    target_sources(btop PRIVATE
+      src/linux/intel_gpu_top/intel_gpu_top.c
+      src/linux/intel_gpu_top/igt_perf.c
+      src/linux/intel_gpu_top/intel_device_info.c
+      src/linux/intel_gpu_top/intel_name_lookup_shim.c
+    )
+  endif()
 else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
@@ -84,7 +93,7 @@ execute_process(
   OUTPUT_VARIABLE GIT_COMMIT
   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_FORTIFY=${BTOP_FORTIFY} -DBTOP_GPU=${BTOP_GPU}"
+    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_GPU=${BTOP_GPU}"
 )
 get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
 set(COMPILER "${CXX_COMPILER_BASENAME}")
@@ -129,8 +138,6 @@ target_compile_definitions(btop PRIVATE
   FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
-  # Only has an effect with optimizations enabled
-  $<$<AND:$<NOT:$<CONFIG:Debug>>,$<BOOL:${BTOP_FORTIFY}>>:_FORTIFY_SOURCE=3>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
@@ -167,6 +174,9 @@ if(LINUX AND BTOP_GPU)
     set(CMAKE_MODULE_PATH _CMAKE_MODULE_PATH)
 
     target_link_libraries(btop ROCm)
+  endif()
+  if(NOT BTOP_STATIC)
+    target_link_libraries(btop ${CMAKE_DL_LIBS})
   endif()
 endif()
 
@@ -214,6 +224,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   endif()
   find_package(kvm REQUIRED)
   target_link_libraries(btop kvm::kvm)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(btop PRIVATE -static-libstdc++ -std=c++20 -DNDEBUG)
+  endif()
+  find_package(kvm REQUIRED)
+  find_package(proplib REQUIRED)
+  target_link_libraries(btop kvm::kvm proplib::proplib)
 endif()
 
 
@@ -222,12 +239,15 @@ find_program(LOWDOWN_EXECUTABLE lowdown)
 
 if(LOWDOWN_EXECUTABLE)
   # Custom target to compile Markdown to man page using lowdown
-  add_custom_target(btop.1 ALL
-      COMMAND lowdown -s -Tman -o btop.1 manpage.md
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  add_custom_command(
+    OUTPUT btop.1
+    COMMAND lowdown -s -T man -o btop.1 ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
+    VERBATIM
   )
+  add_custom_target(generate_manpage ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/btop.1)
   # Install the man page
-  install(FILES btop.1 DESTINATION "share/man/man1")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/btop.1" DESTINATION "share/man/man1")
 else()
   message(WARNING "Command 'lowdown' not found: skipping generating man page btop.1")
 endif()

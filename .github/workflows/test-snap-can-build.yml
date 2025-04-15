@@ -4,11 +4,13 @@ on:
   push:
    branches: [ main ]
    tags-ignore:
-      - '*.*'     
+      - '*.*'
    paths:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
+      - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/test-snap-can-build.yml'
@@ -18,19 +20,21 @@ on:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
+      - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/test-snap-can-build.yml'
- 
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node-version: [20.x]
-        
+
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: snapcore/action-build@v1
         id: build

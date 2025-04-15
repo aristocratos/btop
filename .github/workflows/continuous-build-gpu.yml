@@ -11,6 +11,7 @@ on:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
       - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
@@ -22,6 +23,7 @@ on:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
+      - '!src/netbsd/**'
       - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
@@ -29,7 +31,7 @@ on:
 
 jobs:
   gpu_build_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: alpine:edge
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -38,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: apk add --no-cache --update gcc g++ make
+        run: apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Compile
         run: make CXX=g++ GPU_SUPPORT=true
