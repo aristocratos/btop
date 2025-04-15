@@ -670,6 +670,15 @@ namespace Menu {
 				"kernel as used memory.",
 				"",
 				"True or False."},
+			{
+				"only_first_btrfs_subvol",
+				"(Linux) Show only first BTRFS subvolume.",
+				"",
+				"Set to true to only show the first BTRFS",
+				"subvolume mounted per disk.",
+				"",
+				"True or False.",
+				}
 		},
 		{
 			{"graph_symbol_net",
