@@ -30,6 +30,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -54,6 +55,7 @@ using std::array;
 using std::atomic;
 using std::string;
 using std::to_string;
+using std::string_view;
 using std::tuple;
 using std::vector;
 using namespace fmt::literals;
@@ -292,13 +294,13 @@ namespace Tools {
 	}
 
 	//* Left-trim <t_str> from <str> and return new string
-	string ltrim(const string& str, const string& t_str = " ");
+	string_view ltrim(string_view str, string_view t_str = " ");
 
 	//* Right-trim <t_str> from <str> and return new string
-	string rtrim(const string& str, const string& t_str = " ");
+	string_view rtrim(string_view str, string_view t_str = " ");
 
 	//* Left/right-trim <t_str> from <str> and return new string
-	inline string trim(const string& str, const string& t_str = " ") {
+	inline string_view trim(string_view str, string_view t_str = " ") {
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
@@ -342,8 +344,8 @@ namespace Tools {
 	template <typename K, typename T>
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
 			return fallback;
@@ -351,8 +353,8 @@ namespace Tools {
 	};
 #else
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
 			return fallback;
