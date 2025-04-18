@@ -188,8 +188,8 @@ namespace Tools {
 
 	class MyNumPunct : public std::numpunct<char> {
 	protected:
-		virtual char do_thousands_sep() const { return '\''; }
-		virtual std::string do_grouping() const { return "\03"; }
+		virtual char do_thousands_sep() const override { return '\''; }
+		virtual std::string do_grouping() const override { return "\03"; }
 	};
 
 	size_t wide_ulen(const string& str);
@@ -364,7 +364,7 @@ namespace Tools {
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
 			return fallback;
@@ -373,7 +373,7 @@ namespace Tools {
 #else
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
 			return fallback;
@@ -410,8 +410,12 @@ namespace Tools {
 		atomic<bool>& atom;
 		bool not_true{};
 	public:
-		atomic_lock(atomic<bool>& atom, bool wait = false);
-		~atomic_lock();
+		explicit atomic_lock(atomic<bool>& atom, bool wait = false);
+		~atomic_lock() noexcept;
+		atomic_lock(const atomic_lock& other) = delete;
+		atomic_lock& operator=(const atomic_lock& other) = delete;
+		atomic_lock(atomic_lock&& other) = delete;
+		atomic_lock& operator=(atomic_lock&& other) = delete;
 	};
 
 	//* Read a complete file and return as a string
@@ -433,13 +437,17 @@ namespace Tools {
 		bool running{};
 		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
 		vector<string> report_buffer{};
-	public:
 		string name{};
 		bool delayed_report{};
 		Logger::Level log_level = Logger::DEBUG;
+	public:
 		DebugTimer() = default;
-		DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		explicit DebugTimer(const string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
+		DebugTimer(const DebugTimer& other) = delete;
+		DebugTimer& operator=(const DebugTimer& other) = delete;
+		DebugTimer(DebugTimer&& other) = delete;
+		DebugTimer& operator=(DebugTimer&& other) = delete;
 
 		void start();
 		void stop(bool report = true);
@@ -453,6 +461,3 @@ namespace Tools {
 	};
 
 }
-
-
-
