@@ -36,15 +36,12 @@ tab-size = 4
 #include <regex>
 #include <chrono>
 #include <utility>
+#include <semaphore>
+
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
 	#include <mach-o/dyld.h>
 	#include <limits.h>
-#endif
-#if !defined(__clang__) && __GNUC__ < 11
-	#include <semaphore.h>
-#else
-	#include <semaphore>
 #endif
 
 #include "btop_shared.hpp"
@@ -456,17 +453,10 @@ namespace Runner {
 	atomic<bool> coreNum_reset (false);
 
 	//* Setup semaphore for triggering thread to do work
-#if !defined(__clang__) && __GNUC__ < 11
-	sem_t do_work;
-	inline void thread_sem_init() { sem_init(&do_work, 0, 0); }
-	inline void thread_wait() { sem_wait(&do_work); }
-	inline void thread_trigger() { sem_post(&do_work); }
-#else
-	std::binary_semaphore do_work(0);
-	inline void thread_sem_init() { ; }
+	// TODO: This can be made a local without too much effort.
+	std::binary_semaphore do_work { 0 };
 	inline void thread_wait() { do_work.acquire(); }
 	inline void thread_trigger() { do_work.release(); }
-#endif
 
 	//* RAII wrapper for pthread_mutex locking
 	class thread_lock {
@@ -1121,8 +1111,6 @@ int main(int argc, char **argv) {
 	sigaddset(&mask, SIGUSR1);
 	pthread_sigmask(SIG_BLOCK, &mask, &Input::signal_mask);
 
-	//? Start runner thread
-	Runner::thread_sem_init();
 	if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		clean_quit(1);

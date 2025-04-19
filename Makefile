@@ -58,32 +58,8 @@ endif
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
 
-CLANG_WORKS = false
-GCC_WORKS = false
-MIN_CLANG_VERSION = 16
-
 ifeq ($(DEBUG),true)
 	override ADDFLAGS += -DBTOP_DEBUG
-endif
-
-#? Supported is Clang 16.0.0 and later
-ifeq ($(CXX_IS_CLANG),true)
-	ifeq ($(shell $(CXX) --version | grep Apple >/dev/null 2>&1; echo $$?),0)
-		MIN_CLANG_VERSION := 15
-	endif
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt $(MIN_CLANG_VERSION); echo $$?),0)
-		CLANG_WORKS := true
-	endif
-else
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
-		GCC_WORKS := true
-	endif
-endif
-
-ifeq ($(CLANG_WORKS),false)
-	ifeq ($(GCC_WORKS),false)
-$(error $(shell printf "\033[1;91mERROR: \033[97mCompiler too old. (Requires Clang 16.0.0, GCC 10.1.0)\033[0m"))
-	endif
 endif
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
@@ -165,7 +141,7 @@ endif
 
 #? LTO command line
 ifeq ($(BUILD_TYPE),Release)
-	ifeq ($(CLANG_WORKS),true)
+	ifeq ($(CXX_IS_CLANG),true)
 		LTO := -flto=thin
 	else
 		LTO := -flto=$(THREADS)
