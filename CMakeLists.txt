@@ -36,12 +36,18 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
+
+# Enable LTO in release builds by default
+if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
+  option(BTOP_LTO "Enable LTO" ON)
+else()
+  option(BTOP_LTO "Enable LTO" OFF)
+endif()
 
 if(BTOP_STATIC AND NOT APPLE)
   # Set this before calling find_package
