@@ -403,6 +403,10 @@ namespace Tools {
 		const size_t mult = (bit) ? 8 : 1;
 		bool mega = Config::getB("base_10_sizes");
 
+	    if(bit && per_second) {
+			mega = Config::getB("base_10_bitrate");
+		}
+
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
 		static const array mebiUnits_bit {

@@ -195,6 +195,8 @@ namespace Config {
 
 		{"net_sync", 			"#* Sync the auto scaling for download and upload to whichever currently has the highest scale."},
 
+		{"base_10_bitrate",     "#* Uses Kbps = 1000 bps instead of Kibps = 1024 bps, Mbps = 1000Kbps instead of Mibps = 1024Kibps, and so on."},
+
 		{"net_iface", 			"#* Starts with the Network Interface specified here."},
 
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
@@ -296,6 +298,7 @@ namespace Config {
 		{"io_graph_combined", false},
 		{"net_auto", true},
 		{"net_sync", true},
+	    {"base_10_bitrate", true},
 		{"show_battery", true},
 		{"show_battery_watts", true},
 		{"vim_keys", false},
