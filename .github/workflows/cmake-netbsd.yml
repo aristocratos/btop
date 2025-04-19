@@ -44,8 +44,8 @@ jobs:
             PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
             export PATH PKG_PATH
             /usr/sbin/pkg_add pkgin
-            pkgin -y install cmake ninja-build gcc10 coreutils git
+            pkgin -y install cmake ninja-build gcc14 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc10/bin/g++" -B build -G Ninja -DBTOP_STATIC=OFF
+            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc14/bin/g++" -B build -G Ninja -DBTOP_STATIC=OFF
             cmake --build build --verbose

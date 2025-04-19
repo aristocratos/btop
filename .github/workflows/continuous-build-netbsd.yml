@@ -49,10 +49,10 @@ jobs:
             PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All/"
             export PATH PKG_PATH
             /usr/sbin/pkg_add pkgin
-            pkgin -y install gmake gcc10 coreutils git
+            pkgin -y install gmake gcc14 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=/usr/pkg/gcc10/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
+            gmake CXX=/usr/pkg/gcc14/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
