@@ -163,7 +163,7 @@ static void print_help_hint() {
 }
 
 //* A simple argument parser
-[[nodiscard]] auto argumentParser(const int argc, char **argv) -> std::optional<int> {
+[[nodiscard]] auto argument_parser(const int argc, char **argv) -> std::optional<int> {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
@@ -929,7 +929,7 @@ int main(int argc, char **argv) {
 
 	//? Call argument parser if launched with arguments
 	if (argc > 1) {
-		auto ret = argumentParser(argc, argv);
+		auto ret = argument_parser(argc, argv);
 		if (ret.has_value()) {
 			auto code = ret.value();
 			if (code != 0) {
