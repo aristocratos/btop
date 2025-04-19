@@ -163,20 +163,20 @@ static void print_help_hint() {
 }
 
 //* A simple argument parser
-void argumentParser(const int argc, char **argv) {
+[[nodiscard]] auto argumentParser(const int argc, char **argv) -> std::optional<int> {
 	for(int i = 1; i < argc; i++) {
 		const string argument = argv[i];
 		if (is_in(argument, "-h", "--help")) {
-		  print_help();
-			exit(0);
+			print_help();
+			return std::make_optional(0);
 		}
 		else if (is_in(argument, "-v")) {
 			print_version();
-			exit(0);
+			return std::make_optional(0);
 		}
 		else if (is_in(argument, "--version")) {
 			print_version_with_build_info();
-			exit(0);
+			return std::make_optional(0);
 		}
 		else if (is_in(argument, "-lc", "--low-color")) {
 			Global::arg_low_color = true;
@@ -192,35 +192,27 @@ void argumentParser(const int argc, char **argv) {
 		else if (is_in(argument, "-p", "--preset")) {
 			if (++i >= argc) {
 				fmt::println("{0}error:{1} Preset option needs an argument\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
 				Global::arg_preset = std::clamp(stoi(val), 0, 9);
 			}
 			else {
 				fmt::println("{0}error: {1}Preset option only accepts an integer value between 0-9\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 		}
 		else if (is_in(argument, "-u", "--update")) {
 			if (++i >= argc) {
 				fmt::println("{0}error:{1} Update option needs an argument\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 			const std::string value = argv[i];
 			if (isint(value)) {
 				Global::arg_update = std::clamp(std::stoi(value), 100, Config::ONE_DAY_MILLIS);
 			} else {
 				fmt::println("{0}error:{1} Invalid update rate\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 		}
 		else if (argument == "--utf-force")
@@ -230,26 +222,22 @@ void argumentParser(const int argc, char **argv) {
 		else if (argument == "-c" || argument == "--config") {
 			if (++i > argc) {
 				fmt::println(stderr, "{0}error:{1} Config option requires a file name\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 			auto file = std::filesystem::path(argv[i]);
 			if (std::filesystem::is_directory(file)) {
 				fmt::println(stderr, "{0}error:{1} Config file can't be a directory\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
+				return std::make_optional(1);
 			}
 			Global::config_file = std::make_optional(file);
 		}
 		else {
 			fmt::println("{0}error:{2} unexpected argument '{1}{3}{2}' found\n", "\033[1;31m", "\033[33m", "\033[0m", argument);
-			print_usage();
-			print_help_hint();
-			exit(1);
+			return std::make_optional(1);
 		}
 	}
+
+	return std::nullopt;
 }
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
@@ -940,7 +928,17 @@ int main(int argc, char **argv) {
 	}
 
 	//? Call argument parser if launched with arguments
-	if (argc > 1) argumentParser(argc, argv);
+	if (argc > 1) {
+		auto ret = argumentParser(argc, argv);
+		if (ret.has_value()) {
+			auto code = ret.value();
+			if (code != 0) {
+				print_usage();
+				print_help_hint();
+			}
+			return code;
+		}
+	}
 
 	{
 		const auto config_dir = Config::get_config_dir();
