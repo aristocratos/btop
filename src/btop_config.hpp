@@ -53,6 +53,7 @@ namespace Config {
 #ifdef GPU_SUPPORT
 	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
 #endif
+    const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
 	extern vector<string> available_batteries;
