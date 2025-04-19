@@ -402,16 +402,17 @@ namespace Tools {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
 
-	    const auto& base_10_sizes = Config::getS("base_10_sizes");
-	    bool mega = false;
+		bool mega = Config::getB("base_10_sizes");
 
-	    if(base_10_sizes == "True") {
-			mega = true;
-		} else if(base_10_sizes == "False") {
-		    mega = false;
-		} else {
-		    // "Auto" or Default: Shows only bitrates in base 10
-		    mega = (bit && per_second);
+		// Bitrates
+	    if(bit && per_second) {
+			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
+			if(base_10_bitrate == "True") {
+				mega = true;
+			} else if(base_10_bitrate == "False") {
+				mega = false;
+			}
+			// Default or "Auto": Uses base_10_sizes for bitrates
 		}
 
 		// taking advantage of type deduction for array creation (since C++17)
