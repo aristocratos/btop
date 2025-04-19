@@ -257,7 +257,7 @@ if(LOWDOWN_EXECUTABLE)
   # Install the man page
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/btop.1" DESTINATION "share/man/man1")
 else()
-  message(WARNING "Command 'lowdown' not found: skipping generating man page btop.1")
+  message(STATUS "Command 'lowdown' not found: skipping generating man page btop.1")
 endif()
 
 install(TARGETS btop RUNTIME)
