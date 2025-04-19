@@ -329,11 +329,13 @@ namespace Menu {
 			{"base_10_sizes",
 				"Use base 10 for bits and bytes sizes.",
 				"",
-				"Uses KB = 1000 instead of KiB = 1024,",
-				"MB = 1000KB instead of MiB = 1024KiB,",
-				"and so on.",
+				"True: 1K = 1000, 1M = 1000K, etc.",
+			    "False: 1Ki = 1024, 1Mi = 1024Ki, etc.",
+			    "Auto: Uses Ki, Mi, etc. unless the",
+			    "      measurement is a bitrate, in which",
+			    "      case base 10 is displayed (K, M, etc.)",
 				"",
-				"True or False."},
+				"True, False, or Auto."},
 			{"background_update",
 				"Update main ui when menus are showing.",
 				"",
@@ -702,14 +704,6 @@ namespace Menu {
 				"",
 				"Syncs the scaling for download and upload to",
 				"whichever currently has the highest scale.",
-				"",
-				"True or False."},
-			{"base_10_bitrate",
-				"Use base 10 for bitrate display.",
-				"",
-				"Kbps = 1000bps instead of Kibps = 1024bps,",
-				"Mbps = 1000Kbps instead of Mibps = 1024Kibps,",
-				"and so on.",
 				"",
 				"True or False."},
 			{"net_iface",
@@ -1198,6 +1192,7 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
+	        {"base_10_sizes", std::cref(Config::base_10_sizes_values)},
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
@@ -1375,9 +1370,6 @@ namespace Menu {
 				else if (option == "background_update") {
 					Runner::pause_output = false;
 				}
-				else if (option == "base_10_sizes") {
-					recollect = true;
-				}
 			}
 			else if (selPred.test(isBrowseable)) {
 				auto& optList = optionsList.at(option).get();
@@ -1392,6 +1384,9 @@ namespace Menu {
 				else if (option == "log_level") {
 					Logger::set(optList.at(i));
 					Logger::info("Logger set to " + optList.at(i));
+				}
+				else if (option == "base_10_sizes") {
+					recollect = true;
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;

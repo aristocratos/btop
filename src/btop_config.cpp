@@ -144,7 +144,7 @@ namespace Config {
 
 		{"temp_scale", 			"#* Which temperature scale to use, available values: \"celsius\", \"fahrenheit\", \"kelvin\" and \"rankine\"."},
 
-		{"base_10_sizes",		"#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024."},
+		{"base_10_sizes",		"#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024. \"Auto\" uses base 10 only for bitrates."},
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
 
@@ -195,8 +195,6 @@ namespace Config {
 
 		{"net_sync", 			"#* Sync the auto scaling for download and upload to whichever currently has the highest scale."},
 
-		{"base_10_bitrate",     "#* Uses Kbps = 1000 bps instead of Kibps = 1024 bps, Mbps = 1000Kbps instead of Mibps = 1024Kibps, and so on."},
-
 		{"net_iface", 			"#* Starts with the Network Interface specified here."},
 
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
@@ -245,6 +243,7 @@ namespace Config {
 		{"disks_filter", ""},
 		{"io_graph_speeds", ""},
 		{"net_iface", ""},
+		{"base_10_sizes", "Auto"},
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
 		{"proc_command", ""},
@@ -294,11 +293,9 @@ namespace Config {
 		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},
 		{"io_mode", false},
-		{"base_10_sizes", false},
 		{"io_graph_combined", false},
 		{"net_auto", true},
 		{"net_sync", true},
-	    {"base_10_bitrate", true},
 		{"show_battery", true},
 		{"show_battery_watts", true},
 		{"vim_keys", false},
