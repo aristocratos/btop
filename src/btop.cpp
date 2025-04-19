@@ -19,6 +19,8 @@ tab-size = 4
 #include <algorithm>
 #include <csignal>
 #include <clocale>
+#include <filesystem>
+#include <optional>
 #include <pthread.h>
 #ifdef __FreeBSD__
 	#include <pthread_np.h>
@@ -116,6 +118,8 @@ namespace Global {
 	bool arg_low_color{};
 	int arg_preset = -1;
 	int arg_update = 0;
+
+	static std::optional<std::filesystem::path> config_file {};
 }
 
 static void print_version() {
@@ -146,6 +150,7 @@ static void print_help() {
 			"  {0}+t,  --tty_off       {2}force (OFF) tty mode\n"
 			"  {0}-p,  --preset <id>   {2}start with preset, integer value between 0-9\n"
 			"  {0}-u,  --update <ms>   {2}set the program update rate in milliseconds\n"
+			"  {0}-c,  --config <file> {2}path to a config file\n"
 			"  {0}     --utf-force     {2}force start even if no UTF-8 locale was detected\n"
 			"  {0}     --debug         {2}start in DEBUG mode: shows microsecond timer for information collect\n"
 			"  {0}                     {2}and screen draw functions and sets loglevel to DEBUG",
@@ -222,6 +227,22 @@ void argumentParser(const int argc, char **argv) {
 			Global::utf_force = true;
 		else if (argument == "--debug")
 			Global::debug = true;
+		else if (argument == "-c" || argument == "--config") {
+			if (++i > argc) {
+				fmt::println(stderr, "{0}error:{1} Config option requires a file name\n", "\033[1;31m", "\033[0m");
+				print_usage();
+				print_help_hint();
+				exit(1);
+			}
+			auto file = std::filesystem::path(argv[i]);
+			if (std::filesystem::is_directory(file)) {
+				fmt::println(stderr, "{0}error:{1} Config file can't be a directory\n", "\033[1;31m", "\033[0m");
+				print_usage();
+				print_help_hint();
+				exit(1);
+			}
+			Global::config_file = std::make_optional(file);
+		}
 		else {
 			fmt::println("{0}error:{2} unexpected argument '{1}{3}{2}' found\n", "\033[1;31m", "\033[33m", "\033[0m", argument);
 			print_usage();
@@ -925,7 +946,11 @@ int main(int argc, char **argv) {
 		const auto config_dir = Config::get_config_dir();
 		if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
-			Config::conf_file = Config::conf_dir / "btop.conf";
+			if (Global::config_file.has_value()) {
+				Config::conf_file = Global::config_file.value();
+			} else {
+				Config::conf_file = Config::conf_dir / "btop.conf";
+			}
 			Logger::logfile = Config::get_log_file();
 			Theme::user_theme_dir = Config::conf_dir / "themes";
 
