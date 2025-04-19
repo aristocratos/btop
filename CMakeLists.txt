@@ -108,9 +108,11 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINAR
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Check for and enable LTO
-check_ipo_supported(RESULT ipo_supported)
-if(ipo_supported AND BTOP_LTO)
-  set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+if(BTOP_LTO)
+  check_ipo_supported(RESULT ipo_supported)
+  if(ipo_supported)
+    set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+  endif()
 endif()
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic -ftree-vectorize)
