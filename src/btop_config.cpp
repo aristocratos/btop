@@ -197,6 +197,8 @@ namespace Config {
 
 		{"net_iface", 			"#* Starts with the Network Interface specified here."},
 
+	    {"base_10_bitrate",     "#* \"True\" shows bitrates in base 10 (Kbps, Mbps). \"False\" shows bitrates in binary sizes (Kibps, Mibps, etc.). \"Auto\" uses base_10_sizes."},
+
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
@@ -243,6 +245,7 @@ namespace Config {
 		{"disks_filter", ""},
 		{"io_graph_speeds", ""},
 		{"net_iface", ""},
+		{"base_10_bitrate", "Auto"},
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
 		{"proc_command", ""},
