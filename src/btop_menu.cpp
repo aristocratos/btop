@@ -711,6 +711,17 @@ namespace Menu {
 				"",
 				"Will otherwise automatically choose the NIC",
 				"with the highest total download since boot."},
+		    {"base_10_bitrate",
+			    "Base 10 bitrate",
+			    "",
+			    "True:  Use SI prefixes for bitrates",
+			    "       (1000Kbps = 1Mbps)",
+			    "False: Use binary prefixes for bitrates",
+			    "       (1024Kibps = 1Mibps)",
+			    "Auto:  Use the General -> Base 10 Sizes",
+			    "       setting for bitrates",
+			    "",
+			    "True, False, or Auto",},
 		},
 		{
 			{"proc_left",
@@ -1190,6 +1201,7 @@ namespace Menu {
 			{"cpu_graph_lower", std::cref(Cpu::available_fields)},
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
+	        {"base_10_bitrate", std::cref(Config::base_10_bitrate_values)},
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
@@ -1384,6 +1396,9 @@ namespace Menu {
 				else if (option == "log_level") {
 					Logger::set(optList.at(i));
 					Logger::info("Logger set to " + optList.at(i));
+				}
+				else if (option == "base_10_bitrate") {
+				    recollect = true;
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;

@@ -401,7 +401,19 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
+
 		bool mega = Config::getB("base_10_sizes");
+
+		// Bitrates
+	    if(bit && per_second) {
+			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
+			if(base_10_bitrate == "True") {
+				mega = true;
+			} else if(base_10_bitrate == "False") {
+				mega = false;
+			}
+			// Default or "Auto": Uses base_10_sizes for bitrates
+		}
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
