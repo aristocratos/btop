@@ -164,10 +164,12 @@ ifeq ($(THREADS),1)
 endif
 
 #? LTO command line
-ifeq ($(CLANG_WORKS),true)
-	LTO := thin
-else
-	LTO := $(THREADS)
+ifeq ($(BUILD_TYPE),Release)
+	ifeq ($(CLANG_WORKS),true)
+		LTO := -flto=thin
+	else
+		LTO := -flto=$(THREADS)
+	endif
 endif
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2> /dev/null || true)
@@ -191,7 +193,7 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
+OPTFLAGS			:= -O2 -ftree-vectorize $(LTO)
 LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
