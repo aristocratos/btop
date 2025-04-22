@@ -56,6 +56,7 @@ endif()
 
 add_executable(btop
   src/btop.cpp
+  src/btop_cli.cpp
   src/btop_config.cpp
   src/btop_draw.cpp
   src/btop_input.cpp
