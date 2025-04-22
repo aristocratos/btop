@@ -149,7 +149,7 @@ The Linux version of btop++ is complete. Released as version 1.0.0
 
 I will be providing statically compiled binaries for a range of architectures in every release for those having problems compiling.
 
-For compilation GCC 10 is required, GCC 11 preferred.
+For compilation GCC 11 is required.
 
 Please report any bugs to the [Issues](https://github.com/aristocratos/btop/issues/new?assignees=aristocratos&labels=bug&template=bug_report.md&title=%5BBUG%5D) page.
 
@@ -387,7 +387,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 ## Compilation Linux
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 11 or Clang 16.
 
    The makefile also needs GNU coreutils and `sed` (should already be installed on any modern distribution).
 
@@ -589,7 +589,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 ## Compilation macOS OSX
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 12 or Clang 16.
 
    With GCC, version 12 (or better) is needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
 
@@ -758,7 +758,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 ## Compilation FreeBSD
 
-   Requires at least GCC 10 or Clang 16.
+   Requires at least GCC 11 or Clang 16.
 
    Note that GNU make (`gmake`) is required to compile on FreeBSD.
 
@@ -937,7 +937,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 ## Compilation NetBSD
 
-   Requires at least GCC 10.
+   Requires at least GCC 11.
 
    Note that GNU make (`gmake`) is required to compile on NetBSD.
 
@@ -950,7 +950,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 1. **Install dependencies**
 
    ```bash
-   pkg_add gmake gcc10 coreutils git
+   pkg_add gmake gcc11 coreutils git
    ```
 
 2. **Clone repository**
@@ -1039,7 +1039,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    Requires GCC, CMake, Ninja and Git
 
    ```bash
-   pkg_add cmake ninja-build gcc10 coreutils git
+   pkg_add cmake ninja-build gcc11 coreutils git
    ```
 
 2. **Clone the repository**
@@ -1052,7 +1052,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
    ```bash
    # Configure
-   cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc10/bin/g++" -B build -G Ninja
+   cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc11/bin/g++" -B build -G Ninja
    # Build
    cmake --build build
    ```
@@ -1096,7 +1096,7 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 ## Compilation OpenBSD
 
-   Requires at least GCC 10.
+   Requires at least GCC 11.
 
    Note that GNU make (`gmake`) is required to compile on OpenBSD.
 
