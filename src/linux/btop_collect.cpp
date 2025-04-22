@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <cstdlib>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <fstream>
@@ -1865,6 +1866,7 @@ namespace Mem {
 				auto use_fstab = Config::getB("use_fstab");
 				auto only_physical = Config::getB("only_physical");
 				auto zfs_hide_datasets = Config::getB("zfs_hide_datasets");
+				auto btrfs_group_subvolumes = Config::getB("btrfs_group_subvolumes");
 				auto& disks = mem.disks;
 				static std::unordered_map<string, future<pair<disk_info, int>>> disks_stats_promises;
 				ifstream diskread;
@@ -1925,6 +1927,7 @@ namespace Mem {
 					vector<string> found;
 					found.reserve(last_found.size());
 					string dev, mountpoint, fstype;
+					std::unordered_set<string> found_btrfs_subvolumes;
 					while (not diskread.eof()) {
 						std::error_code ec;
 						diskread >> dev >> mountpoint >> fstype;
@@ -1942,6 +1945,14 @@ namespace Mem {
 						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
 						size_t zfs_dataset_name_start = 0;
 						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
+
+						//? skip BtrFS subvolumes
+						if (btrfs_group_subvolumes and fstype == "btrfs") {
+							string devname = fs::canonical(dev, ec).filename();
+							if (!found_btrfs_subvolumes.insert(devname).second) {
+								continue;
+							}
+						}
 
 						if ((not use_fstab and not only_physical)
 						or (use_fstab and v_contains(fstab, mountpoint))

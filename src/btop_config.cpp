@@ -219,6 +219,7 @@ namespace Config {
 		{"custom_gpu_name4",	"#* Custom gpu4 model name, empty string to disable."},
 		{"custom_gpu_name5",	"#* Custom gpu5 model name, empty string to disable."},
 	#endif
+		{"btrfs_group_subvolumes", "#* Show only the first subvolume of a btrfs filesystem."},
 	};
 
 	std::unordered_map<std::string_view, string> strings = {
@@ -309,8 +310,9 @@ namespace Config {
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
-		{"gpu_mirror_graph", true}
+		{"gpu_mirror_graph", true},
 	#endif
+		{"btrfs_group_subvolumes", false},
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 
