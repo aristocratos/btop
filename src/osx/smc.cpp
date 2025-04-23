@@ -147,7 +147,7 @@ namespace Cpu {
 		return IOConnectCallStructMethod(conn, index,
 										 // inputStructure
 										 inputStructure, structureInputSize,
-										 // ouputStructure
+										 // outputStructure
 										 outputStructure, &structureOutputSize);
 	}
 

@@ -198,7 +198,7 @@ if(BTOP_STATIC)
   target_link_options(btop PRIVATE -static LINKER:--fatal-warnings)
 endif()
 
-# Other platform depdendent flags
+# Other platform dependent flags
 if(APPLE)
   target_link_libraries(btop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
