@@ -46,9 +46,7 @@ jobs:
 
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}
-        run: |
-          wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
-          type -P clang++-${{ matrix.version }}
+        run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
 
       - name: Configure
         run: |
