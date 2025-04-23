@@ -122,7 +122,7 @@ namespace Cli {
 					auto preset_id = std::clamp(std::stoi(arg.data()), 0, 9);
 					cli.preset = std::make_optional(preset_id);
 				} catch (std::invalid_argument& e) {
-					error("Preset must be a positiv number");
+					error("Preset must be a positive number");
 					return OrRetCode { 1 };
 				}
 				continue;
@@ -139,7 +139,7 @@ namespace Cli {
 					auto refresh_rate = std::min(std::stoul(arg.data()), 100UL);
 					cli.updates = refresh_rate;
 				} catch (std::invalid_argument& e) {
-					error("Update must be a positiv number");
+					error("Update must be a positive number");
 					return OrRetCode { 1 };
 				}
 				continue;
@@ -165,7 +165,7 @@ namespace Cli {
 				"  {2}-p, --preset {1}<id>    Start with a preset (0-9)\n"
 				"  {2}-t, --tty{1}            Force tty mode with ANSI graph symbols and 16 colors only\n"
 				"  {2}    --no-tty{1}         Force disable tty mode\n"
-				"  {2}-u, --update {1}<ms>    Set an inital update rate in milliseconds\n"
+				"  {2}-u, --update {1}<ms>    Set an initial update rate in milliseconds\n"
 				"  {2}-h, --help{1}           Show this help message and exit\n"
 				"  {2}-V, --version{1}        Show a version message and exit (more with --version)\n",
 				BOLD_UNDERLINE, RESET, BOLD

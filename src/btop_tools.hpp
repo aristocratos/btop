@@ -211,7 +211,7 @@ namespace Tools {
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
 
-	//* Capatilize <str>
+	//* Capitalize <str>
 	inline string capitalize(string str) {
 		str.at(0) = toupper(str.at(0));
 		return str;
