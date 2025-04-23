@@ -53,8 +53,8 @@ jobs:
           if [[ "${{ matrix.compiler }}" == "clang" ]]; then
             export CC=clang-${{ matrix.version }}
             export CXX=clang++-${{ matrix.version }}
-            export CXXFLAGS="-rtlib=compiler-rt -stdlib=libc++ -unwindlib=libunwind"
-            export LDFLAGS=-fuse-ld=lld
+            export CXXFLAGS="-stdlib=libc++"
+            export LDFLAGS="-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind"
           else
             export CC=gcc-${{ matrix.version }}
             export CXX=g++-${{ matrix.version }}
