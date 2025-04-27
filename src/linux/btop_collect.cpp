@@ -943,8 +943,8 @@ namespace Cpu {
 							core_old_idles.push_back(0);
 							cpu.core_percent.emplace_back();
 						}
-						const long long calc_totals = max(0ll, totals - core_old_totals.at(i-1));
-						const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
+						const long long calc_totals = max(1ll, totals - core_old_totals.at(i-1));
+						const long long calc_idles = max(1ll, idles - core_old_idles.at(i-1));
 						core_old_totals.at(i-1) = totals;
 						core_old_idles.at(i-1) = idles;
 
