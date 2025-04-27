@@ -81,7 +81,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.0";
+	const string Version = "1.4.1";
 
 	int coreCount;
 	string overlay;
@@ -823,7 +823,7 @@ int main(const int argc, const char** argv) {
 			return ret;
 		}
 	}
-	
+
 	{
 		const auto config_dir = Config::get_config_dir();
 		if (config_dir.has_value()) {

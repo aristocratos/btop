@@ -1,3 +1,40 @@
+## v1.4.1
+
+References | Description | Author(s)
+--- | --- | ---
+#1111 #1112 | Various code fixes | @imwints
+#930 #931 | Various code fixes | @bad-co-de
+#1061 | Fixed typo | @polluks
+#1110 | Move the config parser in it's own module  | @imwints
+#1101 | Adding a menu option to show bitrates in base 10 separate from the setting to show bytes/bits in base 10 | @georgev93
+#1079 | Allow MidnightBSD to build btop using the existing freebsd support. | @laffer1
+#1098 | Use XDG_STATE_HOME to save logs | @imwints
+#1092 | Bump CMake version to 3.25 required for LINUX variable | @imwints
+#1058 | Replace brackets with arrows in net and proc box | @taha-yassine
+#1091 | Bump bundled fmt to 11.1.4 | @imwints
+#725 | cmake:  link to CMAKE_DL_LIBS | @alalazo
+#990 | Fix phoenix-night.theme marked as executable | @sertonix
+#1034 | Add Kanagawa-lotus and Kanagawa-wave themes | @philikarus
+#973 | Bump NetBSD version to 10.1 and FreeBSD version to 14.2. | @fraggerfox
+#1072 | Add dark version of adwaita theme: adwaita-dark | @k0tran
+#1036 | Resetting last selection on page navigation in optionsMenu to avoid unordered_map error | @seth-wood
+#1029 | Share the CPU name trimming code between platforms | @yarrick
+#1033 | Update Ryzen name trimming | @yarrick
+#1030 | Drop macos 12 build, add v14 and v15 | @yarrick
+#1028 | Fix cmake-macos workflow | @yarrick
+#1027 | Bump version of deprecated upload-artifact step | @yarrick
+#1025 | Update obsolete egrep call | @tywkeene
+b52069c | Fix menu crash when GPU_SUPPORT=false, issue #989 | @aristocratos
+#961 | Add 'Everforest Ligth Medium' theme | @mstuttgart
+#960 | Support intel GPUs before Gen-6 (patch from upstream) | @w8jcik
+#958 | intel_name_lookup_shim.c (get_intel_device_name): Fix SEGFAULT | @artyom-poptsov
+2e7208d | Fix rsmi_measure_pcie_speeds not saving, issue #934 | @aristocratos
+f3446ed | Show GPU Watt fractions when below 100W | @aristocratos
+
+| + more from @imwints @aristocratos
+
+Big thanks to @imwints for helping out with project maintenance, PR reviews and merging!
+
 ## v1.4.0
 
 References | Description | Author(s)
