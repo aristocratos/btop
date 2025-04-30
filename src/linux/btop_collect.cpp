@@ -1561,14 +1561,14 @@ namespace Gpu {
 		bool init() {
 			if (initialized) return false;
 
-			char *gpu_path = find_intel_gpu_dir();
+			const char *gpu_path = find_intel_gpu_dir();
 			if (!gpu_path) {
 				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
 				return false;
 			}
 
-			char *gpu_device_id = get_intel_device_id(gpu_path);
-			if (!gpu_device_id) {
+			uint16_t gpu_device_id = get_intel_device_id(gpu_path);
+			if (gpu_device_id == UINT16_MAX) {
 				Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
 				return false;
 			}
@@ -1577,8 +1577,6 @@ namespace Gpu {
 			if (!gpu_device_name) {
 				Logger::warning("Failed to find Intel GPU device name in internal database");
 			}
-
-			free(gpu_device_id);
 
 			engines = discover_engines(device);
 			if (!engines) {

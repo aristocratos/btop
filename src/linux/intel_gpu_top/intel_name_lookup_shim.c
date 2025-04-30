@@ -51,8 +51,8 @@ char* find_intel_gpu_dir() {
     return NULL;  // Intel GPU not found
 }
 
-char* get_intel_device_id(const char* gpu_dir) {
-    static char device_path[256];
+uint16_t get_intel_device_id(const char* gpu_dir) {
+    char device_path[256];
     char device_id[16];
 
     // Construct the path to the device file
@@ -63,23 +63,22 @@ char* get_intel_device_id(const char* gpu_dir) {
         if (fgets(device_id, sizeof(device_id), file)) {
             fclose(file);
             // Trim the newline character
-            device_id[strcspn(device_id, "\n")] = 0;
-            // Return a copy of the device ID
-            return strdup(device_id);
+            device_id[strcspn(device_id, "\n")] = '\0';
+            // Return the parsed device ID
+            return strtol(device_id, NULL, 16);
         }
         fclose(file);
     } else {
         perror("fopen");
     }
 
-    return NULL;
+    return UINT16_MAX;
 }
 
-char *get_intel_device_name(const char *device_id) {
-    uint16_t devid = strtol(device_id, NULL, 16);
+char *get_intel_device_name(uint16_t device_id) {
     char dev_name[256];
     char full_name[256];
-    const struct intel_device_info *info = intel_get_device_info(devid);
+    const struct intel_device_info *info = intel_get_device_info(device_id);
     if (info) {
         if (info->codename == NULL) {
             strcpy(dev_name, "(unknown)");
