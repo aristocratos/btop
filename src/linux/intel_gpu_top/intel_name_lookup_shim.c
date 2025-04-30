@@ -29,24 +29,21 @@ char* find_intel_gpu_dir() {
         // Construct the path to the vendor file
         snprintf(vendor_path, sizeof(vendor_path), "%s/%s/device/%s", SYSFS_PATH, entry->d_name, VENDOR_FILE);
 
-        // Check if the vendor file exists
-        if (access(vendor_path, F_OK) != -1) {
-            FILE *file = fopen(vendor_path, "re");
-            if (file) {
-                if (fgets(vendor_id, sizeof(vendor_id), file)) {
-                    // Trim the newline character
-                    vendor_id[strcspn(vendor_id, "\n")] = 0;
+        FILE *file = fopen(vendor_path, "re");
+        if (file) {
+            if (fgets(vendor_id, sizeof(vendor_id), file)) {
+                // Trim the newline character
+                vendor_id[strcspn(vendor_id, "\n")] = '\0';
 
-                    if (strcmp(vendor_id, VENDOR_ID) == 0) {
-                        fclose(file);
-                        closedir(dir);
-                        // Return the parent directory (i.e., /sys/class/drm/card*)
-                        snprintf(path, sizeof(path), "%s/%s", SYSFS_PATH, entry->d_name);
-                        return path;
-                    }
+                if (strcmp(vendor_id, VENDOR_ID) == 0) {
+                    fclose(file);
+                    closedir(dir);
+                    // Return the parent directory (i.e., /sys/class/drm/card*)
+                    snprintf(path, sizeof(path), "%s/%s", SYSFS_PATH, entry->d_name);
+                    return path;
                 }
-                fclose(file);
             }
+            fclose(file);
         }
     }
 
