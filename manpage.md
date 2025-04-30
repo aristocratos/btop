@@ -8,7 +8,7 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 # SYNOPSIS
 
-**btop** [**-lc**] [**-t** | **+t**] [**-p** _id_] [**\-\-utf-force**]
+**btop** [**-lc**] [**-t** | **+t**] [**-p** _id_] [**\-\-force-utf**]
          [**\-\-debug**] [{**-h** | **\-\-help**} | {**-v** | **\-\-version**}]
 
 # DESCRIPTION
@@ -32,7 +32,7 @@ starting with two dashes ('-'). A summary of options is included below.
 **-p**, **\-\-preset _id_**
 :   Start with preset, integer value between 0-9.
 
-**\-\-utf-force**
+**\-\-force-utf**
 :   Force start even if no UTF-8 locale was detected.
 
 **\-\-debug**
