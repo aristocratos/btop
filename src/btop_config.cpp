@@ -172,6 +172,8 @@ namespace Config {
 
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
 
+		{"skip_ro_disks",		"#* Filter out read-only filesystems."},
+
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
 		{"zfs_hide_datasets",		"#* Setting this to True will hide all datasets, and only show ZFS pools. (IO stats will be calculated per-pool)"},
@@ -291,6 +293,7 @@ namespace Config {
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"only_physical", true},
+		{"skip_ro_disks", false},
 		{"use_fstab", true},
 		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},

@@ -1919,10 +1919,11 @@ namespace Mem {
 				if (diskread.good()) {
 					vector<string> found;
 					found.reserve(last_found.size());
-					string dev, mountpoint, fstype;
+					const bool skip_ro_disks = Config::getB("skip_ro_disks");
+					string dev, mountpoint, fstype, flags;
 					while (not diskread.eof()) {
 						std::error_code ec;
-						diskread >> dev >> mountpoint >> fstype;
+						diskread >> dev >> mountpoint >> fstype >> flags;
 						diskread.ignore(SSmax, '\n');
 
 						if (v_contains(ignore_list, mountpoint) or v_contains(found, mountpoint)) continue;
@@ -1936,6 +1937,9 @@ namespace Mem {
 
 						//? Skip composefs (read-only overlayfs alike)
 						if (fstype == "overlay" && dev == "composefs") continue;
+
+						//? Skip read-only filesystems
+						if (skip_ro_disks && flags.starts_with("ro,")) continue;
 
 						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
 						size_t zfs_dataset_name_start = 0;
