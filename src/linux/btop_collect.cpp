@@ -2333,7 +2333,6 @@ namespace Net {
 			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
-			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
 			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
