@@ -932,9 +932,9 @@ int main(const int argc, const char** argv) {
 		}
 	#else
 		if (found.empty() and cli.force_utf) {
-			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
+			Logger::warning("No UTF-8 locale detected! Forcing start with --force-utf argument.");
 		} else if (found.empty()) {
-			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
+			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 	#endif
