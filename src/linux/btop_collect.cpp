@@ -1934,6 +1934,9 @@ namespace Mem {
 								continue;
 						}
 
+						//? Skip composefs (read-only overlayfs alike)
+						if (fstype == "overlay" && dev == "composefs") continue;
+
 						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
 						size_t zfs_dataset_name_start = 0;
 						if (fstype == "zfs" && (zfs_dataset_name_start = dev.find('/')) != std::string::npos && zfs_hide_datasets) continue;
