@@ -1573,7 +1573,7 @@ namespace Gpu {
 				return false;
 			}
 
-			char *gpu_device_name = get_intel_device_name(gpu_device_id);
+			capi::c_str gpu_device_name { get_intel_device_name(gpu_device_id) };
 			if (!gpu_device_name) {
 				Logger::warning("Failed to find Intel GPU device name in internal database");
 			}
@@ -1600,12 +1600,10 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+				gpu_names[Nvml::device_count + Rsmi::device_count] = string{ gpu_device_name.get() };
 			} else {
 				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
 			}
-
-			free(gpu_device_name);
 
 			initialized = true;
 			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);

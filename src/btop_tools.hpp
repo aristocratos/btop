@@ -463,3 +463,14 @@ namespace Tools {
 	};
 
 }
+
+namespace capi {
+	struct free_deleter {
+		template <typename T>
+		void operator()(T *p) const noexcept {
+			std::free(p);
+		}
+	};
+
+	using c_str = std::unique_ptr<char, free_deleter>;
+}
