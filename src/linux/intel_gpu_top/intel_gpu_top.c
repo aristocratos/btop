@@ -117,7 +117,7 @@ static int pmu_parse(struct pmu_counter *pmu, const char *path, const char *str)
 	char buf[128] = {};
 	int dir;
 
-	dir = open(path, O_RDONLY);
+	dir = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
 	if (dir < 0)
 		return -errno;
 

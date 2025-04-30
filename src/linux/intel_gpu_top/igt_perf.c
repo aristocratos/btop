@@ -29,7 +29,7 @@ static char *bus_address(int i915, char *path, int pathlen)
 	snprintf(path, pathlen, "/sys/dev/char/%d:%d",
 		 major(st.st_rdev), minor(st.st_rdev));
 
-	dir = open(path, O_RDONLY);
+	dir = open(path, O_RDONLY | O_CLOEXEC);
 	if (dir != -1) {
 		len = readlinkat(dir, "device", path, pathlen - 1);
 		close(dir);
@@ -117,7 +117,7 @@ uint64_t igt_perf_type_id(const char *device)
 	snprintf(buf, sizeof(buf),
 		 "/sys/bus/event_source/devices/%s/type", device);
 
-	fd = open(buf, O_RDONLY);
+	fd = open(buf, O_RDONLY | O_CLOEXEC);
 	if (fd < 0)
 		return 0;
 
@@ -138,7 +138,7 @@ int igt_perf_events_dir(int i915)
 
 	i915_perf_device(i915, buf, sizeof(buf));
 	snprintf(path, sizeof(path), "/sys/bus/event_source/devices/%s/events", buf);
-	return open(path, O_RDONLY);
+	return open(path, O_RDONLY | O_CLOEXEC | O_DIRECTORY);
 }
 
 static int
@@ -161,7 +161,7 @@ _perf_open(uint64_t type, uint64_t config, int group, uint64_t format)
 	attr.clockid = CLOCK_MONOTONIC;
 
 	do {
-		ret = perf_event_open(&attr, -1, cpu++, group, 0);
+		ret = perf_event_open(&attr, -1, cpu++, group, PERF_FLAG_FD_CLOEXEC);
 	} while ((ret < 0 && errno == EINVAL) && (cpu < nr_cpus));
 
 	return ret;

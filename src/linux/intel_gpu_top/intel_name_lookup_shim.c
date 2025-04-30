@@ -31,7 +31,7 @@ char* find_intel_gpu_dir() {
 
         // Check if the vendor file exists
         if (access(vendor_path, F_OK) != -1) {
-            FILE *file = fopen(vendor_path, "r");
+            FILE *file = fopen(vendor_path, "re");
             if (file) {
                 if (fgets(vendor_id, sizeof(vendor_id), file)) {
                     // Trim the newline character
@@ -61,7 +61,7 @@ char* get_intel_device_id(const char* gpu_dir) {
     // Construct the path to the device file
     snprintf(device_path, sizeof(device_path), "%s/device/%s", gpu_dir, DEVICE_FILE);
 
-    FILE *file = fopen(device_path, "r");
+    FILE *file = fopen(device_path, "re");
     if (file) {
         if (fgets(device_id, sizeof(device_id), file)) {
             fclose(file);
