@@ -1,3 +1,17 @@
+## v1.4.2
+
+References | Description | Author(s)
+--- | --- | ---
+f1482fe | Fix process arguments appearing outside proc box by replacing ASCII control codes with blankspace, issue #1080 | @aristocratos
+#1130 | Fix problems shown by clang-tidy's performance checks | @imwints
+#1120 | Fix wrong error message and documentation of renamed option --utf-force | @t-webber @imwints
+#1128 | Flatten cmake module path | @imwints
+#1129 | CMake: Remove option to use mold  | @imwints
+#1047 | Update Terminus font link, fix typo, spelling, and grammar | @QinCai-rui
+#929 | Please clang with sanitizers | @bad-co-de
+#1126 | Fix MacOS tree-mode + aggregate memory/thread scaling issue | @xaskii
+#993 | Fix typo: Mhz -> MHz | @NyCodeGHG
+
 ## v1.4.1
 
 References | Description | Author(s)
