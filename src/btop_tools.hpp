@@ -26,6 +26,7 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <ranges>
 #include <regex>
@@ -165,7 +166,7 @@ namespace Logger {
 	};
 	extern std::optional<std::filesystem::path> logfile;
 
-	enum Level : size_t {
+	enum Level : std::uint8_t {
 		DISABLED = 0,
 		ERROR = 1,
 		WARNING = 2,
