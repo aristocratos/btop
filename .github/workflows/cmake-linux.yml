@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/cmake-linux.yml'
       - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
@@ -15,6 +16,7 @@ on:
     paths:
       - '.github/workflows/cmake-linux.yml'
       - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
