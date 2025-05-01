@@ -100,7 +100,6 @@ namespace Global {
 	atomic<bool> thread_exception (false);
 
 	bool debug{};
-	bool utf_force{};
 
 	uint64_t start_time;
 
@@ -823,6 +822,8 @@ int main(const int argc, const char** argv) {
 		}
 	}
 
+	Global::debug = cli.debug;
+
 	{
 		const auto config_dir = Config::get_config_dir();
 		if (config_dir.has_value()) {
@@ -930,9 +931,9 @@ int main(const int argc, const char** argv) {
 			}
 		}
 	#else
-		if (found.empty() and Global::utf_force)
+		if (found.empty() and cli.force_utf) {
 			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
-		else if (found.empty()) {
+		} else if (found.empty()) {
 			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
