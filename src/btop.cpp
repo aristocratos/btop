@@ -99,7 +99,6 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-	bool debuginit{};
 	bool debug{};
 	bool utf_force{};
 
