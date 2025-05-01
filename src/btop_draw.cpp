@@ -1658,10 +1658,11 @@ namespace Proc {
 				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
 
 				out += Theme::c("main_fg") + Fx::ub;
-				const int cmd_size = ulen(detailed.entry.cmd, true);
+				const auto san_cmd = replace_ascii_control(detailed.entry.cmd);
+				const int cmd_size = ulen(san_cmd, true);
 				for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
 					out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
-						+ cjust(luresize(detailed.entry.cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
+						+ cjust(luresize(san_cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
 				}
 
 			}
@@ -1855,14 +1856,16 @@ namespace Proc {
 				}
 			}
 
-			if (not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(p.cmd) != ulen(p.cmd, true);
+			const auto san_cmd = replace_ascii_control(p.cmd);
+
+			if (not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(san_cmd) != ulen(san_cmd, true);
 
 			//? Normal view line
 			if (not proc_tree) {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
 					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
-					+ (cmd_size > 0 ? g_color + ljust(p.cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
+					+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
 			}
 			//? Tree view line
 			else {
@@ -1875,7 +1878,7 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7) {
-					const string_view cmd = width_left > 40 ? rtrim(p.cmd) : p.short_cmd;
+					const string_view cmd = width_left > 40 ? rtrim(san_cmd) : p.short_cmd;
 					if (not cmd.empty() and cmd != p.name) {
 						out += g_color + '(' + uresize(string{cmd}, width_left - 3, p_wide_cmd[p.pid]) + ") ";
 						width_left -= (ulen(string{cmd}, true) + 3);

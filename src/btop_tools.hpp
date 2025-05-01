@@ -224,6 +224,12 @@ namespace Tools {
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
 
+	//* Replace ascii control characters with <replacement> in <str> and return new string
+	inline string replace_ascii_control(string str, const char replacement = ' ') {
+		std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+		return str;
+	}
+
 	//* Capitalize <str>
 	inline string capitalize(string str) {
 		str.at(0) = toupper(str.at(0));
