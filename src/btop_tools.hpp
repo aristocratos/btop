@@ -290,8 +290,8 @@ namespace Tools {
 	}
 
 	//* Check if a string is a valid integer value (only positive)
-	inline bool isint(const string& str) {
-		return all_of(str.begin(), str.end(), ::isdigit);
+	constexpr bool isint(const std::string_view str) {
+		return std::ranges::all_of(str, ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return new string
