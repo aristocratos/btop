@@ -838,7 +838,7 @@ namespace Menu {
 	}
 
 	//? Process input
-	int msgBox::input(string key) {
+	int msgBox::input(const string& key) {
 		if (key.empty()) return Invalid;
 
 		if (is_in(key, "escape", "backspace", "q") or key == "button2") {

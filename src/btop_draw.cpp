@@ -1229,7 +1229,7 @@ namespace Mem {
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
-		for (auto name : comb_names) {
+		for (const auto& name : comb_names) {
 			if (cy > height - 4) break;
 			string title;
 			if (name == "swap_used") {

@@ -42,7 +42,7 @@ namespace Cpu {
 			name = "Ryzen";
 			int tokens = 0;
 			for (auto i = ryz_pos + 1; i < name_vec.size() && tokens < 2; i++) {
-				string p = name_vec.at(i);
+				const std::string& p = name_vec.at(i);
 				if (p != "AI" && p != "PRO")
 					tokens++;
 				name += " " + p;

@@ -174,7 +174,7 @@ void term_resize(bool force) {
 				#else
 					if (intKey > 0 and intKey < 5) {
 				#endif
-						auto box = all_boxes.at(intKey);
+						const auto& box = all_boxes.at(intKey);
 						Config::current_preset = -1;
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");

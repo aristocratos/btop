@@ -67,7 +67,7 @@ namespace Menu {
 		string operator()();
 
 		//? Process input and returns value from enum Ret
-		int input(string key);
+		int input(const string& key);
 
 		//? Clears content vector and private strings
 		void clear();
