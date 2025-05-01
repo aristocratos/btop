@@ -26,17 +26,18 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
+#include <limits.h>
+#include <pthread.h>
 #include <ranges>
 #include <regex>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <tuple>
-#include <vector>
-#include <pthread.h>
-#include <limits.h>
 #include <unordered_map>
+#include <vector>
 #ifdef BTOP_DEBUG
 #include <source_location>
 #endif
@@ -165,7 +166,7 @@ namespace Logger {
 	};
 	extern std::optional<std::filesystem::path> logfile;
 
-	enum Level : size_t {
+	enum Level : std::uint8_t {
 		DISABLED = 0,
 		ERROR = 1,
 		WARNING = 2,
@@ -176,11 +177,23 @@ namespace Logger {
 	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
 	void set(const string& level);
 
-	void log_write(const Level level, const string& msg);
-	inline void error(const string msg) { log_write(ERROR, msg); }
-	inline void warning(const string msg) { log_write(WARNING, msg); }
-	inline void info(const string msg) { log_write(INFO, msg); }
-	inline void debug(const string msg) { log_write(DEBUG, msg); }
+	void log_write(const Level level, const std::string_view msg);
+
+	inline void error(const std::string_view msg) {
+		log_write(ERROR, msg);
+	}
+
+	inline void warning(const std::string_view msg) {
+		log_write(WARNING, msg);
+	}
+
+	inline void info(const std::string_view msg) {
+		log_write(INFO, msg);
+	}
+
+	inline void debug(const std::string_view msg) {
+		log_write(DEBUG, msg);
+	}
 }
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -194,11 +207,11 @@ namespace Tools {
 		virtual std::string do_grouping() const override { return "\03"; }
 	};
 
-	size_t wide_ulen(const string& str);
-	size_t wide_ulen(const std::wstring& w_str);
+	size_t wide_ulen(const std::string_view str);
+	size_t wide_ulen(const std::wstring_view w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-	inline size_t ulen(const string& str, bool wide = false) {
+	inline size_t ulen(const std::string_view str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
@@ -218,14 +231,14 @@ namespace Tools {
 	}
 
 	//* Return <str> with only uppercase characters
-	inline string str_to_upper(string str) {
-		std::ranges::for_each(str, [](auto& c) { c = ::toupper(c); } );
+	inline auto str_to_upper(string str) {
+		std::ranges::for_each(str, ::toupper);
 		return str;
 	}
 
 	//* Return <str> with only lowercase characters
-	inline string str_to_lower(string str) {
-		std::ranges::for_each(str, [](char& c) { c = ::tolower(c); } );
+	inline auto str_to_lower(string str) {
+		std::ranges::for_each(str, ::tolower);
 		return str;
 	}
 
@@ -237,12 +250,12 @@ namespace Tools {
 
 	//* Check if string <str> contains value <find_val>
 	template <typename T>
-	inline bool s_contains(const string& str, const T& find_val) {
+	constexpr bool s_contains(const std::string_view str, const T& find_val) {
 		return str.find(find_val) != string::npos;
 	}
 
 	//* Check if string <str> contains string <find_val>, while ignoring case
-	inline bool s_contains_ic(const string& str, const string& find_val) {
+	inline bool s_contains_ic(const std::string_view str, const std::string_view find_val) {
 		auto it = std::search(
 			str.begin(), str.end(),
 			find_val.begin(), find_val.end(),
@@ -279,18 +292,18 @@ namespace Tools {
 	}
 
 	//* Check if a string is a valid bool value
-	inline bool isbool(const string& str) {
+	inline bool isbool(const std::string_view str) {
 		return is_in(str, "true", "false", "True", "False");
 	}
 
 	//* Convert string to bool, returning any value not equal to "true" or "True" as false
-	inline bool stobool(const string& str) {
+	inline bool stobool(const std::string_view str) {
 		return is_in(str, "true", "True");
 	}
 
 	//* Check if a string is a valid integer value (only positive)
-	inline bool isint(const string& str) {
-		return all_of(str.begin(), str.end(), ::isdigit);
+	constexpr bool isint(const std::string_view str) {
+		return std::ranges::all_of(str, ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return new string
@@ -444,7 +457,7 @@ namespace Tools {
 		Logger::Level log_level = Logger::DEBUG;
 	public:
 		DebugTimer() = default;
-		explicit DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		explicit DebugTimer(string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
 		DebugTimer(const DebugTimer& other) = delete;
 		DebugTimer& operator=(const DebugTimer& other) = delete;

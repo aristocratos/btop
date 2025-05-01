@@ -16,12 +16,13 @@ indent = tab
 tab-size = 4
 */
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <ranges>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "btop_draw.hpp"
@@ -31,6 +32,7 @@ tab-size = 4
 #include "btop_tools.hpp"
 #include "btop_input.hpp"
 #include "btop_menu.hpp"
+#include <fmt/format.h>
 
 
 using std::array;
@@ -146,12 +148,12 @@ namespace Draw {
 	}
 
 	TextEdit::TextEdit() {}
-	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(text) {
+	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(std::move(text)) {
 		pos = this->text.size();
 		upos = ulen(this->text);
 	}
 
-	bool TextEdit::command(const string& key) {
+	bool TextEdit::command(const std::string_view key) {
 		if (key == "left" and upos > 0) {
 			upos--;
 			pos = uresize(text, upos).size();
@@ -193,7 +195,7 @@ namespace Draw {
 				upos++;
 			}
 			else {
-				const string first = uresize(text, upos) + key;
+				const auto first = fmt::format("{}{}", uresize(text, upos), key);
 				text = first + text.substr(pos);
 				upos++;
 				pos = first.size();
@@ -245,9 +247,10 @@ namespace Draw {
 		this->text.clear();
 	}
 
-	string createBox(const int x, const int y, const int width,
-					 const int height, string line_color, bool fill,
-					 const string title, const string title2, const int num) {
+	string createBox(
+			const int x, const int y, const int width, const int height, string line_color, bool fill, const std::string_view title,
+			const std::string_view title2, const int num
+	) {
 		string out;
 
 		if (line_color.empty())
@@ -283,12 +286,16 @@ namespace Draw {
 
 		//? Draw titles if defined
 		if (not title.empty()) {
-			out += Mv::to(y, x + 2) + Symbols::title_left + Fx::b + numbering + Theme::c("title") + title
-				+  Fx::ub + line_color + Symbols::title_right;
+			out += fmt::format(
+				"{}{}{}{}{}{}{}{}{}", Mv::to(y, x + 2), Symbols::title_left, Fx::b, numbering, Theme::c("title"), title, Fx::ub,
+				line_color, Symbols::title_right
+			);
 		}
 		if (not title2.empty()) {
-			out += Mv::to(y + height - 1, x + 2) + Symbols::title_left_down + Fx::b + numbering + Theme::c("title") + title2
-				+  Fx::ub + line_color + Symbols::title_right_down;
+			out += fmt::format(
+				"{}{}{}{}{}{}{}{}{}", Mv::to(y, x + 2), Symbols::title_left, Fx::b, numbering, Theme::c("title"), title2, Fx::ub,
+				line_color, Symbols::title_right_down
+			);
 		}
 
 		return out + Fx::reset + Mv::to(y + 1, x + 1);
@@ -1229,7 +1236,7 @@ namespace Mem {
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
-		for (auto name : comb_names) {
+		for (const auto& name : comb_names) {
 			if (cy > height - 4) break;
 			string title;
 			if (name == "swap_used") {
@@ -1482,7 +1489,7 @@ namespace Proc {
 
 	string box;
 
-	int selection(const string& cmd_key) {
+	int selection(const std::string_view cmd_key) {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
@@ -1526,7 +1533,7 @@ namespace Proc {
 			if (selected > 0) selected = select_max;
 		}
 		else if (cmd_key.starts_with("mousey")) {
-			int mouse_y = std::stoi(cmd_key.substr(6));
+			int mouse_y = std::atoi(cmd_key.substr(6).data());
 			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
 		}
 

@@ -16,20 +16,22 @@ indent = tab
 tab-size = 4
 */
 
-#include <deque>
-#include <unordered_map>
-#include <array>
-#include <signal.h>
-#include <errno.h>
-#include <cmath>
-#include <filesystem>
-
 #include "btop_menu.hpp"
-#include "btop_tools.hpp"
+
 #include "btop_config.hpp"
-#include "btop_theme.hpp"
 #include "btop_draw.hpp"
 #include "btop_shared.hpp"
+#include "btop_theme.hpp"
+#include "btop_tools.hpp"
+
+#include <errno.h>
+#include <signal.h>
+
+#include <array>
+#include <cmath>
+#include <filesystem>
+#include <unordered_map>
+#include <utility>
 
 using std::array;
 using std::ceil;
@@ -798,7 +800,7 @@ namespace Menu {
 	};
 
 	msgBox::msgBox() {}
-	msgBox::msgBox(int width, int boxtype, const vector<string>& content, string title)
+	msgBox::msgBox(int width, int boxtype, const vector<string>& content, const std::string_view title)
 	: width(width), boxtype(boxtype) {
 		auto tty_mode = Config::getB("tty_mode");
 		auto rounded = Config::getB("rounded_corners");
@@ -838,7 +840,7 @@ namespace Menu {
 	}
 
 	//? Process input
-	int msgBox::input(string key) {
+	int msgBox::input(const string& key) {
 		if (key.empty()) return Invalid;
 
 		if (is_in(key, "escape", "backspace", "q") or key == "button2") {
@@ -1597,7 +1599,7 @@ static int optionsMenu(const string& key) {
 	};
 	bitset<8> menuMask;
 
-	void process(string key) {
+	void process(const std::string_view key) {
 		if (menuMask.none()) {
 			Menu::active = false;
 			Global::overlay.clear();
@@ -1627,7 +1629,7 @@ static int optionsMenu(const string& key) {
 
 		}
 
-		auto retCode = menuFunc.at(currentMenu)(key);
+		auto retCode = menuFunc.at(currentMenu)(key.data());
 		if (retCode == Closed) {
 			menuMask.reset(currentMenu);
 			mouse_mappings.clear();

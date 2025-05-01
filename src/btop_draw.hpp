@@ -18,11 +18,12 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <vector>
 #include <array>
-#include <unordered_map>
 #include <deque>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 using std::array;
 using std::deque;
@@ -72,15 +73,16 @@ namespace Draw {
 		string text;
 		TextEdit();
 		explicit TextEdit(string text, bool numeric=false);
-		bool command(const string& key);
+		bool command(const std::string_view key);
 		string operator()(const size_t limit=0);
 		void clear();
 	};
 
 	//* Create a box and return as a string
-	string createBox(const int x, const int y, const int width,
-		const int height, string line_color = "", bool fill = false,
-		const string title = "", const string title2 = "", const int num = 0);
+	string createBox(
+			const int x, const int y, const int width, const int height, string line_color = "", bool fill = false,
+			const std::string_view title = "", const std::string_view title2 = "", const int num = 0
+	);
 
 	bool update_clock(bool force = false);
 

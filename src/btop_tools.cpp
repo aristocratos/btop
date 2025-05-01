@@ -26,6 +26,7 @@ tab-size = 4
 #include <optional>
 #include <ranges>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 #include <fcntl.h>
@@ -33,7 +34,6 @@ tab-size = 4
 #include <termios.h>
 #include <unistd.h>
 
-#include "unordered_map"
 #include "widechar_width.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -211,11 +211,11 @@ namespace Term {
 
 namespace Tools {
 
-	size_t wide_ulen(const string& str) {
+	size_t wide_ulen(const std::string_view str) {
 		unsigned int chars = 0;
 		try {
 			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
 
 			for (auto c : w_str) {
 				chars += utf8::wcwidth(c);
@@ -228,7 +228,7 @@ namespace Tools {
 		return chars;
 	}
 
-	size_t wide_ulen(const std::wstring& w_str) {
+	size_t wide_ulen(const std::wstring_view w_str) {
 		unsigned int chars = 0;
 
 		for (auto c : w_str) {
@@ -578,7 +578,8 @@ namespace Tools {
 		return (user != nullptr ? user : "");
 	}
 
-	DebugTimer::DebugTimer(const string name, bool start, bool delayed_report) : name(name), delayed_report(delayed_report) {
+	DebugTimer::DebugTimer(string name, bool start, bool delayed_report)
+			: name(std::move(name)), delayed_report(delayed_report) {
 		if (start)
 			this->start();
 	}
@@ -681,7 +682,7 @@ namespace Logger {
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(const Level level, const string& msg) {
+	void log_write(const Level level, const std::string_view msg) {
 		if (loglevel < level or !logfile.has_value()) {
 			return;
 		}
