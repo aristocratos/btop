@@ -23,9 +23,11 @@ tab-size = 4
 #include <deque>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <tuple>
-#include <vector>
 #include <unordered_map>
+#include <vector>
+
 #include <unistd.h>
 
 // From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
@@ -67,7 +69,6 @@ namespace Global {
 }
 
 namespace Runner {
-
 	extern atomic<bool> active;
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
@@ -414,7 +415,7 @@ namespace Proc {
 	auto collect(bool no_update = false) -> vector<proc_info>&;
 
 	//* Update current selection and view, returns -1 if no change otherwise the current selection
-	int selection(const string& cmd_key);
+	int selection(const std::string_view cmd_key);
 
 	//* Draw contents of proc box using <plist> as data source
 	string draw(const vector<proc_info>& plist, bool force_redraw = false, bool data_same = false);

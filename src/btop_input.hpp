@@ -18,11 +18,12 @@ tab-size = 4
 
 #pragma once
 
-#include <string>
-#include <atomic>
 #include <array>
-#include <unordered_map>
+#include <atomic>
 #include <deque>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 
 using std::array;
 using std::atomic;
@@ -72,6 +73,6 @@ namespace Input {
 	void clear();
 
 	//* Process actions for input <key>
-	void process(const string& key);
+	void process(const std::string_view key);
 
 }
