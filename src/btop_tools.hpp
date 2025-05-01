@@ -219,14 +219,14 @@ namespace Tools {
 	}
 
 	//* Return <str> with only uppercase characters
-	inline string str_to_upper(string str) {
-		std::ranges::for_each(str, [](auto& c) { c = ::toupper(c); } );
+	inline auto str_to_upper(string str) {
+		std::ranges::for_each(str, ::toupper);
 		return str;
 	}
 
 	//* Return <str> with only lowercase characters
-	inline string str_to_lower(string str) {
-		std::ranges::for_each(str, [](char& c) { c = ::tolower(c); } );
+	inline auto str_to_lower(string str) {
+		std::ranges::for_each(str, ::tolower);
 		return str;
 	}
 
