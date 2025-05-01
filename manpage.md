@@ -1,6 +1,6 @@
 % btop(1) | User Commands
 %
-% "January  4 2024"
+% 2025-05-01
 
 # NAME
 
@@ -8,8 +8,9 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 # SYNOPSIS
 
-**btop** [**-lc**] [**-t** | **+t**] [**-p** _id_] [**\-\-force-utf**]
-         [**\-\-debug**] [{**-h** | **\-\-help**} | {**-v** | **\-\-version**}]
+**btop** [**-c**] [**-d**] [**-l**] [**-t**] [**-p** _id_] [**-u** _ms_] [**\-\-force-utf**]
+
+**btop** [{**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
 
@@ -20,28 +21,34 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 The program follows the usual GNU command line syntax, with long options
 starting with two dashes ('-'). A summary of options is included below.
 
-**-lc**, **\-\-low-color**
-:   Disable truecolor, converts 24-bit colors to 256-color.
+**-c**, **\-\-config _file_**
+:   Path to a config file.
 
-**-t**, **\-\-tty_on**
-:   Force (ON) tty mode, max 16 colors and tty-friendly graph symbols.
-
-**+t**, **\-\-tty_off**
-:   Force (OFF) tty mode.
-
-**-p**, **\-\-preset _id_**
-:   Start with preset, integer value between 0-9.
+**-d**, **\-\-debug**
+:   Start in debug mode with additional logs and metrics.
 
 **\-\-force-utf**
 :   Force start even if no UTF-8 locale was detected.
 
-**\-\-debug**
-:   Start in DEBUG mode: shows microsecond timer for information collect and screen draw functions and sets loglevel to DEBUG.
+**-l**, **\-\-low-color**
+:   Disable true color, 256 colors only.
+
+**-p**, **\-\-preset _id_**
+:   Start with a preset (0-9).
+
+**-t**, **\-\-tty-on**
+:   Force tty mode with ANSI graph symbols and 16 colors only.
+
+**\-\-tty-off**
+:   Force disable tty mode.
+
+**-u**, **\-\-update _ms_**
+:   Set an initial update rate in milliseconds.
 
 **-h**, **\-\-help**
 :   Show summary of options.
 
-**-v**, **\-\-version**
+**-V**, **\-\-version**
 :   Show version of program.
 
 # BUGS

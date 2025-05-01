@@ -1499,18 +1499,19 @@ log_level = "DEBUG"
 #### Command line options
 
 ```text
-usage: btop [-h] [-v] [-/+t] [-p <id>] [--force-utf] [--debug]
+Usage: btop [OPTIONS]
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -v, --version         show version info and exit
-  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
-  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
-  +t, --tty_off         force (OFF) tty mode
-  -p, --preset <id>     start with preset, integer value between 0-9
-  --force-utf           force start even if no UTF-8 locale was detected
-  --debug               start in DEBUG mode: shows microsecond timer for information collect
-                        and screen draw functions and sets loglevel to DEBUG
+Options:
+  -c, --config <file>  Path to a config file
+  -d, --debug          Start in debug mode with additional logs and metrics
+      --force-utf      Override automatic UTF locale detection
+  -l, --low-color      Disable true color, 256 colors only
+  -p, --preset <id>    Start with a preset (0-9)
+  -t, --tty            Force tty mode with ANSI graph symbols and 16 colors only
+      --no-tty         Force disable tty mode
+  -u, --update <ms>    Set an initial update rate in milliseconds
+  -h, --help           Show this help message and exit
+  -V, --version        Show a version message and exit (more with --version)
 ```
 
 ## LICENSE
