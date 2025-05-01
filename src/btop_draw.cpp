@@ -146,7 +146,7 @@ namespace Draw {
 	}
 
 	TextEdit::TextEdit() {}
-	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(text) {
+	TextEdit::TextEdit(string text, bool numeric) : numeric(numeric), text(std::move(text)) {
 		pos = this->text.size();
 		upos = ulen(this->text);
 	}

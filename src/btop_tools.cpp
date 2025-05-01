@@ -578,7 +578,8 @@ namespace Tools {
 		return (user != nullptr ? user : "");
 	}
 
-	DebugTimer::DebugTimer(const string name, bool start, bool delayed_report) : name(name), delayed_report(delayed_report) {
+	DebugTimer::DebugTimer(string name, bool start, bool delayed_report)
+			: name(std::move(name)), delayed_report(delayed_report) {
 		if (start)
 			this->start();
 	}

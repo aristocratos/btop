@@ -445,7 +445,7 @@ namespace Tools {
 		Logger::Level log_level = Logger::DEBUG;
 	public:
 		DebugTimer() = default;
-		explicit DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		explicit DebugTimer(string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
 		DebugTimer(const DebugTimer& other) = delete;
 		DebugTimer& operator=(const DebugTimer& other) = delete;
