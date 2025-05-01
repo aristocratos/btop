@@ -22,7 +22,7 @@ include(CheckIPOSupported)
 include(CMakeDependentOption)
 
 # Make our Find<Package>.cmake files available
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 # When the build type is not set we can't fortify
 if(NOT CMAKE_BUILD_TYPE)
