@@ -83,7 +83,7 @@ namespace Cli {
 				cli.force_tty = std::make_optional(true);
 				continue;
 			}
-			if (arg == "-T" || arg == "--no-tty") {
+			if (arg == "--no-tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
 					return OrRetCode { 1 };
