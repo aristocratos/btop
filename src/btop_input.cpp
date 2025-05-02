@@ -213,7 +213,7 @@ namespace Input {
 			auto kill_key = (vim_keys ? "K" : "k");
 			//? Global input actions
 			if (not filtering) {
-                          auto disable_help = Config::getB("disable_help");
+				auto disable_help = Config::getB("disable_help");
 				bool keep_going = false;
 				if (key == "q") {
 					clean_quit(0);
