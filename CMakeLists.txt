@@ -115,7 +115,7 @@ if(BTOP_LTO)
   endif()
 endif()
 
-target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic -ftree-vectorize)
+target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
 
 if(BTOP_PEDANTIC)
   target_compile_options(btop PRIVATE
