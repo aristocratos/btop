@@ -50,6 +50,7 @@ namespace Config {
 	bool write_new;
 
 	const vector<array<string, 2>> descriptions = {
+		{"disable_help", "#* Disable menu and help. For the true minimalist!"},
 		{"color_theme", 		"#* Name of a btop++/bpytop/bashtop formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes.\n"
 								"#* Themes should be placed in \"../share/btop/themes\" relative to binary or \"$HOME/.config/btop/themes\""},
 
@@ -263,6 +264,7 @@ namespace Config {
 	std::unordered_map<std::string_view, string> stringsTmp;
 
 	std::unordered_map<std::string_view, bool> bools = {
+		{"disable_help", false},
 		{"theme_background", true},
 		{"truecolor", true},
 		{"rounded_corners", true},
