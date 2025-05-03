@@ -159,20 +159,24 @@ namespace Proc {
 		}
 	}
 
-	bool matches_filter(const proc_info& proc, const std::string& filter) {
+	auto matches_filter(const proc_info& proc, const std::string& filter) -> bool {
 		if (filter.starts_with("!")) {
 			if (filter.size() == 1) {
 				return true;
 			}
-			std::regex regex{filter.substr(1), std::regex::extended};
-			return std::regex_search(std::to_string(proc.pid), regex) ||
-				   std::regex_search(proc.name, regex) || std::regex_match(proc.cmd, regex) ||
-				   std::regex_search(proc.user, regex);
-		} else {
-			return s_contains(std::to_string(proc.pid), filter) ||
-				   s_contains_ic(proc.name, filter) || s_contains_ic(proc.cmd, filter) ||
-				   s_contains_ic(proc.user, filter);
+
+			// An incomplete regex throws, see issue https://github.com/aristocratos/btop/issues/1133
+			try {
+				std::regex regex { filter.substr(1), std::regex::extended };
+				return std::regex_search(std::to_string(proc.pid), regex) || std::regex_search(proc.name, regex) ||
+							 std::regex_match(proc.cmd, regex) || std::regex_search(proc.user, regex);
+			} catch (std::regex_error& /* unused */) {
+				return false;
+			}
 		}
+
+		return s_contains(std::to_string(proc.pid), filter) || s_contains_ic(proc.name, filter) ||
+					 s_contains_ic(proc.cmd, filter) || s_contains_ic(proc.user, filter);
 	}
 
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
