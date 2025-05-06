@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/cmake-macos.yml'
       - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
       - 'src/osx/*pp'
@@ -15,13 +16,14 @@ on:
     paths:
       - '.github/workflows/cmake-macos.yml'
       - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
       - 'src/osx/*pp'
 
 jobs:
   cmake_build_on_macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true

@@ -26,16 +26,18 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
+#include <limits.h>
+#include <pthread.h>
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
-#include <vector>
-#include <pthread.h>
-#include <limits.h>
 #include <unordered_map>
+#include <vector>
 #ifdef BTOP_DEBUG
 #include <source_location>
 #endif
@@ -54,6 +56,7 @@ using std::array;
 using std::atomic;
 using std::string;
 using std::to_string;
+using std::string_view;
 using std::tuple;
 using std::vector;
 using namespace fmt::literals;
@@ -161,9 +164,9 @@ namespace Logger {
 		"INFO",
 		"DEBUG",
 	};
-	extern std::filesystem::path logfile;
+	extern std::optional<std::filesystem::path> logfile;
 
-	enum Level : size_t {
+	enum Level : std::uint8_t {
 		DISABLED = 0,
 		ERROR = 1,
 		WARNING = 2,
@@ -174,11 +177,23 @@ namespace Logger {
 	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
 	void set(const string& level);
 
-	void log_write(const Level level, const string& msg);
-	inline void error(const string msg) { log_write(ERROR, msg); }
-	inline void warning(const string msg) { log_write(WARNING, msg); }
-	inline void info(const string msg) { log_write(INFO, msg); }
-	inline void debug(const string msg) { log_write(DEBUG, msg); }
+	void log_write(const Level level, const std::string_view msg);
+
+	inline void error(const std::string_view msg) {
+		log_write(ERROR, msg);
+	}
+
+	inline void warning(const std::string_view msg) {
+		log_write(WARNING, msg);
+	}
+
+	inline void info(const std::string_view msg) {
+		log_write(INFO, msg);
+	}
+
+	inline void debug(const std::string_view msg) {
+		log_write(DEBUG, msg);
+	}
 }
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -188,15 +203,15 @@ namespace Tools {
 
 	class MyNumPunct : public std::numpunct<char> {
 	protected:
-		virtual char do_thousands_sep() const { return '\''; }
-		virtual std::string do_grouping() const { return "\03"; }
+		virtual char do_thousands_sep() const override { return '\''; }
+		virtual std::string do_grouping() const override { return "\03"; }
 	};
 
-	size_t wide_ulen(const string& str);
-	size_t wide_ulen(const std::wstring& w_str);
+	size_t wide_ulen(const std::string_view str);
+	size_t wide_ulen(const std::wstring_view w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
-	inline size_t ulen(const string& str, bool wide = false) {
+	inline size_t ulen(const std::string_view str, bool wide = false) {
 		return (wide ? wide_ulen(str) : std::ranges::count_if(str, [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
 	}
 
@@ -209,20 +224,26 @@ namespace Tools {
 	//* Replace <from> in <str> with <to> and return new string
 	string s_replace(const string& str, const string& from, const string& to);
 
-	//* Capatilize <str>
+	//* Replace ascii control characters with <replacement> in <str> and return new string
+	inline string replace_ascii_control(string str, const char replacement = ' ') {
+		std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+		return str;
+	}
+
+	//* Capitalize <str>
 	inline string capitalize(string str) {
 		str.at(0) = toupper(str.at(0));
 		return str;
 	}
 
 	//* Return <str> with only uppercase characters
-	inline string str_to_upper(string str) {
+	inline auto str_to_upper(string str) {
 		std::ranges::for_each(str, [](auto& c) { c = ::toupper(c); } );
 		return str;
 	}
 
 	//* Return <str> with only lowercase characters
-	inline string str_to_lower(string str) {
+	inline auto str_to_lower(string str) {
 		std::ranges::for_each(str, [](char& c) { c = ::tolower(c); } );
 		return str;
 	}
@@ -235,12 +256,12 @@ namespace Tools {
 
 	//* Check if string <str> contains value <find_val>
 	template <typename T>
-	inline bool s_contains(const string& str, const T& find_val) {
+	constexpr bool s_contains(const std::string_view str, const T& find_val) {
 		return str.find(find_val) != string::npos;
 	}
 
 	//* Check if string <str> contains string <find_val>, while ignoring case
-	inline bool s_contains_ic(const string& str, const string& find_val) {
+	inline bool s_contains_ic(const std::string_view str, const std::string_view find_val) {
 		auto it = std::search(
 			str.begin(), str.end(),
 			find_val.begin(), find_val.end(),
@@ -277,28 +298,28 @@ namespace Tools {
 	}
 
 	//* Check if a string is a valid bool value
-	inline bool isbool(const string& str) {
+	inline bool isbool(const std::string_view str) {
 		return is_in(str, "true", "false", "True", "False");
 	}
 
 	//* Convert string to bool, returning any value not equal to "true" or "True" as false
-	inline bool stobool(const string& str) {
+	inline bool stobool(const std::string_view str) {
 		return is_in(str, "true", "True");
 	}
 
 	//* Check if a string is a valid integer value (only positive)
-	inline bool isint(const string& str) {
-		return all_of(str.begin(), str.end(), ::isdigit);
+	constexpr bool isint(const std::string_view str) {
+		return std::ranges::all_of(str, ::isdigit);
 	}
 
 	//* Left-trim <t_str> from <str> and return new string
-	string ltrim(const string& str, const string& t_str = " ");
+	string_view ltrim(string_view str, string_view t_str = " ");
 
 	//* Right-trim <t_str> from <str> and return new string
-	string rtrim(const string& str, const string& t_str = " ");
+	string_view rtrim(string_view str, string_view t_str = " ");
 
 	//* Left/right-trim <t_str> from <str> and return new string
-	inline string trim(const string& str, const string& t_str = " ") {
+	inline string_view trim(string_view str, string_view t_str = " ") {
 		return ltrim(rtrim(str, t_str), t_str);
 	}
 
@@ -342,8 +363,8 @@ namespace Tools {
 	template <typename K, typename T>
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
 			return fallback;
@@ -351,8 +372,8 @@ namespace Tools {
 	};
 #else
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
-		if (map.contains(key)) {
-			return map.at(key);
+		if (auto it = map.find(key); it != map.end()) {
+			return it->second;
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
 			return fallback;
@@ -364,7 +385,7 @@ namespace Tools {
 #ifdef BTOP_DEBUG
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}, std::source_location loc = std::source_location::current()) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
 			return fallback;
@@ -373,7 +394,7 @@ namespace Tools {
 #else
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
 		if (index < vec.size()) {
-			return vec.at(index);
+			return vec[index];
 		} else {
 			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
 			return fallback;
@@ -410,8 +431,12 @@ namespace Tools {
 		atomic<bool>& atom;
 		bool not_true{};
 	public:
-		atomic_lock(atomic<bool>& atom, bool wait = false);
-		~atomic_lock();
+		explicit atomic_lock(atomic<bool>& atom, bool wait = false);
+		~atomic_lock() noexcept;
+		atomic_lock(const atomic_lock& other) = delete;
+		atomic_lock& operator=(const atomic_lock& other) = delete;
+		atomic_lock(atomic_lock&& other) = delete;
+		atomic_lock& operator=(atomic_lock&& other) = delete;
 	};
 
 	//* Read a complete file and return as a string
@@ -433,13 +458,17 @@ namespace Tools {
 		bool running{};
 		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
 		vector<string> report_buffer{};
-	public:
 		string name{};
 		bool delayed_report{};
 		Logger::Level log_level = Logger::DEBUG;
+	public:
 		DebugTimer() = default;
-		DebugTimer(const string name, bool start = true, bool delayed_report = true);
+		explicit DebugTimer(string name, bool start = true, bool delayed_report = true);
 		~DebugTimer();
+		DebugTimer(const DebugTimer& other) = delete;
+		DebugTimer& operator=(const DebugTimer& other) = delete;
+		DebugTimer(DebugTimer&& other) = delete;
+		DebugTimer& operator=(DebugTimer&& other) = delete;
 
 		void start();
 		void stop(bool report = true);
@@ -453,6 +482,3 @@ namespace Tools {
 	};
 
 }
-
-
-

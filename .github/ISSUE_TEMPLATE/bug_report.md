@@ -39,9 +39,9 @@ Any bug that can be solved by just reading the [prerequisites](https://github.co
 
 **Additional context**
 
-Contents of `~/.config/btop/btop.log`
+Contents of `~/.local/state/btop.log`
 
-Note: The snap uses: `~/snap/btop/current/.config/btop`
+Note: The snap uses: `~/snap/btop/current/.local/state/btop.log`
 
 (try running btop with `--debug` flag if btop.log is empty)
 

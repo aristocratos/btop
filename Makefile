@@ -51,11 +51,6 @@ ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
 endif
 
-FORTIFY_SOURCE ?= true
-ifeq ($(FORTIFY_SOURCE),true)
-	override ADDFLAGS += -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
-endif
-
 #? Compiler and Linker
 ifeq ($(shell $(CXX) --version | grep clang >/dev/null 2>&1; echo $$?),0)
 	override CXX_IS_CLANG := true
@@ -63,32 +58,8 @@ endif
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
 
-CLANG_WORKS = false
-GCC_WORKS = false
-MIN_CLANG_VERSION = 16
-
 ifeq ($(DEBUG),true)
 	override ADDFLAGS += -DBTOP_DEBUG
-endif
-
-#? Supported is Clang 16.0.0 and later
-ifeq ($(CXX_IS_CLANG),true)
-	ifeq ($(shell $(CXX) --version | grep Apple >/dev/null 2>&1; echo $$?),0)
-		MIN_CLANG_VERSION := 15
-	endif
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt $(MIN_CLANG_VERSION); echo $$?),0)
-		CLANG_WORKS := true
-	endif
-else
-	ifneq ($(shell test $(CXX_VERSION_MAJOR) -lt 10; echo $$?),0)
-		GCC_WORKS := true
-	endif
-endif
-
-ifeq ($(CLANG_WORKS),false)
-	ifeq ($(GCC_WORKS),false)
-$(error $(shell printf "\033[1;91mERROR: \033[97mCompiler too old. (Requires Clang 16.0.0, GCC 10.1.0)\033[0m"))
-	endif
 endif
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
@@ -104,7 +75,7 @@ $(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link gl
 		endif
 	endif
 
-	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux))
+	ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd linux midnightbsd))
 		override ADDFLAGS += -DSTATIC_BUILD -static
 	else
 		ifeq ($(CXX_IS_CLANG),false)
@@ -128,7 +99,7 @@ ifeq ($(PLATFORM_LC),linux)
 	PLATFORM_DIR := linux
 	THREADS	:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := root
-else ifeq ($(PLATFORM_LC),freebsd)
+else ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd midnightbsd))
 	PLATFORM_DIR := freebsd
 	THREADS	:= $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
 	SU_GROUP := wheel
@@ -169,14 +140,16 @@ ifeq ($(THREADS),1)
 endif
 
 #? LTO command line
-ifeq ($(CLANG_WORKS),true)
-	LTO := thin
-else
-	LTO := $(THREADS)
+ifeq ($(BUILD_TYPE),Release)
+	ifeq ($(CXX_IS_CLANG),true)
+		LTO := -flto=thin
+	else
+		LTO := -flto=$(THREADS)
+	endif
 endif
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2> /dev/null || true)
-CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC) FORTIFY_SOURCE=$(FORTIFY_SOURCE)
+CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC)
 ifeq ($(PLATFORM_LC),linux)
 	CONFIGURE_COMMAND +=  GPU_SUPPORT=$(GPU_SUPPORT) RSMI_STATIC=$(RSMI_STATIC)
 endif
@@ -196,8 +169,8 @@ override GOODFLAGS := $(foreach flag,$(TESTFLAGS),$(strip $(shell echo "int main
 #? Flags, Libraries and Includes
 override REQFLAGS   := -std=c++20
 WARNFLAGS			:= -Wall -Wextra -pedantic
-OPTFLAGS			:= -O2 -ftree-vectorize -flto=$(LTO)
-LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
+OPTFLAGS			:= -O2 $(LTO)
+LDCXXFLAGS			:= -pthread -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG -D_FILE_OFFSET_BITS=64 $(GOODFLAGS) $(ADDFLAGS)
 override CXXFLAGS	+= $(REQFLAGS) $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 override LDFLAGS	+= $(LDCXXFLAGS) $(OPTFLAGS) $(WARNFLAGS)
 INC					:= $(foreach incdir,$(INCDIRS),-isystem $(incdir)) -I$(SRCDIR) -I$(BUILDDIR)

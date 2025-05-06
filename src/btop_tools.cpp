@@ -18,20 +18,22 @@ tab-size = 4
 
 #include <cmath>
 #include <codecvt>
-#include <iostream>
-#include <fstream>
 #include <ctime>
-#include <sstream>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
-#include <utility>
+#include <iostream>
+#include <optional>
 #include <ranges>
+#include <sstream>
+#include <string_view>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
-#include "unordered_map"
 #include "widechar_width.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -95,7 +97,7 @@ namespace Term {
 		struct winsize wsize {};
 		if (uses_dev_tty || ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize) < 0 || (wsize.ws_col == 0 && wsize.ws_row == 0)) {
 			Logger::error(R"(Couldn't determine terminal size of "STDOUT_FILENO"!)");
-			auto dev_tty = open("/dev/tty", O_RDONLY);
+			auto dev_tty = open("/dev/tty", O_RDONLY | O_CLOEXEC);
 			if (dev_tty != -1) {
 				ioctl(dev_tty, TIOCGWINSZ, &wsize);
 				close(dev_tty);
@@ -209,11 +211,11 @@ namespace Term {
 
 namespace Tools {
 
-	size_t wide_ulen(const string& str) {
+	size_t wide_ulen(const std::string_view str) {
 		unsigned int chars = 0;
 		try {
 			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
+			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
 
 			for (auto c : w_str) {
 				chars += utf8::wcwidth(c);
@@ -226,7 +228,7 @@ namespace Tools {
 		return chars;
 	}
 
-	size_t wide_ulen(const std::wstring& w_str) {
+	size_t wide_ulen(const std::wstring_view w_str) {
 		unsigned int chars = 0;
 
 		for (auto c : w_str) {
@@ -296,20 +298,18 @@ namespace Tools {
 		return out;
 	}
 
-	string ltrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.starts_with(t_str))
-			str_v.remove_prefix(t_str.size());
+	string_view ltrim(string_view str, const string_view t_str) {
+		while (str.starts_with(t_str))
+			str.remove_prefix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
-	string rtrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.ends_with(t_str))
-			str_v.remove_suffix(t_str.size());
+	string_view rtrim(string_view str, const string_view t_str) {
+		while (str.ends_with(t_str))
+			str.remove_suffix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
@@ -399,7 +399,19 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
+
 		bool mega = Config::getB("base_10_sizes");
+
+		// Bitrates
+	    if(bit && per_second) {
+			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
+			if(base_10_bitrate == "True") {
+				mega = true;
+			} else if(base_10_bitrate == "False") {
+				mega = false;
+			}
+			// Default or "Auto": Uses base_10_sizes for bitrates
+		}
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
@@ -523,7 +535,7 @@ namespace Tools {
 		else this->atom.store(true);
 	}
 
-	atomic_lock::~atomic_lock() {
+	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
 	}
 
@@ -556,6 +568,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
+		host[HOST_NAME_MAX - 1] = '\0';
 		return string{host};
 	}
 
@@ -565,7 +578,8 @@ namespace Tools {
 		return (user != nullptr ? user : "");
 	}
 
-	DebugTimer::DebugTimer(const string name, bool start, bool delayed_report) : name(name), delayed_report(delayed_report) {
+	DebugTimer::DebugTimer(string name, bool start, bool delayed_report)
+			: name(std::move(name)), delayed_report(delayed_report) {
 		if (start)
 			this->start();
 	}
@@ -642,7 +656,7 @@ namespace Logger {
 	const string tdf = "%Y/%m/%d (%T) | ";
 
 	size_t loglevel;
-	fs::path logfile;
+	std::optional<std::filesystem::path> logfile;
 
 	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
 	class lose_priv {
@@ -653,46 +667,53 @@ namespace Logger {
 				this->status = seteuid(Global::real_uid);
 			}
 		}
-		~lose_priv() {
+		~lose_priv() noexcept {
 			if (status == 0) {
 				status = seteuid(Global::set_uid);
 			}
 		}
+		lose_priv(const lose_priv& other) = delete;
+		lose_priv& operator=(const lose_priv& other) = delete;
+		lose_priv(lose_priv&& other) = delete;
+		lose_priv& operator=(lose_priv&& other) = delete;
 	};
 
 	void set(const string& level) {
 		loglevel = v_index(log_levels, level);
 	}
 
-	void log_write(const Level level, const string& msg) {
-		if (loglevel < level or logfile.empty()) return;
+	void log_write(const Level level, const std::string_view msg) {
+		if (loglevel < level or !logfile.has_value()) {
+			return;
+		}
+		auto& log_file = logfile.value();
 		atomic_lock lck(busy, true);
 		lose_priv neutered{};
 		std::error_code ec;
 		try {
 			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
-			if (fs::exists(logfile) and fs::file_size(logfile, ec) > 1024 << 10 and not ec) {
-				auto old_log = logfile;
+			if (fs::exists(log_file) and fs::file_size(log_file, ec) > 1024 << 10 and not ec) {
+				auto old_log = log_file;
 				old_log += ".1";
 
 				if (fs::exists(old_log))
 					fs::remove(old_log, ec);
 
 				if (not ec)
-					fs::rename(logfile, old_log, ec);
+					fs::rename(log_file, old_log, ec);
 			}
 			if (not ec) {
-				std::ofstream lwrite(logfile, std::ios::app);
+				std::ofstream lwrite(log_file, std::ios::app);
 				if (first) {
 					first = false;
 					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
 				}
 				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
 			}
-			else logfile.clear();
+			else log_file.clear();
 		}
 		catch (const std::exception& e) {
-			logfile.clear();
+			log_file.clear();
 			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
 		}
 	}

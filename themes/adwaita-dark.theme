@@ -1,0 +1,81 @@
+#Bashtop Adwaita Dark theme
+#by k0tran
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#1d1d1d"
+
+# Main text color
+theme[main_fg]="#deddda"
+
+# Title color for boxes
+theme[title]="#deddda"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#62a0ea"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#1c71d8" 
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#ffffff"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#77767b"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#1a5fb4"
+
+# Cpu box outline color
+theme[cpu_box]="#77767b"
+
+# Memory/disks box outline color
+theme[mem_box]="#77767b"
+
+# Net up/down box outline color
+theme[net_box]="#77767b"
+
+# Processes box outline color
+theme[proc_box]="#77767b"
+
+# Box divider line and small boxes line color
+theme[div_line]="#77767b"
+
+# Temperature graph colors
+theme[temp_start]="#62a0ea"
+theme[temp_mid]="#1c71d8"
+theme[temp_end]="#e01b24"
+
+# CPU graph colors
+theme[cpu_start]="#62a0ea"
+theme[cpu_mid]="#1c71d8"
+theme[cpu_end]="#e01b24"
+
+# Mem/Disk free meter
+theme[free_start]="#62a0ea"
+theme[free_mid]="#1c71d8"
+theme[free_end]="#c01b24"
+
+# Mem/Disk cached meter
+theme[cached_start]="#62a0ea"
+theme[cached_mid]="#1c71d8"
+theme[cached_end]="#c01b24"
+
+# Mem/Disk available meter
+theme[available_start]="#62a0ea"
+theme[available_mid]="#1c71d8"
+theme[available_end]="#c01b24"
+
+# Mem/Disk used meter
+theme[used_start]="#62a0ea"
+theme[used_mid]="#1c71d8"
+theme[used_end]="#c01b24"
+
+# Download graph colors
+theme[download_start]="#62a0ea"
+theme[download_mid]="#1c71d8"
+theme[download_end]="#c01b24"
+
+# Upload graph colors
+theme[upload_start]="#62a0ea"
+theme[upload_mid]="#1c71d8"
+theme[upload_end]="#c01b24"

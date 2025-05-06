@@ -21,6 +21,7 @@ tab-size = 4
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <fmt/format.h>
 #include <signal.h>
 #include <sys/select.h>
 #include <utility>
@@ -177,8 +178,8 @@ namespace Input {
 				}
 
 			}
-			else if (Key_escapes.contains(key))
-				key = Key_escapes.at(key);
+			else if (auto it = Key_escapes.find(key); it != Key_escapes.end())
+				key = it->second;
 			else if (ulen(key) > 1)
 				key.clear();
 
@@ -203,7 +204,7 @@ namespace Input {
 		// do not need it, actually
 	}
 
-	void process(const string& key) {
+	void process(const std::string_view key) {
 		if (key.empty()) return;
 		try {
 			auto filtering = Config::getB("proc_filtering");
@@ -213,7 +214,7 @@ namespace Input {
 			//? Global input actions
 			if (not filtering) {
 				bool keep_going = false;
-				if (str_to_lower(key) == "q") {
+				if (key == "q") {
 					clean_quit(0);
 				}
 				else if (is_in(key, "escape", "m")) {
@@ -229,7 +230,7 @@ namespace Input {
 					return;
 				}
 				else if (key.size() == 1 and isint(key)) {
-					auto intKey = stoi(key);
+					auto intKey = std::atoi(key.data());
 				#ifdef GPU_SUPPORT
 					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
 					if ((intKey == 0 and Gpu::count < 5) or (intKey >= 5 and intKey - 4 > Gpu::count))
@@ -317,7 +318,7 @@ namespace Input {
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
-					Proc::filter = { Config::getS("proc_filter") };
+					Proc::filter = Draw::TextEdit{Config::getS("proc_filter")};
 					old_filter = Proc::filter.text;
 				}
 				else if (key == "e") {
@@ -540,8 +541,7 @@ namespace Input {
 		}
 
 		catch (const std::exception& e) {
-			throw std::runtime_error("Input::process(\"" + key + "\") : " + string{e.what()});
+			throw std::runtime_error { fmt::format(R"(Input::process("{}"))", e.what()) };
 		}
 	}
-
 }

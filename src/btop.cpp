@@ -19,6 +19,9 @@ tab-size = 4
 #include <algorithm>
 #include <csignal>
 #include <clocale>
+#include <filesystem>
+#include <iterator>
+#include <optional>
 #include <pthread.h>
 #ifdef __FreeBSD__
 	#include <pthread_np.h>
@@ -34,17 +37,16 @@ tab-size = 4
 #include <regex>
 #include <chrono>
 #include <utility>
+#include <variant>
+#include <semaphore>
+
 #ifdef __APPLE__
 	#include <CoreFoundation/CoreFoundation.h>
 	#include <mach-o/dyld.h>
 	#include <limits.h>
 #endif
-#if !defined(__clang__) && __GNUC__ < 11
-	#include <semaphore.h>
-#else
-	#include <semaphore>
-#endif
 
+#include "btop_cli.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -52,7 +54,6 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_draw.hpp"
 #include "btop_menu.hpp"
-#include "config.h"
 #include "fmt/core.h"
 #include "fmt/ostream.h"
 
@@ -80,7 +81,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.0";
+	const string Version = "1.4.2";
 
 	int coreCount;
 	string overlay;
@@ -98,9 +99,7 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-	bool debuginit{};
 	bool debug{};
-	bool utf_force{};
 
 	uint64_t start_time;
 
@@ -111,124 +110,6 @@ namespace Global {
 	atomic<bool> _runner_started (false);
 	atomic<bool> init_conf (false);
 	atomic<bool> reload_conf (false);
-
-	bool arg_tty{};
-	bool arg_low_color{};
-	int arg_preset = -1;
-	int arg_update = 0;
-}
-
-static void print_version() {
-	if constexpr (GIT_COMMIT.empty()) {
-		fmt::println("btop version: {}", Global::Version);
-	} else {
-		fmt::println("btop version: {}+{}", Global::Version, GIT_COMMIT);
-	}
-}
-
-static void print_version_with_build_info() {
-	print_version();
-	fmt::println("Compiled with: {} ({})\nConfigured with: {}", COMPILER, COMPILER_VERSION, CONFIGURE_COMMAND);
-}
-
-static void print_usage() {
-	fmt::println("\033[1;4mUsage:\033[0;1m btop\033[0m [OPTIONS]\n");
-}
-
-static void print_help() {
-	print_usage();
-	fmt::println(
-			"{0}{1}Options:{2}\n"
-			"  {0}-h,  --help          {2}show this help message and exit\n"
-			"  {0}-v,  --version       {2}show version info and exit\n"
-			"  {0}-lc, --low-color     {2}disable truecolor, converts 24-bit colors to 256-color\n"
-			"  {0}-t,  --tty_on        {2}force (ON) tty mode, max 16 colors and tty friendly graph symbols\n"
-			"  {0}+t,  --tty_off       {2}force (OFF) tty mode\n"
-			"  {0}-p,  --preset <id>   {2}start with preset, integer value between 0-9\n"
-			"  {0}-u,  --update <ms>   {2}set the program update rate in milliseconds\n"
-			"  {0}     --utf-force     {2}force start even if no UTF-8 locale was detected\n"
-			"  {0}     --debug         {2}start in DEBUG mode: shows microsecond timer for information collect\n"
-			"  {0}                     {2}and screen draw functions and sets loglevel to DEBUG",
-			"\033[1m", "\033[4m", "\033[0m"
-	);
-}
-
-static void print_help_hint() {
-	fmt::println("For more information, try '{0}--help{1}'", "\033[1m", "\033[0m");
-}
-
-//* A simple argument parser
-void argumentParser(const int argc, char **argv) {
-	for(int i = 1; i < argc; i++) {
-		const string argument = argv[i];
-		if (is_in(argument, "-h", "--help")) {
-		  print_help();
-			exit(0);
-		}
-		else if (is_in(argument, "-v")) {
-			print_version();
-			exit(0);
-		}
-		else if (is_in(argument, "--version")) {
-			print_version_with_build_info();
-			exit(0);
-		}
-		else if (is_in(argument, "-lc", "--low-color")) {
-			Global::arg_low_color = true;
-		}
-		else if (is_in(argument, "-t", "--tty_on")) {
-			Config::set("tty_mode", true);
-			Global::arg_tty = true;
-		}
-		else if (is_in(argument, "+t", "--tty_off")) {
-			Config::set("tty_mode", false);
-			Global::arg_tty = true;
-		}
-		else if (is_in(argument, "-p", "--preset")) {
-			if (++i >= argc) {
-				fmt::println("{0}error:{1} Preset option needs an argument\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
-			}
-			else if (const string val = argv[i]; isint(val) and val.size() == 1) {
-				Global::arg_preset = std::clamp(stoi(val), 0, 9);
-			}
-			else {
-				fmt::println("{0}error: {1}Preset option only accepts an integer value between 0-9\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
-			}
-		}
-		else if (is_in(argument, "-u", "--update")) {
-			if (++i >= argc) {
-				fmt::println("{0}error:{1} Update option needs an argument\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
-			}
-			const std::string value = argv[i];
-			if (isint(value)) {
-				Global::arg_update = std::clamp(std::stoi(value), 100, Config::ONE_DAY_MILLIS);
-			} else {
-				fmt::println("{0}error:{1} Invalid update rate\n", "\033[1;31m", "\033[0m");
-				print_usage();
-				print_help_hint();
-				exit(1);
-			}
-		}
-		else if (argument == "--utf-force")
-			Global::utf_force = true;
-		else if (argument == "--debug")
-			Global::debug = true;
-		else {
-			fmt::println("{0}error:{2} unexpected argument '{1}{3}{2}' found\n", "\033[1;31m", "\033[33m", "\033[0m", argument);
-			print_usage();
-			print_help_hint();
-			exit(1);
-		}
-	}
 }
 
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
@@ -293,7 +174,7 @@ void term_resize(bool force) {
 				#else
 					if (intKey > 0 and intKey < 5) {
 				#endif
-						auto box = all_boxes.at(intKey);
+						const auto& box = all_boxes.at(intKey);
 						Config::current_preset = -1;
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
@@ -301,7 +182,8 @@ void term_resize(bool force) {
 				}
 			}
 			min_size = Term::get_min_size(boxes);
-			minWidth = min_size.at(0), minHeight = min_size.at(1);
+			minWidth = min_size.at(0);
+			minHeight = min_size.at(1);
 		}
 		else if (not Term::refresh()) break;
 	}
@@ -321,8 +203,7 @@ void clean_quit(int sig) {
 			pthread_cancel(Runner::runner_id);
 		}
 	#else
-		struct timespec ts;
-		ts.tv_sec = 5;
+		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
 		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
@@ -359,23 +240,23 @@ void clean_quit(int sig) {
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
-void _sleep() {
+static void _sleep() {
 	Runner::stop();
 	Term::restore();
 	std::raise(SIGSTOP);
 }
 
 //* Handler for SIGCONT; re-initialize terminal and force a resize event
-void _resume() {
+static void _resume() {
 	Term::init();
 	term_resize(true);
 }
 
-void _exit_handler() {
+static void _exit_handler() {
 	clean_quit(-1);
 }
 
-void _signal_handler(const int sig) {
+static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
 			if (Runner::active) {
@@ -414,11 +295,11 @@ void _signal_handler(const int sig) {
 }
 
 //* Config init
-void init_config(){
+void init_config(bool low_color) {
 	atomic_lock lck(Global::init_conf);
 	vector<string> load_warnings;
 	Config::load(Config::conf_file, load_warnings);
-	Config::set("lowcolor", (Global::arg_low_color ? true : not Config::getB("truecolor")));
+	Config::set("lowcolor", (low_color ? true : not Config::getB("truecolor")));
 
 	static bool first_init = true;
 
@@ -447,31 +328,28 @@ namespace Runner {
 	atomic<bool> coreNum_reset (false);
 
 	//* Setup semaphore for triggering thread to do work
-#if !defined(__clang__) && __GNUC__ < 11
-	sem_t do_work;
-	inline void thread_sem_init() { sem_init(&do_work, 0, 0); }
-	inline void thread_wait() { sem_wait(&do_work); }
-	inline void thread_trigger() { sem_post(&do_work); }
-#else
-	std::binary_semaphore do_work(0);
-	inline void thread_sem_init() { ; }
+	// TODO: This can be made a local without too much effort.
+	std::binary_semaphore do_work { 0 };
 	inline void thread_wait() { do_work.acquire(); }
 	inline void thread_trigger() { do_work.release(); }
-#endif
 
 	//* RAII wrapper for pthread_mutex locking
 	class thread_lock {
 		pthread_mutex_t& pt_mutex;
 	public:
 		int status;
-		thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
+		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
 			pthread_mutex_init(&pt_mutex, nullptr);
 			status = pthread_mutex_lock(&pt_mutex);
 		}
-		~thread_lock() {
+		~thread_lock() noexcept {
 			if (status == 0)
 				pthread_mutex_unlock(&pt_mutex);
 		}
+		thread_lock(const thread_lock& other) = delete;
+		thread_lock& operator=(const thread_lock& other) = delete;
+		thread_lock(thread_lock&& other) = delete;
+		thread_lock& operator=(thread_lock&& other) = delete;
 	};
 
 	//* Wrapper for raising privileges when using SUID bit
@@ -482,10 +360,14 @@ namespace Runner {
 			if (Global::real_uid != Global::set_uid)
 				this->status = seteuid(Global::set_uid);
 		}
-		~gain_priv() {
+		~gain_priv() noexcept {
 			if (status == 0)
 				status = seteuid(Global::real_uid);
 		}
+		gain_priv(const gain_priv& other) = delete;
+		gain_priv& operator=(const gain_priv& other) = delete;
+		gain_priv(gain_priv&& other) = delete;
+		gain_priv& operator=(gain_priv&& other) = delete;
 	};
 
 	string output;
@@ -514,8 +396,8 @@ namespace Runner {
 	class MyNumPunct : public std::numpunct<char>
 	{
 	protected:
-		virtual char do_thousands_sep() const { return '\''; }
-		virtual std::string do_grouping() const { return "\03"; }
+		virtual char do_thousands_sep() const override { return '\''; }
+		virtual std::string do_grouping() const override { return "\03"; }
 	};
 
 
@@ -530,7 +412,7 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
-	void debug_timer(const char* name, const int action) {
+	static void debug_timer(const char* name, const int action) {
 		switch (action) {
 			case collect_begin:
 				debug_times[name].at(collect) = time_micros();
@@ -555,7 +437,7 @@ namespace Runner {
 	}
 
 	//? ------------------------------- Secondary thread: async launcher and drawing ----------------------------------
-	void * _runner(void *) {
+	static void * _runner(void *) {
 		//? Block some signals in this thread to avoid deadlock from any signal handlers trying to stop this thread
 		sigemptyset(&mask);
 		// sigaddset(&mask, SIGINT);
@@ -901,7 +783,7 @@ namespace Runner {
 
 
 //* --------------------------------------------- Main starts here! ---------------------------------------------------
-int main(int argc, char **argv) {
+int main(const int argc, const char** argv) {
 
 	//? ------------------------------------------------ INIT ---------------------------------------------------------
 
@@ -918,15 +800,40 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	//? Call argument parser if launched with arguments
-	if (argc > 1) argumentParser(argc, argv);
+	Cli::Cli cli;
+	{
+		// Wrap the command line arguments in a vector, ignoring the first element, which is the basename (executable name)
+		const std::vector<std::string_view> args {
+			std::next(argv, std::ptrdiff_t { 1 }),
+			std::next(argv, static_cast<std::ptrdiff_t>(argc))
+		};
+
+		// Get the cli options or return with an exit code
+		auto cli_or_ret = Cli::parse(args);
+		if (std::holds_alternative<Cli::Cli>(cli_or_ret)) {
+			cli = std::get<Cli::Cli>(cli_or_ret);
+		} else {
+			auto ret = std::get<std::int32_t>(cli_or_ret);
+			if (ret != 0) {
+				Cli::usage();
+				Cli::help_hint();
+			}
+			return ret;
+		}
+	}
+
+	Global::debug = cli.debug;
 
 	{
 		const auto config_dir = Config::get_config_dir();
 		if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
-			Config::conf_file = Config::conf_dir / "btop.conf";
-			Logger::logfile = Config::conf_dir / "btop.log";
+			if (cli.config_file.has_value()) {
+				Config::conf_file = cli.config_file.value();
+			} else {
+				Config::conf_file = Config::conf_dir / "btop.conf";
+			}
+			Logger::logfile = Config::get_log_file();
 			Theme::user_theme_dir = Config::conf_dir / "themes";
 
 			// If necessary create the user theme directory
@@ -966,7 +873,7 @@ int main(int argc, char **argv) {
 	}
 
 	//? Config init
-	init_config();
+	init_config(cli.low_color);
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
@@ -1024,10 +931,10 @@ int main(int argc, char **argv) {
 			}
 		}
 	#else
-		if (found.empty() and Global::utf_force)
-			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
-		else if (found.empty()) {
-			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
+		if (found.empty() and cli.force_utf) {
+			Logger::warning("No UTF-8 locale detected! Forcing start with --force-utf argument.");
+		} else if (found.empty()) {
+			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 	#endif
@@ -1042,12 +949,12 @@ int main(int argc, char **argv) {
 	}
 
 	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
-	if (not Global::arg_tty and Config::getB("force_tty")) {
+	if ((!cli.force_tty.has_value() || !cli.force_tty.value()) && Config::getB("force_tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
 	}
 #if not defined __APPLE__ && not defined __OpenBSD__ && not defined __NetBSD__
-	else if (not Global::arg_tty and Term::current_tty.starts_with("/dev/tty")) {
+	else if ((!cli.force_tty.has_value() || !cli.force_tty.value()) && Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
 	}
@@ -1098,8 +1005,6 @@ int main(int argc, char **argv) {
 	sigaddset(&mask, SIGUSR1);
 	pthread_sigmask(SIG_BLOCK, &mask, &Input::signal_mask);
 
-	//? Start runner thread
-	Runner::thread_sem_init();
 	if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 		Global::exit_error_msg = "Failed to create _runner thread!";
 		clean_quit(1);
@@ -1110,8 +1015,8 @@ int main(int argc, char **argv) {
 
 	//? Calculate sizes of all boxes
 	Config::presetsValid(Config::getS("presets"));
-	if (Global::arg_preset >= 0) {
-		Config::current_preset = min(Global::arg_preset, (int)Config::preset_list.size() - 1);
+	if (cli.preset.has_value()) {
+		Config::current_preset = min(static_cast<std::int32_t>(cli.preset.value()), static_cast<std::int32_t>(Config::preset_list.size() - 1));
 		Config::apply_preset(Config::preset_list.at(Config::current_preset));
 	}
 
@@ -1134,8 +1039,8 @@ int main(int argc, char **argv) {
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
 
-	if (Global::arg_update != 0) {
-		Config::set("update_ms", Global::arg_update);
+	if (cli.updates.has_value()) {
+		Config::set("update_ms", static_cast<int>(cli.updates.value()));
 	}
 	uint64_t update_ms = Config::getI("update_ms");
 	auto future_time = time_ms();
@@ -1158,7 +1063,7 @@ int main(int argc, char **argv) {
 				Global::reload_conf = false;
 				if (Runner::active) Runner::stop();
 				Config::unlock();
-				init_config();
+				init_config(cli.low_color);
 				Theme::updateThemes();
 				Theme::setTheme();
 				Draw::banner_gen(0, 0, false, true);

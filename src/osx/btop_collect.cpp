@@ -571,7 +571,7 @@ namespace Mem {
 
 		mach_port_t libtop_master_port;
 		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("errot getting master port");
+			Logger::error("error getting master port");
 			return;
 		}
 		/* Get the list of all drive objects. */
@@ -1229,13 +1229,18 @@ namespace Proc {
 					new_proc.state = kproc.kp_proc.p_stat;
 
 					//? Get threads, mem and cpu usage
-					struct proc_taskinfo pti;
+					struct proc_taskinfo pti{};
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
 						cpu_t = pti.pti_total_user + pti.pti_total_system;
 
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
+					} else {
+						// Reset memory value if process info cannot be accessed (bad permissions or zombie processes)
+						new_proc.threads = 0;
+						new_proc.mem = 0;
+						cpu_t = new_proc.cpu_t;
 					}
 
 					//? Process cpu usage since last update
