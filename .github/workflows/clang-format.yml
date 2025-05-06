@@ -1,0 +1,23 @@
+name: Clang Format
+
+on:
+  pull_request:
+    paths:
+      - 'src/**pp'
+
+jobs:
+  check:
+    name: Check style
+    runs-on: ubuntu-24.04
+    container: alpine:edge
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Install clang-format
+        run: apk add --no-cache clang-extra-tools git python3
+      - uses: actions/checkout@v4
+      - name: Check code style
+        run: |
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+          git clang-format --diff --extensions cpp,hpp ${{ github.base_ref }}
