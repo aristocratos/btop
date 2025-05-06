@@ -16,13 +16,13 @@ indent = tab
 tab-size = 4
 */
 
-#include <algorithm>
-#include <csignal>
-#include <clocale>
-#include <filesystem>
-#include <iterator>
-#include <optional>
-#include <pthread.h>
+	#include <algorithm>
+	#include <csignal>
+	#include <clocale>
+	#include <filesystem>
+	#include <iterator>
+	#include <optional>
+	#include <pthread.h>
 #ifdef __FreeBSD__
 	#include <pthread_np.h>
 #endif

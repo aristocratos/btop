@@ -2,6 +2,12 @@
 
 #include "btop_cli.hpp"
 
+#include "btop_shared.hpp"
+#include "config.h"
+
+#include <fmt/base.h>
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <optional>
@@ -9,12 +15,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-
-#include <fmt/base.h>
-#include <fmt/format.h>
-
-#include "btop_shared.hpp"
-#include "config.h"
 
 using namespace std::string_view_literals;
 
