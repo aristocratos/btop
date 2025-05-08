@@ -156,7 +156,7 @@ namespace Config {
 		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
 		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
-									"#* If the line starts with \033[3mexclude=\033[0m disks matching the filter will \033[3mnot\033[0m be shown. Otherwise only the disks matching the filter will be shown. Examples: disks_filter=\"exclude=/boot /home/user\"., disk_filter=\"/boot /home/user\""},
+									"#* Only disks matching the filter will be shown. When the line begins with exclude= only the disks not matching the filter will be shown. Examples: disks_filter=\"exclude=/boot /home/user\"., disk_filter=\"/boot /home/user\""},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
