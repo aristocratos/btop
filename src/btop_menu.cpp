@@ -661,7 +661,7 @@ namespace Menu {
 				"",
 				"Examples:",
 				"/boot /home/user",
-				"exclude=/boot /home/user",
+				"exclude=/boot /home/user"},
 			{"zfs_arc_cached",
 				"(Linux) Count ZFS ARC as cached memory.",
 				"",
