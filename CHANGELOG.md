@@ -1,3 +1,12 @@
+## v1.4.3
+
+References | Description | Author(s)
+--- | --- | ---
+c3b225f | Revert e266ccd which broke str_to_upper() and str_to_lower() | @aristocratos
+#1137 | Enable additional checks in libc++ with the new hardening mode | @imwints
+#1135 | Remove redundant optimization flag | @imwints
+#1139 | Ignore incomplete filter regex, issue #1133 | @imwints
+
 ## v1.4.2
 
 References | Description | Author(s)
