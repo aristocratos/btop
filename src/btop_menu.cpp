@@ -826,12 +826,12 @@ namespace Menu {
 	string msgBox::operator()() {
 		string out;
 		int pos = width / 2 - (boxtype == 0 ? 6 : 14);
-		auto& first_color = (selected == 0 ? Theme::c("hi_fg") : Theme::c("div_line"));
+		const auto first_color = (selected == 0 ? Theme::c("hi_fg") : Theme::c("div_line"));
 		out = Mv::d(1) + Mv::r(pos) + Fx::b + first_color + button_left + (selected == 0 ? Theme::c("title") : Theme::c("main_fg") + Fx::ub)
 			+ (boxtype == 0 ? "    Ok    " : "    Yes    ") + first_color + button_right;
 		mouse_mappings["button1"] = Input::Mouse_loc{y + height - 4, x + pos + 1, 3, 12 + (boxtype > 0 ? 1 : 0)};
 		if (boxtype > 0) {
-			auto& second_color = (selected == 1 ? Theme::c("hi_fg") : Theme::c("div_line"));
+			const auto second_color = (selected == 1 ? Theme::c("hi_fg") : Theme::c("div_line"));
 			out += Mv::r(2) + second_color + button_left + (selected == 1 ? Theme::c("title") : Theme::c("main_fg") + Fx::ub)
 				+ "    No    " + second_color + button_right;
 			mouse_mappings["button2"] = Input::Mouse_loc{y + height - 4, x + pos + 15 + (boxtype > 0 ? 1 : 0), 3, 12};
