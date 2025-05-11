@@ -16,7 +16,6 @@ project("btop"
   LANGUAGES CXX
 )
 
-include(CheckCXXCompilerFlag)
 include(CheckIPOSupported)
 
 # Make our Find<Package>.cmake files available
@@ -52,6 +51,7 @@ endif()
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
 
+include(CheckCXXCompilerFlag)
 if(NOT APPLE)
   target_compile_options(btop PRIVATE -fstack-clash-protection)
 endif()
