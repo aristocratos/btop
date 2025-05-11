@@ -10,17 +10,16 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed")
 endif()
 
-project("btop"
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+project(btop
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
   LANGUAGES CXX
 )
-
-# Make our Find<Package>.cmake files available
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
-
-set(CMAKE_COLOR_DIAGNOSTICS ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(Options)
 
@@ -119,12 +118,13 @@ endif()
 # Other platform dependent flags
 if(APPLE)
   target_link_libraries(btop
-    $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
+    $<LINK_LIBRARY:FRAMEWORK,CoreFoundation>
+    $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
 elseif(CMAKE_SYSTEM_NAME MATCHES "(Free|Midnight)BSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     string(REGEX MATCH "^[0-9]+" GCC_VERSION_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
     set_target_properties(btop PROPERTIES
       INSTALL_RPATH "/usr/local/lib/gcc${GCC_VERSION_MAJOR}"
