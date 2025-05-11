@@ -15,6 +15,7 @@ on:
       - '!src/netbsd/**'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-openbsd.yml'
   pull_request:
     branches:
@@ -27,6 +28,7 @@ on:
       - '!src/netbsd/**'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-openbsd.yml'
 
 jobs:

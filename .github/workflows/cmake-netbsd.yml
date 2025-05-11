@@ -6,7 +6,7 @@ on:
     tags-ignore: '*.*'
     paths:
       - '.github/workflows/cmake-netbsd.yml'
-      - 'CMakeLists.txt'
+      - '**/CMakeLists.txt'
       - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
@@ -15,7 +15,7 @@ on:
     branches: main
     paths:
       - '.github/workflows/cmake-netbsd.yml'
-      - 'CMakeLists.txt'
+      - '**/CMakeLists.txt'
       - 'cmake/**'
       - 'include/**'
       - 'src/*pp'

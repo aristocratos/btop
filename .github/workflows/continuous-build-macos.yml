@@ -15,6 +15,7 @@ on:
       - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-macos.yml'
   pull_request:
     branches:
@@ -27,6 +28,7 @@ on:
       - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-macos.yml'
 
 jobs:
