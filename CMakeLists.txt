@@ -19,7 +19,6 @@ project("btop"
 include(CheckCXXCompilerFlag)
 include(CheckIncludeFileCXX)
 include(CheckIPOSupported)
-include(CMakeDependentOption)
 
 # Make our Find<Package>.cmake files available
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -35,16 +34,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_GPU "Enable GPU support" ON)
-cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
-
-# Enable LTO in release builds by default
-if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
-  option(BTOP_LTO "Enable LTO" ON)
-else()
-  option(BTOP_LTO "Enable LTO" OFF)
-endif()
+include(Options)
 
 if(BTOP_STATIC AND NOT APPLE)
   # Set this before calling find_package
@@ -58,7 +48,6 @@ check_include_file_cxx(ranges CXX_HAVE_RANGES)
 if(NOT CXX_HAVE_RANGES)
   message(FATAL_ERROR "The compiler doesn't support <ranges>")
 endif()
-
 
 # Check for and enable LTO
 if(BTOP_LTO)
