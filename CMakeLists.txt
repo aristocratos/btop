@@ -23,9 +23,6 @@ include(CheckIPOSupported)
 # Make our Find<Package>.cmake files available
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -37,6 +34,13 @@ if(BTOP_STATIC AND NOT APPLE)
 endif()
 
 add_executable(btop)
+
+set_target_properties(btop PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED ON
+  CXX_EXTENSIONS OFF
+)
+
 add_subdirectory(src)
 
 check_include_file_cxx(ranges CXX_HAVE_RANGES)
