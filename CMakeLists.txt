@@ -152,7 +152,7 @@ if(APPLE)
   target_link_libraries(btop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
+elseif(CMAKE_SYSTEM_NAME MATCHES "(Free|Midnight)BSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
   if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

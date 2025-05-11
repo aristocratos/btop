@@ -3,7 +3,7 @@
 # Find libelf, the ELF Access Library
 #
 
-if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
+if(CMAKE_SYSTEM_NAME MATCHES "(Free|Midnight)BSD")
   find_path(elf_INCLUDE_DIR NAMES libelf.h)
   find_library(elf_LIBRARY NAMES elf)
 
