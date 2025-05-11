@@ -13,7 +13,7 @@ endif()
 project("btop"
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX C
+  LANGUAGES CXX
 )
 
 include(CheckCXXCompilerFlag)
@@ -51,39 +51,8 @@ if(BTOP_STATIC AND NOT APPLE)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif()
 
-add_executable(btop
-  src/btop.cpp
-  src/btop_cli.cpp
-  src/btop_config.cpp
-  src/btop_draw.cpp
-  src/btop_input.cpp
-  src/btop_menu.cpp
-  src/btop_shared.cpp
-  src/btop_theme.cpp
-  src/btop_tools.cpp
-)
-
-if(APPLE)
-  target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
-  target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
-  target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
-  target_sources(btop PRIVATE src/netbsd/btop_collect.cpp)
-elseif(LINUX)
-  target_sources(btop PRIVATE src/linux/btop_collect.cpp)
-  if(BTOP_GPU)
-    target_sources(btop PRIVATE
-      src/linux/intel_gpu_top/intel_gpu_top.c
-      src/linux/intel_gpu_top/igt_perf.c
-      src/linux/intel_gpu_top/intel_device_info.c
-      src/linux/intel_gpu_top/intel_name_lookup_shim.c
-    )
-  endif()
-else()
-  message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
-endif()
+add_executable(btop)
+add_subdirectory(src)
 
 check_include_file_cxx(ranges CXX_HAVE_RANGES)
 if(NOT CXX_HAVE_RANGES)
