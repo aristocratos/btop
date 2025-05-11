@@ -25,3 +25,7 @@ elseif(LINUX)
 else()
   message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
 endif()
+
+include(BuildInfo)
+configure_file(config.h.in config.h @ONLY)
+target_include_directories(btop PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")

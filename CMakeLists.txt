@@ -59,20 +59,6 @@ if(NOT CXX_HAVE_RANGES)
   message(FATAL_ERROR "The compiler doesn't support <ranges>")
 endif()
 
-# Generate build info
-execute_process(
-  COMMAND "git" "rev-parse" "--short" "HEAD"
-  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-  OUTPUT_VARIABLE GIT_COMMIT
-  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_GPU=${BTOP_GPU}"
-)
-get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
-set(COMPILER "${CXX_COMPILER_BASENAME}")
-set(COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY IMMEDIATE)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Check for and enable LTO
 if(BTOP_LTO)
