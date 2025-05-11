@@ -16,8 +16,6 @@ project("btop"
   LANGUAGES CXX
 )
 
-include(CheckIPOSupported)
-
 # Make our Find<Package>.cmake files available
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
@@ -39,15 +37,18 @@ set_target_properties(btop PROPERTIES
   CXX_EXTENSIONS OFF
 )
 
-add_subdirectory(src)
-
-# Check for and enable LTO
+include(CheckIPOSupported)
 if(BTOP_LTO)
-  check_ipo_supported(RESULT ipo_supported)
-  if(ipo_supported)
-    set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+  check_ipo_supported(RESULT COMPILER_SUPPORTS_LTO)
+  if(COMPILER_SUPPORTS_LTO)
+    set_target_properties(btop PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION_Release ON
+      INTERPROCEDURAL_OPTIMIZATION_RelWithDebInfo ON
+    )
   endif()
 endif()
+
+add_subdirectory(src)
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
 
