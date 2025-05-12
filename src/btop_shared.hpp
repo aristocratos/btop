@@ -32,6 +32,9 @@ tab-size = 4
 
 // From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
 // clang-format off
+#if defined(__APPLE__)
+# include <sys/socket.h>
+#endif
 #include <net/if.h>
 #include <ifaddrs.h>
 // clang-format on
