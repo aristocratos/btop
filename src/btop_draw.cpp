@@ -293,7 +293,7 @@ namespace Draw {
 		}
 		if (not title2.empty()) {
 			out += fmt::format(
-				"{}{}{}{}{}{}{}{}{}", Mv::to(y, x + 2), Symbols::title_left, Fx::b, numbering, Theme::c("title"), title2, Fx::ub,
+				"{}{}{}{}{}{}{}{}{}", Mv::to(y + height - 1, x + 2), Symbols::title_left_down, Fx::b, numbering, Theme::c("title"), title2, Fx::ub,
 				line_color, Symbols::title_right_down
 			);
 		}
