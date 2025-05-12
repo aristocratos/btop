@@ -1100,12 +1100,14 @@ namespace Proc {
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
 		rusage_info_current rusage;
 		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
 			// this fails for processes we don't own - same as in Linux
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
 		}
+#endif
 	}
 
 	//* Collects and sorts process information from /proc
