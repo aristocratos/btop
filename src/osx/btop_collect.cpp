@@ -228,6 +228,7 @@ namespace Cpu {
 				macM1 = true;
 			} else {
 #endif
+#ifndef __POWERPC__
 				// try SMC (intel)
 				Logger::debug("checking intel");
 				SMCConnection smcCon;
@@ -252,6 +253,10 @@ namespace Cpu {
 					// ignore, we don't have temp
 					got_sensors = false;
 				}
+#else
+            Logger::debug("not supported on PowerPC yet");
+            got_sensors = false;
+#endif // __POWERPC__
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			}
 #endif
@@ -262,6 +267,7 @@ namespace Cpu {
 	void update_sensors() {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
+#ifndef __POWERPC__
 			if (macM1) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
@@ -284,6 +290,7 @@ namespace Cpu {
 					}
 				}
 			}
+#endif // __POWERPC__
 		} catch (std::runtime_error &e) {
 			got_sensors = false;
 			Logger::error("failed getting CPU temp");
