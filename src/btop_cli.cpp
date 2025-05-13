@@ -110,6 +110,17 @@ namespace Cli {
 				cli.config_file = std::make_optional(config_file);
 				continue;
 			}
+			if (arg == "-f" || arg == "--filter") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Filter requires an argument");
+					return OrRetCode { 1 };
+				}
+
+				auto arg = *it;
+				cli.filter = std::make_optional(arg);
+				continue;
+			}
 			if (arg == "-p" || arg == "--preset") {
 				// This flag requires an argument.
 				if (++it == args.end()) {
@@ -164,16 +175,17 @@ namespace Cli {
 	void help() noexcept {
 		fmt::print(
 				"{0}Options:{1}\n"
-				"  {2}-c, --config {1}<file>  Path to a config file\n"
-				"  {2}-d, --debug{1}          Start in debug mode with additional logs and metrics\n"
-				"  {2}    --force-utf{1}      Override automatic UTF locale detection\n"
-				"  {2}-l, --low-color{1}      Disable true color, 256 colors only\n"
-				"  {2}-p, --preset {1}<id>    Start with a preset (0-9)\n"
-				"  {2}-t, --tty{1}            Force tty mode with ANSI graph symbols and 16 colors only\n"
-				"  {2}    --no-tty{1}         Force disable tty mode\n"
-				"  {2}-u, --update {1}<ms>    Set an initial update rate in milliseconds\n"
-				"  {2}-h, --help{1}           Show this help message and exit\n"
-				"  {2}-V, --version{1}        Show a version message and exit (more with --version)\n",
+				"  {2}-c, --config{1} <file>     Path to a config file\n"
+				"  {2}-d, --debug{1}             Start in debug mode with additional logs and metrics\n"
+				"  {2}-f, --filter{1} <filter>   Set an initial process filter\n"
+				"  {2}    --force-utf{1}         Override automatic UTF locale detection\n"
+				"  {2}-l, --low-color{1}         Disable true color, 256 colors only\n"
+				"  {2}-p, --preset{1} <id>       Start with a preset (0-9)\n"
+				"  {2}-t, --tty{1}               Force tty mode with ANSI graph symbols and 16 colors only\n"
+				"  {2}    --no-tty{1}            Force disable tty mode\n"
+				"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
+				"  {2}-h, --help{1}              Show this help message and exit\n"
+				"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
 				BOLD_UNDERLINE, RESET, BOLD
 		);
 	}
