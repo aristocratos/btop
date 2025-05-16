@@ -3,7 +3,7 @@
 # Find devstat, the Device Statistics Library
 #
 
-if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
+if(CMAKE_SYSTEM_NAME MATCHES "(Free|Midnight)BSD")
   find_path(devstat_INCLUDE_DIR NAMES devstat.h)
   find_library(devstat_LIBRARY NAMES devstat)
 
