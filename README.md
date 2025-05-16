@@ -1497,16 +1497,17 @@ log_level = "DEBUG"
 Usage: btop [OPTIONS]
 
 Options:
-  -c, --config <file>  Path to a config file
-  -d, --debug          Start in debug mode with additional logs and metrics
-      --force-utf      Override automatic UTF locale detection
-  -l, --low-color      Disable true color, 256 colors only
-  -p, --preset <id>    Start with a preset (0-9)
-  -t, --tty            Force tty mode with ANSI graph symbols and 16 colors only
-      --no-tty         Force disable tty mode
-  -u, --update <ms>    Set an initial update rate in milliseconds
-  -h, --help           Show this help message and exit
-  -V, --version        Show a version message and exit (more with --version)
+  -c, --config <file>     Path to a config file
+  -d, --debug             Start in debug mode with additional logs and metrics
+  -f, --filter <filter>   Set an initial process filter
+      --force-utf         Override automatic UTF locale detection
+  -l, --low-color         Disable true color, 256 colors only
+  -p, --preset <id>       Start with a preset (0-9)
+  -t, --tty               Force tty mode with ANSI graph symbols and 16 colors only
+      --no-tty            Force disable tty mode
+  -u, --update <ms>       Set an initial update rate in milliseconds
+  -h, --help              Show this help message and exit
+  -V, --version           Show a version message and exit (more with --version)
 ```
 
 ## LICENSE
