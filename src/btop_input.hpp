@@ -58,7 +58,7 @@ namespace Input {
 	extern deque<string> history;
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availability as a bool
-	bool poll(const uint64_t timeout=0);
+	bool poll(const uint64_t timeout = 0);
 
 	//* Get a key or mouse action from input
 	string get();
@@ -75,4 +75,4 @@ namespace Input {
 	//* Process actions for input <key>
 	void process(const std::string_view key);
 
-}
+} // namespace Input

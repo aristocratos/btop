@@ -1,0 +1,38 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+
+IndentWidth: 4
+TabWidth: 4
+ContinuationIndentWidth: 4
+UseTab: ForContinuationAndIndentation
+ColumnLimit: 120
+
+AccessModifierOffset: -4
+AlignAfterOpenBracket: BlockIndent
+AlignOperands: AlignAfterOperator
+AllowShortEnumsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackLongBracedList: false
+BinPackParameters: OnePerLine
+ExperimentalAutoDetectBinPacking: true
+IndentCaseLabels: true
+IndentPPDirectives: BeforeHash
+NamespaceIndentation: All
+PointerAlignment: Left
+QualifierAlignment: Left
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCpp11BracedList: true
+
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^".*"$'
+    Priority: 1
+  - Regex: '^<(sys/)?\w+\.h>$'
+    Priority: 3
+  - Regex: '^<.*\.h>$'
+    Priority: 4
+  - Regex: '^<.*>'
+    Priority: 2
