@@ -38,8 +38,6 @@ jobs:
         compiler: ["clang++", "g++"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Compile
         uses: vmactions/freebsd-vm@v1
