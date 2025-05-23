@@ -55,11 +55,14 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
                 }
             }
             break;
-        case GLFW_KEY_SPACE:
-            // Manual mode cycling
-            if (renderer)
+        case GLFW_KEY_SLASH:
+            // Manual mode cycling on '?'
+            if (mods & GLFW_MOD_SHIFT)
             {
-                renderer->cycleMode();
+                if (renderer)
+                {
+                    renderer->cycleMode();
+                }
             }
             break;
         }
@@ -106,7 +109,7 @@ int main(int argc, char *argv[])
                       << "\nControls:\n"
                       << "  ESC/Q               Quit\n"
                       << "  F11/F               Toggle fullscreen\n"
-                      << "  SPACE               Cycle visualization mode\n"
+                      << "  ?                   Cycle visualization mode\n"
                       << std::endl;
             return 0;
         }
@@ -166,7 +169,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "btop-gl Vulkan edition initialized successfully!" << std::endl;
-    std::cout << "Press ESC or Q to quit, F11 or F to toggle fullscreen, SPACE to cycle modes" << std::endl;
+    std::cout << "Press ESC or Q to quit, F11 or F to toggle fullscreen, ? to cycle modes" << std::endl;
 
     // Main render loop
     int frame_count = 0;

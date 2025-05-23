@@ -19,7 +19,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow *window, int width, int height)
       swapChain(VK_NULL_HANDLE), renderPass(VK_NULL_HANDLE), commandPool(VK_NULL_HANDLE),
       vg(nullptr), frame_time(0.0f), time_accumulator(0.0f),
       collector(BtopGLCollector::getInstance()),
-      current_mode(VisualizationMode::CLASSIC_GRAPHS), mode_transition_time(0.0f),
+      current_mode(VisualizationMode::OVERVIEW_DASHBOARD), mode_transition_time(0.0f),
       history_size(100)
 {
     last_frame_time = std::chrono::high_resolution_clock::now();
@@ -896,12 +896,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     if (vg)
     {
-        // Auto-cycle modes every 10 seconds
-        mode_transition_time += frame_time;
-        if (mode_transition_time > 10.0f)
-        {
-            cycleMode();
-        }
+        // Auto-cycle disabled: mode changes only on user request (press '?')
 
         // Begin NanoVG frame
         nvgBeginFrame(vg, window_width, window_height, 1.0f);
@@ -947,10 +942,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
         drawText("BTOP++ VULKAN - " + mode_name, 20, 40, 32, colors.text);
 
-        float time_remaining = 10.0f - mode_transition_time;
-        drawText("NEXT: " + std::to_string(static_cast<int>(time_remaining)) + "s",
-                 window_width - 150, 40, 24, colors.accent);
-
         // Render based on current mode
         switch (current_mode)
         {
@@ -980,7 +971,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
             break;
         }
 
-        // End NanoVG frame
         nvgEndFrame(vg);
     }
 
@@ -1173,6 +1163,19 @@ void VulkanRenderer::renderDiskActivity()
 void VulkanRenderer::renderOverviewDashboard()
 {
     drawText("SYSTEM OVERVIEW", 40, 50, 32, colors.text);
+
+    // Summary text
+    double uptime = Tools::system_uptime();
+    int hours = static_cast<int>(uptime / 3600);
+    int minutes = (static_cast<int>(uptime) % 3600) / 60;
+    char textbuf[64];
+    snprintf(textbuf, sizeof(textbuf), "Uptime: %dh %dm", hours, minutes);
+    drawText(textbuf, 40, 90, 18, colors.text);
+
+    auto cpu_info = collector.getCpuInfo();
+    auto load_avg = cpu_info.load_avg;
+    snprintf(textbuf, sizeof(textbuf), "Load Avg: %.2f %.2f %.2f", load_avg[0], load_avg[1], load_avg[2]);
+    drawText(textbuf, 40, 110, 18, colors.text);
 
     float margin = 40.0f;
     float spacing = 20.0f;
