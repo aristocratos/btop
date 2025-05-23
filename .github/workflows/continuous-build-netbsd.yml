@@ -35,8 +35,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Compile
         uses: vmactions/netbsd-vm@v1
