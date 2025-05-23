@@ -295,7 +295,7 @@ static void _signal_handler(const int sig) {
 }
 
 //* Config init
-void init_config(bool low_color) {
+void init_config(bool low_color, std::optional<std::string>& filter) {
 	atomic_lock lck(Global::init_conf);
 	vector<string> load_warnings;
 	Config::load(Config::conf_file, load_warnings);
@@ -308,6 +308,10 @@ void init_config(bool low_color) {
 		Logger::debug("Running in DEBUG mode!");
 	}
 	else Logger::set(Config::getS("log_level"));
+
+	if (filter.has_value()) {
+		Config::set("proc_filter", filter.value());
+	}
 
 	static string log_level;
 	if (const string current_level = Config::getS("log_level"); log_level != current_level) {
@@ -873,7 +877,7 @@ int main(const int argc, const char** argv) {
 	}
 
 	//? Config init
-	init_config(cli.low_color);
+	init_config(cli.low_color, cli.filter);
 
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
@@ -1063,7 +1067,7 @@ int main(const int argc, const char** argv) {
 				Global::reload_conf = false;
 				if (Runner::active) Runner::stop();
 				Config::unlock();
-				init_config(cli.low_color);
+				init_config(cli.low_color, cli.filter);
 				Theme::updateThemes();
 				Theme::setTheme();
 				Draw::banner_gen(0, 0, false, true);
