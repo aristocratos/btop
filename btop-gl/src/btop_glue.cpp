@@ -151,7 +151,13 @@ void BtopGLCollector::collectLoop()
             // Collect Process data
             {
                 std::lock_guard<std::mutex> lock(proc_mutex);
-                cached_proc_info = Proc::collect();
+                auto original_procs = Proc::collect();
+                cached_proc_info.clear();
+                cached_proc_info.reserve(original_procs.size());
+                for (const auto &p_orig : original_procs)
+                {
+                    cached_proc_info.push_back(p_orig);
+                }
             }
         }
         catch (const std::exception &e)
