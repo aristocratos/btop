@@ -10,126 +10,48 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed")
 endif()
 
-project("btop"
-  DESCRIPTION "A monitor of resources"
-  HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX C
-)
-
-include(CheckCXXCompilerFlag)
-include(CheckIncludeFileCXX)
-include(CheckIPOSupported)
-include(CMakeDependentOption)
-
-# Make our Find<Package>.cmake files available
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
-
-# When the build type is not set we can't fortify
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
-endif()
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
-option(BTOP_WERROR "Compile with warnings as errors" OFF)
-option(BTOP_GPU "Enable GPU support" ON)
-cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-# Enable LTO in release builds by default
-if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
-  option(BTOP_LTO "Enable LTO" ON)
-else()
-  option(BTOP_LTO "Enable LTO" OFF)
-endif()
+project(btop
+  DESCRIPTION "A monitor of resources"
+  HOMEPAGE_URL "https://github.com/aristocratos/btop"
+  LANGUAGES CXX
+)
+
+include(Options)
 
 if(BTOP_STATIC AND NOT APPLE)
   # Set this before calling find_package
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif()
 
-add_executable(btop
-  src/btop.cpp
-  src/btop_cli.cpp
-  src/btop_config.cpp
-  src/btop_draw.cpp
-  src/btop_input.cpp
-  src/btop_menu.cpp
-  src/btop_shared.cpp
-  src/btop_theme.cpp
-  src/btop_tools.cpp
+add_executable(btop)
+
+set_target_properties(btop PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED ON
+  CXX_EXTENSIONS OFF
 )
 
-if(APPLE)
-  target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
-  target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
-  target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
-  target_sources(btop PRIVATE src/netbsd/btop_collect.cpp)
-elseif(LINUX)
-  target_sources(btop PRIVATE src/linux/btop_collect.cpp)
-  if(BTOP_GPU)
-    target_sources(btop PRIVATE
-      src/linux/intel_gpu_top/intel_gpu_top.c
-      src/linux/intel_gpu_top/igt_perf.c
-      src/linux/intel_gpu_top/intel_device_info.c
-      src/linux/intel_gpu_top/intel_name_lookup_shim.c
+include(CheckIPOSupported)
+if(BTOP_LTO)
+  check_ipo_supported(RESULT COMPILER_SUPPORTS_LTO)
+  if(COMPILER_SUPPORTS_LTO)
+    set_target_properties(btop PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION_Release ON
+      INTERPROCEDURAL_OPTIMIZATION_RelWithDebInfo ON
     )
   endif()
-else()
-  message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
 
-check_include_file_cxx(ranges CXX_HAVE_RANGES)
-if(NOT CXX_HAVE_RANGES)
-  message(FATAL_ERROR "The compiler doesn't support <ranges>")
-endif()
-
-# Generate build info
-execute_process(
-  COMMAND "git" "rev-parse" "--short" "HEAD"
-  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-  OUTPUT_VARIABLE GIT_COMMIT
-  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_GPU=${BTOP_GPU}"
-)
-get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
-set(COMPILER "${CXX_COMPILER_BASENAME}")
-set(COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY IMMEDIATE)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-# Check for and enable LTO
-if(BTOP_LTO)
-  check_ipo_supported(RESULT ipo_supported)
-  if(ipo_supported)
-    set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
-  endif()
-endif()
+add_subdirectory(src)
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
 
-if(BTOP_PEDANTIC)
-  target_compile_options(btop PRIVATE
-    -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual
-    -Wconversion -Wsign-conversion -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough -Weffc++
-    $<$<CXX_COMPILER_ID:Clang>:-Wheader-hygiene -Wgnu -Wthread-safety>
-    $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond -Wduplicated-branches -Wlogical-op>
-    $<$<CXX_COMPILER_ID:GNU>:-Wnull-dereference -Wuseless-cast>
-  )
-endif()
-if(BTOP_WERROR)
-  target_compile_options(btop PRIVATE -Werror)
-endif()
-
+include(CheckCXXCompilerFlag)
 if(NOT APPLE)
   target_compile_options(btop PRIVATE -fstack-clash-protection)
 endif()
@@ -196,12 +118,13 @@ endif()
 # Other platform dependent flags
 if(APPLE)
   target_link_libraries(btop
-    $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
+    $<LINK_LIBRARY:FRAMEWORK,CoreFoundation>
+    $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
-elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
+elseif(CMAKE_SYSTEM_NAME MATCHES "(Free|Midnight)BSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     string(REGEX MATCH "^[0-9]+" GCC_VERSION_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
     set_target_properties(btop PROPERTIES
       INSTALL_RPATH "/usr/local/lib/gcc${GCC_VERSION_MAJOR}"
