@@ -36,8 +36,6 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
-option(BTOP_WERROR "Compile with warnings as errors" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -116,19 +114,6 @@ if(BTOP_LTO)
 endif()
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
-
-if(BTOP_PEDANTIC)
-  target_compile_options(btop PRIVATE
-    -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual
-    -Wconversion -Wsign-conversion -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough -Weffc++
-    $<$<CXX_COMPILER_ID:Clang>:-Wheader-hygiene -Wgnu -Wthread-safety>
-    $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond -Wduplicated-branches -Wlogical-op>
-    $<$<CXX_COMPILER_ID:GNU>:-Wnull-dereference -Wuseless-cast>
-  )
-endif()
-if(BTOP_WERROR)
-  target_compile_options(btop PRIVATE -Werror)
-endif()
 
 if(NOT APPLE)
   target_compile_options(btop PRIVATE -fstack-clash-protection)
