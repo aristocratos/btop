@@ -4,12 +4,16 @@
 #include <algorithm>
 #include <cstring>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 BtopRenderer::BtopRenderer(int width, int height)
     : window_width(width), window_height(height),
       frame_time(0.0f), animation_speed(1.0f), time_accumulator(0.0f),
-      graph_history_size(100), collector(BtopGLCollector::getInstance())
+      graph_history_size(100), collector(BtopGLCollector::getInstance()),
+      current_mode(VisualizationMode::CLASSIC_GRAPHS), mode_transition_time(0.0f)
 {
-
     last_frame_time = std::chrono::high_resolution_clock::now();
 }
 
@@ -231,12 +235,12 @@ void BtopRenderer::render()
     glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Setup projection matrix (orthographic)
-    float projection[16] = {
-        2.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 2.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, -1.0f, 0.0f,
-        -1.0f, -1.0f, 0.0f, 1.0f};
+    // Auto-cycle modes every 10 seconds for screensaver effect
+    mode_transition_time += frame_time;
+    if (mode_transition_time > 10.0f)
+    {
+        cycleMode();
+    }
 
     // Add some test data if no real data is available
     if (cpu_total_graph.values.empty())
@@ -255,36 +259,65 @@ void BtopRenderer::render()
         updateGraphData(network_send_graph, test_net_send);
     }
 
-    // Render CPU graph with enhanced visibility
-    if (!cpu_total_graph.vertices.empty())
+    // Render mode indicator
+    std::string mode_name;
+    switch (current_mode)
     {
-        renderGraph(cpu_total_graph,
-                    layout.cpu_graph_area[0], layout.cpu_graph_area[1],
-                    layout.cpu_graph_area[2], layout.cpu_graph_area[3]);
+    case VisualizationMode::CLASSIC_GRAPHS:
+        mode_name = "CLASSIC GRAPHS";
+        break;
+    case VisualizationMode::CPU_CORES:
+        mode_name = "CPU CORES";
+        break;
+    case VisualizationMode::MEMORY_LANDSCAPE:
+        mode_name = "MEMORY LANDSCAPE";
+        break;
+    case VisualizationMode::NETWORK_FLOW:
+        mode_name = "NETWORK FLOW";
+        break;
+    case VisualizationMode::PROCESS_RAIN:
+        mode_name = "PROCESS RAIN";
+        break;
+    case VisualizationMode::DISK_ACTIVITY:
+        mode_name = "DISK ACTIVITY";
+        break;
+    case VisualizationMode::OVERVIEW_DASHBOARD:
+        mode_name = "OVERVIEW";
+        break;
+    default:
+        mode_name = "UNKNOWN";
+        break;
     }
 
-    // Render Memory graph
-    if (!memory_used_graph.vertices.empty())
-    {
-        renderGraph(memory_used_graph,
-                    layout.memory_graph_area[0], layout.memory_graph_area[1],
-                    layout.memory_graph_area[2], layout.memory_graph_area[3]);
-    }
+    // Display current mode and time remaining
+    renderText("BTOP++ GL - " + mode_name, 0.02f, 0.95f, 0.04f);
+    float time_remaining = 10.0f - mode_transition_time;
+    renderText("NEXT: " + std::to_string(static_cast<int>(time_remaining)) + "s", 0.8f, 0.95f, 0.03f);
 
-    // Render Network graphs
-    float net_height = layout.network_graph_area[3] / 2.0f;
-    if (!network_recv_graph.vertices.empty())
+    // Render based on current mode
+    switch (current_mode)
     {
-        renderGraph(network_recv_graph,
-                    layout.network_graph_area[0], layout.network_graph_area[1] + net_height,
-                    layout.network_graph_area[2], net_height);
-    }
-
-    if (!network_send_graph.vertices.empty())
-    {
-        renderGraph(network_send_graph,
-                    layout.network_graph_area[0], layout.network_graph_area[1],
-                    layout.network_graph_area[2], net_height);
+    case VisualizationMode::CLASSIC_GRAPHS:
+        renderClassicGraphs();
+        break;
+    case VisualizationMode::CPU_CORES:
+        renderCpuCores();
+        break;
+    case VisualizationMode::MEMORY_LANDSCAPE:
+        renderMemoryLandscape();
+        break;
+    case VisualizationMode::NETWORK_FLOW:
+        renderNetworkFlow();
+        break;
+    case VisualizationMode::PROCESS_RAIN:
+        renderProcessRain();
+        break;
+    case VisualizationMode::DISK_ACTIVITY:
+        renderDiskActivity();
+        break;
+    case VisualizationMode::OVERVIEW_DASHBOARD:
+        renderOverviewDashboard();
+        break;
     }
 }
 
@@ -348,4 +381,585 @@ std::array<float, 3> BtopRenderer::interpolateColor(const std::array<float, 3> &
         color1[0] + t * (color2[0] - color1[0]),
         color1[1] + t * (color2[1] - color1[1]),
         color1[2] + t * (color2[2] - color1[2])};
+}
+
+void BtopRenderer::renderLabelsAndValues()
+{
+    // Render actual text labels using our line-based text system
+
+    // Get current values
+    float cpu_value = cpu_total_graph.values.empty() ? 0.0f : cpu_total_graph.values.back();
+    float mem_value = memory_used_graph.values.empty() ? 0.0f : memory_used_graph.values.back();
+    float net_recv_value = network_recv_graph.values.empty() ? 0.0f : network_recv_graph.values.back();
+    float net_send_value = network_send_graph.values.empty() ? 0.0f : network_send_graph.values.back();
+
+    // Render CPU label and value
+    renderText("CPU", layout.cpu_graph_area[0], layout.cpu_graph_area[1] + layout.cpu_graph_area[3] + 0.02f, 0.03f);
+    renderNumber(cpu_value, layout.cpu_graph_area[0] + 0.15f, layout.cpu_graph_area[1] + layout.cpu_graph_area[3] + 0.02f, 0.025f, CPU_COLOR);
+
+    // Render Memory label and value
+    renderText("MEM", layout.memory_graph_area[0], layout.memory_graph_area[1] + layout.memory_graph_area[3] + 0.02f, 0.03f);
+    renderNumber(mem_value, layout.memory_graph_area[0] + 0.15f, layout.memory_graph_area[1] + layout.memory_graph_area[3] + 0.02f, 0.025f, MEMORY_COLOR);
+
+    // Render Network labels and values
+    renderText("NET IN", layout.network_graph_area[0], layout.network_graph_area[1] + layout.network_graph_area[3] + 0.02f, 0.025f);
+    renderNumber(net_recv_value, layout.network_graph_area[0] + 0.2f, layout.network_graph_area[1] + layout.network_graph_area[3] + 0.02f, 0.02f, NETWORK_RECV_COLOR);
+
+    renderText("OUT", layout.network_graph_area[0] + 0.5f, layout.network_graph_area[1] + layout.network_graph_area[3] + 0.02f, 0.025f);
+    renderNumber(net_send_value, layout.network_graph_area[0] + 0.65f, layout.network_graph_area[1] + layout.network_graph_area[3] + 0.02f, 0.02f, NETWORK_SEND_COLOR);
+
+    // Render title
+    renderText("BTOP++ OPENGL", 0.02f, 0.95f, 0.04f);
+}
+
+void BtopRenderer::renderText(const std::string &text, float x, float y, float scale)
+{
+    float char_width = scale * 0.8f;
+    for (size_t i = 0; i < text.length(); ++i)
+    {
+        renderCharacter(text[i], x + i * char_width, y, scale, HIGHLIGHT_COLOR);
+    }
+}
+
+void BtopRenderer::renderCharacter(char c, float x, float y, float scale, const std::array<float, 3> &color)
+{
+    auto lines = getCharacterLines(c);
+    if (lines.empty())
+        return;
+
+    if (!line_shader)
+        return;
+    line_shader->use();
+
+    // Setup projection matrix
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(line_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "offset"), 0.0f, 0.0f);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "scale"), 1.0f, 1.0f);
+    glUniform3f(glGetUniformLocation(line_shader->ID, "color"), color[0], color[1], color[2]);
+    glUniform1f(glGetUniformLocation(line_shader->ID, "alpha"), 1.0f);
+    glUniform1f(glGetUniformLocation(line_shader->ID, "time"), time_accumulator);
+
+    glBindVertexArray(vao_lines);
+
+    // Draw each line segment for the character
+    for (const auto &line : lines)
+    {
+        float vertices[] = {
+            x + line[0] * scale, y + line[1] * scale,
+            x + line[2] * scale, y + line[3] * scale};
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_lines);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+
+        glLineWidth(3.0f);
+        glDrawArrays(GL_LINES, 0, 2);
+    }
+}
+
+void BtopRenderer::renderNumber(float value, float x, float y, float scale, const std::array<float, 3> &color)
+{
+    std::string num_str = std::to_string(static_cast<int>(value)) + "%";
+    float char_width = scale * 0.6f;
+    for (size_t i = 0; i < num_str.length(); ++i)
+    {
+        renderCharacter(num_str[i], x + i * char_width, y, scale, color);
+    }
+}
+
+std::vector<std::array<float, 4>> BtopRenderer::getCharacterLines(char c)
+{
+    // Simple 7-segment style font using line segments
+    // Each line is [x1, y1, x2, y2] in normalized coordinates (0-1)
+    switch (c)
+    {
+    case 'A':
+        return {
+            {0.0f, 0.0f, 0.5f, 1.0f}, {0.5f, 1.0f, 1.0f, 0.0f}, // /\
+            {0.25f, 0.5f, 0.75f, 0.5f} // -
+        };
+    case 'B':
+        return {
+            {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.7f, 1.0f}, {0.7f, 1.0f, 0.7f, 0.5f}, {0.0f, 0.5f, 0.7f, 0.5f}, {0.7f, 0.5f, 0.7f, 0.0f}, {0.0f, 0.0f, 0.7f, 0.0f}};
+    case 'C':
+        return {
+            {1.0f, 0.2f, 0.8f, 0.0f}, {0.8f, 0.0f, 0.2f, 0.0f}, {0.2f, 0.0f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.0f, 0.8f}, {0.0f, 0.8f, 0.2f, 1.0f}, {0.2f, 1.0f, 0.8f, 1.0f}, {0.8f, 1.0f, 1.0f, 0.8f}};
+    case 'E':
+        return {
+            {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.5f, 0.7f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    case 'G':
+        return {
+            {1.0f, 0.8f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.2f, 1.0f}, {0.2f, 1.0f, 0.0f, 0.8f}, {0.0f, 0.8f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.2f, 0.0f}, {0.2f, 0.0f, 0.8f, 0.0f}, {0.8f, 0.0f, 1.0f, 0.2f}, {1.0f, 0.2f, 1.0f, 0.5f}, {1.0f, 0.5f, 0.6f, 0.5f}};
+    case 'I':
+        return {
+            {0.2f, 0.0f, 0.8f, 0.0f}, {0.5f, 0.0f, 0.5f, 1.0f}, {0.2f, 1.0f, 0.8f, 1.0f}};
+    case 'L':
+        return {
+            {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    case 'M':
+        return {
+            {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.5f, 0.5f}, {0.5f, 0.5f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.0f}};
+    case 'N':
+        return {
+            {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 1.0f, 1.0f}};
+    case 'O':
+        return {
+            {0.2f, 0.0f, 0.8f, 0.0f}, {0.8f, 0.0f, 1.0f, 0.2f}, {1.0f, 0.2f, 1.0f, 0.8f}, {1.0f, 0.8f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.2f, 1.0f}, {0.2f, 1.0f, 0.0f, 0.8f}, {0.0f, 0.8f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.2f, 0.0f}};
+    case 'P':
+        return {
+            {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.8f, 0.5f}, {0.8f, 0.5f, 0.0f, 0.5f}};
+    case 'T':
+        return {
+            {0.0f, 1.0f, 1.0f, 1.0f}, {0.5f, 1.0f, 0.5f, 0.0f}};
+    case 'U':
+        return {
+            {0.0f, 1.0f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.2f, 0.0f}, {0.2f, 0.0f, 0.8f, 0.0f}, {0.8f, 0.0f, 1.0f, 0.2f}, {1.0f, 0.2f, 1.0f, 1.0f}};
+    case '+':
+        return {
+            {0.5f, 0.2f, 0.5f, 0.8f}, {0.2f, 0.5f, 0.8f, 0.5f}};
+    case '0':
+        return {
+            {0.2f, 0.0f, 0.8f, 0.0f}, {0.8f, 0.0f, 1.0f, 0.2f}, {1.0f, 0.2f, 1.0f, 0.8f}, {1.0f, 0.8f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.2f, 1.0f}, {0.2f, 1.0f, 0.0f, 0.8f}, {0.0f, 0.8f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.2f, 0.0f}};
+    case '1':
+        return {{0.5f, 0.0f, 0.5f, 1.0f}};
+    case '2':
+        return {
+            {0.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.5f}, {1.0f, 0.5f, 0.0f, 0.5f}, {0.0f, 0.5f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    case '3':
+        return {
+            {0.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.5f}, {1.0f, 0.5f, 0.5f, 0.5f}, {1.0f, 0.5f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}};
+    case '4':
+        return {
+            {0.0f, 1.0f, 0.0f, 0.5f}, {0.0f, 0.5f, 1.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 0.0f}};
+    case '5':
+        return {
+            {1.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 0.5f}, {0.0f, 0.5f, 1.0f, 0.5f}, {1.0f, 0.5f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}};
+    case '6':
+        return {
+            {1.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 1.0f, 0.5f}, {1.0f, 0.5f, 0.0f, 0.5f}};
+    case '7':
+        return {
+            {0.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.0f}};
+    case '8':
+        return {
+            {0.0f, 0.5f, 1.0f, 0.5f}, {0.2f, 0.0f, 0.8f, 0.0f}, {0.8f, 0.0f, 1.0f, 0.2f}, {1.0f, 0.2f, 1.0f, 0.8f}, {1.0f, 0.8f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.2f, 1.0f}, {0.2f, 1.0f, 0.0f, 0.8f}, {0.0f, 0.8f, 0.0f, 0.2f}, {0.0f, 0.2f, 0.2f, 0.0f}};
+    case '9':
+        return {
+            {1.0f, 0.5f, 0.0f, 0.5f}, {0.0f, 0.5f, 0.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 0.0f}};
+    case '%':
+        return {
+            {0.0f, 0.0f, 1.0f, 1.0f}, {0.2f, 0.8f, 0.3f, 1.0f}, {0.7f, 0.0f, 0.8f, 0.2f}};
+    case ' ':
+        return {};
+    default:
+        return {{0.0f, 0.0f, 1.0f, 1.0f}}; // Default line for unknown chars
+    }
+}
+
+void BtopRenderer::renderClassicGraphs()
+{
+    // Original graph-based visualization
+    renderLabelsAndValues();
+
+    // Render CPU graph with enhanced visibility
+    if (!cpu_total_graph.vertices.empty())
+    {
+        renderGraph(cpu_total_graph,
+                    layout.cpu_graph_area[0], layout.cpu_graph_area[1],
+                    layout.cpu_graph_area[2], layout.cpu_graph_area[3]);
+    }
+
+    // Render Memory graph
+    if (!memory_used_graph.vertices.empty())
+    {
+        renderGraph(memory_used_graph,
+                    layout.memory_graph_area[0], layout.memory_graph_area[1],
+                    layout.memory_graph_area[2], layout.memory_graph_area[3]);
+    }
+
+    // Render Network graphs
+    float net_height = layout.network_graph_area[3] / 2.0f;
+    if (!network_recv_graph.vertices.empty())
+    {
+        renderGraph(network_recv_graph,
+                    layout.network_graph_area[0], layout.network_graph_area[1] + net_height,
+                    layout.network_graph_area[2], net_height);
+    }
+
+    if (!network_send_graph.vertices.empty())
+    {
+        renderGraph(network_send_graph,
+                    layout.network_graph_area[0], layout.network_graph_area[1],
+                    layout.network_graph_area[2], net_height);
+    }
+}
+
+void BtopRenderer::renderCpuCores()
+{
+    // Artistic CPU core visualization - each core as a pulsing orb
+    if (!quad_shader)
+        return;
+
+    quad_shader->use();
+
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(quad_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "time"), time_accumulator);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "size"), 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(quad_shader->ID, "renderMode"), 2); // Animated mode
+
+    glBindVertexArray(vao_quads);
+
+    // Simulate 8 CPU cores arranged in a circle
+    float center_x = 0.5f;
+    float center_y = 0.5f;
+    float radius = 0.3f;
+    int core_count = 8;
+
+    for (int i = 0; i < core_count; ++i)
+    {
+        float angle = (2.0f * M_PI * i) / core_count;
+        float core_x = center_x + cos(angle) * radius;
+        float core_y = center_y + sin(angle) * radius;
+
+        // Simulate CPU usage for each core
+        float core_usage = 30.0f + 40.0f * sin(time_accumulator * 0.3f + i * 0.5f);
+        float core_size = 0.06f + (core_usage / 100.0f) * 0.04f;
+
+        // Color intensity based on usage
+        float intensity = core_usage / 100.0f;
+        glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                    CPU_COLOR[0] * intensity, CPU_COLOR[1] * intensity, CPU_COLOR[2] * intensity);
+
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"),
+                    core_x - core_size / 2, core_y - core_size / 2);
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), core_size, core_size);
+        glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 0.8f + intensity * 0.2f);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // Render core label
+        renderText("C" + std::to_string(i), core_x - 0.01f, core_y - 0.12f, 0.02f);
+        renderNumber(core_usage, core_x - 0.02f, core_y - 0.15f, 0.015f, CPU_COLOR);
+    }
+
+    // Central CPU label
+    renderText("CPU CORES", center_x - 0.08f, center_y - 0.02f, 0.03f);
+}
+
+void BtopRenderer::renderMemoryLandscape()
+{
+    // Memory visualization as a terrain-like landscape
+    if (!quad_shader)
+        return;
+
+    quad_shader->use();
+
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(quad_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "time"), time_accumulator);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "size"), 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(quad_shader->ID, "renderMode"), 1); // Gradient mode
+
+    glBindVertexArray(vao_quads);
+
+    // Create memory "terrain" with different layers
+    float base_y = 0.1f;
+    float mem_value = memory_used_graph.values.empty() ? 45.0f : memory_used_graph.values.back();
+
+    // Used memory (bottom layer)
+    float used_height = (mem_value / 100.0f) * 0.3f;
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), 0.1f, base_y);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), 0.8f, used_height);
+    glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                MEMORY_COLOR[0], MEMORY_COLOR[1], MEMORY_COLOR[2]);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 0.8f);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Cache layer (middle)
+    float cache_height = 0.15f;
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), 0.1f, base_y + used_height);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), 0.8f, cache_height);
+    glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                SECONDARY_COLOR[0], SECONDARY_COLOR[1], SECONDARY_COLOR[2]);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 0.6f);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Available memory (top layer)
+    float avail_height = 0.4f - used_height - cache_height;
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), 0.1f, base_y + used_height + cache_height);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), 0.8f, avail_height);
+    glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                ACCENT_COLOR[0], ACCENT_COLOR[1], ACCENT_COLOR[2]);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 0.4f);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Labels
+    renderText("MEMORY LANDSCAPE", 0.02f, 0.85f, 0.04f);
+    renderText("USED", 0.02f, base_y + used_height / 2, 0.025f);
+    renderNumber(mem_value, 0.15f, base_y + used_height / 2, 0.02f, MEMORY_COLOR);
+    renderText("CACHE", 0.02f, base_y + used_height + cache_height / 2, 0.02f);
+    renderText("FREE", 0.02f, base_y + used_height + cache_height + avail_height / 2, 0.02f);
+}
+
+void BtopRenderer::renderNetworkFlow()
+{
+    // Network visualization with flowing particles
+    renderText("NETWORK FLOW", 0.02f, 0.85f, 0.04f);
+
+    if (!quad_shader)
+        return;
+
+    quad_shader->use();
+
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(quad_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform1f(glGetUniformLocation(quad_shader->ID, "time"), time_accumulator);
+    glUniform2f(glGetUniformLocation(quad_shader->ID, "size"), 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(quad_shader->ID, "renderMode"), 2); // Animated mode
+
+    glBindVertexArray(vao_quads);
+
+    // Simulate flowing data packets
+    int packet_count = 20;
+    for (int i = 0; i < packet_count; ++i)
+    {
+        float flow_progress = fmod(time_accumulator * 0.2f + i * 0.1f, 1.0f);
+
+        // Download packets (blue, flowing down)
+        float down_x = 0.2f + (i % 5) * 0.15f;
+        float down_y = 0.8f - flow_progress * 0.6f;
+
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), down_x, down_y);
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), 0.02f, 0.03f);
+        glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                    NETWORK_RECV_COLOR[0], NETWORK_RECV_COLOR[1], NETWORK_RECV_COLOR[2]);
+        glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 1.0f - flow_progress);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // Upload packets (orange, flowing up)
+        float up_x = 0.6f + (i % 5) * 0.08f;
+        float up_y = 0.2f + flow_progress * 0.6f;
+
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), up_x, up_y);
+        glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), 0.015f, 0.025f);
+        glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                    NETWORK_SEND_COLOR[0], NETWORK_SEND_COLOR[1], NETWORK_SEND_COLOR[2]);
+        glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 1.0f - flow_progress);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+
+    // Network stats
+    float recv_value = network_recv_graph.values.empty() ? 1024.0f : network_recv_graph.values.back();
+    float send_value = network_send_graph.values.empty() ? 256.0f : network_send_graph.values.back();
+
+    renderText("DOWNLOAD", 0.02f, 0.7f, 0.03f);
+    renderNumber(recv_value, 0.02f, 0.65f, 0.025f, NETWORK_RECV_COLOR);
+    renderText("KB/S", 0.15f, 0.65f, 0.02f);
+
+    renderText("UPLOAD", 0.6f, 0.3f, 0.03f);
+    renderNumber(send_value, 0.6f, 0.25f, 0.025f, NETWORK_SEND_COLOR);
+    renderText("KB/S", 0.73f, 0.25f, 0.02f);
+}
+
+void BtopRenderer::renderProcessRain()
+{
+    // Matrix-style digital rain showing process activity
+    renderText("PROCESS RAIN", 0.02f, 0.85f, 0.04f);
+
+    // Simulate falling text streams
+    if (!line_shader)
+        return;
+
+    line_shader->use();
+
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(line_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "offset"), 0.0f, 0.0f);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "scale"), 1.0f, 1.0f);
+    glUniform1f(glGetUniformLocation(line_shader->ID, "time"), time_accumulator);
+
+    // Create vertical streams of "process data"
+    int stream_count = 15;
+    std::string process_chars = "0123456789ABCDEF";
+
+    for (int stream = 0; stream < stream_count; ++stream)
+    {
+        float x = 0.05f + stream * 0.06f;
+        float stream_speed = 0.1f + (stream % 3) * 0.05f;
+        float stream_offset = fmod(time_accumulator * stream_speed, 1.2f);
+
+        // Render characters falling down
+        for (int i = 0; i < 20; ++i)
+        {
+            float y = 0.9f - stream_offset - i * 0.04f;
+            if (y < -0.1f)
+                continue;
+
+            // Character intensity fades as it falls
+            float intensity = std::max(0.0f, std::min(1.0f, (y + 0.1f) / 1.0f));
+
+            glUniform3f(glGetUniformLocation(line_shader->ID, "color"),
+                        CPU_COLOR[0] * intensity, CPU_COLOR[1] * intensity, CPU_COLOR[2] * intensity);
+            glUniform1f(glGetUniformLocation(line_shader->ID, "alpha"), intensity);
+
+            // Pick a "random" character based on position and time
+            int char_index = (stream * 7 + i * 3 + static_cast<int>(time_accumulator * 10)) % process_chars.length();
+            renderCharacter(process_chars[char_index], x, y, 0.02f, {CPU_COLOR[0] * intensity, CPU_COLOR[1] * intensity, CPU_COLOR[2] * intensity});
+        }
+    }
+}
+
+void BtopRenderer::renderDiskActivity()
+{
+    // Spinning disk visualization
+    renderText("DISK ACTIVITY", 0.02f, 0.85f, 0.04f);
+
+    if (!line_shader)
+        return;
+
+    line_shader->use();
+
+    float projection[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f, 1.0f};
+
+    glUniformMatrix4fv(glGetUniformLocation(line_shader->ID, "projection"), 1, GL_FALSE, projection);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "offset"), 0.0f, 0.0f);
+    glUniform2f(glGetUniformLocation(line_shader->ID, "scale"), 1.0f, 1.0f);
+    glUniform3f(glGetUniformLocation(line_shader->ID, "color"),
+                ACCENT_COLOR[0], ACCENT_COLOR[1], ACCENT_COLOR[2]);
+    glUniform1f(glGetUniformLocation(line_shader->ID, "alpha"), 0.8f);
+    glUniform1f(glGetUniformLocation(line_shader->ID, "time"), time_accumulator);
+
+    glBindVertexArray(vao_lines);
+
+    // Draw spinning disk
+    float center_x = 0.5f;
+    float center_y = 0.5f;
+    float disk_radius = 0.2f;
+    int segments = 36;
+
+    // Outer ring
+    std::vector<float> circle_vertices;
+    for (int i = 0; i <= segments; ++i)
+    {
+        float angle = (2.0f * M_PI * i) / segments;
+        circle_vertices.push_back(center_x + cos(angle) * disk_radius);
+        circle_vertices.push_back(center_y + sin(angle) * disk_radius);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_lines);
+    glBufferData(GL_ARRAY_BUFFER, circle_vertices.size() * sizeof(float),
+                 circle_vertices.data(), GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+
+    glLineWidth(3.0f);
+    glDrawArrays(GL_LINE_STRIP, 0, circle_vertices.size() / 2);
+
+    // Spinning activity indicators
+    int activity_lines = 8;
+    for (int i = 0; i < activity_lines; ++i)
+    {
+        float angle = (2.0f * M_PI * i) / activity_lines + time_accumulator * 2.0f;
+        float inner_radius = 0.05f;
+        float outer_radius = disk_radius * (0.7f + 0.3f * sin(time_accumulator * 3.0f + i));
+
+        float vertices[] = {
+            center_x + cos(angle) * inner_radius, center_y + sin(angle) * inner_radius,
+            center_x + cos(angle) * outer_radius, center_y + sin(angle) * outer_radius};
+
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+
+        glDrawArrays(GL_LINES, 0, 2);
+    }
+
+    renderText("DISK I/O", center_x - 0.04f, center_y - 0.02f, 0.025f);
+}
+
+void BtopRenderer::renderOverviewDashboard()
+{
+    // Combined dashboard view with mini versions of all visualizations
+    renderText("SYSTEM OVERVIEW", 0.02f, 0.95f, 0.04f);
+
+    // Mini CPU cores (top left)
+    if (quad_shader)
+    {
+        quad_shader->use();
+
+        float projection[16] = {
+            2.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 2.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, -1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f, 1.0f};
+
+        glUniformMatrix4fv(glGetUniformLocation(quad_shader->ID, "projection"), 1, GL_FALSE, projection);
+        glUniform1f(glGetUniformLocation(quad_shader->ID, "time"), time_accumulator);
+        glUniform1i(glGetUniformLocation(quad_shader->ID, "renderMode"), 2);
+        glBindVertexArray(vao_quads);
+
+        // Mini CPU visualization
+        for (int i = 0; i < 4; ++i)
+        {
+            float core_x = 0.05f + i * 0.03f;
+            float core_y = 0.8f;
+            float core_usage = 30.0f + 40.0f * sin(time_accumulator * 0.3f + i * 0.5f);
+            float core_size = 0.02f;
+
+            float intensity = core_usage / 100.0f;
+            glUniform3f(glGetUniformLocation(quad_shader->ID, "color"),
+                        CPU_COLOR[0] * intensity, CPU_COLOR[1] * intensity, CPU_COLOR[2] * intensity);
+            glUniform2f(glGetUniformLocation(quad_shader->ID, "offset"), core_x, core_y);
+            glUniform2f(glGetUniformLocation(quad_shader->ID, "scale"), core_size, core_size);
+            glUniform1f(glGetUniformLocation(quad_shader->ID, "alpha"), 0.8f);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+        }
+    }
+
+    renderText("CPU", 0.05f, 0.75f, 0.02f);
+
+    // Mini memory bars (middle)
+    renderText("MEM", 0.3f, 0.75f, 0.02f);
+
+    // Mini network flow (right)
+    renderText("NET", 0.7f, 0.75f, 0.02f);
+
+    // Classic graphs at bottom
+    if (!cpu_total_graph.vertices.empty())
+    {
+        renderGraph(cpu_total_graph, 0.05f, 0.1f, 0.4f, 0.15f);
+    }
+    if (!memory_used_graph.vertices.empty())
+    {
+        renderGraph(memory_used_graph, 0.55f, 0.1f, 0.4f, 0.15f);
+    }
 }

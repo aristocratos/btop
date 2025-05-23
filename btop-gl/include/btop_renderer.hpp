@@ -36,6 +36,27 @@ public:
     void setAnimationSpeed(float speed) { animation_speed = speed; }
     void setGraphHistory(size_t history) { graph_history_size = history; }
 
+    // Mode system for cycling through different visualizations
+    enum class VisualizationMode
+    {
+        CLASSIC_GRAPHS = 0, // Traditional line graphs
+        CPU_CORES,          // Individual CPU core visualization
+        MEMORY_LANDSCAPE,   // Memory usage as terrain
+        NETWORK_FLOW,       // Particle-based network visualization
+        PROCESS_RAIN,       // Matrix-style process display
+        DISK_ACTIVITY,      // Disk I/O visualization
+        OVERVIEW_DASHBOARD, // Combined artistic overview
+        MODE_COUNT          // Total number of modes
+    };
+
+    void cycleMode()
+    {
+        current_mode = static_cast<VisualizationMode>((static_cast<int>(current_mode) + 1) % static_cast<int>(VisualizationMode::MODE_COUNT));
+        mode_transition_time = 0.0f;
+    }
+
+    VisualizationMode getCurrentMode() const { return current_mode; }
+
 private:
     // Window dimensions
     int window_width, window_height;
@@ -118,6 +139,12 @@ private:
     void renderGraph(const GraphData &graph, float x, float y, float width, float height);
     void renderBar(const BarData &bar);
     void renderText(const std::string &text, float x, float y, float scale);
+    void renderLabelsAndValues();
+
+    // Text rendering
+    void renderCharacter(char c, float x, float y, float scale, const std::array<float, 3> &color);
+    void renderNumber(float value, float x, float y, float scale, const std::array<float, 3> &color);
+    std::vector<std::array<float, 4>> getCharacterLines(char c); // Returns line segments for character
 
     // Layout calculations
     void calculateLayout();
@@ -155,4 +182,17 @@ private:
                                           float t);
     void setupBuffers();
     void createShaders();
+
+    // Mode system variables
+    VisualizationMode current_mode;
+    float mode_transition_time;
+
+    // Mode-specific rendering methods
+    void renderClassicGraphs();
+    void renderCpuCores();
+    void renderMemoryLandscape();
+    void renderNetworkFlow();
+    void renderProcessRain();
+    void renderDiskActivity();
+    void renderOverviewDashboard();
 };
