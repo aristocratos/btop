@@ -308,6 +308,7 @@ namespace Shared {
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
+					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
 						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
 		}
@@ -1117,7 +1118,7 @@ namespace Gpu {
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
     					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
-    					gpus[i].supported_functions = {false, false, false, false, false, false, false, false};
+						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
     					continue;
         			}
 
