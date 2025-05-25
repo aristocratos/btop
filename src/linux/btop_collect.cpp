@@ -1466,6 +1466,10 @@ namespace Gpu {
         			if (result != RSMI_STATUS_SUCCESS)
     					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
     				else gpus_slice[i].temp_max = (long long)temp_max;
+
+					//? Disable encoder and decoder utilisation on AMD
+					gpus_slice[i].supported_functions.encoder_utilization = false;
+					gpus_slice[i].supported_functions.decoder_utilization = false;
     			}
 
 				//? GPU utilization
@@ -1697,7 +1701,9 @@ namespace Gpu {
 					.temp_info = false,
 					.mem_total = false,
 					.mem_used = false,
-					.pcie_txrx = false
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
