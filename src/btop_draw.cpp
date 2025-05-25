@@ -1046,7 +1046,8 @@ namespace Gpu {
 		}
 
 		//? Encode and Decode meters
-		if (gpu.supported_functions.encoder_utilization and gpu.supported_functions.decoder_utilization) {
+		bool drawnEncDec = gpu.supported_functions.encoder_utilization and gpu.supported_functions.decoder_utilization;
+		if (drawnEncDec) {
 			out += Mv::to(b_y + 3, b_x +1) + Theme::c("main_fg") + Fx::b + "ENC " + enc_meter(gpu.encoder_utilization)
 				+ Theme::g("cpu").at(clamp(gpu.encoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.encoder_utilization), 4) + '%'
 				+ Theme::c("div_line") + Symbols::v_line + Theme::c("main_fg")
@@ -1054,7 +1055,7 @@ namespace Gpu {
 		}
 
 		if (gpu.supported_functions.mem_total or gpu.supported_functions.mem_used) {
-			out += Mv::to(b_y + 4, b_x);
+			out += Mv::to(b_y + (drawnEncDec ? 4 : 3), b_x);
 			if (gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) {
 				string used_memory_string = floating_humanizer(gpu.mem_used);
 
@@ -1079,7 +1080,7 @@ namespace Gpu {
 				//? Memory clock speed
 				if (gpu.supported_functions.mem_clock) {
 					string clock_speed_string = to_string(gpu.mem_clock_speed);
-					out += Mv::to(b_y + 4, b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
+					out += Mv::to(b_y + (drawnEncDec ? 4 : 3), b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
 						+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 				}
 			} else {
