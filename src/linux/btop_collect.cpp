@@ -822,14 +822,14 @@ namespace Cpu {
 		if (b.use_power) {
 			if (not b.power_now.empty()) {
 				try {
-					watts = (float)stoll(readfile(b.power_now, "-1")) / 1000000.0;
+					watts = (float)stoll(readfile(b.power_now, "-1")) / 1000000.0F;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
 			else if (not b.voltage_now.empty() and not b.current_now.empty()) {
 				try {
-					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0 * stoll(readfile(b.voltage_now, "1")) / 1000000.0;
+					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0F * stoll(readfile(b.voltage_now, "1")) / 1000000.0F;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
@@ -2334,7 +2334,6 @@ namespace Net {
 			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
-			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
 			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {

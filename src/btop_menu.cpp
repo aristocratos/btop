@@ -1173,8 +1173,8 @@ namespace Menu {
 		return (redraw ? Changed : retval);
 	}
 
-static int optionsMenu(const string& key) {
- 		enum Predispositions { isBool, isInt, isString, is2D, isBrowsable, isEditable};
+	static int optionsMenu(const string& key) {
+		enum Predispositions { isBool, isInt, isString, is2D, isBrowsable, isEditable};
 		static int y{};
 		static int x{};
 		static int height{};
