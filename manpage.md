@@ -27,6 +27,9 @@ starting with two dashes ('-'). A summary of options is included below.
 **-d**, **\-\-debug**
 :   Start in debug mode with additional logs and metrics.
 
+**-f**, **\-\-filter _filter_**
+:   Set an initial process filter.
+
 **\-\-force-utf**
 :   Force start even if no UTF-8 locale was detected.
 
