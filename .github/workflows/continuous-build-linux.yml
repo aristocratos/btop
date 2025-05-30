@@ -15,6 +15,7 @@ on:
       - '!src/openbsd/**'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-linux.yml'
   pull_request:
     branches:
@@ -25,8 +26,10 @@ on:
       - '!src/freebsd/**'
       - '!src/netbsd/**'
       - '!src/openbsd/**'
+      - '!**/CMakeLists.txt'
       - 'include/**'
       - 'Makefile'
+      - '!**/CMakeLists.txt'
       - '.github/workflows/continuous-build-linux.yml'
 
 jobs:
