@@ -295,7 +295,7 @@ static void _signal_handler(const int sig) {
 }
 
 //* Config init
-void init_config(bool low_color) {
+static void init_config(bool low_color) {
 	atomic_lock lck(Global::init_conf);
 	vector<string> load_warnings;
 	Config::load(Config::conf_file, load_warnings);

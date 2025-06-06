@@ -323,7 +323,7 @@ namespace Net {
 		IfAddrsPtr& operator=(IfAddrsPtr&& other) = delete;
 		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
 		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
-		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
+		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; }
 	};
 
 	extern std::unordered_map<string, net_info> current_net;
