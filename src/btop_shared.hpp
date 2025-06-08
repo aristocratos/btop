@@ -139,7 +139,9 @@ namespace Gpu {
 				 temp_info = true,
 				 mem_total = true,
 				 mem_used = true,
-				 pcie_txrx = true;
+				 pcie_txrx = true,
+				 encoder_utilization = true,
+				 decoder_utilization = true;
 	};
 
 	//* Per-device container for GPU info
@@ -165,6 +167,9 @@ namespace Gpu {
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;
+
+		long long encoder_utilization = 0;
+		long long decoder_utilization = 0;
 
 		gpu_info_supported supported_functions;
 
