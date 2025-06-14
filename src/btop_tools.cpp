@@ -398,6 +398,8 @@ namespace Tools {
 
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
+
+		static const string num_delim = string(1, std::use_facet<std::numpunct<char>>(std::locale()).thousands_sep());
 		const size_t mult = (bit) ? 8 : 1;
 
 		bool mega = Config::getB("base_10_sizes");
@@ -467,17 +469,17 @@ namespace Tools {
 			out = to_string(value);
 			if (not mega and out.size() == 4 and start > 0) {
 				out.pop_back();
-				out.insert(2, ".");
+				out.insert(2, num_delim);
 			}
 			else if (out.size() == 3 and start > 0) {
-				out.insert(1, ".");
+				out.insert(1, num_delim);
 			}
 			else if (out.size() >= 2) {
 				out.resize(out.size() - 2);
 			}
 		}
 		if (shorten) {
-			auto f_pos = out.find('.');
+			auto f_pos = out.find(num_delim);
 			if (f_pos == 1 and out.size() > 3) {
 				out = to_string(round(stod(out) * 10) / 10).substr(0,3);
 			}
@@ -485,7 +487,7 @@ namespace Tools {
 				out = to_string((int)round(stod(out)));
 			}
 			if (out.size() > 3) {
-				out = to_string((int)(out[0] - '0')) + ".0";
+				out = to_string((int)(out[0] - '0')) + num_delim + "0";
 				start++;
 			}
 			out.push_back(units[start][0]);
