@@ -13,7 +13,7 @@ endif()
 project("btop"
   DESCRIPTION "A monitor of resources"
   HOMEPAGE_URL "https://github.com/aristocratos/btop"
-  LANGUAGES CXX C
+  LANGUAGES CXX
 )
 
 include(CheckCXXCompilerFlag)
@@ -36,8 +36,6 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
-option(BTOP_WERROR "Compile with warnings as errors" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
@@ -65,6 +63,11 @@ add_executable(btop
   src/btop_tools.cpp
 )
 
+if(BTOP_LTO)
+  check_ipo_supported()
+  set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
+
 if(APPLE)
   target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
@@ -76,12 +79,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
 elseif(LINUX)
   target_sources(btop PRIVATE src/linux/btop_collect.cpp)
   if(BTOP_GPU)
-    target_sources(btop PRIVATE
-      src/linux/intel_gpu_top/intel_gpu_top.c
-      src/linux/intel_gpu_top/igt_perf.c
-      src/linux/intel_gpu_top/intel_device_info.c
-      src/linux/intel_gpu_top/intel_name_lookup_shim.c
-    )
+    add_subdirectory(src/linux/intel_gpu_top)
   endif()
 else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
@@ -107,28 +105,7 @@ set(COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY IMMEDIATE)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-# Check for and enable LTO
-if(BTOP_LTO)
-  check_ipo_supported(RESULT ipo_supported)
-  if(ipo_supported)
-    set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
-  endif()
-endif()
-
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
-
-if(BTOP_PEDANTIC)
-  target_compile_options(btop PRIVATE
-    -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual
-    -Wconversion -Wsign-conversion -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough -Weffc++
-    $<$<CXX_COMPILER_ID:Clang>:-Wheader-hygiene -Wgnu -Wthread-safety>
-    $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond -Wduplicated-branches -Wlogical-op>
-    $<$<CXX_COMPILER_ID:GNU>:-Wnull-dereference -Wuseless-cast>
-  )
-endif()
-if(BTOP_WERROR)
-  target_compile_options(btop PRIVATE -Werror)
-endif()
 
 if(NOT APPLE)
   target_compile_options(btop PRIVATE -fstack-clash-protection)

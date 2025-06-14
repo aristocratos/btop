@@ -657,12 +657,13 @@ namespace Menu {
 				"Separate multiple values with",
 				"whitespace \" \".",
 				"",
-				"Begin line with \"exclude=\" to change to",
-				"exclude filter.",
-				"Otherwise defaults to \"most include\" filter.",
+				"Only disks matching the filter will be shown.",
+				"Prepend \033[3mexclude=\033[23m to only show disks ",
+				"not matching the filter.",
 				"",
-				"Example:",
-				"\"exclude=/boot /home/user\""},
+				"Examples:",
+				"/boot /home/user",
+				"exclude=/boot /home/user"},
 			{"zfs_arc_cached",
 				"(Linux) Count ZFS ARC as cached memory.",
 				"",
@@ -1003,7 +1004,7 @@ namespace Menu {
 		if (redraw) {
 			vector<string> cont_vec {
 				Fx::b + Theme::g("used")[100] + "Error:" + Theme::c("main_fg") + Fx::ub,
-				"Terminal size to small to" + Fx::reset,
+				"Terminal size too small to" + Fx::reset,
 				"display menu or box!" + Fx::reset };
 
 			messageBox = Menu::msgBox{45, 0, cont_vec, "error"};

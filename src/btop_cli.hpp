@@ -18,6 +18,8 @@ namespace Cli {
 		std::optional<stdfs::path> config_file;
 		// Enable debug mode with additional logs and metrics
 		bool debug {};
+		// Set an initial process filter.
+		std::optional<std::string> filter;
 		// Only use ANSI supported graph symbols and colors
 		std::optional<bool> force_tty;
 		// Use UTF-8 locale even if not detected
