@@ -39,7 +39,7 @@ jobs:
       - name: Compile
         uses: vmactions/openbsd-vm@v1
         with:
-          release: '7.6'
+          release: '7.7'
           usesh: true
           prepare: |
             pkg_add gmake gcc%11 g++%11 coreutils git lowdown
@@ -52,6 +52,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: btop-x86_64-openbsd-7.6
+          name: btop-x86_64-openbsd-7.7
           path: 'bin/*'
           if-no-files-found: error
