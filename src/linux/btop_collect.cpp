@@ -445,7 +445,7 @@ namespace Cpu {
 
 						found_sensors[sensor_name] = Sensor { fs::path(basepath + "input"), temp, crit };
 
-						if (not got_cpu and (label.starts_with("Package id") or label.starts_with("Tdie"))) {
+						if (not got_cpu and (label.starts_with("Package id") or label.starts_with("Tdie") or label.starts_with("SoC Temperature"))) {
 							got_cpu = true;
 							cpu_sensor = sensor_name;
 						}
