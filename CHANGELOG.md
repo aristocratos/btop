@@ -1,3 +1,15 @@
+## v1.4.4
+
+References | Description | Author(s)
+--- | --- | ---
+#1185 | Fix auto-detection of CPU temp on Ampere boards | @bexcran
+589c133 | Fixed floating_humanizer() to work correctly when numeric delimiter isn't a dot. | @aristocratos
+#1157 | Add command line option to set an inital filter | @imwints
+#1172 | Make 100ms the minimal refresh rate. Exit gracefully if integer conversion in CLI parser fails. | @imwints
+#1031 | Lock/unlock config to avoid infinite recursion | @Jacajack
+#1156 | Fix incorrect positioning and start symbol of second title introduced in 2538d89 | @xDMPx
+ffcd064 | Fix dangling reference warnings for GCC 13 and later | aristocratos
+
 ## v1.4.3
 
 References | Description | Author(s)
