@@ -785,6 +785,22 @@ namespace Runner {
 
 }
 
+static auto configure_tty_mode(std::optional<bool> force_tty) {
+	if (force_tty.has_value()) {
+		Config::set("tty_mode", force_tty.value());
+		Logger::debug("TTY mode set via command line");
+  	}
+
+#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+	else if (Term::current_tty.starts_with("/dev/tty")) {
+		Config::set("tty_mode", true);
+		Logger::debug("Auto detect real TTY");
+  	}
+#endif
+
+	Logger::debug(fmt::format("TTY mode enabled: {}", Config::getB("tty_mode")));
+}
+
 
 //* --------------------------------------------- Main starts here! ---------------------------------------------------
 int main(const int argc, const char** argv) {
@@ -952,17 +968,11 @@ int main(const int argc, const char** argv) {
 		clean_quit(1);
 	}
 
-	if (Term::current_tty != "unknown") Logger::info("Running on " + Term::current_tty);
-	if ((!cli.force_tty.has_value() || !cli.force_tty.value()) && Config::getB("force_tty")) {
-		Config::set("tty_mode", true);
-		Logger::info("Forcing tty mode: setting 16 color mode and using tty friendly graph symbols");
+	if (Term::current_tty != "unknown") {
+		Logger::info("Running on " + Term::current_tty);
 	}
-#if not defined __APPLE__ && not defined __OpenBSD__ && not defined __NetBSD__
-	else if ((!cli.force_tty.has_value() || !cli.force_tty.value()) && Term::current_tty.starts_with("/dev/tty")) {
-		Config::set("tty_mode", true);
-		Logger::info("Real tty detected: setting 16 color mode and using tty friendly graph symbols");
-	}
-#endif
+
+	configure_tty_mode(cli.force_tty);
 
 	//? Check for valid terminal dimensions
 	{
