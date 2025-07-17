@@ -858,7 +858,7 @@ namespace Cpu {
 			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { lavg_pre = "L "; }
 			string lavg;
 			for (const auto& val : cpu.load_avg) {
-				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? to_string((int)round(val)) : to_string(val).substr(0, 4));
+				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? fmt::format("{:.0f}", val) : fmt::format("{:.2f}", val));
 			}
 
 			string lavg_str = lavg_pre + lavg;
@@ -1754,13 +1754,13 @@ namespace Proc {
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
 			//? Graph part of box
-			string cpu_str = (alive ? to_string(detailed.entry.cpu_p) : "");
+			string cpu_str = (alive ? fmt::format("{:.2f}", detailed.entry.cpu_p) : "");
 			if (alive) {
-				cpu_str.resize((detailed.entry.cpu_p < 10 or detailed.entry.cpu_p >= 100 ? 3 : 4));
-				cpu_str += '%';
+				cpu_str.resize(4);
+				if (cpu_str.ends_with('.')) { cpu_str.pop_back(); cpu_str.pop_back(); }
 			}
 			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
-				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + cpu_str;
+				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + rjust(cpu_str, 4) + "%";
 			for (int i = 0; const auto& l : {'C', 'P', 'U'})
 					out += Mv::to(d_y + 3 + i++, dgraph_x + 1) + l;
 
@@ -1777,10 +1777,11 @@ namespace Proc {
 			if (item_fit >= 8) out += cjust(to_string(detailed.entry.p_nice), item_width);
 
 
-			const double mem_p = (double)detailed.mem_bytes.back() * 100 / totalMem;
-			string mem_str = to_string(mem_p);
-			mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
-			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + mem_str + "% ", (d_width / 3) - 2)
+			const double mem_p = detailed.mem_bytes.back() * 100.0 / totalMem;
+			string mem_str = fmt::format("{:.2f}", mem_p);
+			mem_str.resize(4);
+			if (mem_str.ends_with('.')) mem_str.pop_back();
+			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + rjust(mem_str, 4) + "% ", (d_width / 3) - 2)
 				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
@@ -1887,10 +1888,10 @@ namespace Proc {
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
 			}
 			//? Common end of line
-			string cpu_str = to_string(p.cpu_p);
+			string cpu_str = fmt::format("{:.2f}", p.cpu_p);
 			if (p.cpu_p < 10 or (p.cpu_p >= 100 and p.cpu_p < 1000)) cpu_str.resize(3);
 			else if (p.cpu_p >= 10'000) {
-				cpu_str = to_string(p.cpu_p / 1000);
+				cpu_str = fmt::format("{:.2f}", p.cpu_p / 1000);
 				cpu_str.resize(3);
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
@@ -1898,9 +1899,9 @@ namespace Proc {
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
-				mem_str = to_string(mem_p);
-				if (mem_str.size() < 4)	mem_str = "0";
-				else mem_str.resize((mem_p < 10 or mem_p >= 100 ? 3 : 4));
+				mem_str = mem_p < 0.01 ? "0" : fmt::format("{:.1f}", mem_p);
+				if (mem_str.size() > 3) mem_str.resize(3);
+				if (mem_str.ends_with('.')) mem_str.pop_back();
 				mem_str += '%';
 			}
 

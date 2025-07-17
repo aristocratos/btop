@@ -568,16 +568,24 @@ namespace Cpu {
 				}
 			}
 
-			if (hz <= 1 or hz >= 1000000)
+			if (hz <= 1 or hz >= 999999999)
 				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
-			if (hz >= 1000) {
-				if (hz >= 10000) cpuhz = to_string((int)round(hz / 1000)); // Future proof until we reach THz speeds :)
-				else cpuhz = to_string(round(hz / 100) / 10.0).substr(0, 3);
+			if (hz > 999999) {
+				cpuhz = fmt::format("{:.1f}", hz / 1'000'000);
+				cpuhz.resize(3);
+				if (cpuhz.back() == '.') cpuhz.pop_back();
+				cpuhz += " THz";
+			}
+			else if (hz > 999) {
+				cpuhz = fmt::format("{:.1f}", hz / 1'000);
+				cpuhz.resize(3);
+				if (cpuhz.back() == '.') cpuhz.pop_back();
 				cpuhz += " GHz";
 			}
-			else if (hz > 0)
-				cpuhz = to_string((int)hz) + " MHz";
+			else {
+				cpuhz = fmt::format("{:.0f} MHz", hz);
+			}
 
 		}
 		catch (const std::exception& e) {

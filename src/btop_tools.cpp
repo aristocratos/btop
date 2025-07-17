@@ -398,8 +398,6 @@ namespace Tools {
 
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
-
-		static const string num_delim = string(1, std::use_facet<std::numpunct<char>>(std::locale()).thousands_sep());
 		const size_t mult = (bit) ? 8 : 1;
 
 		bool mega = Config::getB("base_10_sizes");
@@ -449,7 +447,7 @@ namespace Tools {
 			while (value >= 100000) {
 				value /= 1000;
 				if (value < 100) {
-					out = to_string(value);
+					out = fmt::format("{}", value);
 					break;
 				}
 				start++;
@@ -459,35 +457,39 @@ namespace Tools {
 			while (value >= 102400) {
 				value >>= 10;
 				if (value < 100) {
-					out = to_string(value);
+					out = fmt::format("{}", value);
 					break;
 				}
 				start++;
 			}
 		}
 		if (out.empty()) {
-			out = to_string(value);
+			out = fmt::format("{}", value);
 			if (not mega and out.size() == 4 and start > 0) {
 				out.pop_back();
-				out.insert(2, num_delim);
+				out.insert(2, ".");
 			}
 			else if (out.size() == 3 and start > 0) {
-				out.insert(1, num_delim);
+				out.insert(1, ".");
 			}
 			else if (out.size() >= 2) {
 				out.resize(out.size() - 2);
 			}
+			if (out.empty()) {
+				out = "0";
+			}
 		}
+
 		if (shorten) {
-			auto f_pos = out.find(num_delim);
+			auto f_pos = out.find(".");
 			if (f_pos == 1 and out.size() > 3) {
-				out = to_string(round(stod(out) * 10) / 10).substr(0,3);
+				out = fmt::format("{:.1f}", stod(out));
 			}
 			else if (f_pos != string::npos) {
-				out = to_string((int)round(stod(out)));
+				out = fmt::format("{:.0f}", stod(out));
 			}
 			if (out.size() > 3) {
-				out = to_string((int)(out[0] - '0')) + num_delim + "0";
+				out = fmt::format("{:d}.0", out[0] - '0');
 				start++;
 			}
 			out.push_back(units[start][0]);
