@@ -1738,6 +1738,36 @@ namespace Gpu {
 }
 #endif
 
+/// Convert ascii escapes like \040 into chars.
+static auto convert_ascii_escapes(const std::string& input) -> std::string {
+    std::string out;
+    out.reserve(input.size());
+
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        if (input[i] == '\\' &&
+	    	// Peek the next three characters.
+            i + 3 < input.size() &&
+            std::isdigit(input[i + 1]) &&
+            std::isdigit(input[i + 2]) &&
+            std::isdigit(input[i + 3])) {
+
+			// Convert octal chars to decimal int.
+			//   '0' - '0' -> 0, '4' - '0' -> 4, '0' - '0' -> 0.
+			//   0 * 64 (0)
+			//   + 4 * 8 (32)
+			//   + 0
+			//   = 32 (ascii space)
+            int value = ((input[i + 1] - '0') * 64) + ((input[i + 2] - '0') * 8) + (input[i + 3] - '0');
+            out.push_back(static_cast<char>(value));
+            // Consume the three digits.
+            i += 3;
+        } else {
+            out.push_back(input[i]);
+        }
+    }
+    return out;
+}
+
 namespace Mem {
 	bool has_swap{};
 	vector<string> fstab;
@@ -1933,6 +1963,9 @@ namespace Mem {
 						std::error_code ec;
 						diskread >> dev >> mountpoint >> fstype;
 						diskread.ignore(SSmax, '\n');
+
+						// A mountpoint can ascii escape codes, which will not work with `statvfs`.
+						mountpoint = convert_ascii_escapes(mountpoint);
 
 						if (v_contains(ignore_list, mountpoint) or v_contains(found, mountpoint)) continue;
 
