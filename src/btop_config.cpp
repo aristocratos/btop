@@ -20,6 +20,7 @@ tab-size = 4
 #include <atomic>
 #include <filesystem>
 #include <fstream>
+#include <locale>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -764,6 +765,7 @@ namespace Config {
 		Logger::debug("Writing new config file");
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
+		cwrite.imbue(std::locale::classic());
 		if (cwrite.good()) {
 			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
 			for (const auto& [name, description] : descriptions) {
