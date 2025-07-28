@@ -203,12 +203,26 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 
 ## Themes
 
-Btop++ uses the same theme files as bpytop and bashtop (some color values missing in bashtop themes) .
+Btop++ uses the same theme files as bpytop and bashtop (some color values missing in bashtop themes).
 
 See [themes](https://github.com/aristocratos/btop/tree/main/themes) folder for available themes.
 
+Btop searches the following directories for system themes:
+
+* `../share/btop/themes` (this path is relative to the btop executable)
+* `/usr/local/share/btop/themes`
+* `/usr/share/btop/themes`
+
+The first directory that exists and isn't empty is used as the system themes directory.
+
+The user themes directory depends on which environment variables are set:
+
+* If `$XDG_CONFIG_HOME` is set, the user themes directory is `$XDG_CONFIG_HOME/btop/themes`
+* Otherwise, if `$HOME` is set, the user themes directory is `$HOME/.config/btop/themes`
+* Otherwise, the user themes directory is `~/.config/btop/themes`
+
 The `make install` command places the default themes in `[$PREFIX or /usr/local]/share/btop/themes`.
-User created themes should be placed in `$XDG_CONFIG_HOME/btop/themes` or `$HOME/.config/btop/themes`.
+User created themes should be placed in the user themes directory.
 
 Let me know if you want to contribute with new themes.
 
