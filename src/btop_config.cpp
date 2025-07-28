@@ -467,7 +467,11 @@ namespace Config {
 			} else if (vals.at(0) == "proc") {
 				set("proc_left", (vals.at(1) != "0"));
 			}
-			set("graph_symbol_" + vals.at(0), vals.at(2));
+			if (vals.at(0).starts_with("gpu")) {
+				set("graph_symbol_gpu", vals.at(2));
+			} else {
+				set("graph_symbol_" + vals.at(0), vals.at(2));
+			}
 		}
 
 		if (set_boxes(boxes)) {
