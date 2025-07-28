@@ -151,6 +151,8 @@ namespace Gpu {
 		nvmlReturn_t (*nvmlDeviceGetTemperature)(nvmlDevice_t, nvmlTemperatureSensors_t, unsigned int*);
 		nvmlReturn_t (*nvmlDeviceGetMemoryInfo)(nvmlDevice_t, nvmlMemory_t*);
 		nvmlReturn_t (*nvmlDeviceGetPcieThroughput)(nvmlDevice_t, nvmlPcieUtilCounter_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetEncoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetDecoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
 
 		//? Data
 		void* nvml_dl_handle;
@@ -308,6 +310,7 @@ namespace Shared {
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
+					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
 						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
 		}
@@ -1062,6 +1065,8 @@ namespace Gpu {
 		    LOAD_SYM(nvmlDeviceGetTemperature);
 		    LOAD_SYM(nvmlDeviceGetMemoryInfo);
 		    LOAD_SYM(nvmlDeviceGetPcieThroughput);
+			LOAD_SYM(nvmlDeviceGetEncoderUtilization);
+			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
 
             #undef LOAD_SYM
 
@@ -1117,7 +1122,7 @@ namespace Gpu {
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
     					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
-    					gpus[i].supported_functions = {false, false, false, false, false, false, false, false};
+						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
     					continue;
         			}
 
@@ -1262,6 +1267,30 @@ namespace Gpu {
 						auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
 						gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(used_percent);
 					}
+				}
+
+				// nvTimer.stop_rename_reset("Nv enc");
+				//? Encoder info
+				if (gpus_slice[i].supported_functions.encoder_utilization) {
+					unsigned int utilization;
+					unsigned int samplingPeriodUs;
+					result = nvmlDeviceGetEncoderUtilization(devices[i], &utilization, &samplingPeriodUs);
+					if (result != NVML_SUCCESS) {
+						Logger::warning(std::string("NVML: Failed to get encoder utilization: ") + nvmlErrorString(result));
+						if constexpr(is_init) gpus_slice[i].supported_functions.encoder_utilization = false;
+					} else gpus_slice[i].encoder_utilization = (long long)utilization;
+				}
+
+				// nvTimer.stop_rename_reset("Nv dec");
+				//? Decoder info
+				if (gpus_slice[i].supported_functions.decoder_utilization) {
+					unsigned int utilization;
+					unsigned int samplingPeriodUs;
+					result = nvmlDeviceGetDecoderUtilization(devices[i], &utilization, &samplingPeriodUs);
+					if (result != NVML_SUCCESS) {
+						Logger::warning(std::string("NVML: Failed to get decoder utilization: ") + nvmlErrorString(result));
+						if constexpr(is_init) gpus_slice[i].supported_functions.decoder_utilization = false;
+					} else gpus_slice[i].decoder_utilization = (long long)utilization;
 				}
 
     			//? TODO: Processes using GPU
@@ -1437,6 +1466,10 @@ namespace Gpu {
         			if (result != RSMI_STATUS_SUCCESS)
     					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
     				else gpus_slice[i].temp_max = (long long)temp_max;
+
+					//? Disable encoder and decoder utilisation on AMD
+					gpus_slice[i].supported_functions.encoder_utilization = false;
+					gpus_slice[i].supported_functions.decoder_utilization = false;
     			}
 
 				//? GPU utilization
@@ -1668,7 +1701,9 @@ namespace Gpu {
 					.temp_info = false,
 					.mem_total = false,
 					.mem_used = false,
-					.pcie_txrx = false
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
