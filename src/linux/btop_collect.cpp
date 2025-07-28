@@ -54,6 +54,7 @@ extern "C" {
 	#undef class
 #endif
 
+using std::abs;
 using std::clamp;
 using std::cmp_greater;
 using std::cmp_less;
@@ -803,14 +804,14 @@ namespace Cpu {
 			if (b.use_energy_or_charge ) {
 				if (not b.power_now.empty()) {
 					try {
-						seconds = round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600);
+						seconds = abs(round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600));
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
 				}
 				else if (not b.current_now.empty()) {
 					try {
-						seconds = round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600);
+						seconds = abs(round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600));
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
@@ -824,7 +825,28 @@ namespace Cpu {
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
-		}
+		} 
+		//? Or get seconds to full
+		else if(is_in(status, "charging")) {
+			if (b.use_energy_or_charge ) {
+				if (not b.power_now.empty()) {
+					try {
+						seconds = (round((double)stoll(readfile(b.energy_full , "0")) - round((double)stoll(readfile(b.energy_now, "0"))))  
+									/ abs((double)stoll(readfile(b.power_now, "1"))) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
+				}
+				else if (not b.current_now.empty()) {
+					try {
+						seconds = (round((double)stoll(readfile(b.charge_full , "0")) - (double)stoll(readfile(b.charge_now, "0")))  
+									/ std::abs((double)stoll(readfile(b.current_now, "1"))) * 3600);
+					}
+					catch (const std::invalid_argument&) { }
+					catch (const std::out_of_range&) { }
+				}
+			}
+		} 
 
 		//? Get power draw
 		if (b.use_power) {
