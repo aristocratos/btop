@@ -1,0 +1,24 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+
+AlignAfterOpenBracket: BlockIndent
+AllowShortFunctionsOnASingleLine: Inline
+ColumnLimit:     120
+Cpp11BracedListStyle: false
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^".*"$'
+    Priority: 1
+  - Regex: '^<.*\..*>$'
+    Priority: 2
+  - Regex: '^<.*>$'
+    Priority: 3
+IndentPPDirectives: AfterHash
+NamespaceIndentation: All
+QualifierAlignment: Left
+PointerAlignment: Left
+SpaceBeforeCpp11BracedList: true
+TabWidth:        2
+UseTab:          Always
+...
