@@ -1490,6 +1490,7 @@ namespace Proc {
 	bool shown = true, redraw = true;
 	int selected_pid = 0, selected_depth = 0;
 	string selected_name;
+	string selected_cmd;
 	std::unordered_map<size_t, Draw::Graph> p_graphs;
 	std::unordered_map<size_t, bool> p_wide_cmd;
 	std::unordered_map<size_t, int> p_counters;
@@ -1741,6 +1742,7 @@ namespace Proc {
 				mouse_x += 6;
 			}
 			out += title_left_down + Fx::b + hi_color + 's' + t_color + "ignals" + Fx::ub + title_right_down;
+			out += title_left_down + Fx::b + t_color + "copy cmd" + Fx::b + hi_color + " y" + t_color + Fx::ub + title_right_down;
 			if (selected > 0) Input::mouse_mappings["s"] = {y + height - 1, mouse_x, 1, 7};
 
 			//? Labels for fields in list
@@ -1818,6 +1820,7 @@ namespace Proc {
 			if (is_selected) {
 				selected_pid = (int)p.pid;
 				selected_name = p.name;
+				selected_cmd = p.cmd;
 				selected_depth = p.depth;
 			}
 
