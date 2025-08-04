@@ -22,6 +22,7 @@ tab-size = 4
 #include <atomic>
 #include <deque>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -204,6 +205,7 @@ namespace Cpu {
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
 	extern tuple<int, float, long, string> current_bat;
+	extern std::optional<std::string> container_engine;
 
 	struct cpu_info {
 		std::unordered_map<string, deque<long long>> cpu_percent = {
@@ -451,3 +453,6 @@ namespace Proc {
 	//* Build prefixes for tree view
 	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
 }
+
+/// Detect container engine.
+auto detect_container() -> std::optional<std::string>;

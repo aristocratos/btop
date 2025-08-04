@@ -19,6 +19,7 @@ tab-size = 4
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iterator>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -599,6 +600,11 @@ namespace Cpu {
 				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
 			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
+
+			// Draw container engine name
+			if (Cpu::container_engine.has_value()) {
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}", Mv::to(button_y, x + 28), title_left, Theme::c("title"), Cpu::container_engine.value(), title_right);
+			}
 
 			//? Graphs & meters
 			const int graph_default_width = x + width - b_width - 3;
