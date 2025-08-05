@@ -249,6 +249,8 @@ namespace Menu {
 				"Enable vim keys.",
 				"Set to True to enable \"h,j,k,l\" keys for",
 				"directional control in lists.",
+				"Also enables ctrl + u/d for quicker scrolling",
+				"and ctrl + b/f for page up/down.",
 				"",
 				"Conflicting keys for",
 				"h (help) and k (kill)",
