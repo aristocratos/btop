@@ -20,8 +20,10 @@ tab-size = 4
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -224,6 +226,7 @@ namespace Cpu {
 		long long temp_max = 0;
 		array<double, 3> load_avg;
 		float usage_watts = 0;
+		std::optional<std::vector<std::int32_t>> active_cpus;
 	};
 
 	//* Collect cpu stats and temperatures
