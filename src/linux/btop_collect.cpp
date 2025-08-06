@@ -769,21 +769,21 @@ namespace Cpu {
 		//? Try to get battery percentage
 		if (percent < 0) {
 			try {
-				percent = stoll(readfile(b.base_dir / "capacity", "-1"));
+				percent = stoi(readfile(b.base_dir / "capacity", "-1"));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
 		if (b.use_energy_or_charge and percent < 0) {
 			try {
-				percent = round(100.0 * stoll(readfile(b.energy_now, "-1")) / stoll(readfile(b.energy_full, "1")));
+				percent = round(100.0 * stod(readfile(b.energy_now, "-1")) / stod(readfile(b.energy_full, "1")));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
 		}
 		if (b.use_energy_or_charge and percent < 0) {
 			try {
-				percent = round(100.0 * stoll(readfile(b.charge_now, "-1")) / stoll(readfile(b.charge_full, "1")));
+				percent = round(100.0 * stod(readfile(b.charge_now, "-1")) / stod(readfile(b.charge_full, "1")));
 			}
 			catch (const std::invalid_argument&) { }
 			catch (const std::out_of_range&) { }
@@ -807,14 +807,14 @@ namespace Cpu {
 			if (b.use_energy_or_charge ) {
 				if (not b.power_now.empty()) {
 					try {
-						seconds = abs(round((double)stoll(readfile(b.energy_now, "0")) / stoll(readfile(b.power_now, "1")) * 3600));
+						seconds = abs(round(stod(readfile(b.energy_now, "0")) / stod(readfile(b.power_now, "1")) * 3600));
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
 				}
 				else if (not b.current_now.empty()) {
 					try {
-						seconds = abs(round((double)stoll(readfile(b.charge_now, "0")) / (double)stoll(readfile(b.current_now, "1")) * 3600));
+						seconds = abs(round(stod(readfile(b.charge_now, "0")) / stod(readfile(b.current_now, "1")) * 3600));
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
@@ -834,16 +834,16 @@ namespace Cpu {
 			if (b.use_energy_or_charge ) {
 				if (not b.power_now.empty()) {
 					try {
-						seconds = (round((double)stoll(readfile(b.energy_full , "0")) - round((double)stoll(readfile(b.energy_now, "0"))))  
-									/ abs((double)stoll(readfile(b.power_now, "1"))) * 3600);
+						seconds = (round(stod(readfile(b.energy_full , "0")) - round(stod(readfile(b.energy_now, "0"))))  
+									/ abs(stod(readfile(b.power_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
 				}
 				else if (not b.current_now.empty()) {
 					try {
-						seconds = (round((double)stoll(readfile(b.charge_full , "0")) - (double)stoll(readfile(b.charge_now, "0")))  
-									/ std::abs((double)stoll(readfile(b.current_now, "1"))) * 3600);
+						seconds = (round(stod(readfile(b.charge_full , "0")) - stod(readfile(b.charge_now, "0")))  
+									/ std::abs(stod(readfile(b.current_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
@@ -855,14 +855,14 @@ namespace Cpu {
 		if (b.use_power) {
 			if (not b.power_now.empty()) {
 				try {
-					watts = (float)stoll(readfile(b.power_now, "-1")) / 1000000.0;
+					watts = stof(readfile(b.power_now, "-1")) / 1000000.0F;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
 			else if (not b.voltage_now.empty() and not b.current_now.empty()) {
 				try {
-					watts = (float)stoll(readfile(b.current_now, "-1")) / 1000000.0 * stoll(readfile(b.voltage_now, "1")) / 1000000.0;
+					watts = stof(readfile(b.current_now, "-1")) / 1000000.0F * stof(readfile(b.voltage_now, "1")) / 1000000.0F;
 				}
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
@@ -2489,7 +2489,7 @@ namespace Net {
 					auto& bandwidth = netif.bandwidth.at(dir);
 
 					uint64_t val{};
-					try { val = (uint64_t)stoull(readfile(sys_file, "0")); }
+					try { val = stoull(readfile(sys_file, "0")); }
 					catch (const std::invalid_argument&) {}
 					catch (const std::out_of_range&) {}
 
