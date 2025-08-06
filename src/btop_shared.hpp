@@ -241,6 +241,8 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, float, long, string>;
 
 	string trim_name(string);
+
+	auto detect_active_cpus() -> std::vector<std::int32_t>;
 }
 
 namespace Mem {
