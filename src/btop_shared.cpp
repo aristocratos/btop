@@ -16,6 +16,8 @@ indent = tab
 tab-size = 4
 */
 
+#include <filesystem>
+#include <fstream>
 #include <ranges>
 #include <regex>
 #include <string>
@@ -24,6 +26,7 @@ tab-size = 4
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
+namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
 
@@ -254,4 +257,24 @@ namespace Proc {
 
 	}
 
+}
+
+auto detect_container() -> std::optional<std::string> {
+    std::error_code err;
+
+    if (fs::exists(fs::path("/run/.containerenv"), err)) {
+        return std::make_optional(std::string { "podman" });
+    }
+    if (fs::exists(fs::path("/.dockerenv"), err)) {
+        return std::make_optional(std::string { "docker" });
+    }
+    auto systemd_container = fs::path("/run/systemd/container");
+    if (fs::exists(systemd_container, err)) {
+        auto stream = std::ifstream { systemd_container };
+        auto buf = std::string {};
+        stream >> buf;
+        return std::make_optional(buf);
+    }
+
+    return std::nullopt;
 }
