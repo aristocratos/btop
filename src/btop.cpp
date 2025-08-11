@@ -898,7 +898,6 @@ int main(const int argc, const char** argv) {
 	//? Try to find and set a UTF-8 locale
 	if (std::setlocale(LC_ALL, "") != nullptr and not s_contains((string)std::setlocale(LC_ALL, ""), ";")
 	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
-		std::locale::global(std::locale(std::setlocale(LC_ALL, "")));
 		Logger::debug("Using locale " + std::locale().name());
 	}
 	else {
@@ -921,7 +920,6 @@ int main(const int argc, const char** argv) {
 							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
 								found = l.substr(l.find('=') + 1);
 								if (std::setlocale(LC_ALL, found.c_str()) != nullptr) {
-									std::locale::global(std::locale(found));
 									break;
 								}
 							}
@@ -943,11 +941,9 @@ int main(const int argc, const char** argv) {
 				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
 			}
 			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != nullptr) {
-				std::locale::global(std::locale(cur_locale + ".UTF-8"));
 				Logger::debug("Setting LC_ALL=" + cur_locale + ".UTF-8");
 			}
 			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
-				std::locale::global(std::locale("en_US.UTF-8"));
 				Logger::debug("Setting LC_ALL=en_US.UTF-8");
 			}
 			else {
@@ -976,8 +972,6 @@ int main(const int argc, const char** argv) {
 	if (Term::current_tty != "unknown") {
 		Logger::info("Running on " + Term::current_tty);
 	}
-
-	Logger::debug(to_string(1.0).substr(1,1));
 
 	configure_tty_mode(cli.force_tty);
 
