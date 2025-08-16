@@ -78,6 +78,18 @@ using namespace std::literals; // for operator""s
 using namespace std::chrono_literals;
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
+namespace
+{
+
+long long get_monotonicTimeUSec()
+{
+	struct timespec time;
+	clock_gettime(CLOCK_MONOTONIC, &time);
+	return time.tv_sec * 1000000 + time.tv_nsec / 1000;
+}
+
+}
+
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
@@ -87,6 +99,7 @@ namespace Cpu {
 	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors{};
 	bool cpu_temp_only{};
+	bool supports_watts = true;
 
 	//* Populate found_sensors map
 	bool get_sensors();
@@ -873,6 +886,47 @@ namespace Cpu {
 		return {percent, watts, seconds, status};
 	}
 
+	long long get_cpuConsumptionUJoules()
+	{
+		long long consumption = -1;
+		const auto rapl_power_usage_path = "/sys/class/powercap/intel-rapl:0/energy_uj";
+		std::ifstream file(rapl_power_usage_path);
+		if(file.good())
+		{
+			file >> consumption;
+		}
+		return consumption;
+	}
+
+	float get_cpuConsumptionWatts()
+	{
+		static long long previous_usage = 0;
+		static long long previous_timestamp = 0;
+
+		if (previous_usage == 0)
+		{
+			previous_usage = get_cpuConsumptionUJoules();
+			previous_timestamp = get_monotonicTimeUSec();
+			supports_watts = (previous_usage > 0);
+			return 0;
+		}
+
+		if (!supports_watts)
+		{
+			return -1;
+		}
+
+		auto current_timestamp = get_monotonicTimeUSec();
+		auto current_usage = get_cpuConsumptionUJoules();
+
+		auto watts = (float)(current_usage - previous_usage) / (float)(current_timestamp - previous_timestamp);
+
+		previous_timestamp = current_timestamp;
+		previous_usage = current_usage;
+
+		return watts;
+	}
+
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
@@ -1009,6 +1063,9 @@ namespace Cpu {
 
 		if (Config::getB("show_battery") and has_battery)
 			current_bat = get_battery();
+
+		if (Config::getB("show_cpu_watts") and supports_watts)
+			current_cpu.usage_watts = get_cpuConsumptionWatts();
 
 		return cpu;
 	}

@@ -1402,6 +1402,9 @@ cpu_bottom = False
 #* Shows the system uptime in the CPU box.
 show_uptime = True
 
+#* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo.
+show_cpu_watts = True
+
 #* Show cpu temperature.
 check_temp = True
 
