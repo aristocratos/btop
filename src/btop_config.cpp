@@ -132,6 +132,8 @@ namespace Config {
 
 		{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
 
+		{"show_cpu_watts",		"#* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo."},
+
 		{"check_temp", 			"#* Show cpu temperature."},
 
 		{"cpu_sensor", 			"#* Which sensor to use for cpu temperature, use options menu to select from list of available sensors."},
@@ -281,6 +283,7 @@ namespace Config {
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
 		{"show_uptime", true},
+		{"show_cpu_watts", true},
 		{"check_temp", true},
 		{"show_coretemp", true},
 		{"show_cpu_freq", true},

@@ -510,6 +510,13 @@ namespace Menu {
 				"\"/uptime\" in the formatting.",
 				"",
 				"True or False."},
+			{"show_cpu_watts",
+				"Shows the CPU power consumption in watts.",
+				"",
+				"Requires running `make setcap` or",
+				"`make setuid` or running with sudo.",
+				"",
+				"True or False."},
 		},
 	#ifdef GPU_SUPPORT
 		{
