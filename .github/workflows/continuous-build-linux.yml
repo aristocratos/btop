@@ -123,7 +123,10 @@ jobs:
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
+          echo $TOOLCHAIN $GIT_HASH $FILENAME
+          pwd
           cp bin/btop .artifacts/$FILENAME
+          ls -alh .artifacts
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
