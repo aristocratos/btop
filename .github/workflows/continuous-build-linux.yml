@@ -97,7 +97,7 @@ jobs:
         run: git config --global --add safe.directory /__w/btop/btop
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 

@@ -44,7 +44,7 @@ jobs:
           - compiler: gcc
             version: 14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}
