@@ -519,7 +519,8 @@ namespace Cpu {
 	int x = 1, y = 1, width = 20, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
-	long unsigned int lavg_str_len = 0;
+	float max_observed_pwr = 1.0f;
+
 	int graph_up_height, graph_low_height;
 	int graph_up_width, graph_low_width;
 	int gpu_meter_width;
@@ -538,6 +539,7 @@ namespace Cpu {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
+		bool show_watts = (Config::getB("show_cpu_watts") and supports_watts);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
 		const int extra_width = (hide_cores ? max(6, 6 * b_column_size) : 0);
@@ -584,7 +586,6 @@ namespace Cpu {
 			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0));
 			graph_low_height = height - 2 - graph_up_height - mid_line;
 			const int button_y = cpu_bottom ? y + height - 1 : y;
-			lavg_str_len = 0;
 			out += box;
 
 			//? Buttons on title
@@ -681,7 +682,12 @@ namespace Cpu {
 			}
 			#endif
 
-			cpu_meter = Draw::Meter{b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11), "cpu"};
+			int cpu_meter_width = b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11);
+			if (show_watts) {
+				cpu_meter_width -= 6;
+			}
+
+			cpu_meter = Draw::Meter{cpu_meter_width, "cpu"};
 
 			if (mid_line) {
 				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
@@ -815,9 +821,25 @@ namespace Cpu {
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
 			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 		}
+	
+		if (show_watts) {
+			string cwatts = fmt::format(" {:>4.{}f}", cpu.usage_watts, cpu.usage_watts < 10.0f ? 2 : cpu.usage_watts < 100.0f ? 1 : 0);
+			string cwatts_post = "W";
+
+			max_observed_pwr = max(max_observed_pwr, cpu.usage_watts);
+			out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post; 
+		}
+
 		out += Theme::c("div_line") + Symbols::v_line;
 
 		} catch (const std::exception& e) { throw std::runtime_error("graphs, clock, meter : " + string{e.what()}); }
+
+		int max_row = b_height - 3; // Subtracting one extra row for the load average (and power if enabled)
+		int n_gpus_to_show = 0;
+	#ifdef GPU_SUPPORT
+		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
+	#endif
+		max_row -= n_gpus_to_show;
 
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
@@ -843,7 +865,7 @@ namespace Cpu {
 
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == b_height - 2) and n != Shared::coreCount - 1) {
+			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
 				if (++cc >= b_columns) break;
 				cy = 1; cx = (b_width / b_columns) * cc;
 			}
@@ -851,28 +873,17 @@ namespace Cpu {
 
 		//? Load average
 		if (cy < b_height - 1 and cc <= b_columns) {
-			string lavg_pre;
-			int sep = 1;
-			if (b_column_size == 2 and show_temps) { lavg_pre = "Load AVG: "; sep = 3; }
-			else if (b_column_size == 2 or (b_column_size == 1 and show_temps)) { lavg_pre = "LAV:"; }
-			else if (b_column_size == 1 or (b_column_size == 0 and show_temps)) { lavg_pre = "L "; }
-			string lavg;
+			cy = b_height - 2 - n_gpus_to_show;
+
+			string load_avg_pre = "Load avg:";
+			string load_avg;
+
 			for (const auto& val : cpu.load_avg) {
-				lavg += string(sep, ' ') + (lavg_pre.size() < 3 ? fmt::format("{:.0f}", val) : fmt::format("{:.2f}", val));
+				load_avg += fmt::format(" {:.2f}", val);
 			}
 
-			string lavg_str = lavg_pre + lavg;
-			if (lavg_str_len > lavg_str.length()) {
-				lavg_str += string(lavg_str_len - lavg_str.length(), ' ');
-			} else {
-				lavg_str_len = lavg_str.length();
-			}
-		#ifdef GPU_SUPPORT
-			cy = b_height - 2 - (show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0);
-		#else
-			cy = b_height - 2;
-		#endif
-			out += Mv::to(b_y + cy, b_x + cx + 1) + Theme::c("main_fg") + lavg_str;
+			int len = load_avg_pre.size() + load_avg.size();
+			out += Mv::to(b_y + cy, b_x + 1) + string(max(b_width - len - 2, 0), ' ') + Theme::c("main_fg") + Fx::b + load_avg_pre + Fx::ub + load_avg;
 		}
 
 	#ifdef GPU_SUPPORT
