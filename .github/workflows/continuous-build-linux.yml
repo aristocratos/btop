@@ -90,14 +90,17 @@ jobs:
     container: muslcc/x86_64:${{ matrix.toolchain }}
 
     steps:
+      - name: Update docker image
+        run: sed -i 's/3\.14/3\.22/' /etc/apk/repositories
+
       - name: Install build tools
-        run: apk add --no-cache coreutils git make tar zstd
+        run: apk add --upgrade --no-cache coreutils git make tar zstd
 
       - name: Fix - Unsafe repository stop
         run: git config --global --add safe.directory /__w/btop/btop
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
