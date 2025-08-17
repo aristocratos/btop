@@ -115,7 +115,7 @@ jobs:
 
       - name: Set up directories
         run: |
-          mkdir .artifacts
+          mkdir ${{ github.workspace }}/artifacts
           mkdir .package
 
       - name: Create binary artifacts
@@ -123,10 +123,10 @@ jobs:
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/btop .artifacts/$FILENAME
+          cp bin/btop ${{ github.workspace }}/artifacts/$FILENAME
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: btop-${{ matrix.toolchain }}
-          path: '/__w/btop/btop/.artifacts/**'
+          path: '${{ github.workspace }}/artifacts/**'
