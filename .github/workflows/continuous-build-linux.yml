@@ -129,4 +129,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: btop-${{ matrix.toolchain }}
-          path: '${{ github.workspace }}/.artifacts/**'
+          path: '${{ github.workspace }}/.artifacts/*'
+          include-hidden-files: true
