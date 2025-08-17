@@ -129,4 +129,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: btop-${{ matrix.toolchain }}
-          path: '.artifacts/**'
+          path: '.artifacts/*'
