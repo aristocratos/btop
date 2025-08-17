@@ -331,11 +331,11 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    sudo make install
    ```
 
-3. **(Optional/Required for Intel GPU) Set extended capabilities or suid bit to btop**
+3. **(Optional/Required for Intel GPU and CPU wattage) Set extended capabilities or suid bit to btop**
 
    Enables signal sending to any process without starting with `sudo` and can prevent /proc read permissions problems on some systems.
 
-   Is required for Intel GPU support.
+   Is required for Intel GPU support and CPU wattage monitoring.
 
    * **Run:**
 
@@ -485,11 +485,11 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-5. **(Optional/Required for Intel GPU support) Set extended capabilities or suid bit to btop**
+5. **(Optional/Required for Intel GPU support and CPU wattage) Set extended capabilities or suid bit to btop**
 
    No need for `sudo` to enable signal sending to any process and to prevent /proc read permissions problems on some systems.
 
-   Also required for Intel GPU monitoring.
+   Also required for Intel GPU monitoring and CPU wattage monitoring.
 
    Run after make install and use same PREFIX if any was used at install.
 
