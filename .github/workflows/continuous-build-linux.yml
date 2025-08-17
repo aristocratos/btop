@@ -124,6 +124,7 @@ jobs:
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
           cp bin/btop .artifacts/$FILENAME
+          echo $(pwd)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
