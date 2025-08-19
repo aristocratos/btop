@@ -333,8 +333,7 @@ setuid:
 setcap:
 	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
 	@printf "\033[1;92mSetting capabilities...\033[0m\n"
-	@setcap cap_perfmon=+ep $(DESTDIR)$(PREFIX)/bin/btop
-	@setcap cap_dac_read_search=+ep $(DESTDIR)$(PREFIX)/bin/btop
+	@setcap "cap_perfmon=+ep cap_dac_read_search=+ep" $(DESTDIR)$(PREFIX)/bin/btop
 
 # With 'rm -v' user will see what files (if any) got removed
 uninstall:
