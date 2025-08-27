@@ -3,10 +3,8 @@ name: Continuous Build Linux
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    tags-ignore:
-      - '*.*'
+    branches: main
+    tags-ignore: '*.*'
     paths:
       - 'src/**'
       - '!src/osx/**'
@@ -17,8 +15,7 @@ on:
       - 'Makefile'
       - '.github/workflows/continuous-build-linux.yml'
   pull_request:
-    branches:
-      - main
+    branches: main
     paths:
       - 'src/**'
       - '!src/osx/**'
@@ -30,104 +27,61 @@ on:
       - '.github/workflows/continuous-build-linux.yml'
 
 jobs:
-  static-build:
+  build:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.toolchain }}
+      cancel-in-progress: true
     continue-on-error: true
     strategy:
       matrix:
         toolchain:
-          - aarch64-linux-musl
-          - aarch64_be-linux-musl
-          - arm-linux-musleabi
-          - arm-linux-musleabihf
-          - armeb-linux-musleabi
-          - armeb-linux-musleabihf
-          - armel-linux-musleabi
-          - armel-linux-musleabihf
-          - armv5l-linux-musleabi
-          - armv5l-linux-musleabihf
-          - armv6-linux-musleabi
-          - armv6-linux-musleabihf
-          - armv7l-linux-musleabihf
-          - armv7m-linux-musleabi
-          - armv7r-linux-musleabihf
-          - i486-linux-musl
-          - i686-linux-musl
-          - m68k-linux-musl
-          - mips-linux-musl
-          - mips-linux-musln32sf
-          - mips-linux-muslsf
-          - mips64-linux-musl
-          - mips64-linux-musln32
-          - mips64-linux-musln32sf
-          - mips64el-linux-musl
-          - mips64el-linux-musln32
-          - mips64el-linux-musln32sf
-          - mipsel-linux-musl
-          - mipsel-linux-musln32
-          - mipsel-linux-musln32sf
-          - mipsel-linux-muslsf
-          - powerpc-linux-musl
-          - powerpc-linux-muslsf
-          - powerpc64-linux-musl
-          - powerpc64le-linux-musl
-          - powerpcle-linux-musl
-          - powerpcle-linux-muslsf
-          - riscv32-linux-musl
-          - riscv64-linux-musl
-          - s390x-linux-musl
-          - x86_64-linux-musl
-          - x86_64-linux-muslx32
-
-    # - or1k-linux-musl
-    # - sh2-linux-musl
-    # - sh2-linux-muslfdpic
-    # - sh2eb-linux-musl
-    # - sh2eb-linux-muslfdpic
-    # - sh4-linux-musl
-    # - sh4eb-linux-musl
-
-    runs-on: ubuntu-24.04
-    container: muslcc/x86_64:${{ matrix.toolchain }}
+          - aarch64-unknown-linux-musl
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+          - armv7-unknown-linux-musleabi
+          - armv7-unknown-linux-musleabihf
+          - i586-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - m68k-unknown-linux-musl
+          - mips-unknown-linux-musl
+          - mips-unknown-linux-muslsf
+          - mips64-unknown-linux-musl
+          - mips64el-unknown-linux-musl
+          - mipsel-unknown-linux-musl
+          - mipsel-unknown-linux-muslsf
+          - powerpc-unknown-linux-musl
+          - powerpc64-unknown-linux-musl
+          - powerpc64le-unknown-linux-musl
+          - powerpcle-unknown-linux-musl
+          - riscv32-unknown-linux-musl
+          - riscv64-unknown-linux-musl
+          - s390x-ibm-linux-musl
+          - x86_64-unknown-linux-musl
 
     steps:
-      - name: Update alpine repositories
-        run: sed -i 's/3\.14/3\.22/' /etc/apk/repositories
+      - uses: actions/checkout@v5
 
-      - name: Install build tools
-        run: apk add --no-cache --upgrade coreutils git make tar zstd
-
-      - name: Fix - Unsafe repository stop
-        run: git config --global --add safe.directory /__w/btop/btop
-
-      - name: Checkout source
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Fix - Stopping at filesystem boundary
-        run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
-
-      - name: Build
-        run: make STATIC=true STRIP=true
-
-      - name: Make executable
-        run: chmod +x bin/*
-
-      - name: Set up directories
+      - name: Install cross toolchain
         run: |
-          mkdir .artifacts
-          mkdir .package
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz.sha256
+          echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
+          mkdir -p /opt/x-tools/
+          tar -xf /tmp/${{ matrix.toolchain }}.tar.xz -C /opt/x-tools
+
+      - name: Compile
+        run: CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=true STRIP=true
 
       - name: Create binary artifacts
         run: |
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/btop .artifacts/$FILENAME
+          mv bin/btop bin/$FILENAME
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
           name: btop-${{ matrix.toolchain }}
-          path: '${{ github.workspace }}/.artifacts/*'
-          include-hidden-files: true
+          path: '${{ github.workspace }}/bin/*'
