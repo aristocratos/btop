@@ -6,128 +6,70 @@ on:
     branches:
       - main
     tags-ignore:
-      - '*.*'
+      - "*.*"
     paths:
-      - 'src/**'
-      - '!src/osx/**'
-      - '!src/freebsd/**'
-      - '!src/netbsd/**'
-      - '!src/openbsd/**'
-      - 'include/**'
-      - 'Makefile'
-      - '.github/workflows/continuous-build-linux.yml'
+      - "src/**"
+      - "!src/osx/**"
+      - "!src/freebsd/**"
+      - "!src/netbsd/**"
+      - "!src/openbsd/**"
+      - "include/**"
+      - "Makefile"
+      - ".github/workflows/continuous-build-linux.yml"
   pull_request:
     branches:
       - main
     paths:
-      - 'src/**'
-      - '!src/osx/**'
-      - '!src/freebsd/**'
-      - '!src/netbsd/**'
-      - '!src/openbsd/**'
-      - 'include/**'
-      - 'Makefile'
-      - '.github/workflows/continuous-build-linux.yml'
+      - "src/**"
+      - "!src/osx/**"
+      - "!src/freebsd/**"
+      - "!src/netbsd/**"
+      - "!src/openbsd/**"
+      - "include/**"
+      - "Makefile"
+      - ".github/workflows/continuous-build-linux.yml"
 
 jobs:
-  static-build:
+  build:
+    runs-on: ubuntu-24.04
+    container: ubuntu:25.04
     continue-on-error: true
     strategy:
       matrix:
-        toolchain:
-          - aarch64-linux-musl
-          - aarch64_be-linux-musl
-          - arm-linux-musleabi
-          - arm-linux-musleabihf
-          - armeb-linux-musleabi
-          - armeb-linux-musleabihf
-          - armel-linux-musleabi
-          - armel-linux-musleabihf
-          - armv5l-linux-musleabi
-          - armv5l-linux-musleabihf
-          - armv6-linux-musleabi
-          - armv6-linux-musleabihf
-          - armv7l-linux-musleabihf
-          - armv7m-linux-musleabi
-          - armv7r-linux-musleabihf
-          - i486-linux-musl
-          - i686-linux-musl
-          - m68k-linux-musl
-          - mips-linux-musl
-          - mips-linux-musln32sf
-          - mips-linux-muslsf
-          - mips64-linux-musl
-          - mips64-linux-musln32
-          - mips64-linux-musln32sf
-          - mips64el-linux-musl
-          - mips64el-linux-musln32
-          - mips64el-linux-musln32sf
-          - mipsel-linux-musl
-          - mipsel-linux-musln32
-          - mipsel-linux-musln32sf
-          - mipsel-linux-muslsf
-          - powerpc-linux-musl
-          - powerpc-linux-muslsf
-          - powerpc64-linux-musl
-          - powerpc64le-linux-musl
-          - powerpcle-linux-musl
-          - powerpcle-linux-muslsf
-          - riscv32-linux-musl
-          - riscv64-linux-musl
-          - s390x-linux-musl
-          - x86_64-linux-musl
-          - x86_64-linux-muslx32
-
-    # - or1k-linux-musl
-    # - sh2-linux-musl
-    # - sh2-linux-muslfdpic
-    # - sh2eb-linux-musl
-    # - sh2eb-linux-muslfdpic
-    # - sh4-linux-musl
-    # - sh4eb-linux-musl
-
-    runs-on: ubuntu-24.04
-    container: muslcc/x86_64:${{ matrix.toolchain }}
+        include:
+          - triple: aarch64
+          - triple: alpha
+          - triple: arc
+          - triple: arm
+            abi: eabi
+          - triple: arm
+            abi: eabihf
+          - triple: hppa
+          - triple: i686
+          - triple: loongarch64
+          - triple: m68k
+          - triple: powerpc
+          - triple: powerpc64
+          - triple: powerpc64le
+          - triple: riscv64
+          - triple: s390x
+          - triple: sh4
+          - triple: sparc64
+          - triple: x86-64
+            xtriple: x86_64
+          - triple: x86-64
+            xtriple: x86_64
+            abi: x32
 
     steps:
-      - name: Update alpine repositories
-        run: sed -i 's/3\.14/3\.22/' /etc/apk/repositories
+      - uses: actions/checkout@v5
 
       - name: Install build tools
-        run: apk add --no-cache --upgrade coreutils git make tar zstd
-
-      - name: Fix - Unsafe repository stop
-        run: git config --global --add safe.directory /__w/btop/btop
-
-      - name: Checkout source
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Fix - Stopping at filesystem boundary
-        run: git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
-
-      - name: Build
-        run: make STATIC=true STRIP=true
-
-      - name: Make executable
-        run: chmod +x bin/*
-
-      - name: Set up directories
         run: |
-          mkdir .artifacts
-          mkdir .package
+          apt-get update
+          apt-get install -y --no-install-recommends make \
+            ${{ matrix.triple == 'x86-64' && 'binutils' || '' }} \
+            g++-15-${{ matrix.triple }}-linux-gnu${{ matrix.abi || '' }}
 
-      - name: Create binary artifacts
-        run: |
-          TOOLCHAIN=${{ matrix.toolchain }}
-          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
-          FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/btop .artifacts/$FILENAME
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: btop-${{ matrix.toolchain }}
-          path: '${{ github.workspace }}/.artifacts/*'
-          include-hidden-files: true
+      - name: Compile
+        run: CXX=${{ matrix.xtriple || matrix.triple }}-linux-gnu${{ matrix.abi || '' }}-g++-15 make STATIC=true STRIP=true VERBOSE=true
