@@ -16,9 +16,15 @@ indent = tab
 tab-size = 4
 */
 
+#include <algorithm>
+#include <charconv>
+#include <fstream>
+#include <iterator>
+#include <numeric>
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 
 #include "btop_config.hpp"
 #include "btop_shared.hpp"
@@ -70,6 +76,51 @@ namespace Cpu {
 		}
 
 		return name;
+	}
+
+	static auto to_int(std::string_view view) -> std::uint32_t {
+		std::uint32_t value;
+		std::from_chars(view.data(), view.data() + view.size(), value);
+		return value;
+	}
+
+	auto detect_active_cpus() -> std::vector<std::int32_t> {
+	    auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
+	    auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
+
+	    if (buf.empty()) {
+	        auto result = std::vector<std::int32_t>(Shared::coreCount);
+	        std::iota(result.begin(), result.end(), Shared::coreCount);
+	        return result;
+	    }
+
+	    auto active_cpus = buf | std::views::split(',') | std::views::transform([](auto&& expr) {
+	                           // Officially only in C++23
+	                           // auto view = std::string_view { expr.begin(), expr.end() };
+	                           auto view =
+	                               std::string_view(&*expr.begin(), std::ranges::distance(expr.begin(), expr.end()));
+	                           auto dash = view.find('-');
+
+	                           if (dash == std::string_view::npos) {
+	                               // Single CPU, return iota of single element
+	                               auto value = to_int(view);
+	                               return std::views::iota(value, value + 1);
+	                           }
+
+	                           // Create views before and after '-'
+	                           auto low_view = view.substr(0, dash);
+	                           auto high_view = view.substr(dash + 1);
+
+	                           auto low = to_int(low_view);
+	                           auto high = to_int(high_view);
+	                           return std::views::iota(low, high + 1);
+	                       }) |
+	                       std::views::join;
+
+	    // Collect the view into a vector. C++20 way of `std::ranges::to`.
+	    auto result = std::vector<std::int32_t> {};
+	    std::ranges::copy(active_cpus, std::back_inserter(result));
+	    return result;
 	}
 }
 
