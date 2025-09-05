@@ -22,6 +22,7 @@ tab-size = 4
 #include <atomic>
 #include <deque>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -445,3 +446,6 @@ namespace Proc {
 				   int cur_depth, bool collapsed, const string& filter,
 				   bool found = false, bool no_update = false, bool should_filter = false);
 }
+
+/// Detect container engine.
+auto detect_container() -> std::optional<std::string>;
