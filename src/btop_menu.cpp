@@ -1564,10 +1564,10 @@ static int optionsMenu(const string& key) {
 		else if (is_in(key, "escape", "q", "h", "backspace", "space", "enter", "mouse_click")) {
 			return Closed;
 		}
-		else if (pages > 1 and is_in(key, "down", "page_down", "tab", "mouse_scroll_down")) {
+		else if (pages > 1 and is_in(key, "down", "j", "page_down", "tab", "mouse_scroll_down")) {
 			if (++page >= pages) page = 0;
 		}
-		else if (pages > 1 and is_in(key, "up", "page_up", "shift_tab", "mouse_scroll_up")) {
+		else if (pages > 1 and is_in(key, "up", "k", "page_up", "shift_tab", "mouse_scroll_up")) {
 			if (--page < 0) page = pages - 1;
 		}
 		else {
