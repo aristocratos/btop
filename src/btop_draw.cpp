@@ -817,24 +817,24 @@ namespace Cpu {
 				out += Mv::to(b_y, b_x + b_width - 10) + Fx::ub + Theme::c("div_line") + Symbols::h_line * (7 - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
-			out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
-				+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
-			if (show_temps) {
-				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
-				const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
-				if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
-						+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
-				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
-			}
-	
-			if (show_watts) {
-				string cwatts = fmt::format(" {:>4.{}f}", cpu.usage_watts, cpu.usage_watts < 10.0f ? 2 : cpu.usage_watts < 100.0f ? 1 : 0);
-				string cwatts_post = "W";
+		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
+			+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
+		if (show_temps) {
+			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
+			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
+			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
+			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+		}
 
-				max_observed_pwr = max(max_observed_pwr, cpu.usage_watts);
-				out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post; 
-			}
+		if (show_watts) {
+			string cwatts = fmt::format(" {:>4.{}f}", cpu.usage_watts, cpu.usage_watts < 10.0f ? 2 : cpu.usage_watts < 100.0f ? 1 : 0);
+			string cwatts_post = "W";
+
+			max_observed_pwr = max(max_observed_pwr, cpu.usage_watts);
+			out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post; 
+		}
 
 			out += Theme::c("div_line") + Symbols::v_line;
 		} catch (const std::exception& e) {
