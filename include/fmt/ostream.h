@@ -33,8 +33,8 @@
 FMT_BEGIN_NAMESPACE
 namespace detail {
 
-// Generate a unique explicit instantion in every translation unit using a tag
-// type in an anonymous namespace.
+// Generate a unique explicit instantiation in every translation unit using a
+// tag type in an anonymous namespace.
 namespace {
 struct file_access_tag {};
 }  // namespace
@@ -158,7 +158,8 @@ void print(std::ostream& os, format_string<T...> fmt, T&&... args) {
 
 FMT_EXPORT template <typename... T>
 void println(std::ostream& os, format_string<T...> fmt, T&&... args) {
-  fmt::print(os, "{}\n", fmt::format(fmt, std::forward<T>(args)...));
+  fmt::print(os, FMT_STRING("{}\n"),
+             fmt::format(fmt, std::forward<T>(args)...));
 }
 
 FMT_END_NAMESPACE
