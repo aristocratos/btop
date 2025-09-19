@@ -486,7 +486,7 @@ namespace Tools {
 				out = fmt::format("{:.1f}", stod(out));
 			}
 			else if (f_pos != string::npos) {
-				out = fmt::format("{:.0f}", stod(out));
+				out = fmt::format("{:.1f}", stod(out));
 			}
 			if (out.size() > 3) {
 				out = fmt::format("{:d}.0", out[0] - '0');
