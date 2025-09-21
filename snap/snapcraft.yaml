@@ -25,6 +25,7 @@ package-repositories:
 apps:
   btop:
     command: usr/local/bin/btop
+    desktop: usr/local/share/applications/btop.desktop
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -62,3 +63,11 @@ parts:
     override-pull: |
       snapcraftctl pull
       snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
+
+    override-build: |
+      snapcraftctl build
+
+      # Patch icon path of the desktop entry
+      # WORKAROUND: Use PNG icon until KDE Plasma can correctly render the SVG one
+      # Bug: https://bugs.kde.org/show_bug.cgi?id=448234
+      sed -i 's|Icon=btop|Icon=/usr/local/share/icons/hicolor/48x48/apps/btop.png|' "${CRAFT_PART_INSTALL}/usr/local/share/applications/btop.desktop"
