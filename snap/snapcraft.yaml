@@ -19,8 +19,8 @@ architectures:
   - build-on: s390x
 
 package-repositories:
- - type: apt
-   ppa: ubuntu-toolchain-r/test
+  - type: apt
+    ppa: ubuntu-toolchain-r/test
 
 apps:
   btop:
