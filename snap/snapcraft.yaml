@@ -1,4 +1,13 @@
 name: btop
+title: btop++
+contact: https://github.com/aristocratos/btop/issues
+issues: https://github.com/aristocratos/btop/issues
+donation:
+  - https://github.com/sponsors/aristocratos
+  - https://ko-fi.com/aristocratos
+  - https://www.paypal.com/paypalme/aristocratos
+source-code: https://github.com/aristocratos/btop
+website: https://github.com/aristocratos/btop
 adopt-info: btop
 summary: Resource monitor that shows usage and stats
 description: |
