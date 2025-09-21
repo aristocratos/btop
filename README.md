@@ -257,21 +257,21 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
  * **NVIDIA**
 
-If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
+   If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
 
-In addition to that you must also have the nvidia-ml dynamic library installed, which should be included with the driver package of your distribution.
+   In addition to that you must also have the nvidia-ml dynamic library installed, which should be included with the driver package of your distribution.
 
  * **AMD**
 
-If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packaged for your distribution.
+   If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packaged for your distribution.
 
  * **INTEL**
 
-Requires a working C compiler if compiling from source - tested with GCC12 and Clang16.
+   Requires a working C compiler if compiling from source - tested with GCC12 and Clang16.
 
-Also requires the user to have permission to read from SYSFS.
+   Also requires the user to have permission to read from SYSFS.
 
-Can be set with `make setcap` (preferred) or `make setuid` or by running btop with `sudo` or equivalent.
+   Can be set with `make setcap` (preferred) or `make setuid` or by running btop with `sudo` or equivalent.
 
 ### **Notice (Text rendering issues)**
 
