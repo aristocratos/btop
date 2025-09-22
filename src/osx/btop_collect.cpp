@@ -38,6 +38,7 @@ tab-size = 4
 #include <netdb.h>
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
@@ -1025,6 +1026,12 @@ namespace Net {
 }  // namespace Net
 
 namespace Proc {
+bool set_priority(pid_t pid, int priority) {
+  if (setpriority(PRIO_PROCESS, pid, priority) == 0) {
+    return true;
+  }
+  return false;
+}
 
 	vector<proc_info> current_procs;
 	std::unordered_map<string, string> uid_user;

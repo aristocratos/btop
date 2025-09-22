@@ -31,6 +31,7 @@ tab-size = 4
 #include <arpa/inet.h> // for inet_ntop()
 #include <filesystem>
 #include <future>
+#include <sys/resource.h>
 #include <dlfcn.h>
 #include <utility>
 
@@ -246,6 +247,16 @@ namespace Gpu {
 	}
 #endif
 }
+
+namespace Proc {
+bool set_priority(pid_t pid, int priority) {
+  if (setpriority(PRIO_PROCESS, pid, priority) == 0) {
+    return true;
+  }
+  return false;
+}
+
+} // namespace Proc
 
 namespace Mem {
 	double old_uptime;

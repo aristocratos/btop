@@ -72,6 +72,8 @@ namespace Menu {
 
 		//? Clears content vector and private strings
 		void clear();
+        int getX() const { return x; }
+        int getY() const { return y; }
 	};
 
 	extern bitset<8> menuMask;
@@ -84,6 +86,7 @@ namespace Menu {
 		SignalReturn,
 		Options,
 		Help,
+	    Renice,
 		Main
 	};
 
