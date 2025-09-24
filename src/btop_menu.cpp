@@ -203,6 +203,7 @@ namespace Menu {
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
 		{"Selected s", "Select or enter signal to send to process."},
+		{"Selected N", "Select new nice value for selected process."},
 		{"", " "},
 		{"", "For bug reporting and project updates, visit:"},
 		{"", "https://github.com/aristocratos/btop"},
@@ -1595,6 +1596,81 @@ static int optionsMenu(const string& key) {
 		return (redraw ? Changed : retval);
 	}
 
+	static int reniceMenu(const string& key) {
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+	static Draw::TextEdit editor;
+	static string nice_value;
+	static string message;
+	static bool editing = true;
+
+	if (redraw) {
+		nice_value.clear();
+		editing = true;
+		editor = Draw::TextEdit("", true); // Only allow numbers and hyphen
+		vector<string> cont_vec;
+		message = "Enter new nice value (-20 to 19) for PID " + to_string(s_pid) + ':';
+		cont_vec.push_back(message);
+		messageBox = Menu::msgBox(50, 1, cont_vec, "Renice");
+		Global::overlay = messageBox();
+	}
+		
+		if (editing) {
+			if (is_in(key, "escape")) {
+				editing = false;
+				return Closed;
+			} else if (key == "enter") {
+				nice_value = editor.text;
+				Logger::debug(fmt::format("reniceMenu: editor.text='{}'", editor.text));
+				try {
+					int new_nice = stoi(nice_value);
+					if (new_nice < -20 || new_nice > 19) {
+						message = "Nice value must be between -20 and 19.";
+			        }
+					else {
+						bool result = Proc::set_priority(s_pid, new_nice);
+						Logger::debug(fmt::format("reniceMenu: set_priority returned {}", result));
+						if (result) {
+							message = "Successfully set nice value of PID " + to_string(s_pid) + ".";
+					    }
+						else {
+							Logger::debug(fmt::format("reniceMenu: set_priority failed with errno={}", errno));
+							message = "Failed to set nice value of PID " + to_string(s_pid) + ".";
+						}
+				    }
+				}
+				catch (const std::invalid_argument&) {
+						message = "Invalid nice value.";
+
+				}
+				catch (const std::out_of_range&) {
+						message = "Nice value out of range.";
+				}
+				editing = false;
+				vector<string> cont_vec = {message};
+				messageBox = Menu::msgBox(50, 0, cont_vec, "Renice");
+				Global::overlay = messageBox();
+				return Changed;
+			}
+			else if (not editor.command(key)) {
+				return NoChange;
+			}
+			Global::overlay = messageBox();
+			Global::overlay += Mv::to(messageBox.getY() + 4, messageBox.getX() + 2) + editor(46);
+			return Changed;
+		    }
+
+		    auto ret = messageBox.input(key);
+		    if (ret == msgBox::msgReturn::Ok_Yes or ret == msgBox::No_Esc) {
+			    messageBox.clear();
+			    return Closed;
+		    }
+		    else if (redraw) {
+			    return Changed;
+		    }
+		    return NoChange;
+		
+	}
+
 	//* Add menus here and update enum Menus in header
 	const auto menuFunc = vector{
 		ref(sizeError),
@@ -1603,6 +1679,7 @@ static int optionsMenu(const string& key) {
 		ref(signalReturn),
 		ref(optionsMenu),
 		ref(helpMenu),
+		ref(reniceMenu),
 		ref(mainMenu),
 	};
 	bitset<8> menuMask;

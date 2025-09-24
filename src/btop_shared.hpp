@@ -351,6 +351,7 @@ namespace Proc {
 	extern atomic<int> detailed_pid;
 	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth;
 	extern string selected_name;
+	bool set_priority(pid_t pid, int priority);
 
 	//? Contains the valid sorting options for processes
 	const vector<string> sort_vector = {
