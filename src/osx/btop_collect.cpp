@@ -260,6 +260,7 @@ namespace Cpu {
 	}
 
 	void update_sensors() {
+		Logger::debug(string("update_sensors() started"));
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
 			if (macM1) {
@@ -416,6 +417,7 @@ namespace Cpu {
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
+		Logger::debug(string("Cpu::collect() started"));
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
 			return current_cpu;
 		auto &cpu = current_cpu;
@@ -569,13 +571,8 @@ namespace Mem {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
-		mach_port_t libtop_master_port;
-		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("error getting master port");
-			return;
-		}
 		/* Get the list of all drive objects. */
-		if (IOServiceGetMatchingServices(libtop_master_port,
+		if (IOServiceGetMatchingServices(kIOMainPortDefault,
 										 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
@@ -637,6 +634,7 @@ namespace Mem {
 	}
 
 	auto collect(bool no_update) -> mem_info & {
+		Logger::debug(string("Mem::collect() started"));
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
 			return current_mem;
 
@@ -822,6 +820,7 @@ namespace Net {
 	};
 
 	auto collect(bool no_update) -> net_info & {
+		Logger::debug(string("Net::collect() started"));
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");
@@ -1103,6 +1102,7 @@ namespace Proc {
 
 	//* Collects and sorts process information from /proc
 	auto collect(bool no_update) -> vector<proc_info> & {
+		Logger::debug(string("Proc::collect() started"));
 		const auto &sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
 		const auto &filter = Config::getS("proc_filter");
