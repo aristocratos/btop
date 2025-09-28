@@ -185,6 +185,7 @@ namespace Menu {
 		{"Up, Down", "Select in process list."},
 		{"Enter", "Show detailed information for selected process."},
 		{"Spacebar", "Expand/collapse the selected process in tree view."},
+		{"u", "Expand/collapse the selected process' children in tree view"},
 		{"Pg Up, Pg Down", "Jump 1 page in process list."},
 		{"Home, End", "Jump to first or last page in process list."},
 		{"Left, Right", "Select previous/next sorting column."},

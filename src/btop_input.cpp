@@ -402,11 +402,12 @@ namespace Input {
 						Config::set("show_detailed", false);
 					}
 				}
-				else if (is_in(key, "+", "-", "space") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
+				else if (is_in(key, "+", "-", "space", "u") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
 					atomic_wait(Runner::active);
 					auto& pid = Config::getI("selected_pid");
 					if (key == "+" or key == "space") Proc::expand = pid;
 					if (key == "-" or key == "space") Proc::collapse = pid;
+					if (key == "u")	Proc::toggle_children = pid;
 					no_update = false;
 				}
 				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
