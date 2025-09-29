@@ -571,6 +571,10 @@ namespace Mem {
 	};
 
 	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
+		// Enable pthread cancellation in this thread
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
+		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, nullptr);
+
 		// Lock mutex to prevent concurrent IOKit access
 		std::lock_guard<std::mutex> lock(iokit_mutex);
 
@@ -827,6 +831,10 @@ namespace Net {
 
 	auto collect(bool no_update) -> net_info & {
 		Logger::debug(string("Net::collect() started"));
+		// Enable pthread cancellation in this thread
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
+		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, nullptr);
+
 		// Lock mutex to prevent concurrent interface access during USB device changes
 		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
 		auto &net = current_net;
