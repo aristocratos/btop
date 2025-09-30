@@ -50,6 +50,9 @@ namespace Config {
 #endif
 		};
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
+#ifdef __linux__
+	const vector<string> freq_modes = { "first", "range", "lowest", "highest", "average" };
+#endif
 #ifdef GPU_SUPPORT
 	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
 #endif

@@ -806,7 +806,6 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 int main(const int argc, const char** argv) {
 
 	//? ------------------------------------------------ INIT ---------------------------------------------------------
-
 	Global::start_time = time_s();
 
 	//? Save real and effective userid's and drop privileges until needed if running with SUID bit set

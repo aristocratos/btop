@@ -559,13 +559,94 @@ namespace Cpu {
 			return ""s;
 
 		string cpuhz;
+
+	#ifdef __linux__
+		const auto &freq_mode = Config::getS("freq_mode");
+	#else
+		const string freq_mode = "first";
+	#endif
+
 		try {
 			double hz{};
 			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
 			if (not freq_path.empty()) {
-				hz = stod(readfile(freq_path, "0.0")) / 1000;
-				if (hz <= 0.0 and ++failed >= 2)
-					freq_path.clear();
+				if (freq_mode == "first") {
+					hz = stod(readfile(freq_path, "0.0")) / 1000;
+					if (hz <= 0.0 and ++failed >= 2)
+						freq_path.clear();
+				}
+				else {
+					// Read frequencies from all CPU cores
+					vector<double> frequencies;
+					for (int i = 0; i < Shared::coreCount; ++i) {
+						fs::path core_freq_path = "/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq";
+						if (fs::exists(core_freq_path)) {
+							try {
+								double core_hz = stod(readfile(core_freq_path, "0.0")) / 1000;
+								if (core_hz > 0.0) {
+									frequencies.push_back(core_hz);
+								}
+							}
+							catch (...) { continue; }
+						}
+					}
+
+					if (frequencies.empty() and ++failed >= 2) {
+						freq_path.clear();
+					}
+					else if (not frequencies.empty()) {
+						if (freq_mode == "average") {
+							hz = std::accumulate(frequencies.begin(), frequencies.end(), 0.0) / frequencies.size();
+						}
+						else if (freq_mode == "highest") {
+							hz = *std::max_element(frequencies.begin(), frequencies.end());
+						}
+						else if (freq_mode == "lowest") {
+							hz = *std::min_element(frequencies.begin(), frequencies.end());
+						}
+						else if (freq_mode == "range") {
+							auto min_hz = *std::min_element(frequencies.begin(), frequencies.end());
+							auto max_hz = *std::max_element(frequencies.begin(), frequencies.end());
+
+							// Format as range
+							string min_str, max_str;
+							if (max_hz > 999999) {
+								max_str = fmt::format("{:.1f}", max_hz / 1'000'000);
+								max_str.resize(3);
+								if (max_str.back() == '.') max_str.pop_back();
+								max_str += " THz";
+							}
+							else if (max_hz > 999) {
+								max_str = fmt::format("{:.1f}", max_hz / 1'000);
+								max_str.resize(3);
+								if (max_str.back() == '.') max_str.pop_back();
+								max_str += " GHz";
+							}
+							else {
+								max_str = fmt::format("{:.0f} MHz", max_hz);
+							}
+
+							if (min_hz > 999999) {
+								min_str = fmt::format("{:.1f}", min_hz / 1'000'000);
+								min_str.resize(3);
+								if (min_str.back() == '.') min_str.pop_back();
+								min_str += " THz";
+							}
+							else if (min_hz > 999) {
+								min_str = fmt::format("{:.1f}", min_hz / 1'000);
+								min_str.resize(3);
+								if (min_str.back() == '.') min_str.pop_back();
+								min_str += " GHz";
+							}
+							else {
+								min_str = fmt::format("{:.0f} MHz", min_hz);
+							}
+
+							return min_str + " - " + max_str;
+						}
+					}
+
+				}
 			}
 			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
 			if (hz <= 0.0) {
