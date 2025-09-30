@@ -1429,6 +1429,9 @@ base_10_sizes = False
 #* Show CPU frequency.
 show_cpu_freq = True
 
+#* How to calculate CPU frequency, available values: "first", "range", "lowest", "highest" and "average".
+freq_mode = "first"
+
 #* Draw a clock at top of screen, formatting according to strftime, empty string to disable.
 #* Special formatting: /host = hostname | /user = username | /uptime = system uptime
 clock_format = "%H:%M"

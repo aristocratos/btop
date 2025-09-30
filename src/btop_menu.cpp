@@ -500,6 +500,22 @@ namespace Menu {
 				"",
 				"Can cause slowdowns on systems with many",
 				"cores and certain kernel versions."},
+		#ifdef __linux__
+			{"freq_mode",
+				"How the CPU frequency will be displayed.",
+				"",
+				"First, get the frequency from the first",
+				"core.",
+				"",
+				"Range, show the lowest and the highest",
+				"frequency.",
+				"",
+				"Lowest, the lowest frequency.",
+				"",
+				"Highest, the highest frequency.",
+				"",
+				"Average, sum and divide."},
+		#endif
 			{"custom_cpu_name",
 				"Custom cpu model name in cpu percentage box.",
 				"",
@@ -1202,6 +1218,9 @@ static int optionsMenu(const string& key) {
 			{"color_theme", std::cref(Theme::themes)},
 			{"log_level", std::cref(Logger::log_levels)},
 			{"temp_scale", std::cref(Config::temp_scales)},
+		#ifdef __linux__
+			{"freq_mode", std::cref(Config::freq_modes)},
+		#endif
 			{"proc_sorting", std::cref(Proc::sort_vector)},
 			{"graph_symbol", std::cref(Config::valid_graph_symbols)},
 			{"graph_symbol_cpu", std::cref(Config::valid_graph_symbols_def)},
