@@ -70,11 +70,11 @@ parts:
       - g++-11
 
     override-pull: |
-      snapcraftctl pull
-      snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
+      craftctl default
+      craftctl set version="$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
 
     override-build: |
-      snapcraftctl build
+      craftctl default
 
       # Patch icon path of the desktop entry
       # WORKAROUND: Use PNG icon until KDE Plasma can correctly render the SVG one
