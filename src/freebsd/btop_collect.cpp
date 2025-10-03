@@ -102,6 +102,15 @@ namespace Cpu {
 	std::unordered_map<int, int> core_mapping;
 }  // namespace Cpu
 
+namespace Proc {
+bool set_priority(pid_t pid, int priority) {
+  if (setpriority(PRIO_PROCESS, pid, priority) == 0) {
+    return true;
+  }
+  return false;
+}
+} // namespace Proc
+
 namespace Mem {
 	double old_uptime;
 	std::vector<string> zpools;

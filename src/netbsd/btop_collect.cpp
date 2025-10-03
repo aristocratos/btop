@@ -1087,6 +1087,12 @@ namespace Net {
 }  // namespace Net
 
 namespace Proc {
+bool set_priority(pid_t pid, int priority) {
+  if (setpriority(PRIO_PROCESS, pid, priority) == 0) {
+    return true;
+  }
+  return false;
+}
 
 	vector<proc_info> current_procs;
 	std::unordered_map<string, string> uid_user;
