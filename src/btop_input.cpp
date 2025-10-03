@@ -122,7 +122,7 @@ namespace Input {
 		string key = input;
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
-			if (key.substr(0, 2) == Fx::e) {
+			if (key.length() > 1 and key.substr(0, 1) == "\x1b") {
 				key.erase(0, 1);
 			}
 			//? Detect if input is an mouse event
