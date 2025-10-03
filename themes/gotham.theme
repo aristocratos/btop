@@ -1,0 +1,91 @@
+# btop theme with the Gotham colorscheme for vim/neovim
+# Credit to Andrea Lopardi (https://github.com/whatyouhide/vim-gotham)
+# Adapted by jrebs (https://github.com/jrebs)
+
+# Colors should be in 6 or 2 character hexadecimal or single spaced rgb decimal: "#RRGGBB", "#BW" or "0-255 0-255 0-255"
+# example for white: "#ffffff", "#ff" or "255 255 255".
+
+# All graphs and meters can be gradients
+# For single color graphs leave "mid" and "end" variable empty.
+# Use "start" and "end" variables for two color gradient
+# Use "start", "mid" and "end" for three color gradient
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#2E3440"
+
+# Main text color
+theme[main_fg]="#99d1ce"
+
+# Title color for boxes
+theme[title]="#2aa889"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#ffffff"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#0a3749"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#99d1ce"
+
+# Color of inactive/disabled text
+#theme[inactive_fg]="#a89984"
+theme[inactive_fg]="#403b34"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#a89984"
+
+# Cpu box outline color
+theme[cpu_box]="#99d1ce"
+
+# Memory/disks box outline color
+theme[mem_box]="#99d1ce"
+
+# Net up/down box outline color
+theme[net_box]="#99d1ce"
+
+# Processes box outline color
+theme[proc_box]="#99d1ce"
+
+# Box divider line and small boxes line color
+theme[div_line]="#4C566A"
+
+# Temperature graph colors
+theme[temp_start]="#2aa889"
+theme[temp_mid]="#99d1ce"
+theme[temp_end]="#ffffff"
+
+# CPU graph colors
+theme[cpu_start]="#2aa889"
+theme[cpu_mid]="#99d1ce"
+theme[cpu_end]="#ffffff"
+
+# Mem/Disk free meter
+theme[free_start]="#2aa889"
+theme[free_mid]="#99d1ce"
+theme[free_end]="#ffffff"
+
+# Mem/Disk cached meter
+theme[cached_start]="#2aa889"
+theme[cached_mid]="#99d1ce"
+theme[cached_end]="#ffffff"
+
+# Mem/Disk available meter
+theme[available_start]="#2aa889"
+theme[available_mid]="#99d1ce"
+theme[available_end]="#ffffff"
+
+# Mem/Disk used meter
+theme[used_start]="#2aa889"
+theme[used_mid]="#99d1ce"
+theme[used_end]="#ffffff"
+
+# Download graph colors
+theme[download_start]="#2aa889"
+theme[download_mid]="#99d1ce"
+theme[download_end]="#ffffff"
+
+# Upload graph colors
+theme[upload_start]="#2aa889"
+theme[upload_mid]="#99d1ce"
+theme[upload_end]="#ffffff"
