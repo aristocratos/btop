@@ -22,6 +22,7 @@ tab-size = 4
 #include <atomic>
 #include <deque>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -448,3 +449,6 @@ namespace Proc {
 	//* Build prefixes for tree view
 	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
 }
+
+/// Detect container engine.
+auto detect_container() -> std::optional<std::string>;
