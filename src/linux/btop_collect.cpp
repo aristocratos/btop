@@ -637,7 +637,7 @@ namespace Cpu {
 				if (cpufreq.good()) {
 					while (cpufreq.ignore(SSmax, '\n')) {
 						// peek is caps sensitive so it was skipping 'CPU MHz'. This aims to fix it.
-						if (cpufreq.peek() == 'c' or 'C') {
+						if (cpufreq.peek() == 'c' || cpufreq.peek() == 'C') {
 							cpufreq.ignore(SSmax, ' ');
 							if (cpufreq.peek() == 'M') {
 								cpufreq.ignore(SSmax, ':');
