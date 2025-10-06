@@ -1662,11 +1662,14 @@ namespace Proc {
 				}
 				out += title_left + hi_color + Fx::b + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
+					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right
 					+ Mv::to(d_y, d_x + d_width - 10) + title_left + t_color + Fx::b + hide + Symbols::enter + Fx::ub + title_right;
 				if (alive and selected == 0) {
 					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
 					Input::mouse_mappings["s"] = {d_y, mouse_x, 1, 7};
+				    mouse_x += 9;
+					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
 				}
 				if (selected == 0) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
 
@@ -1760,6 +1763,9 @@ namespace Proc {
 			}
 			out += title_left_down + Fx::b + hi_color + 's' + t_color + "ignals" + Fx::ub + title_right_down;
 			if (selected > 0) Input::mouse_mappings["s"] = {y + height - 1, mouse_x, 1, 7};
+		    mouse_x += 9;
+		    out += title_left_down + Fx::b + hi_color + 'N' + t_color + "ice" + Fx::ub + title_right_down;
+		    if (selected > 0) Input::mouse_mappings["N"] = {y + height -1, mouse_x, 1, 5};
 
 			//? Labels for fields in list
 			if (not proc_tree)

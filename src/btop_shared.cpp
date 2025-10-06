@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <sys/resource.h>
 #include <ranges>
 #include <regex>
 #include <string>
@@ -87,6 +88,13 @@ namespace Gpu {
 #endif
 
 namespace Proc {
+bool set_priority(pid_t pid, int priority) {
+  if (setpriority(PRIO_PROCESS, pid, priority) == 0) {
+    return true;
+  }
+  return false;
+}
+
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {

@@ -203,6 +203,7 @@ namespace Menu {
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
 		{"Selected s", "Select or enter signal to send to process."},
+		{"Selected N", "Select new nice value for selected process."},
 		{"", " "},
 		{"", "For bug reporting and project updates, visit:"},
 		{"", "https://github.com/aristocratos/btop"},
@@ -1595,6 +1596,94 @@ static int optionsMenu(const string& key) {
 		return (redraw ? Changed : retval);
 	}
 
+	static int reniceMenu(const string& key) {
+		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static int x{};
+		static int y{};
+		static int selected_nice = 0;
+		static string nice_edit;
+
+		if (bg.empty()) {
+			selected_nice = 0;
+			nice_edit.clear();
+		}
+		auto& out = Global::overlay;
+		int retval = Changed;
+
+		if (redraw) {
+			x = Term::width/2 - 25;
+			y = Term::height/2 - 6;
+			bg = Draw::createBox(x + 2, y, 50, 13, Theme::c("hi_fg"), true, "renice");
+			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Renice PID " + to_string(s_pid) + " ("
+				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 15) + ")", 48);
+		}
+		else if (is_in(key, "escape", "q")) {
+			return Closed;
+		}
+		else if (is_in(key, "enter", "space")) {
+			if (s_pid > 0) {
+				if (not nice_edit.empty()) {
+					try {
+						selected_nice = stoi(nice_edit);
+					}
+					catch (...) { selected_nice = 0; }
+				}
+				if (not Proc::set_priority(s_pid, selected_nice)) {
+					// TODO: show error message
+				}
+			}
+			return Closed;
+		}
+		else if (key.size() == 1 and (isdigit(key.at(0)) or (key.at(0) == '-' and nice_edit.empty()))) {
+			nice_edit += key;
+		}
+		else if (key == "backspace" and not nice_edit.empty()) {
+			nice_edit.pop_back();
+		}
+		else if (is_in(key, "up", "k")) {
+			if (++selected_nice > 19) selected_nice = -20;
+			nice_edit.clear();
+		}
+		else if (is_in(key, "down", "j")) {
+			if (--selected_nice < -20) selected_nice = 19;
+			nice_edit.clear();
+		}
+		else if (is_in(key, "left", "h")) {
+			if ((selected_nice -= 5) < -20) selected_nice += 40;
+			nice_edit.clear();
+		}
+		else if (is_in(key, "right", "l")) {
+			if ((selected_nice += 5) > 19) selected_nice -= 40;
+			nice_edit.clear();
+		}
+		else {
+			retval = NoChange;
+		}
+
+		if (retval == Changed) {
+			int cy = y+4;
+			if (not nice_edit.empty()) {
+				try {
+					selected_nice = stoi(nice_edit);
+				}
+				catch (...) { selected_nice = 0; }
+			}
+			out = bg + Mv::to(cy++, x+3) + Theme::c("main_fg") + Fx::ub
+				+ rjust("Enter nice value: ", 30) + Theme::c("hi_fg") + (nice_edit.empty() ? to_string(selected_nice) : nice_edit) + Theme::c("main_fg") + Fx::bl + "█" + Fx::ubl;
+
+			cy++;
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "↑ ↓", 20, true) + Theme::c("main_fg") + Fx::ub + " | To change value.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust( "← →", 20, true) + Theme::c("main_fg") + Fx::ub + " | To change value by 5.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("0-9", 20) + Theme::c("main_fg") + Fx::ub + " | Enter manually.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ENTER", 20) + Theme::c("main_fg") + Fx::ub + " | To set nice value.";
+			out += Mv::to(++cy, x+3) + Fx::b + Theme::c("hi_fg") + rjust("ESC or 'q'", 20) + Theme::c("main_fg") + Fx::ub + " | To abort.";
+
+			out += Fx::reset;
+		}
+
+		return (redraw ? Changed : retval);
+	}
+
 	//* Add menus here and update enum Menus in header
 	const auto menuFunc = vector{
 		ref(sizeError),
@@ -1603,6 +1692,7 @@ static int optionsMenu(const string& key) {
 		ref(signalReturn),
 		ref(optionsMenu),
 		ref(helpMenu),
+		ref(reniceMenu),
 		ref(mainMenu),
 	};
 	bitset<8> menuMask;
