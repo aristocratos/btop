@@ -2067,17 +2067,15 @@ namespace Mem {
 					diskread.close();
 				}
 
-				//? Get mounts from /proc/self/mountinfo
-				diskread.open((Shared::procPath / "self/mountinfo"));
+				//? Get mounts from /etc/mtab or /proc/self/mounts
+				diskread.open((fs::exists("/etc/mtab") ? fs::path("/etc/mtab") : Shared::procPath / "self/mounts"));
 				if (diskread.good()) {
 					vector<string> found;
 					found.reserve(last_found.size());
-					string dev, major_minor, mountpoint, fstype, _;
+					string dev, mountpoint, fstype;
 					while (not diskread.eof()) {
-						// See proc_pid_mountinfo(5) for the file format
-						// We specifically want the major/minor device numbers
 						std::error_code ec;
-						diskread >> _ >> _ >> major_minor >> _ >> mountpoint >> _ >> _ >> _ >> fstype >> dev >> _;
+						diskread >> dev >> mountpoint >> fstype;
 						diskread.ignore(SSmax, '\n');
 
 						// A mountpoint can ascii escape codes, which will not work with `statvfs`.
@@ -2110,17 +2108,25 @@ namespace Mem {
 									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
 								#endif
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
-
-								// Use the major:minor device numbers to get device stats; see sysfs(5)
-								auto stat_path = "/sys/dev/block/" + major_minor + "/stat";
-								if (fs::exists(stat_path, ec) and access(stat_path.c_str(), R_OK) == 0) {
-									disks.at(mountpoint).stat = stat_path;
-								} else if (fstype == "zfs") {
+								string devname = disks.at(mountpoint).dev.filename();
+								int c = 0;
+								while (devname.size() >= 2) {
+									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
+										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
+											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+										else
+											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										break;
 									//? Set ZFS stat filepath
-									disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
-									if (disks.at(mountpoint).stat.empty()) {
-										Logger::debug("Failed to get ZFS stat file for device " + dev);
+									} else if (fstype == "zfs") {
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+										if (disks.at(mountpoint).stat.empty()) {
+											Logger::debug("Failed to get ZFS stat file for device " + dev);
+										}
+										break;
 									}
+									devname.resize(devname.size() - 1);
+									c++;
 								}
 							}
 
@@ -2147,7 +2153,7 @@ namespace Mem {
 					last_found = std::move(found);
 				}
 				else
-					throw std::runtime_error("Failed to get mounts from /proc/self/mountinfo");
+					throw std::runtime_error("Failed to get mounts from /etc/mtab and /proc/self/mounts");
 				diskread.close();
 
 				//? Get disk/partition stats
