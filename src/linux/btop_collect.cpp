@@ -93,10 +93,10 @@ long long get_monotonicTimeUSec()
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
+	vector<fs::path> core_freq;
 	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
-	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors{};
 	bool cpu_temp_only{};
 	bool supports_watts = true;
@@ -289,11 +289,19 @@ namespace Shared {
 		}
 
 		//? Init for namespace Cpu
-		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+
+		for (int i = 0; i < Shared::coreCount; ++i) {
+			Cpu::core_freq.push_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
+			if (not fs::exists(Cpu::core_freq[i]) or access(Cpu::core_freq[i].c_str(), R_OK) == -1) {
+				Cpu::core_freq[i].clear();
+				Cpu::core_freq.pop_back();
+			}
+		}
+
 		Cpu::collect();
 		if (Runner::coreNum_reset) Runner::coreNum_reset = false;
 		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
@@ -552,6 +560,26 @@ namespace Cpu {
 		}
 	}
 
+	static string normalize_frequency(double hz) {
+		string str;
+		if (hz > 999999) {
+			str = fmt::format("{:.1f}", hz / 1'000'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " THz";
+		}
+		else if (hz > 999) {
+			str = fmt::format("{:.1f}", hz / 1'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " GHz";
+		}
+		else {
+			str = fmt::format("{:.0f} MHz", hz);
+		}
+		return str;
+	}
+
 	string get_cpuHz() {
 		static int failed{};
 
@@ -559,13 +587,49 @@ namespace Cpu {
 			return ""s;
 
 		string cpuhz;
+
+		const auto &freq_mode = Config::getS("freq_mode");
+
 		try {
-			double hz{};
-			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
-			if (not freq_path.empty()) {
-				hz = stod(readfile(freq_path, "0.0")) / 1000;
-				if (hz <= 0.0 and ++failed >= 2)
-					freq_path.clear();
+			double hz = 0.0;
+			// Read frequencies from all CPU cores
+			vector<double> frequencies;
+			unsigned long cpu_count = freq_mode == "first" ? std::min(static_cast<size_t>(1),Cpu::core_freq.size()) : Cpu::core_freq.size();
+			for (unsigned int i = 0; i < cpu_count; ++i) {
+				if (not Cpu::core_freq[i].empty()) {
+					double core_hz = stod(readfile(Cpu::core_freq[i], "0.0")) / 1000;
+					if (core_hz <= 0.0 and ++failed >= 2) {
+						Cpu::core_freq[i].clear();
+						Cpu::core_freq.erase(Cpu::core_freq.begin() + i--);
+					} else {
+						frequencies.push_back(core_hz);
+					}
+				}
+			}
+
+			if (not frequencies.empty()) {
+				if (freq_mode == "first") {
+					hz = frequencies.front();
+				}
+				if (freq_mode == "average") {
+					hz = std::accumulate(frequencies.begin(), frequencies.end(), 0.0) / static_cast<double>(frequencies.size());
+				}
+				else if (freq_mode == "highest") {
+					hz = *std::max_element(frequencies.begin(), frequencies.end());
+				}
+				else if (freq_mode == "lowest") {
+					hz = *std::min_element(frequencies.begin(), frequencies.end());
+				}
+				else if (freq_mode == "range") {
+					auto [min_hz,max_hz] = std::minmax_element(frequencies.begin(), frequencies.end());
+
+					// Format as range
+					string min_str, max_str;
+					min_str = normalize_frequency(*min_hz);
+					max_str = normalize_frequency(*max_hz);
+
+					return min_str + " - " + max_str;
+				}
 			}
 			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
 			if (hz <= 0.0) {
@@ -588,21 +652,7 @@ namespace Cpu {
 			if (hz <= 1 or hz >= 999999999)
 				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
-			if (hz > 999999) {
-				cpuhz = fmt::format("{:.1f}", hz / 1'000'000);
-				cpuhz.resize(3);
-				if (cpuhz.back() == '.') cpuhz.pop_back();
-				cpuhz += " THz";
-			}
-			else if (hz > 999) {
-				cpuhz = fmt::format("{:.1f}", hz / 1'000);
-				cpuhz.resize(3);
-				if (cpuhz.back() == '.') cpuhz.pop_back();
-				cpuhz += " GHz";
-			}
-			else {
-				cpuhz = fmt::format("{:.0f} MHz", hz);
-			}
+			cpuhz = normalize_frequency(hz);
 
 		}
 		catch (const std::exception& e) {

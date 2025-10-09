@@ -150,7 +150,9 @@ namespace Config {
 		{"base_10_sizes",		"#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024."},
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
-
+	#ifdef __linux__
+		{"freq_mode",				"#* How to calculate CPU frequency, available values: \"first\", \"range\", \"lowest\", \"highest\" and \"average\"."},
+	#endif
 		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable.\n"
 								"#* Special formatting: /host = hostname | /user = username | /uptime = system uptime"},
 
@@ -243,6 +245,9 @@ namespace Config {
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
 		{"temp_scale", "celsius"},
+	#ifdef __linux__
+		{"freq_mode", "first"},
+	#endif
 		{"clock_format", "%X"},
 		{"custom_cpu_name", ""},
 		{"disks_filter", ""},
