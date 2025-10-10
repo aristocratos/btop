@@ -431,6 +431,9 @@ namespace Proc {
 		vector<tree_proc> children;
 	};
 
+	//* Change priority (nice) of pid, returns true on success otherwise false
+	bool set_priority(pid_t pid, int priority);
+
 	//* Sort vector of proc_info's
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
 
