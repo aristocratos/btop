@@ -49,11 +49,11 @@ jobs:
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           brew update --quiet
-          brew install --force --overwrite llvm lld lowdown
+          brew install --force --overwrite gcc@15 lowdown
 
       - name: Compile
         run: |
-          make CXX=$(brew --prefix llvm)/bin/clang++
+          make CXX=$(brew --prefix)/bin/g++-15
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin
