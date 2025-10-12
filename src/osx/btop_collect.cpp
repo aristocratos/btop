@@ -569,13 +569,8 @@ namespace Mem {
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
-		mach_port_t libtop_master_port;
-		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("error getting master port");
-			return;
-		}
 		/* Get the list of all drive objects. */
-		if (IOServiceGetMatchingServices(libtop_master_port,
+		if (IOServiceGetMatchingServices(kIOMainPortDefault,
 										 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
