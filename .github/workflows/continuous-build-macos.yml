@@ -53,7 +53,7 @@ jobs:
 
       - name: Compile
         run: |
-          make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
+          make CXX=$(brew --prefix llvm)/bin/clang++
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin
