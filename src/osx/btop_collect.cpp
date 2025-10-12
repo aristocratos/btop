@@ -523,6 +523,7 @@ namespace Mem {
 	int disk_ios = 0;
 	vector<string> last_found;
 	static std::mutex iokit_mutex;  // Protect concurrent IOKit calls
+	static std::mutex interface_mutex;  // Protect concurrent interface access during USB device changes
 
 	mem_info current_mem{};
 
@@ -822,6 +823,8 @@ namespace Net {
 	};
 
 	auto collect(bool no_update) -> net_info & {
+		// Lock mutex to prevent concurrent interface access during USB device changes
+		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");
