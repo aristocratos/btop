@@ -822,12 +822,6 @@ namespace Net {
 	};
 
 	auto collect(bool no_update) -> net_info & {
-<<<<<<< Updated upstream
-		Logger::debug(string("Net::collect() started"));
-=======
-		// Lock mutex to prevent concurrent interface access during USB device changes
-		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
->>>>>>> Stashed changes
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");
