@@ -49,6 +49,7 @@ tab-size = 4
 
 #include <cmath>
 #include <fstream>
+#include <mutex>
 #include <numeric>
 #include <ranges>
 #include <regex>
@@ -521,6 +522,7 @@ namespace Mem {
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
+	static std::mutex iokit_mutex;  // Protect concurrent IOKit calls
 
 	mem_info current_mem{};
 
@@ -566,6 +568,9 @@ namespace Mem {
 	};
 
 	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
+		// Lock mutex to prevent concurrent IOKit access
+		std::lock_guard<std::mutex> lock(iokit_mutex);
+
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
