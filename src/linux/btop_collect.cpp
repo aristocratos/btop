@@ -636,7 +636,8 @@ namespace Cpu {
 				ifstream cpufreq(Shared::procPath / "cpuinfo");
 				if (cpufreq.good()) {
 					while (cpufreq.ignore(SSmax, '\n')) {
-						if (cpufreq.peek() == 'c') {
+						// peek is caps sensitive so it was skipping 'CPU MHz'. This aims to fix it.
+						if (cpufreq.peek() == 'c' || cpufreq.peek() == 'C') {
 							cpufreq.ignore(SSmax, ' ');
 							if (cpufreq.peek() == 'M') {
 								cpufreq.ignore(SSmax, ':');
