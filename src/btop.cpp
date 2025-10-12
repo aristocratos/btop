@@ -256,6 +256,16 @@ static void _exit_handler() {
 	clean_quit(-1);
 }
 
+static void _crash_handler(const int sig) {
+	// Restore terminal before crashing
+	if (Term::initialized) {
+		Term::restore();
+	}
+	// Re-raise the signal to get default behavior (core dump)
+	std::signal(sig, SIG_DFL);
+	std::raise(sig);
+}
+
 static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
@@ -1014,6 +1024,12 @@ int main(const int argc, const char** argv) {
 	std::signal(SIGWINCH, _signal_handler);
 	std::signal(SIGUSR1, _signal_handler);
 	std::signal(SIGUSR2, _signal_handler);
+	// Add crash handlers to restore terminal on crash
+	std::signal(SIGSEGV, _crash_handler);
+	std::signal(SIGABRT, _crash_handler);
+	std::signal(SIGTRAP, _crash_handler);
+	std::signal(SIGBUS, _crash_handler);
+	std::signal(SIGILL, _crash_handler);
 
 	sigset_t mask;
 	sigemptyset(&mask);
