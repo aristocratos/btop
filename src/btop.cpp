@@ -731,6 +731,14 @@ namespace Runner {
 			active = false;
 			// exit(1);
 			pthread_cancel(Runner::runner_id);
+
+			// Wait for the thread to actually terminate before creating a new one
+			void* thread_result;
+			int join_result = pthread_join(Runner::runner_id, &thread_result);
+			if (join_result != 0) {
+				Logger::warning("Failed to join cancelled thread: " + string(strerror(join_result)));
+			}
+
 			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
 				clean_quit(1);
