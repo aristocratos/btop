@@ -821,8 +821,7 @@ namespace Cpu {
 			//? Cpu clock and cpu meter
 			if (Config::getB("show_cpu_freq") and not cpuHz.empty())
 				out += Mv::to(b_y, b_x + b_width - (freq_range ? 20 : 10)) + Fx::ub + Theme::c("div_line")
-					// + Symbols::h_line * max((size_t)0, (freq_range ? 17 : 7) - cpuHz.size())
-					+ Symbols::h_line * max((size_t)0, (freq_range ? 17 : 7) - cpuHz.size())
+					+ Symbols::h_line * ((freq_range ? 17 : 7) - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
 		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
