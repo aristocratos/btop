@@ -49,6 +49,7 @@ tab-size = 4
 
 #include <cmath>
 #include <fstream>
+#include <mutex>
 #include <numeric>
 #include <ranges>
 #include <regex>
@@ -521,6 +522,8 @@ namespace Mem {
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
+	static std::mutex iokit_mutex;  // Protect concurrent IOKit calls
+	static std::mutex interface_mutex;  // Protect concurrent interface access during USB device changes
 
 	mem_info current_mem{};
 
@@ -566,16 +569,14 @@ namespace Mem {
 	};
 
 	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
+		// Lock mutex to prevent concurrent IOKit access
+		std::lock_guard<std::mutex> lock(iokit_mutex);
+
 		io_registry_entry_t drive;
 		io_iterator_t drive_list;
 
-		mach_port_t libtop_master_port;
-		if (IOMasterPort(bootstrap_port, &libtop_master_port)) {
-			Logger::error("error getting master port");
-			return;
-		}
 		/* Get the list of all drive objects. */
-		if (IOServiceGetMatchingServices(libtop_master_port,
+		if (IOServiceGetMatchingServices(kIOMainPortDefault,
 										 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
@@ -822,6 +823,8 @@ namespace Net {
 	};
 
 	auto collect(bool no_update) -> net_info & {
+		// Lock mutex to prevent concurrent interface access during USB device changes
+		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
 		auto &net = current_net;
 		auto &config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");

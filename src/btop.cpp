@@ -256,6 +256,16 @@ static void _exit_handler() {
 	clean_quit(-1);
 }
 
+static void _crash_handler(const int sig) {
+	// Restore terminal before crashing
+	if (Term::initialized) {
+		Term::restore();
+	}
+	// Re-raise the signal to get default behavior (core dump)
+	std::signal(sig, SIG_DFL);
+	std::raise(sig);
+}
+
 static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
@@ -721,6 +731,14 @@ namespace Runner {
 			active = false;
 			// exit(1);
 			pthread_cancel(Runner::runner_id);
+
+			// Wait for the thread to actually terminate before creating a new one
+			void* thread_result;
+			int join_result = pthread_join(Runner::runner_id, &thread_result);
+			if (join_result != 0) {
+				Logger::warning("Failed to join cancelled thread: " + string(strerror(join_result)));
+			}
+
 			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
 				clean_quit(1);
@@ -1014,6 +1032,12 @@ int main(const int argc, const char** argv) {
 	std::signal(SIGWINCH, _signal_handler);
 	std::signal(SIGUSR1, _signal_handler);
 	std::signal(SIGUSR2, _signal_handler);
+	// Add crash handlers to restore terminal on crash
+	std::signal(SIGSEGV, _crash_handler);
+	std::signal(SIGABRT, _crash_handler);
+	std::signal(SIGTRAP, _crash_handler);
+	std::signal(SIGBUS, _crash_handler);
+	std::signal(SIGILL, _crash_handler);
 
 	sigset_t mask;
 	sigemptyset(&mask);
