@@ -364,7 +364,7 @@ namespace Menu {
 				"Show discharge power when discharging.",
 				"Show charging power when charging."},
 			{"log_level",
-				"Set loglevel for error.log",
+				"Set loglevel for \"~/.config/btop/btop.log\"",
 				"",
 				"\"ERROR\", \"WARNING\", \"INFO\" and \"DEBUG\".",
 				"",
