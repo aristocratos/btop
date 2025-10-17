@@ -608,7 +608,7 @@ namespace Cpu {
         			it = Cpu::core_freq.erase(it);
         			continue;
     			}
-    			
+
     			double core_hz = stod(readfile(*it, "0.0")) / 1000;
     			if (core_hz <= 0.0 and ++failed >= 2) {
         			it = Cpu::core_freq.erase(it);
@@ -904,13 +904,13 @@ namespace Cpu {
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
-		} 
+		}
 		//? Or get seconds to full
 		else if(is_in(status, "charging")) {
 			if (b.use_energy_or_charge ) {
 				if (not b.power_now.empty()) {
 					try {
-						seconds = (round(stod(readfile(b.energy_full , "0")) - round(stod(readfile(b.energy_now, "0"))))  
+						seconds = (round(stod(readfile(b.energy_full , "0")) - round(stod(readfile(b.energy_now, "0"))))
 									/ abs(stod(readfile(b.power_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
@@ -918,14 +918,14 @@ namespace Cpu {
 				}
 				else if (not b.current_now.empty()) {
 					try {
-						seconds = (round(stod(readfile(b.charge_full , "0")) - stod(readfile(b.charge_now, "0")))  
+						seconds = (round(stod(readfile(b.charge_full , "0")) - stod(readfile(b.charge_now, "0")))
 									/ std::abs(stod(readfile(b.current_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
 				}
 			}
-		} 
+		}
 
 		//? Get power draw
 		if (b.use_power) {
