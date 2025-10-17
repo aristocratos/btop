@@ -1038,7 +1038,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1;
+	int collapse = -1, expand = -1, toggle_children = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
@@ -1303,6 +1303,23 @@ namespace Proc {
 		//* Generate tree view if enabled
 		if (tree and (not no_update or should_filter or sorted_change)) {
 			bool locate_selection = false;
+
+			if (toggle_children != -1) {
+				auto collapser = rng::find(current_procs, toggle_children, &proc_info::pid);
+				if (collapser != current_procs.end()){
+					for (auto& p : current_procs) {
+						if (p.ppid == collapser->pid) {
+							auto child = rng::find(current_procs, p.pid, &proc_info::pid);
+							if (child != current_procs.end()){
+								child->collapsed = not child->collapsed;
+							}
+						}
+					}
+					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+				}
+				toggle_children = -1;
+			}
+			
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {

@@ -1097,7 +1097,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1;
+	int collapse = -1, expand = -1, toggle_children = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
