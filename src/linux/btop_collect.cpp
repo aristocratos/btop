@@ -296,8 +296,7 @@ namespace Shared {
 
 		for (int i = 0; i < Shared::coreCount; ++i) {
 			Cpu::core_freq.push_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
-			if (not fs::exists(Cpu::core_freq[i]) or access(Cpu::core_freq[i].c_str(), R_OK) == -1) {
-				Cpu::core_freq[i].clear();
+			if (not fs::exists(Cpu::core_freq.back()) or access(Cpu::core_freq.back().c_str(), R_OK) == -1) {
 				Cpu::core_freq.pop_back();
 			}
 		}
@@ -594,18 +593,21 @@ namespace Cpu {
 			double hz = 0.0;
 			// Read frequencies from all CPU cores
 			vector<double> frequencies;
-			unsigned long cpu_count = freq_mode == "first" ? std::min(static_cast<size_t>(1),Cpu::core_freq.size()) : Cpu::core_freq.size();
-			for (unsigned int i = 0; i < cpu_count; ++i) {
-				if (not Cpu::core_freq[i].empty()) {
-					double core_hz = stod(readfile(Cpu::core_freq[i], "0.0")) / 1000;
-					if (core_hz <= 0.0 and ++failed >= 2) {
-						Cpu::core_freq[i].clear();
-						Cpu::core_freq.erase(Cpu::core_freq.begin() + i--);
-					} else {
-						frequencies.push_back(core_hz);
-					}
-				}
-			}
+			for (auto it = Cpu::core_freq.begin(); it != Cpu::core_freq.end(); ) {
+    			if (it->empty()) {
+        			it = Cpu::core_freq.erase(it);
+        			continue;
+    			}
+    			
+    			double core_hz = stod(readfile(*it, "0.0")) / 1000;
+    			if (core_hz <= 0.0 and ++failed >= 2) {
+        			it = Cpu::core_freq.erase(it);
+    			} else {
+        			frequencies.push_back(core_hz);
+        			if (freq_mode == "first") break;
+        			++it;
+    			}
+ 			}
 
 			if (not frequencies.empty()) {
 				if (freq_mode == "first") {
