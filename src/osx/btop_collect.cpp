@@ -231,8 +231,9 @@ namespace Cpu {
 #endif
 				// try SMC (intel)
 				Logger::debug("checking intel");
-				SMCConnection smcCon;
 				try {
+					SMCConnection smcCon;
+					Logger::debug("SMC connection established");
 					long long t = smcCon.getTemp(-1);  // check if we have package T
 					if (t > -1) {
 						Logger::debug("intel sensors found");
@@ -250,7 +251,8 @@ namespace Cpu {
 						got_sensors = false;
 					}
 				} catch (std::runtime_error &e) {
-					// ignore, we don't have temp
+					Logger::debug("SMC not available: " + string(e.what()));
+					// ignore, we don't have temp (common in VMs)
 					got_sensors = false;
 				}
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
