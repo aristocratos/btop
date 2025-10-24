@@ -50,7 +50,7 @@ jobs:
             mv bin/btop bin/btop-GCC11-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: btop-x86_64-openbsd-7.7
           path: 'bin/*'
