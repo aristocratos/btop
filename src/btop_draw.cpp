@@ -1968,7 +1968,7 @@ namespace Proc {
 		}
 
 		out += Fx::reset;
-		while (lc++ < height - 5) out += Mv::to(y+lc+1, x+1) + string(width - 2, ' ');
+		while (lc++ < height - 3) out += Mv::to(y+lc+1, x+1) + string(width - 2, ' ');
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
