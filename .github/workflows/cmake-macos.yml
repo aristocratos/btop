@@ -34,7 +34,7 @@ jobs:
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           brew update --quiet
-          brew install --force --overwrite cmake llvm lld ninja lowdown
+          brew install --force --overwrite cmake llvm lld ninja
 
       - name: Configure
         run: |

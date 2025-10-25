@@ -41,7 +41,7 @@ jobs:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
           usesh: true
-          prepare: pkg install -y cmake ninja lowdown
+          prepare: pkg install -y cmake ninja
           run: |
-            CXX=clang++ cmake -B build -G Ninja -DBTOP_STATIC=ON
+            cmake -B build -G Ninja
             cmake --build build --verbose

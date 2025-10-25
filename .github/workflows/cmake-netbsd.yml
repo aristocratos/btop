@@ -42,12 +42,11 @@ jobs:
           release: ${{ matrix.version }}
           usesh: true
           prepare: |
-            PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
-            export PATH PKG_PATH
+            export PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
+            export PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
             /usr/sbin/pkg_add pkgin
-            pkgin -y install cmake ninja-build gcc14 coreutils git
-            git config --global --add safe.directory /home/runner/work/btop/btop
+            pkgin -y install cmake gcc14 ninja-build
           run: |
-            cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc14/bin/g++" -B build -G Ninja -DBTOP_STATIC=OFF
+            export CXX="/usr/pkg/gcc14/bin/g++"
+            cmake -B build -G Ninja
             cmake --build build --verbose
