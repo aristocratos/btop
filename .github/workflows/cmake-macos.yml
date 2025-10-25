@@ -43,7 +43,7 @@ jobs:
           export CXX="$LLVM_PREFIX/bin/clang++"
           export CPPFLAGS="-I$LLVM_PREFIX/include"
           export LDFLAGS="-L$LLVM_PREFIX/lib -L$LLVM_PREFIX/lib/c++ -Wl,-rpath,$LLVM_PREFIX/lib/c++ -fuse-ld=$LLD_PREFIX/bin/ld64.lld"
-          cmake -B build -G Ninja
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 
       - name: Compile
         run: cmake --build build --verbose

@@ -48,5 +48,5 @@ jobs:
             pkgin -y install cmake gcc14 ninja-build
           run: |
             export CXX="/usr/pkg/gcc14/bin/g++"
-            cmake -B build -G Ninja
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
