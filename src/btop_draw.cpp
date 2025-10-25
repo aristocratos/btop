@@ -831,7 +831,7 @@ namespace Cpu {
 			+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
-			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
+			const auto temp_color = Theme::g("temp").at(clamp(cpu.temp_max > 0 ? safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max : 0, 0ll, 100ll));
 			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
@@ -873,7 +873,7 @@ namespace Cpu {
 
 			if (show_temps and not hide_cores) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
-				const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll));
+				const auto temp_color = Theme::g("temp").at(clamp(cpu.temp_max > 0 ? safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max : 0, 0ll, 100ll));
 				if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
 					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
 						+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
@@ -936,9 +936,9 @@ namespace Cpu {
 					const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
 					out += ' ';
 					if (b_columns > 1)
-						out += Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
+						out += Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("temp").at(clamp(gpus[i].temp_max > 0 ? gpus[i].temp.back() * 100 / gpus[i].temp_max : 0, 0ll, 100ll))
 							+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw);
-					else out += Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll));
+					else out += Theme::g("temp").at(clamp(gpus[i].temp_max > 0 ? gpus[i].temp.back() * 100 / gpus[i].temp_max : 0, 0ll, 100ll));
 					out += rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
 				}
 				if (gpus[i].supported_functions.pwr_usage) {
@@ -1051,7 +1051,7 @@ namespace Gpu {
 			//? Temperature graph, I assume the device supports utilization if it supports temperature
 			if (show_temps) {
 				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp_max > 0 ? gpu.temp.back() * 100 / gpu.temp_max : 0, 0ll, 100ll))
 					+ temp_graph(gpu.temp, data_same or redraw[index]);
 				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
