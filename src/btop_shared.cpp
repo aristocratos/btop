@@ -144,8 +144,8 @@ bool set_priority(pid_t pid, int priority) {
 		}
 	}
 
-	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, int& c_index, const int index_max, bool collapsed) {
-		if (proc_vec.size() > 1) {
+	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused, int& c_index, const int index_max, bool collapsed) {
+		if (proc_vec.size() > 1 and not paused) {
 			if (reverse) {
 				switch (v_index(sort_vector, sorting)) {
 				case 3: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().threads < b.entry.get().threads; });	break;
@@ -167,7 +167,7 @@ bool set_priority(pid_t pid, int priority) {
 		for (auto& r : proc_vec) {
 			r.entry.get().tree_index = (collapsed or r.entry.get().filtered ? index_max : c_index++);
 			if (not r.children.empty()) {
-				tree_sort(r.children, sorting, reverse, c_index, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == (size_t)index_max));
+				tree_sort(r.children, sorting, reverse, paused, c_index, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == (size_t)index_max));
 			}
 		}
 	}
@@ -239,14 +239,16 @@ bool set_priority(pid_t pid, int priority) {
 
 			if (not no_update and not filtering and (collapsed or cur_proc.collapsed)) {
 				//auto& parent = cur_proc;
-				cur_proc.cpu_p += p.cpu_p;
-				cur_proc.cpu_c += p.cpu_c;
-				cur_proc.mem += p.mem;
-				cur_proc.threads += p.threads;
+				if (p.state != 'X') {
+					cur_proc.cpu_p += p.cpu_p;
+					cur_proc.cpu_c += p.cpu_c;
+					cur_proc.mem += p.mem;
+					cur_proc.threads += p.threads;
+				}
 				filter_found++;
 				p.filtered = true;
 			}
-			else if (Config::getB("proc_aggregate")) {
+			else if (Config::getB("proc_aggregate") and p.state != 'X') {
 				cur_proc.cpu_p += p.cpu_p;
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;

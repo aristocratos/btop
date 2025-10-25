@@ -2786,6 +2786,7 @@ namespace Proc {
 	string current_sort;
 	string current_filter;
 	bool current_rev{};
+	bool is_tree_mode;
 
 	fs::file_time_type passwd_time;
 
@@ -2798,6 +2799,7 @@ namespace Proc {
 	detail_container detailed;
 	constexpr size_t KTHREADD = 2;
 	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
+	static std::unordered_set<size_t> dead_procs;
 
 	//* Get detailed info for selected process
 	static void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
@@ -2819,7 +2821,8 @@ namespace Proc {
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
-		detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
+		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
+		else detailed.elapsed = sec_to_dhms(detailed.entry.death_time);
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
 		//? Get parent process name
@@ -2906,14 +2909,17 @@ namespace Proc {
 		auto should_filter_kernel = Config::getB("proc_filter_kernel");
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
+		const auto pause_proc_list = Config::getB("pause_proc_list");
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+		bool tree_mode_change = tree != is_tree_mode;
 		if (sorted_change) {
 			current_sort = sorting;
 			current_rev = reverse;
 		}
+		if (tree_mode_change) is_tree_mode = tree;
 		ifstream pread;
 		string long_string;
 		string short_str;
@@ -3001,11 +3007,13 @@ namespace Proc {
 				//? Check if pid already exists in current_procs
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
 				bool no_cache{};
-				if (find_old == current_procs.end()) {
+				//? Only add new processes if not paused
+				if (find_old == current_procs.end() and not pause_proc_list) {
 					current_procs.push_back({pid});
 					find_old = current_procs.end() - 1;
 					no_cache = true;
 				}
+				else if (dead_procs.contains(pid)) continue;
 
 				auto& new_proc = *find_old;
 
@@ -3160,9 +3168,27 @@ namespace Proc {
 				}
 			}
 
-			//? Clear dead processes from current_procs and remove kernel processes if enabled
-			auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
-			current_procs.erase(eraser.begin(), eraser.end());
+			//? Clear dead processes from current_procs and remove kernel processes if enabled and not paused
+			if (not pause_proc_list) {
+				auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
+				current_procs.erase(eraser.begin(), eraser.end());
+				if (!dead_procs.empty()) dead_procs.clear();
+			}
+			//? Set correct state of dead processes if paused
+			else {
+				for (auto& r : current_procs) {
+					if (rng::find(found, r.pid) == found.end()) {
+						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clkTck);
+						r.state = 'X';
+						dead_procs.emplace(r.pid);
+						//? Reset cpu usage for dead processes if paused and option is set
+						if (!Config::getB("keep_dead_proc_usage")) {
+							r.cpu_p = 0.0;
+							r.mem = 0;
+						}
+					}
+				}
+			}
 
 			//? Update the details info box for process if active
 			if (show_detailed and got_detailed) {
@@ -3195,7 +3221,7 @@ namespace Proc {
 		}
 
 		//* Sort processes
-		if (sorted_change or not no_update) {
+		if ((sorted_change or tree_mode_change) or (not no_update and not pause_proc_list)) {
 			proc_sorter(current_procs, sorting, reverse, tree);
 		}
 
@@ -3240,8 +3266,10 @@ namespace Proc {
 			vector<tree_proc> tree_procs;
 			tree_procs.reserve(current_procs.size());
 
-			for (auto& p : current_procs) {
-				if (not v_contains(found, p.ppid)) p.ppid = 0;
+			if (!pause_proc_list) {
+				for (auto& p : current_procs) {
+					if (not v_contains(found, p.ppid)) p.ppid = 0;
+				}
 			}
 
 			//? Stable sort to retain selected sorting among processes with the same parent
@@ -3254,7 +3282,7 @@ namespace Proc {
 
 			//? Recursive sort over tree structure to account for collapsed processes in the tree
 			int index = 0;
-			tree_sort(tree_procs, sorting, reverse, index, current_procs.size());
+			tree_sort(tree_procs, sorting, reverse, (pause_proc_list and not (sorted_change or tree_mode_change)), index, current_procs.size());
 
 			//? Recursive construction of ASCII tree prefixes.
 			for (auto t = tree_procs.begin(); t != tree_procs.end(); ++t) {

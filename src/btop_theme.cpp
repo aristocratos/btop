@@ -88,7 +88,8 @@ namespace Theme {
 		{ "upload_end", "#dcafde" },
 		{ "process_start", "#80d0a3" },
 		{ "process_mid", "#dcd179" },
-		{ "process_end", "#d45454" }
+		{ "process_end", "#d45454" },
+		{ "proc_pause_bg", "#b54040" }
 	};
 
 	const std::unordered_map<string, string> TTY_theme = {
@@ -133,7 +134,8 @@ namespace Theme {
 		{ "upload_end", "\x1b[95m" },
 		{ "process_start", "\x1b[32m" },
 		{ "process_mid", "\x1b[33m" },
-		{ "process_end", "\x1b[31m" }
+		{ "process_end", "\x1b[31m" },
+		{ "proc_pause_bg", "\x1b[31m" }
 	};
 
 	namespace {

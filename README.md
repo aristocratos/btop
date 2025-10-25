@@ -193,6 +193,7 @@ C++ version and continuation of [bashtop](https://github.com/aristocratos/bashto
 * Easy switching between sorting options.
 * Tree view of processes.
 * Send any signal to selected process.
+* Pause the process list.
 * UI menu for changing all config file options.
 * Auto scaling graph for network usage.
 * Shows IO activity and speeds for disks.
@@ -1375,6 +1376,9 @@ proc_per_core = True
 
 #* Show process memory as bytes instead of percent.
 proc_mem_bytes = True
+
+#* Choose to preserve last cpu and memory usage of dead processes for when paused.
+keep_dead_proc_usage = False
 
 #* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)
 proc_info_smaps = False

@@ -116,6 +116,8 @@ namespace Config {
 
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
 
+		{"keep_dead_proc_usage", "#* Should cpu and memory usage display be preserved for dead processes when paused."},
+
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
 								"#* Select from a list of detected attributes from the options menu."},
 
@@ -320,6 +322,8 @@ namespace Config {
 		{"show_detailed", false},
 		{"proc_filtering", false},
 		{"proc_aggregate", false},
+		{"pause_proc_list", false},
+		{"keep_dead_proc_usage", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
