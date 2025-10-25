@@ -16,8 +16,6 @@ project("btop"
   LANGUAGES CXX
 )
 
-include(CheckCXXCompilerFlag)
-include(CheckIncludeFileCXX)
 include(CheckIPOSupported)
 include(CMakeDependentOption)
 
@@ -29,7 +27,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
@@ -85,11 +83,6 @@ else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
 
-check_include_file_cxx(ranges CXX_HAVE_RANGES)
-if(NOT CXX_HAVE_RANGES)
-  message(FATAL_ERROR "The compiler doesn't support <ranges>")
-endif()
-
 # Generate build info
 execute_process(
   COMMAND "git" "rev-parse" "--short" "HEAD"
@@ -105,7 +98,25 @@ set(COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY IMMEDIATE)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+include(CheckCXXSourceCompiles)
+include(CheckCXXSymbolExists)
+
+check_cxx_symbol_exists("__cpp_lib_expected" "version" HAS_CXX_EXPECTED)
+if(NOT HAS_CXX_EXPECTED)
+  message(FATAL_ERROR "The compiler doesn't support std::expected")
+endif()
+check_cxx_symbol_exists("__cpp_lib_ranges" "version" HAS_CXX_RANGES)
+if(NOT HAS_CXX_RANGES)
+  message(FATAL_ERROR "The compiler doesn't support std::ranges")
+endif()
+check_cxx_symbol_exists("__cpp_lib_ranges_to_container" "version" HAS_CXX_RANGES_TO_CONTAINER)
+if(NOT HAS_CXX_RANGES_TO_CONTAINER)
+  message(FATAL_ERROR "The compiler doesn't support std::ranges::to")
+endif()
+
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
+
+include(CheckCXXCompilerFlag)
 
 if(NOT APPLE)
   target_compile_options(btop PRIVATE -fstack-clash-protection)

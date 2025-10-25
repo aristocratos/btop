@@ -10,7 +10,7 @@
 ![NetBSD](https://img.shields.io/badge/-NetBSD-black?logo=netbsd)
 ![OpenBSD](https://img.shields.io/badge/-OpenBSD-black?logo=openbsd)
 ![Usage](https://img.shields.io/badge/Usage-System%20resource%20monitor-yellow)
-![c++20](https://img.shields.io/badge/cpp-c%2B%2B20-green)
+![c++23](https://img.shields.io/badge/cpp-c%2B%2B23-green)
 ![latest_release](https://img.shields.io/github/v/tag/aristocratos/btop?label=release)
 [![Donate](https://img.shields.io/badge/-Donate-yellow?logo=paypal)](https://paypal.me/aristocratos)
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
@@ -267,7 +267,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
  * **INTEL**
 
-   Requires a working C compiler if compiling from source - tested with GCC12 and Clang16.
+   Requires a working C compiler if compiling from source.
 
    Also requires the user to have permission to read from SYSFS.
 
@@ -401,7 +401,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Compilation Linux
 
-   Requires at least GCC 11 or Clang 16.
+   Requires at least GCC 14 or Clang 19.
 
    The Makefile also needs GNU `coreutils` and `sed` (should already be installed on any modern distribution).
 
@@ -437,10 +437,10 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 ### With Make
 </summary>
 
-1. **Install dependencies (example for Ubuntu 21.04 Hirsute)**
+1. **Install dependencies (example for Ubuntu 24.04 Noble)**
 
    ```bash
-   sudo apt install coreutils sed git build-essential gcc-11 g++-11 lowdown
+   sudo apt install coreutils sed git build-essential lowdown
    ```
 
 2. **Clone repository**
@@ -602,9 +602,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Compilation macOS OSX
 
-   Requires at least GCC 12 or Clang 16.
-
-   With GCC, version 12 (or better) is needed for macOS Ventura. If you get linker errors on Ventura you'll need to upgrade your command line tools (Version 14.0) is bugged.
+   Requires at least GCC 14 or Clang 19.
 
    The Makefile also needs GNU coreutils and `sed`.
 
@@ -619,7 +617,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 1. **Install dependencies (example for Homebrew)**
 
    ```bash
-   brew install coreutils make gcc@12 lowdown
+   brew install coreutils make gcc@15 lowdown
    ```
 
 2. **Clone repository**
@@ -730,8 +728,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    cmake --build build
    ```
 
-   _**Note:** btop uses lots of C++ 20 features, so it's necessary to be specific about the compiler and the standard library. If you get a compile with Apple-Clang or GCC, feel free to add the instructions here._
-
    This will automatically build a release version of btop.
 
    Some useful options to pass to the configure step:
@@ -770,7 +766,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Compilation FreeBSD
 
-   Requires at least GCC 11 or Clang 16.
+   Requires at least Clang 19 (default) or GCC 14.
 
    Note that GNU make (`gmake`) is required to compile on FreeBSD.
 
@@ -783,7 +779,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 1. **Install dependencies**
 
    ```bash
-   sudo pkg install gmake gcc11 coreutils git lowdown
+   sudo pkg install gmake coreutils git lowdown
    ```
 
 2. **Clone repository**
@@ -871,16 +867,8 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Requires Clang / GCC, CMake, Ninja, Lowdown and Git
 
-   _**Note:** LLVM's libc++ shipped with FreeBSD 13 is too old and cannot compile btop._
-
-	FreeBSD 14 and later:
    ```bash
    pkg install cmake ninja lowdown
-   ```
-
-	FreeBSD 13:
-   ```bash
-   pkg install cmake gcc13 ninja lowdown
    ```
 
 2. **Clone the repository**
@@ -891,18 +879,9 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 3. **Compile**
 
-	FreeBSD 14 and later:
    ```bash
    # Configure
    cmake -B build -G Ninja
-   # Build
-   cmake --build build
-   ```
-
-	FreeBSD 13:
-   ```bash
-   # Configure
-   CXX=g++13 cmake -B build -G Ninja
    # Build
    cmake --build build
    ```
@@ -948,7 +927,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Compilation NetBSD
 
-   Requires at least GCC 11.
+   Requires at least GCC 14.
 
    Note that GNU make (`gmake`) is required to compile on NetBSD.
 
@@ -961,7 +940,8 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 1. **Install dependencies**
 
    ```bash
-   pkg_add gmake gcc11 coreutils git
+   /usr/sbin/pkg_add pkgin
+   pkgin install -y coregutils gcc14 git gmake
    ```
 
 2. **Clone repository**
@@ -974,7 +954,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 3. **Compile**
 
    ```bash
-   gmake CXXFLAGS="-DNDEBUG"
+   CXX=/usr/pkg/gcc14/bin/g++ gmake CXXFLAGS="-DNDEBUG"
    ```
 
    Options for make:
@@ -1050,7 +1030,8 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    Requires GCC, CMake, Ninja and Git
 
    ```bash
-   pkg_add cmake ninja-build gcc11 coreutils git
+   /usr/sbin/pkg_add pkgin
+   pkgin install cmake ninja-build gcc14 git
    ```
 
 2. **Clone the repository**
@@ -1063,7 +1044,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    ```bash
    # Configure
-   cmake -DCMAKE_CXX_COMPILER="/usr/pkg/gcc11/bin/g++" -B build -G Ninja
+   CXX="/usr/pkg/gcc14/bin/g++" cmake -B build -G Ninja
    # Build
    cmake --build build
    ```
@@ -1106,8 +1087,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Compilation OpenBSD
 
-   Requires at least GCC 11.
-
    Note that GNU make (`gmake`) is required to compile on OpenBSD.
 
 <details>
@@ -1119,7 +1098,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 1. **Install dependencies**
 
    ```bash
-   pkg_add gmake gcc%11 g++%11 coreutils git lowdown
+   pkg_add coreutils git gmake lowdown
    ```
 
 2. **Clone repository**
@@ -1132,7 +1111,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 3. **Compile**
 
    ```bash
-   gmake CXX=eg++
+   gmake
    ```
 
    Options for make:
@@ -1210,7 +1189,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    _**Note:** LLVM's libc++ shipped with OpenBSD 7.4 is too old and cannot compile btop._
 
    ```bash
-   pkg_add cmake g++%11 git ninja lowdown
+   pkg_add cmake git ninja lowdown
    ```
 
 2. **Clone the repository**
@@ -1223,7 +1202,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    ```bash
    # Configure
-   CXX=eg++ cmake -B build -G Ninja
+   cmake -B build -G Ninja
    # Build
    cmake --build build
    ```

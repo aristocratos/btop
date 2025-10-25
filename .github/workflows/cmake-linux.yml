@@ -32,15 +32,11 @@ jobs:
       matrix:
         include:
           - compiler: clang
-            version: 18
-          - compiler: clang
             version: 19
           - compiler: clang
             version: 20
-          - compiler: gcc
-            version: 12
-          - compiler: gcc
-            version: 13
+          - compiler: clang
+            version: 21
           - compiler: gcc
             version: 14
     steps:
