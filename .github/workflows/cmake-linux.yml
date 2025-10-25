@@ -61,7 +61,7 @@ jobs:
             export CC=gcc-${{ matrix.version }}
             export CXX=g++-${{ matrix.version }}
           fi
-          cmake -B build -G Ninja
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 
       - name: Compile
         run: cmake --build build --verbose

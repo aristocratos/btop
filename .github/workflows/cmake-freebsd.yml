@@ -43,5 +43,5 @@ jobs:
           usesh: true
           prepare: pkg install -y cmake ninja
           run: |
-            cmake -B build -G Ninja
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
