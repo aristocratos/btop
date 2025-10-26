@@ -37,7 +37,7 @@ namespace Cpu {
 	string trim_name(string name) {
 		auto name_vec = ssplit(name);
 
-		if ((s_contains(name, "Xeon"s) or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
+		if ((name.contains("Xeon") or v_contains(name_vec, "Duo"s)) and v_contains(name_vec, "CPU"s)) {
 			auto cpu_pos = v_index(name_vec, "CPU"s);
 			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')'))
 				name = name_vec.at(cpu_pos + 1);
@@ -53,7 +53,7 @@ namespace Cpu {
 					tokens++;
 				name += " " + p;
 			}
-		} else if (s_contains(name, "Intel"s) and v_contains(name_vec, "CPU"s)) {
+		} else if (name.contains("Intel") and v_contains(name_vec, "CPU"s)) {
 			auto cpu_pos = v_index(name_vec, "CPU"s);
 			if (cpu_pos < name_vec.size() - 1 and not name_vec.at(cpu_pos + 1).ends_with(')') and name_vec.at(cpu_pos + 1) != "@")
 				name = name_vec.at(cpu_pos + 1);
@@ -188,7 +188,7 @@ bool set_priority(pid_t pid, int priority) {
 			}
 		}
 
-		return s_contains(std::to_string(proc.pid), filter) || s_contains_ic(proc.name, filter) ||
+		return std::to_string(proc.pid).contains(filter) || s_contains_ic(proc.name, filter) ||
 					 s_contains_ic(proc.cmd, filter) || s_contains_ic(proc.user, filter);
 	}
 

@@ -127,7 +127,7 @@ namespace Term {
 		int gpu = 0;
         if (Gpu::count > 0)
         	for (char i = '0'; i <= '5'; i++)
-        		gpu += (Tools::s_contains(boxes, "gpu"s + i) ? 1 : 0);
+        		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
 	#endif
         int width = 0;
 		if (mem) width = Mem::min_width;

@@ -716,7 +716,7 @@ namespace Config {
 			valid_names.reserve(descriptions.size());
 			for (const auto &n : descriptions)
 				valid_names.push_back(n[0]);
-			if (string v_string; cread.peek() != '#' or (getline(cread, v_string, '\n') and not s_contains(v_string, Global::Version)))
+			if (string v_string; cread.peek() != '#' or (getline(cread, v_string, '\n') and not v_string.contains(Global::Version)))
 				write_new = true;
 			while (not cread.eof()) {
 				cread >> std::ws;

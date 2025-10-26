@@ -324,15 +324,15 @@ namespace Shared {
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
 		auto shown_gpus = Config::getS("shown_gpus");
-		if (s_contains(shown_gpus, "nvidia")) {
+		if (shown_gpus.contains("nvidia")) {
 		    Gpu::Nvml::init();
 		}
 
-		if (s_contains(shown_gpus, "amd")) {
+		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
 		}
 
-		if (s_contains(shown_gpus, "intel")) {
+		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
 		}
 
@@ -430,7 +430,7 @@ namespace Cpu {
 					fs::path add_path = fs::canonical(dir.path());
 					if (v_contains(search_paths, add_path) or v_contains(search_paths, add_path / "device")) continue;
 
-					if (s_contains(add_path.c_str(), "coretemp"))
+					if (std::string_view { add_path.c_str() }.contains("coretemp"))
 						got_coretemp = true;
 
 					for (const auto & file : fs::directory_iterator(add_path)) {
@@ -475,7 +475,7 @@ namespace Cpu {
 						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
 						string file_path = file.path();
 
-						if (!s_contains(file_path, file_suffix) or s_contains(file_path, "nvme")) {
+						if (!file_path.contains(file_suffix) or file_path.contains("nvme")) {
 							continue;
 						}
 
@@ -538,7 +538,7 @@ namespace Cpu {
 
 		if (cpu_sensor.empty() and not found_sensors.empty()) {
 			for (const auto& [name, sensor] : found_sensors) {
-				if (s_contains(str_to_lower(name), "cpu") or s_contains(str_to_lower(name), "k10temp")) {
+				if (str_to_lower(name).contains("cpu") or str_to_lower(name).contains("k10temp")) {
 					cpu_sensor = name;
 					break;
 				}

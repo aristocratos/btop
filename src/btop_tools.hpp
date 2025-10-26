@@ -254,12 +254,6 @@ namespace Tools {
 		return std::ranges::find(vec, find_val) != vec.end();
 	}
 
-	//* Check if string <str> contains value <find_val>
-	template <typename T>
-	constexpr bool s_contains(const std::string_view str, const T& find_val) {
-		return str.find(find_val) != string::npos;
-	}
-
 	//* Check if string <str> contains string <find_val>, while ignoring case
 	inline bool s_contains_ic(const std::string_view str, const std::string_view find_val) {
 		auto it = std::search(
