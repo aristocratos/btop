@@ -3,6 +3,7 @@
 #include "btop_cli.hpp"
 
 #include <algorithm>
+#include <expected>
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -42,7 +43,7 @@ static void error(std::string_view msg) noexcept {
 }
 
 namespace Cli {
-	[[nodiscard]] auto parse(const std::span<const std::string_view> args) noexcept -> OrRetCode {
+	[[nodiscard]] auto parse(const std::span<const std::string_view> args) noexcept -> Result {
 		Cli cli {};
 
 		for (auto it = args.begin(); it != args.end(); ++it) {
@@ -51,16 +52,16 @@ namespace Cli {
 			if (arg == "-h" || arg == "--help") {
 				usage();
 				help();
-				return OrRetCode { 0 };
+				return std::unexpected { 0 };
 			}
 			if (arg == "-v" || arg == "-V") {
 				version();
-				return OrRetCode { 0 };
+				return std::unexpected { 0 };
 			}
 			if (arg == "--version") {
 				version();
 				build_info();
-				return OrRetCode { 0 };
+				return std::unexpected { 0 };
 			}
 
 			if (arg == "-d" || arg == "--debug") {
@@ -78,7 +79,7 @@ namespace Cli {
 			if (arg == "-t" || arg == "--tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 				cli.force_tty = std::make_optional(true);
 				continue;
@@ -86,7 +87,7 @@ namespace Cli {
 			if (arg == "--no-tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 				cli.force_tty = std::make_optional(false);
 				continue;
@@ -96,7 +97,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Config requires an argument");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 
 				auto arg = *it;
@@ -104,7 +105,7 @@ namespace Cli {
 
 				if (stdfs::is_directory(config_file)) {
 					error("Config file can't be a directory");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 
 				cli.config_file = std::make_optional(config_file);
@@ -114,7 +115,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Filter requires an argument");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 
 				auto arg = *it;
@@ -125,7 +126,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Preset requires an argument");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 
 				auto arg = *it;
@@ -134,10 +135,10 @@ namespace Cli {
 					cli.preset = std::make_optional(preset_id);
 				} catch (std::invalid_argument& e) {
 					error("Preset must be a positive number");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				} catch (std::out_of_range& e) {
 					error(fmt::format("Preset argument is out of range: {}", arg.data()));
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 				continue;
 			}
@@ -145,7 +146,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Update requires an argument");
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 
 				auto arg = *it;
@@ -154,18 +155,18 @@ namespace Cli {
 					cli.updates = refresh_rate;
 				} catch (std::invalid_argument& e) {
 					error("Update must be a positive number");
-					return OrRetCode { 1 };
-				} catch(std::out_of_range& e) {
+					return std::unexpected { 1 };
+				} catch (std::out_of_range& e) {
 					error(fmt::format("Update argument is out of range: {}", arg.data()));
-					return OrRetCode { 1 };
+					return std::unexpected { 1 };
 				}
 				continue;
 			}
 
 			error(fmt::format("Unknown argument '{}{}{}'", YELLOW, arg, RESET));
-			return OrRetCode { 1 };
+			return std::unexpected { 1 };
 		}
-		return OrRetCode { cli };
+		return cli;
 	}
 
 	void usage() noexcept {
@@ -174,19 +175,19 @@ namespace Cli {
 
 	void help() noexcept {
 		fmt::print(
-				"{0}Options:{1}\n"
-				"  {2}-c, --config{1} <file>     Path to a config file\n"
-				"  {2}-d, --debug{1}             Start in debug mode with additional logs and metrics\n"
-				"  {2}-f, --filter{1} <filter>   Set an initial process filter\n"
-				"  {2}    --force-utf{1}         Override automatic UTF locale detection\n"
-				"  {2}-l, --low-color{1}         Disable true color, 256 colors only\n"
-				"  {2}-p, --preset{1} <id>       Start with a preset (0-9)\n"
-				"  {2}-t, --tty{1}               Force tty mode with ANSI graph symbols and 16 colors only\n"
-				"  {2}    --no-tty{1}            Force disable tty mode\n"
-				"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
-				"  {2}-h, --help{1}              Show this help message and exit\n"
-				"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
-				BOLD_UNDERLINE, RESET, BOLD
+			"{0}Options:{1}\n"
+			"  {2}-c, --config{1} <file>     Path to a config file\n"
+			"  {2}-d, --debug{1}             Start in debug mode with additional logs and metrics\n"
+			"  {2}-f, --filter{1} <filter>   Set an initial process filter\n"
+			"  {2}    --force-utf{1}         Override automatic UTF locale detection\n"
+			"  {2}-l, --low-color{1}         Disable true color, 256 colors only\n"
+			"  {2}-p, --preset{1} <id>       Start with a preset (0-9)\n"
+			"  {2}-t, --tty{1}               Force tty mode with ANSI graph symbols and 16 colors only\n"
+			"  {2}    --no-tty{1}            Force disable tty mode\n"
+			"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
+			"  {2}-h, --help{1}              Show this help message and exit\n"
+			"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
+			BOLD_UNDERLINE, RESET, BOLD
 		);
 	}
 
