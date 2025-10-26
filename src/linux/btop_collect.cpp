@@ -998,50 +998,36 @@ namespace Cpu {
 		return watts;
 	}
 
-	static auto to_int(std::string_view view) -> std::uint32_t {
-		std::uint32_t value {};
-		std::from_chars(view.data(), view.data() + view.size(), value);
-		return value;
-	}
+    static constexpr auto to_int(std::string_view view) {
+        std::uint32_t value {};
+        std::from_chars(view.data(), view.data() + view.size(), value);
+        return value;
+    }
 
-	static auto detect_active_cpus() -> std::vector<std::int32_t> {
-	    auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
-	    auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
+    static constexpr auto detect_active_cpus() {
+        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
+        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
 
-	    if (buf.empty()) {
-	        auto result = std::vector<std::int32_t>(Shared::coreCount);
-	        std::iota(result.begin(), result.end(), Shared::coreCount);
-	        return result;
-	    }
+        if (buf.empty()) {
+            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+        }
 
-	    auto active_cpus = buf | std::views::split(',') | std::views::transform([](auto&& expr) {
-	                           // Officially only in C++23
-	                           // auto view = std::string_view { expr.begin(), expr.end() };
-	                           auto view =
-	                               std::string_view(&*expr.begin(), std::ranges::distance(expr.begin(), expr.end()));
-	                           auto dash = view.find('-');
+        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
+                   auto view = std::string_view { range };
+                   auto dash = view.find('-');
 
-	                           if (dash == std::string_view::npos) {
-	                               // Single CPU, return iota of single element
-	                               auto value = to_int(view);
-	                               return std::views::iota(value, value + 1);
-	                           }
+                   if (dash == std::string_view::npos) {
+                       // Single CPU, return iota of single element
+                       auto value = to_int(view);
+                       return std::views::iota(value, value + 1);
+                   }
 
-	                           // Create views before and after '-'
-	                           auto low_view = view.substr(0, dash);
-	                           auto high_view = view.substr(dash + 1);
-
-	                           auto low = to_int(low_view);
-	                           auto high = to_int(high_view);
-	                           return std::views::iota(low, high + 1);
-	                       }) |
-	                       std::views::join;
-
-	    // Collect the view into a vector. C++20 way of `std::ranges::to`.
-	    auto result = std::vector<std::int32_t> {};
-	    std::ranges::copy(active_cpus, std::back_inserter(result));
-	    return result;
-	}
+                   auto start = to_int(view.substr(0, dash));
+                   auto end = to_int(view.substr(dash + 1));
+                   return std::views::iota(start, end + 1);
+               }) |
+               std::views::join | std::ranges::to<std::vector<std::int32_t>>();
+    }
 
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
