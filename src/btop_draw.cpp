@@ -338,7 +338,7 @@ namespace Draw {
 
 
 		for (const auto& [c_format, replacement] : clock_custom_format) {
-			if (s_contains(clock_str, c_format)) {
+			if (clock_str.contains(c_format)) {
 				if (c_format == "/uptime") {
 					string upstr = sec_to_dhms(system_uptime());
 					if (upstr.size() > 8) upstr.resize(upstr.size() - 3);
@@ -2058,7 +2058,7 @@ namespace Draw {
 		Cpu::height = Mem::height = Net::height = Proc::height = 0;
 		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
 
-		Cpu::shown = s_contains(boxes, "cpu");
+		Cpu::shown = boxes.contains("cpu");
 	#ifdef GPU_SUPPORT
 		Gpu::box.clear();
 		Gpu::width = 0;
@@ -2074,9 +2074,9 @@ namespace Draw {
 		Gpu::shown = Gpu::shown_panels.size();
 
 	#endif
-		Mem::shown = s_contains(boxes, "mem");
-		Net::shown = s_contains(boxes, "net");
-		Proc::shown = s_contains(boxes, "proc");
+		Mem::shown = boxes.contains("mem");
+		Net::shown = boxes.contains("net");
+		Proc::shown = boxes.contains("proc");
 
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
