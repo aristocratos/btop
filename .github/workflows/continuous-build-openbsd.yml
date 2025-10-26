@@ -42,13 +42,12 @@ jobs:
           release: '7.8'
           usesh: true
           prepare: |
-            pkg_add gmake gcc%11 g++%11 coreutils git lowdown
+            pkg_add gmake coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=eg++ STATIC=true STRIP=true
+            gmake STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-            mv bin/btop bin/btop-GCC11-"$GIT_HASH"
-            ls -alh bin
+            mv bin/btop bin/btop-"$GIT_HASH"
 
       - uses: actions/upload-artifact@v5
         with:
