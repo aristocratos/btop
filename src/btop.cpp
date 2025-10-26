@@ -37,7 +37,6 @@ tab-size = 4
 #include <regex>
 #include <chrono>
 #include <utility>
-#include <variant>
 #include <semaphore>
 
 #ifdef __APPLE__
@@ -847,16 +846,16 @@ int main(const int argc, const char** argv) {
 		};
 
 		// Get the cli options or return with an exit code
-		auto cli_or_ret = Cli::parse(args);
-		if (std::holds_alternative<Cli::Cli>(cli_or_ret)) {
-			cli = std::get<Cli::Cli>(cli_or_ret);
+		auto result = Cli::parse(args);
+		if (result.has_value()) {
+			cli = result.value();
 		} else {
-			auto ret = std::get<std::int32_t>(cli_or_ret);
-			if (ret != 0) {
+			auto error = result.error();
+			if (error != 0) {
 				Cli::usage();
 				Cli::help_hint();
 			}
-			return ret;
+			return error;
 		}
 	}
 

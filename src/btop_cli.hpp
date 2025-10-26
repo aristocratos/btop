@@ -3,11 +3,11 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <filesystem>
 #include <optional>
 #include <span>
 #include <string_view>
-#include <variant>
 
 namespace Cli {
 	namespace stdfs = std::filesystem;
@@ -32,11 +32,10 @@ namespace Cli {
 		std::optional<std::uint32_t> updates;
 	};
 
-	// A variant holding either a `Cli` struct filled with the parsed command line options or a return code
-	using OrRetCode = std::variant<Cli, std::int32_t>;
+	using Result = std::expected<Cli, std::int32_t>;
 
 	// Parse the command line arguments
-	[[nodiscard]] auto parse(std::span<const std::string_view> args) noexcept -> OrRetCode;
+	[[nodiscard]] auto parse(std::span<const std::string_view> args) noexcept -> Result;
 
 	// Print a usage header
 	void usage() noexcept;
