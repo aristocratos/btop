@@ -71,6 +71,8 @@ namespace Config {
 
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
+		{"terminal_sync", 		"#* Use terminal synchronized output sequences to reduce flickering on supported terminals."},
+
 		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
 								"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"
 								"#* \"block\" has half the resolution of braille but uses more common characters.\n"
@@ -323,8 +325,9 @@ namespace Config {
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
-		{"gpu_mirror_graph", true}
+		{"gpu_mirror_graph", true},
 	#endif
+		{"terminal_sync", true}
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 

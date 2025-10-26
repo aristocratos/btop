@@ -712,10 +712,11 @@ namespace Runner {
 			}
 
 			//? If overlay isn't empty, print output without color and then print overlay on top
-			cout << Term::sync_start << (conf.overlay.empty()
+			const bool term_sync = Config::getB("terminal_sync");
+			cout << (term_sync ? Term::sync_start : "") << (conf.overlay.empty()
 					? output
 					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
-				<< Term::sync_end << flush;
+				<< (term_sync ? Term::sync_end : "") << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		return {};
