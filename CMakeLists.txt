@@ -101,6 +101,19 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 include(CheckCXXSourceCompiles)
 include(CheckCXXSymbolExists)
 
+check_cxx_source_compiles(
+  "
+  #include <version>
+  #if __cpp_lib_optional < 202110L
+  #error \"Missing __cpp_lib_optional < 202110L\"
+  #endif
+  int main() { return 0; }
+  "
+  HAS_CXX_OPTIONAL_MONADS
+)
+if(NOT HAS_CXX_OPTIONAL_MONADS)
+  message(FATAL_ERROR "The compiler doesn't support std::optional::and_then")
+endif()
 check_cxx_symbol_exists("__cpp_lib_expected" "version" HAS_CXX_EXPECTED)
 if(NOT HAS_CXX_EXPECTED)
   message(FATAL_ERROR "The compiler doesn't support std::expected")
