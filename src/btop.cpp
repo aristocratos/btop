@@ -747,10 +747,12 @@ namespace Runner {
 		if (stopping or Global::resized) return;
 
 		if (box == "overlay") {
-			cout << Term::sync_start << Global::overlay << Term::sync_end << flush;
+			const bool term_sync = Config::getB("terminal_sync");
+			cout << (term_sync ? Term::sync_start : "") << Global::overlay << (term_sync ? Term::sync_end : "") << flush;
 		}
 		else if (box == "clock") {
-			cout << Term::sync_start << Global::clock << Term::sync_end << flush;
+			const bool term_sync = Config::getB("terminal_sync");
+			cout << (term_sync ? Term::sync_start : "") << Global::clock << (term_sync ? Term::sync_end : "") << flush;
 		}
 		else {
 			Config::unlock();
@@ -1073,7 +1075,8 @@ int main(const int argc, const char** argv) {
 	Draw::calcSizes();
 
 	//? Print out box outlines
-	cout << Term::sync_start << Cpu::box << Mem::box << Net::box << Proc::box << Term::sync_end << flush;
+	const bool term_sync = Config::getB("terminal_sync");
+	cout << (term_sync ? Term::sync_start : "") << Cpu::box << Mem::box << Net::box << Proc::box << (term_sync ? Term::sync_end : "") << flush;
 
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------
