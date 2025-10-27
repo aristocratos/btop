@@ -1545,7 +1545,8 @@ namespace Proc {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
-		const int select_max = (Config::getB("show_detailed") ? Proc::select_max - 8 : Proc::select_max);
+		const int select_max = (Config::getB("show_detailed") ? (Config::getB("pause_proc_list") ? Proc::select_max - 9 : Proc::select_max - 8) :
+																(Config::getB("pause_proc_list") ? Proc::select_max - 1 : Proc::select_max));
 		auto vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
@@ -1613,11 +1614,13 @@ namespace Proc {
 		auto mem_bytes = Config::getB("proc_mem_bytes");
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
+		const auto pause_proc_list = Config::getB("pause_proc_list");
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
-		const int select_max = show_detailed ? Proc::select_max - 8 : Proc::select_max;
+		const int select_max = show_detailed ? (pause_proc_list ? Proc::select_max - 9 : Proc::select_max - 8) : 
+												(pause_proc_list ? Proc::select_max - 1 : Proc::select_max);
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
@@ -1655,7 +1658,7 @@ namespace Proc {
 				d_y = Proc::y;
 
 				//? Create cpu and mem graphs if process is alive
-				if (alive) {
+				if (alive or pause_proc_list) {
 					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
 					detailed_mem_graph = Draw::Graph{d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
@@ -1812,8 +1815,8 @@ namespace Proc {
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
 			//? Graph part of box
-			string cpu_str = (alive ? fmt::format("{:.2f}", detailed.entry.cpu_p) : "");
-			if (alive) {
+			string cpu_str = (alive or pause_proc_list ? fmt::format("{:.2f}", detailed.entry.cpu_p) : "");
+			if (alive or pause_proc_list) {
 				cpu_str.resize(4);
 				if (cpu_str.ends_with('.')) { cpu_str.pop_back(); cpu_str.pop_back(); }
 			}
@@ -1979,10 +1982,18 @@ namespace Proc {
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
+			else if (lc > height - 5 and pause_proc_list) break;
 		}
 
 		out += Fx::reset;
 		while (lc++ < height - 3) out += Mv::to(y+lc+1, x+1) + string(width - 2, ' ');
+		if (pause_proc_list) {
+			fmt::format_to(std::back_inserter(out), "{}{}{}{}{:^{}}{}",
+				Mv::to(y + height - 2, x + 1),
+				Theme::c("proc_pause_bg"), Theme::c("title"), 
+				Fx::b, "Process list paused", width - 2,
+				Fx::reset);
+		}
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
