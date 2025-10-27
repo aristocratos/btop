@@ -104,10 +104,10 @@ bool set_priority(pid_t pid, int priority) {
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
-			case 1: rng::stable_sort(proc_vec, rng::less{}, &proc_info::name);		break;
-			case 2: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cmd); 		break;
+			case 1: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::name);		break;
+			case 2: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::less{}, &proc_info::threads);	break;
-			case 4: rng::stable_sort(proc_vec, rng::less{}, &proc_info::user);		break;
+			case 4: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::user); 		break;
 			case 5: rng::stable_sort(proc_vec, rng::less{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_p);		break;
 			case 7: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_c);		break;
@@ -116,10 +116,10 @@ bool set_priority(pid_t pid, int priority) {
 		else {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::pid); 		break;
-			case 1: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::name);		break;
-			case 2: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cmd); 		break;
+			case 1: rng::stable_sort(proc_vec, rng::less{}, &proc_info::name);		break;
+			case 2: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::threads);	break;
-			case 4: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::user); 		break;
+			case 4: rng::stable_sort(proc_vec, rng::less{}, &proc_info::user);		break;
 			case 5: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::mem); 		break;
 			case 6: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_p);   	break;
 			case 7: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_c);   	break;
