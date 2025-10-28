@@ -45,12 +45,18 @@ jobs:
           release: '14.3'
           usesh: true
           prepare: |
-            pkg install -y gmake gcc coreutils git lowdown
+            pkg install -y gmake gcc15 coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            CXX=${{ matrix.compiler }} gmake STATIC=true STRIP=true
+            if [ "${{ matrix.compiler }}" == "g++" ]; then
+              CXX=g++15
+              COMPILER=gcc
+            else
+              CXX=clang++
+              COMPILER=llvm
+            fi
+            gmake STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-            COMPILER=$(echo ${{ matrix.compiler }} | sed 's/clang++/llvm/' | sed 's/g++/gcc/')
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
