@@ -49,7 +49,8 @@ if(BTOP_STATIC AND NOT APPLE)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 endif()
 
-add_executable(btop
+add_executable(btop src/main.cpp)
+add_library(libbtop OBJECT
   src/btop.cpp
   src/btop_cli.cpp
   src/btop_config.cpp
@@ -61,21 +62,24 @@ add_executable(btop
   src/btop_tools.cpp
 )
 
+target_link_libraries(btop libbtop)
+
 if(BTOP_LTO)
   check_ipo_supported()
   set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+  set_target_properties(libbtop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 
 if(APPLE)
-  target_sources(btop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
+  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
-  target_sources(btop PRIVATE src/freebsd/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
-  target_sources(btop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
+  target_sources(libbtop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
-  target_sources(btop PRIVATE src/netbsd/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
-  target_sources(btop PRIVATE src/linux/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
   if(BTOP_GPU)
     add_subdirectory(src/linux/intel_gpu_top)
   endif()
@@ -131,38 +135,38 @@ if(NOT HAS_CXX_STRING_CONTAINS)
   message(FATAL_ERROR "The compiler doesn't support std::string::contains")
 endif()
 
-target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(libbtop PUBLIC -Wall -Wextra -Wpedantic)
 
 include(CheckCXXCompilerFlag)
 
 if(NOT APPLE)
-  target_compile_options(btop PRIVATE -fstack-clash-protection)
+  target_compile_options(libbtop PUBLIC -fstack-clash-protection)
 endif()
 check_cxx_compiler_flag(-fstack-protector HAS_FSTACK_PROTECTOR)
 if(HAS_FSTACK_PROTECTOR)
-  target_compile_options(btop PRIVATE -fstack-protector)
+  target_compile_options(libbtop PUBLIC -fstack-protector)
 endif()
 check_cxx_compiler_flag(-fcf-protection HAS_FCF_PROTECTION)
 if(HAS_FCF_PROTECTION)
-  target_compile_options(btop PRIVATE -fcf-protection)
+  target_compile_options(libbtop PUBLIC -fcf-protection)
 endif()
 
-target_compile_definitions(btop PRIVATE
+target_compile_definitions(libbtop PUBLIC
   FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG>
 )
 
-target_include_directories(btop SYSTEM PRIVATE include)
+target_include_directories(libbtop SYSTEM PUBLIC include)
 
 # Enable pthreads
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-target_link_libraries(btop Threads::Threads)
+target_link_libraries(libbtop Threads::Threads)
 
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
-  target_compile_definitions(btop PRIVATE GPU_SUPPORT)
+  target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
@@ -186,21 +190,21 @@ if(LINUX AND BTOP_GPU)
 
     set(CMAKE_MODULE_PATH _CMAKE_MODULE_PATH)
 
-    target_link_libraries(btop ROCm)
+    target_link_libraries(libbtop ROCm)
   endif()
   if(NOT BTOP_STATIC)
-    target_link_libraries(btop ${CMAKE_DL_LIBS})
+    target_link_libraries(libbtop ${CMAKE_DL_LIBS})
   endif()
 endif()
 
 if(BTOP_STATIC)
-  target_compile_definitions(btop PRIVATE STATIC_BUILD)
-  target_link_options(btop PRIVATE -static LINKER:--fatal-warnings)
+  target_compile_definitions(libbtop PUBLIC STATIC_BUILD)
+  target_link_options(libbtop PUBLIC -static LINKER:--fatal-warnings)
 endif()
 
 # Other platform dependent flags
 if(APPLE)
-  target_link_libraries(btop
+  target_link_libraries(libbtop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
@@ -216,32 +220,31 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "Midni
     # The gcc compiler wrapper doesn't add '--eh-frame-hdr' on FreeBSD with static builds
     # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=278551
     if(BTOP_STATIC)
-      target_link_options(btop PRIVATE LINKER:--eh-frame-hdr)
+      target_link_options(libbtop PUBLIC LINKER:--eh-frame-hdr)
     endif()
   endif()
 
   find_package(devstat REQUIRED)
   find_package(kvm REQUIRED)
-  target_link_libraries(btop devstat::devstat kvm::kvm)
+  target_link_libraries(libbtop devstat::devstat kvm::kvm)
   if(BTOP_STATIC)
     find_package(elf REQUIRED)
-    target_link_libraries(btop elf::elf)
+    target_link_libraries(libbtop elf::elf)
   endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(btop PRIVATE -static-libstdc++)
+    target_compile_options(libbtop PUBLIC -static-libstdc++)
   endif()
   find_package(kvm REQUIRED)
-  target_link_libraries(btop kvm::kvm)
+  target_link_libraries(libbtop kvm::kvm)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(btop PRIVATE -static-libstdc++)
+    target_compile_options(libbtop PUBLIC -static-libstdc++)
   endif()
   find_package(kvm REQUIRED)
   find_package(proplib REQUIRED)
-  target_link_libraries(btop kvm::kvm proplib::proplib)
+  target_link_libraries(libbtop kvm::kvm proplib::proplib)
 endif()
-
 
 # Check if lowdown is installed
 find_program(LOWDOWN_EXECUTABLE lowdown)
@@ -266,3 +269,8 @@ install(FILES "btop.desktop" DESTINATION "share/applications")
 install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME "btop.png")
 install(FILES "Img/icon.svg" DESTINATION "share/icons/hicolor/scalable/apps" RENAME "btop.svg")
 install(DIRECTORY "themes" DESTINATION "share/btop")
+
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()

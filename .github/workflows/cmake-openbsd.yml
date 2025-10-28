@@ -41,7 +41,8 @@ jobs:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
           usesh: true
-          prepare: pkg_add cmake ninja
+          prepare: pkg_add cmake git ninja
           run: |
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
+            ctest --test-dir build
