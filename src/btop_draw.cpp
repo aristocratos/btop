@@ -1542,11 +1542,14 @@ namespace Proc {
 	string box;
 
 	int selection(const std::string_view cmd_key) {
+		if ((Config::getB("follow_process") and not Config::getB("pause_proc_list"))) {
+			return -1;
+		}
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
-		const int select_max = (Config::getB("show_detailed") ? (Config::getB("pause_proc_list") ? Proc::select_max - 9 : Proc::select_max - 8) :
-																(Config::getB("pause_proc_list") ? Proc::select_max - 1 : Proc::select_max));
+		const int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
+																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
 		auto vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
@@ -1615,17 +1618,50 @@ namespace Proc {
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
+		auto follow_process = Config::getB("follow_process"); 
+		auto follow_filtered = Config::getB("follow_filtered");
+		auto proc_banner_shown = pause_proc_list or follow_process;
+		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
-		const int select_max = show_detailed ? (pause_proc_list ? Proc::select_max - 9 : Proc::select_max - 8) : 
-												(pause_proc_list ? Proc::select_max - 1 : Proc::select_max);
+		const int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) : 
+												(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max);
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
 		string out;
 		out.reserve(width * height);
+
+		//? Move current selection/view to the selected process when a process should be followed
+		if (follow_process and (not pause_proc_list or Config::getB("update_following"))) {
+			Config::set("update_following", false);
+			int loc = 1;
+			bool can_follow = false;
+			for (auto& p : plist) {
+				if (p.filtered or (proc_tree and p.tree_index == plist.size())) continue;
+				if (p.pid == (size_t)Config::getI("followed_pid")) {
+					can_follow = true;
+					break;
+				}
+				loc++;
+			}
+
+			if (can_follow) {
+				start = max(0, loc - (select_max / 2));
+				selected = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+			}
+			else {
+				Config::set("follow_process", follow_process = false);
+				Config::set("proc_banner_shown", proc_banner_shown = pause_proc_list);
+				if (follow_filtered) {
+					Config::set("follow_filtered", follow_filtered = false);
+					redraw = true;
+				}
+				Config::set("followed_pid", 0);
+			}
+		}
 
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
@@ -1676,7 +1712,6 @@ namespace Proc {
 
 				const string t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 				const string hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));
-				const string hide = (selected > 0 ? t_color + "hide " : Theme::c("title") + "hide " + Theme::c("hi_fg"));
 				int mouse_x = d_x + 2;
 				out += Mv::to(d_y, d_x + 1);
 				if (width > 55) {
@@ -1686,8 +1721,7 @@ namespace Proc {
 				}
 				out += title_left + hi_color + Fx::b + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
-					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right
-					+ Mv::to(d_y, d_x + d_width - 10) + title_left + t_color + Fx::b + hide + Symbols::enter + Fx::ub + title_right;
+					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right;
 				if (alive and selected == 0) {
 					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
@@ -1730,7 +1764,7 @@ namespace Proc {
 			const auto filter_text = (filtering) ? filter(max(6, width - 58)) : uresize(Config::getS("proc_filter"), max(6, width - 58));
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
-				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
+				+ ((not filtering and not filter_text.empty()) or follow_filtered ? Theme::c("hi_fg") + " del" : "")
 				+ (filtering ? Theme::c("hi_fg") + ' ' + Symbols::enter : "") + Fx::ub + title_right;
 			if (not filtering) {
 				int f_len = (filter_text.empty() ? 6 : ulen(filter_text) + 2);
@@ -1863,6 +1897,7 @@ namespace Proc {
 		for (int n=0; auto& p : plist) {
 			if (p.filtered or (proc_tree and p.tree_index == plist.size()) or n++ < start) continue;
 			bool is_selected = (lc + 1 == selected);
+			bool is_followed = Config::getI("followed_pid") == (int)p.pid;
 			if (is_selected) {
 				selected_pid = (int)p.pid;
 				selected_name = p.name;
@@ -1888,10 +1923,11 @@ namespace Proc {
 
 			//? Set correct gradient colors if enabled
 			string c_color, m_color, t_color, g_color, end;
-			if (is_selected) {
+			if (is_selected or is_followed) {
 				c_color = m_color = t_color = g_color = Fx::b;
 				end = Fx::ub;
-				out += Theme::c("selected_bg") + Theme::c("selected_fg") + Fx::b;
+				const string highlight = is_followed ? Theme::c("followed_bg") + Theme::c("followed_fg") : Theme::c("selected_bg") + Theme::c("selected_fg");
+				fmt::format_to(std::back_inserter(out), "{}{}", highlight, Fx::b);
 			}
 			else {
 				int calc = (selected > lc) ? selected - lc : lc - selected;
@@ -1978,20 +2014,25 @@ namespace Proc {
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
-				+ (is_selected ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
+				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
 			if (lc++ > height - 5) break;
-			else if (lc > height - 5 and pause_proc_list) break;
+			else if (lc > height - 5 and proc_banner_shown) break;
 		}
 
 		out += Fx::reset;
 		while (lc++ < height - 3) out += Mv::to(y+lc+1, x+1) + string(width - 2, ' ');
-		if (pause_proc_list) {
+		if (proc_banner_shown) {
 			fmt::format_to(std::back_inserter(out), "{}{}{}{}{:^{}}{}",
 				Mv::to(y + height - 2, x + 1),
-				Theme::c("proc_pause_bg"), Theme::c("title"), 
-				Fx::b, "Process list paused", width - 2,
+				(pause_proc_list and follow_process) ? Theme::c("proc_banner_bg")
+					: pause_proc_list ? Theme::c("proc_pause_bg")
+					: Theme::c("proc_follow_bg"), 
+				Theme::c("proc_banner_fg"), Fx::b,
+				(pause_proc_list and follow_process) ? "Paused list and following process"
+					: pause_proc_list ? "Process list paused"
+					: "Following process", width - 2,
 				Fx::reset);
 		}
 
@@ -2027,6 +2068,17 @@ namespace Proc {
 			std::erase_if(p_wide_cmd, [&](const auto& pair) {
 				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
 			});
+		}
+
+		//? Draw hide button if detailed view is shown
+		if (show_detailed) {
+			const bool greyed_out = selected_pid != Config::getI("detailed_pid") && selected > 0; 
+			fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				Mv::to(d_y, d_x + d_width - 10), 
+				Theme::c("proc_box"), Symbols::title_left, Fx::b,
+				greyed_out ? Theme::c("inactive_fg") : Theme::c("title"), "hide ",
+				greyed_out ? "" : Theme::c("hi_fg"), Symbols::enter,
+				Fx::ub, Theme::c("proc_box"), Symbols::title_right);
 		}
 
 		if (selected == 0 and selected_pid != 0) {
