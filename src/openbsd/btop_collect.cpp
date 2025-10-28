@@ -1076,10 +1076,13 @@ namespace Proc {
 				bool no_cache = false;
 				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
 				//? Only add new processes if not paused
-				if (find_old == current_procs.end() and not pause_proc_list) {
-					current_procs.push_back({pid});
-					find_old = current_procs.end() - 1;
-					no_cache = true;
+				if (find_old == current_procs.end()) {
+					if (not pause_proc_list) {
+						current_procs.push_back({pid});
+						find_old = current_procs.end() - 1;
+						no_cache = true;
+					}
+					else continue;
 				}
 				else if (dead_procs.contains(pid)) continue;
 
