@@ -16,4 +16,4 @@ endif()
 target_compile_options(igt PRIVATE -w)
 
 # Link igt into btop
-target_link_libraries(btop $<TARGET_OBJECTS:igt>)
+target_link_libraries(libbtop $<TARGET_OBJECTS:igt>)

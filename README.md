@@ -39,6 +39,7 @@
 * [Compilation FreeBSD](#compilation-freebsd)
 * [Compilation NetBSD](#compilation-netbsd)
 * [Compilation OpenBSD](#compilation-openbsd)
+* [Testing](#testing)
 * [GPU compatibility](#gpu-compatibility)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
@@ -1215,8 +1216,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
@@ -1243,6 +1242,12 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    ```
 
 </details>
+
+## Testing
+
+Testing requires [CMake](cmake.org). Tests are build by default and can be run with `ctest --test-dir <build>`.
+
+If you want to disable building tests, pass `-DBUILD_TESTING=OFF` to the configure step.
 
 ## Installing the snap
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
