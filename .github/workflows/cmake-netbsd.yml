@@ -45,8 +45,9 @@ jobs:
             export PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
             export PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
             /usr/sbin/pkg_add pkgin
-            pkgin -y install cmake gcc14 ninja-build
+            pkgin -y install cmake gcc14 git ninja-build
           run: |
             export CXX="/usr/pkg/gcc14/bin/g++"
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
+            ctest --test-dir build

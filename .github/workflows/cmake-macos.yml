@@ -47,3 +47,6 @@ jobs:
 
       - name: Compile
         run: cmake --build build --verbose
+
+      - name: Test
+        run: ctest --test-dir build

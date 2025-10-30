@@ -16,6 +16,8 @@ indent = tab
 tab-size = 4
 */
 
+#include "btop.hpp"
+
 #include <algorithm>
 #include <csignal>
 #include <clocale>
@@ -23,6 +25,8 @@ tab-size = 4
 #include <iterator>
 #include <optional>
 #include <pthread.h>
+#include <span>
+#include <string_view>
 #ifdef __FreeBSD__
 	#include <pthread_np.h>
 #endif
@@ -823,7 +827,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 
 //* --------------------------------------------- Main starts here! ---------------------------------------------------
-int main(const int argc, const char** argv) {
+[[nodiscard]] auto btop_main(const std::span<const std::string_view> args) -> int {
 
 	//? ------------------------------------------------ INIT ---------------------------------------------------------
 
@@ -842,12 +846,6 @@ int main(const int argc, const char** argv) {
 
 	Cli::Cli cli;
 	{
-		// Wrap the command line arguments in a vector, ignoring the first element, which is the basename (executable name)
-		const std::vector<std::string_view> args {
-			std::next(argv, std::ptrdiff_t { 1 }),
-			std::next(argv, static_cast<std::ptrdiff_t>(argc))
-		};
-
 		// Get the cli options or return with an exit code
 		auto result = Cli::parse(args);
 		if (result.has_value()) {
@@ -1167,5 +1165,5 @@ int main(const int argc, const char** argv) {
 		Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
 		clean_quit(1);
 	}
-
+	return 0;
 }
