@@ -1389,7 +1389,7 @@ namespace Proc {
 			}
 
 			//? Final sort based on tree index
-			rng::sort(current_procs, rng::less{}, & proc_info::tree_index);
+			rng::stable_sort(current_procs, rng::less {}, &proc_info::tree_index);
 
 			//? Move current selection/view to the selected process when collapsing/expanding in the tree
 			if (locate_selection) {
