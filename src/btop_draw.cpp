@@ -1676,7 +1676,6 @@ namespace Proc {
 
 				const string t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 				const string hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));
-				const string hide = (selected > 0 ? t_color + "hide " : Theme::c("title") + "hide " + Theme::c("hi_fg"));
 				int mouse_x = d_x + 2;
 				out += Mv::to(d_y, d_x + 1);
 				if (width > 55) {
@@ -1686,8 +1685,7 @@ namespace Proc {
 				}
 				out += title_left + hi_color + Fx::b + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
-					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right
-					+ Mv::to(d_y, d_x + d_width - 10) + title_left + t_color + Fx::b + hide + Symbols::enter + Fx::ub + title_right;
+					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right;
 				if (alive and selected == 0) {
 					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
@@ -2027,6 +2025,17 @@ namespace Proc {
 			std::erase_if(p_wide_cmd, [&](const auto& pair) {
 				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
 			});
+		}
+
+		//? Draw hide button if detailed view is shown
+		if (show_detailed) {
+			const bool greyed_out = selected_pid != Config::getI("detailed_pid") && selected > 0; 
+			fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				Mv::to(d_y, d_x + d_width - 10), 
+				Theme::c("proc_box"), Symbols::title_left, Fx::b,
+				greyed_out ? Theme::c("inactive_fg") : Theme::c("title"), "hide ",
+				greyed_out ? "" : Theme::c("hi_fg"), Symbols::enter,
+				Fx::ub, Theme::c("proc_box"), Symbols::title_right);
 		}
 
 		if (selected == 0 and selected_pid != 0) {
