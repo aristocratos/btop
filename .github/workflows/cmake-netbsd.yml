@@ -24,7 +24,7 @@ on:
 jobs:
   build:
     name: netbsd-${{ matrix.version }}-${{ matrix.arch }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.arch }}-${{ matrix.version }}
       cancel-in-progress: true
