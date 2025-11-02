@@ -118,6 +118,8 @@ namespace Config {
 
 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
+		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
+
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
 
 		{"keep_dead_proc_usage", "#* Should cpu and memory usage display be preserved for dead processes when paused."},
@@ -329,6 +331,10 @@ namespace Config {
 		{"proc_aggregate", false},
 		{"pause_proc_list", false},
 		{"keep_dead_proc_usage", false},
+		{"proc_banner_shown", false},
+		{"proc_follow_detailed", true},
+		{"follow_process", false},
+		{"update_following", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
@@ -345,6 +351,7 @@ namespace Config {
 		{"net_upload", 100},
 		{"detailed_pid", 0},
 		{"selected_pid", 0},
+		{"followed_pid", 0},
 		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},

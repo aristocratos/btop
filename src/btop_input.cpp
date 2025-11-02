@@ -25,6 +25,7 @@ tab-size = 4
 #include <signal.h>
 #include <sys/select.h>
 #include <utility>
+#include <cmath>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -318,12 +319,14 @@ namespace Input {
 					if (--cur_i < 0)
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
 					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
@@ -333,14 +336,26 @@ namespace Input {
 				else if (key == "e") {
 					Config::flip("proc_tree");
 					no_update = false;
+					Config::set("update_following", true);
+				}
+				else if (is_in(key, "u")) {
+					Config::flip("pause_proc_list");
 				}
 				else if (is_in(key, "F")) {
-					Config::flip("pause_proc_list");
-					redraw = true;
+					if (Config::getI("proc_selected") != 0 and Config::getI("followed_pid") != Config::getI("selected_pid")) {
+						Config::set("follow_process", true);
+						Config::set("followed_pid", Config::getI("selected_pid"));
+						Config::set("update_following", true);
+					}
+					else if (Config::getB("follow_process")) {
+						Config::flip("follow_process");
+						Config::set("followed_pid", 0);
+					}
 				}
-				else if (key == "r")
+				else if (key == "r") {
 					Config::flip("proc_reversed");
-
+					Config::set("update_following", true);
+				}
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
@@ -375,6 +390,11 @@ namespace Input {
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
+								else if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
+									Config::flip("follow_process");
+									Config::set("followed_pid", 0);
+									redraw = true;
+								}
 								Config::set("proc_selected", line - y - 1);
 							}
 							else if (line == y + 1) {
@@ -411,13 +431,24 @@ namespace Input {
 						Config::set("detailed_pid", Config::getI("selected_pid"));
 						Config::set("proc_last_selected", Config::getI("proc_selected"));
 						Config::set("proc_selected", 0);
+						if (Config::getB("proc_follow_detailed")) {
+							Config::set("follow_process", true);
+							Config::set("followed_pid", Config::getI("selected_pid"));
+							Config::set("update_following", true);
+						}
 						Config::set("show_detailed", true);
 					}
 					else if (Config::getB("show_detailed")) {
+						const int proc_start_offset = Config::getB("proc_follow_detailed") ? Proc::selected - Config::getI("proc_last_selected") : 0;
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
+						Config::set("proc_start", std::max(0, Config::getI("proc_start") + proc_start_offset));
 						Config::set("proc_last_selected", 0);
 						Config::set("detailed_pid", 0);
 						Config::set("show_detailed", false);
+						if (Config::getB("follow_process") and Config::getB("proc_follow_detailed")) {
+							Config::flip("follow_process");
+							Config::set("followed_pid", 0);
+						}
 					}
 				}
 				else if (is_in(key, "+", "-", "space", "u") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {

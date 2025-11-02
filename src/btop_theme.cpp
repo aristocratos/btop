@@ -90,7 +90,12 @@ namespace Theme {
 		{ "process_start", "#80d0a3" },
 		{ "process_mid", "#dcd179" },
 		{ "process_end", "#d45454" },
-		{ "proc_pause_bg", "#b54040" }
+		{ "proc_pause_bg", "#b54040" },
+		{ "proc_follow_bg", "#4040b5"},
+		{ "proc_banner_bg", "#7b407b"},
+		{ "proc_banner_fg", "#ee"},
+		{ "followed_bg", "#4040b5"},
+		{ "followed_fg", "#ee"},
 	};
 
 	const std::unordered_map<string, string> TTY_theme = {
@@ -137,6 +142,11 @@ namespace Theme {
 		{ "process_mid", "\x1b[33m" },
 		{ "process_end", "\x1b[31m" },
 		{ "proc_pause_bg", "\x1b[41m" },
+		{ "proc_follow_bg", "\x1b[44m" },
+		{ "proc_banner_bg", "\x1b[45m" },
+		{ "proc_banner_fg", "\x1b[97m" },
+		{ "followed_bg", "\x1b[44m" },
+		{ "followed_fg", "\x1b[97m" },
 	};
 
 	namespace {
