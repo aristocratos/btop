@@ -63,7 +63,7 @@ parts:
     source-type: git
     source-tag: releases/gcc-15
     plugin: autotools   
-    configflags:
+    autotools-configure-parameters:
       - --enable-languages=c,c++
       - --disable-multilib
       - --prefix=/usr/local    
