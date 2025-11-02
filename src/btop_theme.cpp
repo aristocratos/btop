@@ -135,7 +135,7 @@ namespace Theme {
 		{ "process_start", "\x1b[32m" },
 		{ "process_mid", "\x1b[33m" },
 		{ "process_end", "\x1b[31m" },
-		{ "proc_pause_bg", "\x1b[31m" }
+		{ "proc_pause_bg", "\x1b[41m" },
 	};
 
 	namespace {
