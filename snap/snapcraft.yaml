@@ -1,13 +1,4 @@
 name: btop
-title: btop++
-contact: https://github.com/aristocratos/btop/issues
-issues: https://github.com/aristocratos/btop/issues
-donation:
-  - https://github.com/sponsors/aristocratos
-  - https://ko-fi.com/aristocratos
-  - https://www.paypal.com/paypalme/aristocratos
-source-code: https://github.com/aristocratos/btop
-website: https://github.com/aristocratos/btop
 adopt-info: btop
 summary: Resource monitor that shows usage and stats
 description: |
@@ -15,26 +6,26 @@ description: |
   C++ version and continuation of bashtop and bpytop.
 license: Apache-2.0
 
-base: core22
+base: core24
 grade: stable
 confinement: strict
 compression: lzo
 
-architectures:
-  - build-on: amd64
-  - build-on: arm64
-  - build-on: armhf
-  - build-on: ppc64el
-  - build-on: s390x
+contact: https://github.com/kz6fittycent/btop/issues
+issues: https://github.com/kz6fittycent/btop/issues
+source-code: https://github.com/aristocratos/btop
 
-package-repositories:
-  - type: apt
-    ppa: ubuntu-toolchain-r/test
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+  arm64:
+    build-on: [arm64]
+    build-for: [arm64]
 
 apps:
   btop:
     command: usr/local/bin/btop
-    desktop: usr/local/share/applications/btop.desktop
     environment:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -54,29 +45,47 @@ parts:
     source: https://github.com/aristocratos/btop
     source-type: git
     plugin: make
+    after:
+      - gcc-15
     make-parameters:
-      - CXX=g++-11
+      - CC=gcc-15
+      - CXX=g++-15
       - PREFIX=/usr/local
-      - STATIC=true
-      - ADDFLAGS="-D SNAPPED"
-    # Add 'lowdown' to build dependencies as soon at Snap builder updates from
-    # Ubuntu 20.04 "Focal" to something newer that has Lowdown included
-    build-packages:
-      - coreutils
-      - sed
-      - git
-      - build-essential
-      - gcc-11
-      - g++-11
-
+      - STATIC=true #required
+      - ADDFLAGS="-D SNAPPED" #required
+    
     override-pull: |
-      snapcraftctl pull
-      snapcraftctl set-version "$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
-
-    override-build: |
-      snapcraftctl build
-
-      # Patch icon path of the desktop entry
-      # WORKAROUND: Use PNG icon until KDE Plasma can correctly render the SVG one
-      # Bug: https://bugs.kde.org/show_bug.cgi?id=448234
-      sed -i 's|Icon=btop|Icon=/usr/local/share/icons/hicolor/48x48/apps/btop.png|' "${CRAFT_PART_INSTALL}/usr/local/share/applications/btop.desktop"
+      craftctl default
+      craftctl set version="$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
+   
+  gcc-15:
+    source: https://gcc.gnu.org/git/gcc.git
+    source-type: git
+    source-tag: releases/gcc-15
+    plugin: autotools   
+    configflags:
+      - --enable-languages=c,c++
+      - --disable-multilib
+      - --prefix=/usr/local    
+    build-packages:
+      - build-essential 
+      - pkg-config
+      - gawk 
+      - flex 
+      - bison 
+      - libtool
+      - texinfo
+      - libgmp-dev 
+      - libmpfr-dev 
+      - libmpc-dev 
+      - python3 
+      - binutils 
+      - perl 
+      - libisl-dev 
+      - libzstd-dev 
+      - gzip 
+      - bzip2
+      - g++
+      - tar
+      - python3
+      - autoconf
