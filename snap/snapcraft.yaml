@@ -45,47 +45,20 @@ parts:
     source: https://github.com/aristocratos/btop
     source-type: git
     plugin: make
-    after:
-      - gcc-15
     make-parameters:
-      - CC=gcc-15
-      - CXX=g++-15
+      - CC=gcc-14
+      - CXX=g++-14
       - PREFIX=/usr/local
       - STATIC=true #required
       - ADDFLAGS="-D SNAPPED" #required
+    build-packages:
+      - coreutils
+      - sed
+      - git
+      - build-essential
+      - gcc-14
+      - g++-14
     
     override-pull: |
       craftctl default
       craftctl set version="$(git describe --tags | sed 's/^v//' | cut -d "-" -f1)"
-   
-  gcc-15:
-    source: https://gcc.gnu.org/git/gcc.git
-    source-type: git
-    source-tag: releases/gcc-15
-    plugin: autotools   
-    autotools-configure-parameters:
-      - --enable-languages=c,c++
-      - --disable-multilib
-      - --prefix=/usr/local    
-    build-packages:
-      - build-essential 
-      - pkg-config
-      - gawk 
-      - flex 
-      - bison 
-      - libtool
-      - texinfo
-      - libgmp-dev 
-      - libmpfr-dev 
-      - libmpc-dev 
-      - python3 
-      - binutils 
-      - perl 
-      - libisl-dev 
-      - libzstd-dev 
-      - gzip 
-      - bzip2
-      - g++
-      - tar
-      - python3
-      - autoconf
