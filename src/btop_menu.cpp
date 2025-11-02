@@ -844,6 +844,22 @@ namespace Menu {
 				"",
 				"Set to 'True' to filter out internal",
 				"processes started by the Linux kernel."},
+			{"proc_follow_filter",
+				"Process list follows filtered selection",
+				"",
+				"If set to 'True' then after filtering for",
+				"a process and pressing Delete with it",
+				"selected, the process will be followed",
+				"until Delete is pressed a second time",
+				"or a new filter is entered."},
+			{"proc_follow_detailed",
+				"Follow selected process with detailed view",
+				"",
+				"If set to 'True' then when opening the",
+				"detailed view, the process will be",
+				"followed in the list. Pressing enter",
+				"again will close the detailed view",
+				"and stop following the process."},
 		}
 	};
 
