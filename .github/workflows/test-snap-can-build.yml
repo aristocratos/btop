@@ -14,6 +14,7 @@ on:
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/test-snap-can-build.yml'
+      - 'snap/snapcraft.yaml'
   pull_request:
    branches: [ main ]
    paths:
@@ -25,6 +26,7 @@ on:
       - 'include/**'
       - 'Makefile'
       - '.github/workflows/test-snap-can-build.yml'
+      - 'snap/snapcraft.yaml'
 
 jobs:
   build:
