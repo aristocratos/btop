@@ -723,7 +723,7 @@ namespace Cpu {
 			}
 		}
 		catch (const std::exception& e) {
-			Logger::warning("get_cpu_coresHz() : " + string{e.what()});
+			Logger::warning(fmt::format("get_cpu_coresHz() : {}", e.what()));
 			return vector<string>{};
 		}
 
