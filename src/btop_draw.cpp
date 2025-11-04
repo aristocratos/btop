@@ -515,6 +515,10 @@ namespace Draw {
 }
 
 namespace Cpu {
+	const int core_frequency_offset = 8;
+	const int core_temperature_offset = 16;
+	const int minimum_core_temperature_offset = 6;
+
 	int width_p = 100, height_p = 32;
 	int min_width = 60, min_height = 8;
 	int x = 1, y = 1, width = 20, height;
@@ -540,6 +544,7 @@ namespace Cpu {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
+    	bool show_cores_freq = (Config::getB("show_cores_freq") and got_sensors);
 		bool show_watts = (Config::getB("show_cpu_watts") and supports_watts);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
@@ -882,13 +887,26 @@ namespace Cpu {
 			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
 
-			if (show_temps and not hide_cores) {
-				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
-				const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
-				if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
-						+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
-				out += temp_color + rjust(to_string(temp), 4) + Theme::c(enabled ? "main_fg" : "inactive_fg") + unit;
+			if (not hide_cores)
+			{
+			#if __linux__
+				// Preventing anyone using unsupported OS from manually setting this option to On
+				if (show_cores_freq) {
+					auto core_frequency = safeVal(cpu.core_freq, n);
+					if (core_frequency.empty())
+						core_frequency = "N/A";
+					out += rjust(core_frequency, 8);
+				}
+			#endif
+
+				if (show_temps) {
+					const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
+					const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
+					if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
+						out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
+							+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
+					out += temp_color + rjust(to_string(temp), 4) + Theme::c(enabled ? "main_fg" : "inactive_fg") + unit;
+				}
 			}
 
 			out += Theme::c("div_line") + Symbols::v_line;
@@ -2108,6 +2126,13 @@ namespace Draw {
 				: 0;
 		#endif
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
+
+		#ifdef __linux__
+			const bool show_cpu_core_freq = (Config::getB("show_cores_freq") and got_sensors);
+		#else
+			const bool show_cpu_core_freq = false;
+		#endif
+
 			width = round((double)Term::width * width_p / 100);
 		#ifdef GPU_SUPPORT
 			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
@@ -2127,23 +2152,23 @@ namespace Draw {
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
-			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
+			if (b_columns * (21 + core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) < width - (width / 3)) {
 				b_column_size = 2;
-				b_width =  max(29, (21 + 12 * show_temp) * b_columns - (b_columns - 1));
+				b_width =  max(29, (21 + core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) * b_columns - (b_columns - 1));
 			}
-			else if (b_columns * (15 + 6 * show_temp) < width - (width / 3)) {
+			else if (b_columns * (15 + minimum_core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) < width - (width / 3)) {
 				b_column_size = 1;
-				b_width = (15 + 6 * show_temp) * b_columns - (b_columns - 1);
+				b_width = (15 + minimum_core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) * b_columns - (b_columns - 1);
 			}
-			else if (b_columns * (8 + 6 * show_temp) < width - (width / 3)) {
+			else if (b_columns * (8 + minimum_core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) < width - (width / 3)) {
 				b_column_size = 0;
 			}
 			else {
-				b_columns = (width - width / 3) / (8 + 6 * show_temp);
+				b_columns = (width - width / 3) / (8 + minimum_core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq);
 				b_column_size = 0;
 			}
 
-			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
+			if (b_column_size == 0) b_width = (8 + minimum_core_temperature_offset * show_temp + core_frequency_offset * show_cpu_core_freq) * b_columns + 1;
 		#ifdef GPU_SUPPORT
 			//gpus_extra_height = max(0, gpus_extra_height - 1);
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);

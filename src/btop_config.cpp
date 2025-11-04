@@ -155,7 +155,8 @@ namespace Config {
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
 	#ifdef __linux__
-		{"freq_mode",				"#* How to calculate CPU frequency, available values: \"first\", \"range\", \"lowest\", \"highest\" and \"average\"."},
+		{"show_cores_freq",     "#* Show each CPU core frequence."},
+		{"freq_mode",			"#* How to calculate CPU frequency, available values: \"first\", \"range\", \"lowest\", \"highest\" and \"average\"."},
 	#endif
 		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable.\n"
 								"#* Special formatting: /host = hostname | /user = username | /uptime = system uptime"},
@@ -298,6 +299,7 @@ namespace Config {
 		{"check_temp", true},
 		{"show_coretemp", true},
 		{"show_cpu_freq", true},
+		{"show_cores_freq", false },
 		{"background_update", true},
 		{"mem_graphs", true},
 		{"mem_below_net", false},

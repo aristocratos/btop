@@ -365,6 +365,7 @@ namespace Shared {
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
+	vector<string> cpu_coreHz;
 	bool has_battery = true;
 	tuple<int, float, long, string> current_bat;
 
@@ -686,6 +687,47 @@ namespace Cpu {
 		}
 
 		return cpuhz;
+	}
+
+	vector<string> get_cpu_coresHz()
+	{
+		try
+		{
+			vector<double> frequencies;
+			for (auto it = core_freq.begin(); it != Cpu::core_freq.end(); )
+			{
+				if (it->empty()) {
+					it = core_freq.erase(it);
+					continue;
+				}
+
+				double core_hz = stod(readfile(*it, "0.0")) / 1000;
+				if (core_hz <= 1 or core_hz >= 999999999) {
+					Logger::warning("get_cpuHZ() : Failed to read /sys/devices/system/cpu/cpufreq/policy");
+					frequencies.push_back(0.0);
+				}
+				else {
+					frequencies.push_back(core_hz);
+				}
+				++it;
+			}
+
+			if (not frequencies.empty()) {
+				vector<string> formated_frequencies;
+				for (auto& freq : frequencies)
+				{
+					formated_frequencies.push_back(freq == 0.0 ? "" : normalize_frequency(freq));
+				}
+
+				return formated_frequencies;
+			}
+		}
+		catch (const std::exception& e) {
+			Logger::warning("get_cpu_coresHz() : " + string{e.what()});
+			return vector<string>{};
+		}
+
+		return vector<string>{};
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -1036,6 +1078,11 @@ namespace Cpu {
 		if (Config::getB("show_cpu_freq"))
 			cpuHz = get_cpuHz();
 
+	#ifdef __linux__
+		if (Config::getB("show_cores_freq"))
+			cpu_coreHz = get_cpu_coresHz();
+	#endif
+
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
 		}
@@ -1170,6 +1217,11 @@ namespace Cpu {
 			current_cpu.usage_watts = get_cpuConsumptionWatts();
 
 		cpu.active_cpus = std::make_optional(detect_active_cpus());
+
+		if (Config::getB("show_cores_freq") and not cpu_coreHz.empty())
+		{
+			cpu.core_freq = cpu_coreHz;
+		}
 
 		return cpu;
 	}
