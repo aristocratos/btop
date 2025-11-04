@@ -887,8 +887,7 @@ namespace Cpu {
 			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
 
-			if (not hide_cores)
-			{
+			if (not hide_cores) {
 			#if __linux__
 				// Preventing anyone using unsupported OS from manually setting this option to On
 				if (show_cores_freq) {
