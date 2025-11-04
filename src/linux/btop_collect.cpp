@@ -689,13 +689,10 @@ namespace Cpu {
 		return cpuhz;
 	}
 
-	vector<string> get_cpu_coresHz()
-	{
-		try
-		{
+	vector<string> get_cpu_coresHz() {
+		try {
 			vector<double> frequencies;
-			for (auto it = core_freq.begin(); it != Cpu::core_freq.end(); )
-			{
+			for (auto it = core_freq.begin(); it != Cpu::core_freq.end();) {
 				if (it->empty()) {
 					it = core_freq.erase(it);
 					continue;
