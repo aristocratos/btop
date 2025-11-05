@@ -691,7 +691,7 @@ namespace Cpu {
 
 	vector<string> get_cpu_coresHz() {
 		try {
-			vector<double> frequencies;
+			vector<std::optional<double>> frequencies;
 			for (auto it = core_freq.begin(); it != Cpu::core_freq.end();) {
 				if (it->empty()) {
 					it = core_freq.erase(it);
@@ -701,11 +701,10 @@ namespace Cpu {
 				double core_hz = stod(readfile(*it, "0.0")) / 1000;
 				if (core_hz <= 1 or core_hz >= 999999999) {
 					Logger::warning("get_cpuHZ() : Failed to read /sys/devices/system/cpu/cpufreq/policy");
-					// Pushing -1.0 to signalize no frequency have been obtained
-					frequencies.push_back(-1.0);
+					frequencies.emplace_back(std::nullopt);
 				}
 				else {
-					frequencies.push_back(core_hz);
+					frequencies.emplace_back(core_hz);
 				}
 				++it;
 			}
@@ -713,7 +712,7 @@ namespace Cpu {
 			if (not frequencies.empty()) {
 				vector<string> formated_frequencies;
 				for (auto& freq : frequencies) {
-					formated_frequencies.push_back(freq == -1.0 ? "N/A" : normalize_frequency(freq));
+					formated_frequencies.push_back(not freq.has_value() ? "N/A" : normalize_frequency(freq.value()));
 				}
 
 				return formated_frequencies;
