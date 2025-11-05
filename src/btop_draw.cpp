@@ -1693,7 +1693,6 @@ namespace Proc {
 				    mouse_x += 9;
 					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
 				}
-				if (selected == 0) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
 
 				//? Labels
 				const int item_fit = floor((double)(d_width - 2) / 10);
@@ -2036,6 +2035,7 @@ namespace Proc {
 				greyed_out ? Theme::c("inactive_fg") : Theme::c("title"), "hide ",
 				greyed_out ? "" : Theme::c("hi_fg"), Symbols::enter,
 				Fx::ub, Theme::c("proc_box"), Symbols::title_right);
+			if (not greyed_out) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
 		}
 
 		if (selected == 0 and selected_pid != 0) {
