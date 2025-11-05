@@ -525,7 +525,7 @@ namespace Menu {
 				"",
 				"Average, sum and divide."},
 			{"show_cores_freq",
-				"Show each CPU core frequency.",
+				"Show each CPU core frequency next to core utilization.",
 				"",
 				"Can cause slowdowns on systems with many",
 				"cores and certain kernel versions."},

@@ -701,7 +701,8 @@ namespace Cpu {
 				double core_hz = stod(readfile(*it, "0.0")) / 1000;
 				if (core_hz <= 1 or core_hz >= 999999999) {
 					Logger::warning("get_cpuHZ() : Failed to read /sys/devices/system/cpu/cpufreq/policy");
-					frequencies.push_back(0.0);
+					// Pushing -1.0 to signalize no frequency have been obtained
+					frequencies.push_back(-1.0);
 				}
 				else {
 					frequencies.push_back(core_hz);
@@ -711,9 +712,8 @@ namespace Cpu {
 
 			if (not frequencies.empty()) {
 				vector<string> formated_frequencies;
-				for (auto& freq : frequencies)
-				{
-					formated_frequencies.push_back(freq == 0.0 ? "" : normalize_frequency(freq));
+				for (auto& freq : frequencies) {
+					formated_frequencies.push_back(freq == -1.0 ? "N/A" : normalize_frequency(freq));
 				}
 
 				return formated_frequencies;
@@ -1215,8 +1215,7 @@ namespace Cpu {
 
 		cpu.active_cpus = std::make_optional(detect_active_cpus());
 
-		if (Config::getB("show_cores_freq") and not cpu_coreHz.empty())
-		{
+		if (Config::getB("show_cores_freq") and not cpu_coreHz.empty()) {
 			cpu.core_freq = cpu_coreHz;
 		}
 
@@ -3282,7 +3281,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
