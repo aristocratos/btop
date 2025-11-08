@@ -20,8 +20,8 @@ tab-size = 4
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 namespace Cpu {
 	class ThermalSensors {
-	   public:
+	public:
 		long long getSensors();
 	};
-}  // namespace Cpu
+} // namespace Cpu
 #endif

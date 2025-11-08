@@ -2,6 +2,9 @@
 
 #include "btop_cli.hpp"
 
+#include "btop_shared.hpp"
+#include "config.h"
+
 #include <algorithm>
 #include <expected>
 #include <filesystem>
@@ -13,9 +16,6 @@
 
 #include <fmt/base.h>
 #include <fmt/format.h>
-
-#include "btop_shared.hpp"
-#include "config.h"
 
 using namespace std::string_view_literals;
 
@@ -38,9 +38,7 @@ static void build_info() noexcept {
 	fmt::println("Configured with: {}", CONFIGURE_COMMAND);
 }
 
-static void error(std::string_view msg) noexcept {
-	fmt::println("{}error:{} {}\n", BOLD_RED, RESET, msg);
-}
+static void error(std::string_view msg) noexcept { fmt::println("{}error:{} {}\n", BOLD_RED, RESET, msg); }
 
 namespace Cli {
 	[[nodiscard]] auto parse(const std::span<const std::string_view> args) noexcept -> Result {
@@ -52,16 +50,16 @@ namespace Cli {
 			if (arg == "-h" || arg == "--help") {
 				usage();
 				help();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 			if (arg == "-v" || arg == "-V") {
 				version();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 			if (arg == "--version") {
 				version();
 				build_info();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 
 			if (arg == "-d" || arg == "--debug") {
@@ -79,7 +77,7 @@ namespace Cli {
 			if (arg == "-t" || arg == "--tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				cli.force_tty = std::make_optional(true);
 				continue;
@@ -87,7 +85,7 @@ namespace Cli {
 			if (arg == "--no-tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				cli.force_tty = std::make_optional(false);
 				continue;
@@ -97,15 +95,15 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Config requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
-				auto config_file = stdfs::path { arg };
+				auto config_file = stdfs::path {arg};
 
 				if (stdfs::is_directory(config_file)) {
 					error("Config file can't be a directory");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				cli.config_file = std::make_optional(config_file);
@@ -115,7 +113,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Filter requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -126,7 +124,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Preset requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -135,10 +133,10 @@ namespace Cli {
 					cli.preset = std::make_optional(preset_id);
 				} catch (std::invalid_argument& e) {
 					error("Preset must be a positive number");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				} catch (std::out_of_range& e) {
 					error(fmt::format("Preset argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				continue;
 			}
@@ -146,7 +144,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Update requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -155,23 +153,21 @@ namespace Cli {
 					cli.updates = refresh_rate;
 				} catch (std::invalid_argument& e) {
 					error("Update must be a positive number");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				} catch (std::out_of_range& e) {
 					error(fmt::format("Update argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				continue;
 			}
 
 			error(fmt::format("Unknown argument '{}{}{}'", YELLOW, arg, RESET));
-			return std::unexpected { 1 };
+			return std::unexpected {1};
 		}
 		return cli;
 	}
 
-	void usage() noexcept {
-		fmt::println("{0}Usage:{1} {2}btop{1} [OPTIONS]\n", BOLD_UNDERLINE, RESET, BOLD);
-	}
+	void usage() noexcept { fmt::println("{0}Usage:{1} {2}btop{1} [OPTIONS]\n", BOLD_UNDERLINE, RESET, BOLD); }
 
 	void help() noexcept {
 		fmt::print(
@@ -187,11 +183,11 @@ namespace Cli {
 			"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
 			"  {2}-h, --help{1}              Show this help message and exit\n"
 			"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
-			BOLD_UNDERLINE, RESET, BOLD
+			BOLD_UNDERLINE,
+			RESET,
+			BOLD
 		);
 	}
 
-	void help_hint() noexcept {
-		fmt::println("For more information, try '{}--help{}'", BOLD, RESET);
-	}
+	void help_hint() noexcept { fmt::println("For more information, try '{}--help{}'", BOLD, RESET); }
 } // namespace Cli
