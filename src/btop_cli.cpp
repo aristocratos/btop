@@ -151,7 +151,7 @@ namespace Cli {
 
 				auto arg = *it;
 				try {
-					auto refresh_rate = std::max(std::stoul(arg.data()), 100UL);
+					auto refresh_rate = std::max(std::stoi(arg.data()), 100);
 					cli.updates = refresh_rate;
 				} catch (std::invalid_argument& e) {
 					error("Update must be a positive number");
