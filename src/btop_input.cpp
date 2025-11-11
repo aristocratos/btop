@@ -25,6 +25,7 @@ tab-size = 4
 #include <signal.h>
 #include <sys/select.h>
 #include <utility>
+#include <cmath>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -311,37 +312,59 @@ namespace Input {
 					if (--cur_i < 0)
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
 					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
 					Proc::filter = Draw::TextEdit{Config::getS("proc_filter")};
 					old_filter = Proc::filter.text;
+					if (Config::getB("follow_filtered")) {
+						Config::flip("follow_filtered");
+						Config::set("follow_process", false);
+						Config::set("followed_pid", 0);
+					}
 				}
 				else if (key == "e") {
 					Config::flip("proc_tree");
 					no_update = false;
+					Config::set("update_following", true);
 				}
 				else if (is_in(key, "F")) {
 					Config::flip("pause_proc_list");
 					redraw = true;
 				}
-				else if (key == "r")
+				else if (key == "r") {
 					Config::flip("proc_reversed");
-
+					Config::set("update_following", true);
+				}
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
 				else if (key == "%")
 					Config::flip("proc_mem_bytes");
 
-				else if (key == "delete" and not Config::getS("proc_filter").empty())
-					Config::set("proc_filter", ""s);
+				else if (key == "delete") {
+					if (not Config::getS("proc_filter").empty()) {
+						Config::set("proc_filter", ""s);
+						if (Config::getI("proc_selected") != 0 and Config::getB("proc_follow_filter")) {
+							Config::set("follow_process", true);
+							Config::set("follow_filtered", true);
+							Config::set("followed_pid", Config::getI("selected_pid"));
+						}
+					}
+					else if (Config::getB("follow_process")) {
+						Config::flip("follow_process");
+						Config::set("follow_filtered", false);
+						Config::set("followed_pid", 0);
+					}
+				}
 
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
@@ -367,7 +390,9 @@ namespace Input {
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
-								Config::set("proc_selected", line - y - 1);
+
+								if (!Config::getB("follow_process") or Config::getB("pause_proc_list"))
+									Config::set("proc_selected", line - y - 1);
 							}
 							else if (line == y + 1) {
 								if (Proc::selection("page_up") == -1) return;
@@ -396,13 +421,25 @@ namespace Input {
 						Config::set("detailed_pid", Config::getI("selected_pid"));
 						Config::set("proc_last_selected", Config::getI("proc_selected"));
 						Config::set("proc_selected", 0);
+						if (Config::getB("proc_follow_detailed")) {
+							Config::set("follow_process", true);
+							Config::set("followed_pid", Config::getI("selected_pid"));
+							Config::set("update_following", true);
+							Config::set("follow_filtered", false);
+						}
 						Config::set("show_detailed", true);
 					}
 					else if (Config::getB("show_detailed")) {
+						const int proc_start_offset = Config::getB("proc_follow_detailed") ? Proc::selected - Config::getI("proc_last_selected") : 0;
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
+						Config::set("proc_start", std::max(0, Config::getI("proc_start") + proc_start_offset));
 						Config::set("proc_last_selected", 0);
 						Config::set("detailed_pid", 0);
 						Config::set("show_detailed", false);
+						if (Config::getB("follow_process") and !Config::getB("follow_filtered")) {
+							Config::flip("follow_process");
+							Config::set("followed_pid", 0);
+						}
 					}
 				}
 				else if (is_in(key, "+", "-", "space", "u") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
