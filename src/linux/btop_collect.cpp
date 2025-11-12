@@ -365,6 +365,7 @@ namespace Shared {
 namespace Cpu {
 	string cpuName;
 	string cpuHz;
+	vector<string> cpu_coreHz;
 	bool has_battery = true;
 	tuple<int, float, long, string> current_bat;
 
@@ -686,6 +687,43 @@ namespace Cpu {
 		}
 
 		return cpuhz;
+	}
+
+	vector<string> get_cpu_coresHz() {
+		try {
+			vector<std::optional<double>> frequencies;
+			for (auto it = core_freq.begin(); it != Cpu::core_freq.end();) {
+				if (it->empty()) {
+					it = core_freq.erase(it);
+					continue;
+				}
+
+				double core_hz = stod(readfile(*it, "0.0")) / 1000;
+				if (core_hz <= 1 or core_hz >= 999999999) {
+					Logger::warning("get_cpuHZ() : Failed to read /sys/devices/system/cpu/cpufreq/policy");
+					frequencies.emplace_back(std::nullopt);
+				}
+				else {
+					frequencies.emplace_back(core_hz);
+				}
+				++it;
+			}
+
+			if (not frequencies.empty()) {
+				vector<string> formated_frequencies;
+				for (auto& freq : frequencies) {
+					formated_frequencies.push_back(not freq.has_value() ? "N/A" : normalize_frequency(freq.value()));
+				}
+
+				return formated_frequencies;
+			}
+		}
+		catch (const std::exception& e) {
+			Logger::warning(fmt::format("get_cpu_coresHz() : {}", e.what()));
+			return vector<string>{};
+		}
+
+		return vector<string>{};
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -1036,6 +1074,11 @@ namespace Cpu {
 		if (Config::getB("show_cpu_freq"))
 			cpuHz = get_cpuHz();
 
+	#ifdef __linux__
+		if (Config::getB("show_cores_freq"))
+			cpu_coreHz = get_cpu_coresHz();
+	#endif
+
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
 		}
@@ -1170,6 +1213,10 @@ namespace Cpu {
 			current_cpu.usage_watts = get_cpuConsumptionWatts();
 
 		cpu.active_cpus = std::make_optional(detect_active_cpus());
+
+		if (Config::getB("show_cores_freq") and not cpu_coreHz.empty()) {
+			cpu.core_freq = cpu_coreHz;
+		}
 
 		return cpu;
 	}
@@ -3233,7 +3280,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
