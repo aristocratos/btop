@@ -142,6 +142,24 @@ namespace Cli {
 				}
 				continue;
 			}
+			if (arg == "--themes-dir") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Themes directory requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				auto themes_dir = stdfs::path { arg };
+
+				if (not stdfs::is_directory(themes_dir)) {
+					error("Themes directory does not exist or is not a directory");
+					return std::unexpected { 1 };
+				}
+
+				cli.themes_dir = std::make_optional(themes_dir);
+				continue;
+			}
 			if (arg == "-u" || arg == "--update") {
 				// This flag requires an argument.
 				if (++it == args.end()) {
@@ -183,6 +201,7 @@ namespace Cli {
 			"  {2}-l, --low-color{1}         Disable true color, 256 colors only\n"
 			"  {2}-p, --preset{1} <id>       Start with a preset (0-9)\n"
 			"  {2}-t, --tty{1}               Force tty mode with ANSI graph symbols and 16 colors only\n"
+			"  {2}    --themes-dir{1} <dir>  Path to a custom themes directory\n"
 			"  {2}    --no-tty{1}            Force disable tty mode\n"
 			"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
 			"  {2}-h, --help{1}              Show this help message and exit\n"
