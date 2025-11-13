@@ -38,10 +38,10 @@ char* find_intel_gpu_dir() {
                     vendor_id[strcspn(vendor_id, "\n")] = 0;
 
                     if (strcmp(vendor_id, VENDOR_ID) == 0) {
-                        fclose(file);
-                        closedir(dir);
                         // Return the parent directory (i.e., /sys/class/drm/card*)
                         snprintf(path, sizeof(path), "%s/%s", SYSFS_PATH, entry->d_name);
+                        fclose(file);
+                        closedir(dir);
                         return path;
                     }
                 }
