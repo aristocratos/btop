@@ -312,17 +312,6 @@ namespace Tools {
 		return str;
 	}
 
-	auto ssplit(const string& str, const char& delim) -> vector<string> {
-		vector<string> out;
-		for (const auto& s : str 	| rng::views::split(delim)
-									| rng::views::transform([](auto &&rng) {
-										return std::string_view(&*rng.begin(), rng::distance(rng));
-		})) {
-			if (not s.empty()) out.emplace_back(s);
-		}
-		return out;
-	}
-
 	string ljust(string str, const size_t x, bool utf, bool wide, bool limit) {
 		if (utf) {
 			if (limit and ulen(str, wide) > x)
