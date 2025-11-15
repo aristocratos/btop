@@ -488,7 +488,7 @@ namespace Config {
 			if (vals.at(0).starts_with("gpu")) {
 				set("graph_symbol_gpu", vals.at(2));
 			} else {
-				set("graph_symbol_" + vals.at(0), vals.at(2));
+				set(strings.find("graph_symbol_" + vals.at(0))->first, vals.at(2));
 			}
 		}
 
