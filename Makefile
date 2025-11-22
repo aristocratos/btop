@@ -297,26 +297,26 @@ distclean: clean
 	@test -e lib/rocm_smi_lib/build && rm -rf lib/rocm_smi_lib/build || true
 
 install:
-	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\n"
+	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -p $(TARGETDIR)/btop $(DESTDIR)$(PREFIX)/bin/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\n"
+	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\n"
+	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
 	@cp -p btop.desktop $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
-	@printf "\033[1;92mInstalling PNG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\n"
+	@printf "\033[1;92mInstalling PNG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps
 	@cp -p Img/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
-	@printf "\033[1;92mInstalling SVG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\n"
+	@printf "\033[1;92mInstalling SVG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	@cp -p Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
 ifneq ($(wildcard btop.1),)
-	@printf "\033[1;92mInstalling man page to: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\n"
+	@printf "\033[1;92mInstalling man page to: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\033[0m\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
 	@cp -p btop.1 $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
 endif
