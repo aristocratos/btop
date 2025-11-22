@@ -49,6 +49,12 @@ tab-size = 4
 	#include <limits.h>
 #endif
 
+#ifdef __NetBSD__
+	#include <sys/param.h>
+	#include <sys/sysctl.h>
+	#include <unistd.h>
+#endif
+
 #include "btop_cli.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -893,6 +899,19 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		char buf [PATH_MAX];
 		uint32_t bufsize = PATH_MAX;
 		if(!_NSGetExecutablePath(buf, &bufsize))
+			Global::self_path = fs::path(buf).remove_filename();
+	}
+#elif __NetBSD__
+	{
+		int mib[4];
+		char buf[PATH_MAX];
+		size_t bufsize = sizeof buf;
+
+		mib[0] = CTL_KERN;
+		mib[1] = KERN_PROC_ARGS;
+		mib[2] = getpid();
+		mib[3] = KERN_PROC_PATHNAME;
+		if (sysctl(mib, 4, buf, &bufsize, NULL, 0) == 0)
 			Global::self_path = fs::path(buf).remove_filename();
 	}
 #endif
