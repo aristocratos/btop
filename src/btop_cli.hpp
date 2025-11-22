@@ -28,6 +28,8 @@ namespace Cli {
 		bool low_color {};
 		// Start with one of the provided presets
 		std::optional<std::uint32_t> preset;
+		// Path to a custom themes directory
+		std::optional<stdfs::path> themes_dir;
 		// The initial refresh rate
 		std::optional<std::uint32_t> updates;
 	};
