@@ -2234,9 +2234,9 @@ namespace Draw {
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
 		#ifdef GPU_SUPPORT
-				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height + Gpu::height*Gpu::shown : 0);
+				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
-				y = cpu_bottom ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::height * Gpu::shown;
 		#else
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
@@ -2298,7 +2298,7 @@ namespace Draw {
 			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
 			#ifdef GPU_SUPPORT
-				y = cpu_bottom ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::height * Gpu::shown;
 			#else
 				y = cpu_bottom ? 1 : Cpu::height + 1;
 			#endif
@@ -2327,7 +2327,7 @@ namespace Draw {
 		#endif
 			x = proc_left ? 1 : Term::width - width + 1;
 		#ifdef GPU_SUPPORT
-			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + Gpu::height*Gpu::shown + 1;
+			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::height * Gpu::shown;
 		#else
 			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
 		#endif
