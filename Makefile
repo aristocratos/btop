@@ -301,9 +301,10 @@ install:
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -p $(TARGETDIR)/btop $(DESTDIR)$(PREFIX)/bin/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\033[0m\n"
+	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/doc/btop\033[0m\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/btop
+	@cp -p README.md $(DESTDIR)$(PREFIX)/share/doc/btop
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
-	@cp -p README.md $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
 	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
