@@ -401,6 +401,14 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
   brew install btop
   ```
 
+**Binary Installation with mise (macOS (x86_64 & ARM64) / Linux (x86_64))**
+
+If you are an enthusiast user of [mise](https://github.com/mise) the polyglot tools version manager, you can use a command like this one:
+
+```bash
+mise use -g btop@latest
+```
+
 ## Compilation Linux
 
    Requires at least GCC 14 or Clang 19.
