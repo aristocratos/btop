@@ -37,7 +37,7 @@ jobs:
       matrix:
         compiler: ["clang++", "g++"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Compile
         uses: vmactions/freebsd-vm@v1

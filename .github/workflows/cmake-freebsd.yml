@@ -33,7 +33,7 @@ jobs:
         arch: ['aarch64', 'x86_64']
         version: ['14.3', '15.0']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Compile
         uses: vmactions/freebsd-vm@v1

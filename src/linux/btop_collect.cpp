@@ -1145,7 +1145,7 @@ namespace Cpu {
 					//? Calculate values for totals from first line of stat
 					if (i == 0) {
 						const long long calc_totals = max(1ll, totals - cpu_old.at("totals"));
-						const long long calc_idles = max(1ll, idles - cpu_old.at("idles"));
+						const long long calc_idles = max(0ll, idles - cpu_old.at("idles"));
 						cpu_old.at("totals") = totals;
 						cpu_old.at("idles") = idles;
 
@@ -1176,7 +1176,7 @@ namespace Cpu {
 							cpu.core_percent.emplace_back();
 						}
 						const long long calc_totals = max(1ll, totals - core_old_totals.at(i-1));
-						const long long calc_idles = max(1ll, idles - core_old_idles.at(i-1));
+						const long long calc_idles = max(0ll, idles - core_old_idles.at(i-1));
 						core_old_totals.at(i-1) = totals;
 						core_old_idles.at(i-1) = idles;
 

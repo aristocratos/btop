@@ -37,7 +37,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install build tools
         run: apk add --no-cache --update gcc g++ make linux-headers
