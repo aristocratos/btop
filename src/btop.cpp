@@ -523,7 +523,9 @@ namespace Runner {
 			#ifdef GPU_SUPPORT
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
-					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
+					Config::getS("cpu_graph_lower").starts_with("gpu-")
+					or (Config::getS("cpu_graph_lower") == "Auto")
+					or Config::getS("cpu_graph_upper").starts_with("gpu-")
 					or (Gpu::shown == 0 and Config::getS("show_gpu_info") != "Off")
 				);
 
