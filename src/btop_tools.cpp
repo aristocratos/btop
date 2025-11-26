@@ -142,7 +142,8 @@ namespace Term {
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
 	#ifdef GPU_SUPPORT
-		height += Gpu::min_height*gpu;
+		for (int i = 0; i < gpu; i++)
+			height += Gpu::gpu_b_height_offsets[i] + 4;
 	#endif
 
 		return { width, height };
