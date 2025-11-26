@@ -1021,8 +1021,8 @@ namespace Gpu {
 		if (redraw[index]) {
 			out += box[index];
 
-			graph_up_height = single_graph ? b_height_vec[index] : max(0, b_y - y - 1);
-			const int graph_low_height = single_graph ? 0 : max(0, (y + b_height_vec[index] - 1) - (b_y + b_height_vec[index]) - 1);
+			graph_up_height = single_graph ? b_height_vec[index] : (b_height_vec[index] + 1) / 2;
+			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
 
 			if (gpu.supported_functions.gpu_utilization) {
 				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
@@ -1056,7 +1056,7 @@ namespace Gpu {
 		if (gpu.supported_functions.gpu_utilization) {
 			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
 			if (not single_graph)
-				out += Mv::to(y + graph_up_height + 1, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
+				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
 
 			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
 				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
@@ -2209,7 +2209,7 @@ namespace Draw {
 					else height = Cpu::height;
 				else
 					if (not (Mem::shown or Net::shown or Proc::shown))
-						height = Term::height/Gpu::shown + (i == 0)*(Term::height%Gpu::shown);
+						height = (Term::height - total_height) / (Gpu::shown - i) + (i == 0) * ((Term::height - total_height) % (Gpu::shown - i));
 					else
 						height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
 
@@ -2223,7 +2223,7 @@ namespace Draw {
 
 				//? Main statistics box
 				b_x_vec[i] = x_vec[i] + width - b_width - 1;
-				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2) / 2) - ceil((double)b_height_vec[i] / 2) + 1;
+				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2 - b_height_vec[i]) / 2) + 1;
 
 				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
 				if (name.empty()) name = gpu_names[shown_panels[i]];
