@@ -870,19 +870,59 @@ namespace Cpu {
 
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
-		if (Shared::coreCount >= 100) core_width++;
-		for (const auto& n : iota(0, Shared::coreCount)) {
+		//if (Shared::coreCount >= 100) core_width++;
+		//for (const auto& n : iota(0, Shared::coreCount)) {
+		// <--- NEW: Determine if we are merging --->
+		bool merge_smt = (Shared::smt_offset > 0 && Shared::coreCount > 32);
+		int visual_count = merge_smt ? (Shared::coreCount / 2) : Shared::coreCount;
+		// Check visual count for width (if we dropped from 128->64, we might save space)
+		if (visual_count >= 100) core_width++;
+		// <--- NEW: Loop only through visual cores --->
+		for (int n = 0; n < visual_count; n++) {
+			// <--- NEW: Calculate Average Load --->
+			long long val = 0;
+			if (merge_smt) {
+				// Strategy 1: Offset is 1 (Siblings are 0,1 | 2,3...)
+				// We map Visual Core 'n' -> Physical Cores (n*2) and (n*2+1)
+				if (Shared::smt_offset == 1) {
+					// CHANGE: cpu_percent -> core_percent
+					// CHANGE: added .back() to get the number
+					val = (cpu.core_percent.at(n * 2).back() + cpu.core_percent.at((n * 2) + 1).back()) / 2;
+				}
+				// Strategy 2: Offset is CoreCount/2 (Siblings are 0,N/2 | 1,N/2+1 ... N/2-1,N-1)
+				// We map Visual Core 'n' -> Physical Cores (n) and (n+n/2)
+				else {
+					val = (cpu.core_percent.at(n).back() + cpu.core_percent.at(n + Shared::smt_offset).back()) / 2;
+				}
+			} else {
+				// Standard behavior (No Merge)
+				val = cpu.core_percent.at(n).back();
+			} // <--- END NEW LOGIC --->
+
+			// [EXISTING LINE] Determine if core is enabled
 			auto enabled = is_cpu_enabled(n);
+
+			// [EXISTING LINES] Draw the box title (e.g. "C0") and the graph history
+			// NOTE: leave the graph history pointing to 'n'.  It will show the graph of
+			// the "Main" sibling. Merging graph history vectors is too expensive for the render loop.
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
 
-			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
-			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
+			// <--- CHANGE 1 & 2: USE 'val' FOR COLOR AND TEXT --->
+			// Old: ...at(clamp(safeVal(cpu.core_percent, n).back(), ...
+			// New: ...at(clamp(val, ...
+			out += enabled ? Theme::g("cpu").at(clamp(val, 0ll, 100ll)) : Theme::c("inactive_fg");
+
+			// Old: ...to_string(safeVal(cpu.core_percent, n).back())...
+			// New: ...to_string(val)...
+			out += rjust(to_string(val), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
+			// <--- END CHANGE 1 & 2 --->
 
 			if (show_temps and not hide_cores) {
+				// (Assume showing the temp of the main sibling is accurate enough, leaving temps as is.)
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
 				const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
 				if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
@@ -893,7 +933,13 @@ namespace Cpu {
 
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
+			// <--- CHANGE 3: FIX LAYOUT MATH --->
+			// We must use 'visual_count' instead of 'Shared::coreCount'
+			// otherwise the grid calculation thinks we have twice as many items and screws up the rows.
+
+			// Old: if ((++cy...((double)Shared::coreCount / b_columns)...x_row) and n != Shared::coreCount - 1) {
+			// New:
+			if ((++cy > ceil((double)visual_count / b_columns) or cy == max_row) and n != visual_count - 1) {
 				if (++cc >= b_columns) break;
 				cy = 1; cx = (b_width / b_columns) * cc;
 			}

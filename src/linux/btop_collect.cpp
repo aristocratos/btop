@@ -260,7 +260,7 @@ namespace Mem {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	long pageSize, clkTck, coreCount;
+	long pageSize, clkTck, coreCount, smt_offset;
 
 	void init() {
 
@@ -279,6 +279,35 @@ namespace Shared {
 			if (coreCount < 1) {
 				coreCount = 1;
 				Logger::warning("Could not determine number of cores, defaulting to 1.");
+			}
+		}
+		smt_offset = 0; // Default to 0 (disabled)
+
+		// Only try to merge if we have a high core count (e.g. > 32)
+		if (coreCount > 32) {
+			// Check CPU0 topology
+			std::ifstream file("/sys/devices/system/cpu/cpu0/topology/thread_siblings_list");
+			if (file.good()) {
+				std::string line;
+				std::getline(file, line);
+				// Format example: "0,128" -> We want 128.
+
+				size_t comma_pos = line.find(',');
+				if (comma_pos != std::string::npos) {
+					try {
+						// Parse the number after the comma
+						long sibling_id = std::stol(line.substr(comma_pos + 1));
+						if (sibling_id > 0) smt_offset = sibling_id;
+					} catch (...) {}
+				}
+				// Fallback for "0-1" format or similar if needed
+				else if (line.find('-') != std::string::npos) {
+					smt_offset = 1;
+				}
+			}
+			// Fallback: If file read failed but we have 64+ cores, assume 50% split
+			if (smt_offset == 0 && coreCount >= 64) {
+				 smt_offset = coreCount / 2;
 			}
 		}
 

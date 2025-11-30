@@ -94,7 +94,7 @@ namespace Shared {
 	//* Initialize platform specific needed variables and check for errors
 	void init();
 
-	extern long coreCount, page_size, clk_tck;
+	extern long coreCount, page_size, clk_tck, smt_offset;
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
