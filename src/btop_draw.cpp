@@ -280,7 +280,7 @@ namespace Draw {
 		}
 
 		//? Draw corners
-		out += 	Mv::to(y, x) + left_up
+		out +=	Mv::to(y, x) + left_up
 			+	Mv::to(y, x + width - 1) + right_up
 			+	Mv::to(y + height - 1, x) +left_down
 			+	Mv::to(y + height - 1, x + width - 1) + right_down;
@@ -536,7 +536,7 @@ namespace Cpu {
 	vector<Draw::Graph> gpu_temp_graphs;
 	vector<Draw::Graph> gpu_mem_graphs;
 
-    string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpus, bool force_redraw, bool data_same) {
+	string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpus, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
@@ -653,9 +653,9 @@ namespace Cpu {
 			#endif
 			};
 
-            init_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field, false);
-            if (not single_graph)
-            	init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
+			init_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field, false);
+			if (not single_graph)
+				init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
 
 			#ifdef GPU_SUPPORT
 			if (show_gpu and b_columns > 1) {
@@ -727,7 +727,7 @@ namespace Cpu {
 		if (Config::getB("show_battery") and has_battery) {
 			static int old_percent{};   // defaults to = 0
 			static long old_seconds{};  // defaults to = 0
-			static float old_watts{};	// defaults to = 0
+			static float old_watts{};   // defaults to = 0
 			static string old_status;
 			static Draw::Meter bat_meter {10, "cpu", true};
 			static const std::unordered_map<string, string> bat_symbols = {
@@ -1035,7 +1035,7 @@ namespace Gpu {
 	vector<Draw::Meter> enc_meter_vec = {};
 	vector<string> box = {};
 
-    string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same) {
+	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 
 		auto& b_x = b_x_vec[index];
@@ -1053,12 +1053,12 @@ namespace Gpu {
 		auto& enc_meter = enc_meter_vec[index];
 
 		if (force_redraw) redraw[index] = true;
-        bool show_temps = gpu.supported_functions.temp_info and (Config::getB("check_temp"));
-        auto tty_mode = Config::getB("tty_mode");
+		bool show_temps = gpu.supported_functions.temp_info and (Config::getB("check_temp"));
+		auto tty_mode = Config::getB("tty_mode");
 		auto& temp_scale = Config::getS("temp_scale");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_gpu"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-        auto single_graph = !Config::getB("gpu_mirror_graph");
+		auto single_graph = !Config::getB("gpu_mirror_graph");
 		string out;
 		out.reserve(width * height);
 
@@ -1070,15 +1070,15 @@ namespace Gpu {
 
 			if (gpu.supported_functions.gpu_utilization) {
 				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
-            	if (not single_graph) {
-                	graph_lower = Draw::Graph{
-                    	x + width - b_width - 3,
-                    	graph_low_height, "cpu",
-                    	safeVal(gpu.gpu_percent, "gpu-totals"s),
-                    	graph_symbol,
-                    	Config::getB("cpu_invert_lower"), true
-                	};
-            	}
+				if (not single_graph) {
+					graph_lower = Draw::Graph{
+						x + width - b_width - 3,
+						graph_low_height, "cpu",
+						safeVal(gpu.gpu_percent, "gpu-totals"s),
+						graph_symbol,
+						Config::getB("cpu_invert_lower"), true
+					};
+				}
 				gpu_meter = Draw::Meter{b_width - (show_temps ? 25 : 12), "cpu"};
 			}
 			if (gpu.supported_functions.temp_info)
@@ -1736,7 +1736,7 @@ namespace Proc {
 					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
 					Input::mouse_mappings["s"] = {d_y, mouse_x, 1, 7};
-				    mouse_x += 9;
+					mouse_x += 9;
 					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
 				}
 
@@ -1830,9 +1830,9 @@ namespace Proc {
 			}
 			out += title_left_down + Fx::b + hi_color + 's' + t_color + "ignals" + Fx::ub + title_right_down;
 			if (selected > 0) Input::mouse_mappings["s"] = {y + height - 1, mouse_x, 1, 7};
-		    mouse_x += 9;
-		    out += title_left_down + Fx::b + hi_color + 'N' + t_color + "ice" + Fx::ub + title_right_down;
-		    if (selected > 0) Input::mouse_mappings["N"] = {y + height -1, mouse_x, 1, 5};
+			mouse_x += 9;
+			out += title_left_down + Fx::b + hi_color + 'N' + t_color + "ice" + Fx::ub + title_right_down;
+			if (selected > 0) Input::mouse_mappings["N"] = {y + height -1, mouse_x, 1, 5};
 
 			//? Labels for fields in list
 			if (not proc_tree)
@@ -2153,7 +2153,7 @@ namespace Draw {
 				: Config::getS("show_gpu_info") == "Auto" ? Gpu::count - Gpu::shown
 				: 0;
 		#endif
-            const bool show_temp = (Config::getB("check_temp") and got_sensors);
+			const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 		#ifdef GPU_SUPPORT
 			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {

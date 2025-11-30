@@ -134,14 +134,14 @@ namespace Gpu {
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
-		#define NVML_DEVICE_NAME_BUFFER_SIZE        64
-		#define NVML_SUCCESS                         0
+		#define NVML_DEVICE_NAME_BUFFER_SIZE		64
+		#define NVML_SUCCESS						 0
 		#define NVML_TEMPERATURE_THRESHOLD_SHUTDOWN  0
-		#define NVML_CLOCK_GRAPHICS                  0
-		#define NVML_CLOCK_MEM                       2
-		#define NVML_TEMPERATURE_GPU                 0
-		#define NVML_PCIE_UTIL_TX_BYTES              0
-		#define NVML_PCIE_UTIL_RX_BYTES              1
+		#define NVML_CLOCK_GRAPHICS					 0
+		#define NVML_CLOCK_MEM						 2
+		#define NVML_TEMPERATURE_GPU				 0
+		#define NVML_PCIE_UTIL_TX_BYTES				 0
+		#define NVML_PCIE_UTIL_RX_BYTES				 1
 
 		typedef void* nvmlDevice_t; // we won't be accessing any of the underlying struct's properties, so this is fine
 		typedef int nvmlReturn_t, // enums are basically ints
@@ -192,20 +192,20 @@ namespace Gpu {
 	#if !defined(RSMI_STATIC)
 		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
-		#define RSMI_STATUS_SUCCESS           0
-		#define RSMI_MEM_TYPE_VRAM            0
-		#define RSMI_TEMP_CURRENT             0
-		#define RSMI_TEMP_TYPE_EDGE           0
-		#define RSMI_CLK_TYPE_MEM             4
-		#define RSMI_CLK_TYPE_SYS             0
-		#define RSMI_TEMP_MAX                 1
+		#define RSMI_STATUS_SUCCESS			  0
+		#define RSMI_MEM_TYPE_VRAM			  0
+		#define RSMI_TEMP_CURRENT			  0
+		#define RSMI_TEMP_TYPE_EDGE			  0
+		#define RSMI_CLK_TYPE_MEM			  4
+		#define RSMI_CLK_TYPE_SYS			  0
+		#define RSMI_TEMP_MAX				  1
 
 		typedef int rsmi_status_t,
 					rsmi_temperature_metric_t,
 					rsmi_clk_type_t,
 					rsmi_memory_type_t;
 
-		struct rsmi_version_t {uint32_t major,  minor,  patch; const char* build;};
+		struct rsmi_version_t {uint32_t major,	minor,	patch; const char* build;};
 		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V5];};
 		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V6];};
 
@@ -354,7 +354,7 @@ namespace Shared {
 	#ifdef GPU_SUPPORT
 		auto shown_gpus = Config::getS("shown_gpus");
 		if (shown_gpus.contains("nvidia")) {
-		    Gpu::Nvml::init();
+			Gpu::Nvml::init();
 		}
 
 		if (shown_gpus.contains("amd")) {
@@ -641,20 +641,20 @@ namespace Cpu {
 			// Read frequencies from all CPU cores
 			vector<double> frequencies;
 			for (auto it = Cpu::core_freq.begin(); it != Cpu::core_freq.end(); ) {
-    			if (it->empty()) {
-        			it = Cpu::core_freq.erase(it);
-        			continue;
-    			}
+				if (it->empty()) {
+					it = Cpu::core_freq.erase(it);
+					continue;
+				}
 
-    			double core_hz = stod(readfile(*it, "0.0")) / 1000;
-    			if (core_hz <= 0.0 and ++failed >= 2) {
-        			it = Cpu::core_freq.erase(it);
-    			} else {
-        			frequencies.push_back(core_hz);
-        			if (freq_mode == "first") break;
-        			++it;
-    			}
- 			}
+				double core_hz = stod(readfile(*it, "0.0")) / 1000;
+				if (core_hz <= 0.0 and ++failed >= 2) {
+					it = Cpu::core_freq.erase(it);
+				} else {
+					frequencies.push_back(core_hz);
+					if (freq_mode == "first") break;
+					++it;
+				}
+			}
 
 			if (not frequencies.empty()) {
 				if (freq_mode == "first") {
@@ -1027,36 +1027,36 @@ namespace Cpu {
 		return watts;
 	}
 
-    static constexpr auto to_int(std::string_view view) {
-        std::uint32_t value {};
-        std::from_chars(view.data(), view.data() + view.size(), value);
-        return value;
-    }
+	static constexpr auto to_int(std::string_view view) {
+		std::uint32_t value {};
+		std::from_chars(view.data(), view.data() + view.size(), value);
+		return value;
+	}
 
-    static constexpr auto detect_active_cpus() {
-        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
-        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
+	static constexpr auto detect_active_cpus() {
+		auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
+		auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
 
-        if (buf.empty()) {
-            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
-        }
+		if (buf.empty()) {
+			return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+		}
 
-        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
-                   auto view = std::string_view { range };
-                   auto dash = view.find('-');
+		return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
+				   auto view = std::string_view { range };
+				   auto dash = view.find('-');
 
-                   if (dash == std::string_view::npos) {
-                       // Single CPU, return iota of single element
-                       auto value = to_int(view);
-                       return std::views::iota(value, value + 1);
-                   }
+				   if (dash == std::string_view::npos) {
+					   // Single CPU, return iota of single element
+					   auto value = to_int(view);
+					   return std::views::iota(value, value + 1);
+				   }
 
-                   auto start = to_int(view.substr(0, dash));
-                   auto end = to_int(view.substr(dash + 1));
-                   return std::views::iota(start, end + 1);
-               }) |
-               std::views::join | std::ranges::to<std::vector<std::int32_t>>();
-    }
+				   auto start = to_int(view.substr(0, dash));
+				   auto end = to_int(view.substr(dash + 1));
+				   return std::views::iota(start, end + 1);
+			   }) |
+			   std::views::join | std::ranges::to<std::vector<std::int32_t>>();
+	}
 
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
@@ -1206,8 +1206,8 @@ namespace Cpu {
 
 #ifdef GPU_SUPPORT
 namespace Gpu {
-    //? NVIDIA
-    namespace Nvml {
+	//? NVIDIA
+	namespace Nvml {
 		bool init() {
 			if (initialized) return false;
 
@@ -1224,10 +1224,10 @@ namespace Gpu {
 					break;
 				}
 			}
- 			if (!nvml_dl_handle) {
+			if (!nvml_dl_handle) {
 				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: "s + dlerror());
- 				return false;
- 			}
+				return false;
+			}
 
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
@@ -1238,41 +1238,41 @@ namespace Gpu {
 				} else return sym;
 			};
 
-            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+			#define LOAD_SYM(NAME)	if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
 
-		    LOAD_SYM(nvmlErrorString);
-		    LOAD_SYM(nvmlInit);
-		    LOAD_SYM(nvmlShutdown);
-		    LOAD_SYM(nvmlDeviceGetCount);
-		    LOAD_SYM(nvmlDeviceGetHandleByIndex);
-		    LOAD_SYM(nvmlDeviceGetName);
-		    LOAD_SYM(nvmlDeviceGetPowerManagementLimit);
-		    LOAD_SYM(nvmlDeviceGetTemperatureThreshold);
-		    LOAD_SYM(nvmlDeviceGetUtilizationRates);
-		    LOAD_SYM(nvmlDeviceGetClockInfo);
-		    LOAD_SYM(nvmlDeviceGetPowerUsage);
-		    LOAD_SYM(nvmlDeviceGetPowerState);
-		    LOAD_SYM(nvmlDeviceGetTemperature);
-		    LOAD_SYM(nvmlDeviceGetMemoryInfo);
-		    LOAD_SYM(nvmlDeviceGetPcieThroughput);
+			LOAD_SYM(nvmlErrorString);
+			LOAD_SYM(nvmlInit);
+			LOAD_SYM(nvmlShutdown);
+			LOAD_SYM(nvmlDeviceGetCount);
+			LOAD_SYM(nvmlDeviceGetHandleByIndex);
+			LOAD_SYM(nvmlDeviceGetName);
+			LOAD_SYM(nvmlDeviceGetPowerManagementLimit);
+			LOAD_SYM(nvmlDeviceGetTemperatureThreshold);
+			LOAD_SYM(nvmlDeviceGetUtilizationRates);
+			LOAD_SYM(nvmlDeviceGetClockInfo);
+			LOAD_SYM(nvmlDeviceGetPowerUsage);
+			LOAD_SYM(nvmlDeviceGetPowerState);
+			LOAD_SYM(nvmlDeviceGetTemperature);
+			LOAD_SYM(nvmlDeviceGetMemoryInfo);
+			LOAD_SYM(nvmlDeviceGetPcieThroughput);
 			LOAD_SYM(nvmlDeviceGetEncoderUtilization);
 			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
 
-            #undef LOAD_SYM
+			#undef LOAD_SYM
 
 			//? Function calls
 			nvmlReturn_t result = nvmlInit();
-    		if (result != NVML_SUCCESS) {
-    			Logger::debug(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
-    			return false;
-    		}
+			if (result != NVML_SUCCESS) {
+				Logger::debug(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
+				return false;
+			}
 
 			//? Device count
 			result = nvmlDeviceGetCount(&device_count);
-    		if (result != NVML_SUCCESS) {
-    			Logger::warning(std::string("NVML: Failed to get device count: ") + nvmlErrorString(result));
-    			return false;
-    		}
+			if (result != NVML_SUCCESS) {
+				Logger::warning(std::string("NVML: Failed to get device count: ") + nvmlErrorString(result));
+				return false;
+			}
 
 			if (device_count > 0) {
 				devices.resize(device_count);
@@ -1309,30 +1309,30 @@ namespace Gpu {
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
 					//? Device Handle
-    				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
-        			if (result != NVML_SUCCESS) {
-    					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
+					result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
+					if (result != NVML_SUCCESS) {
+						Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
 						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
-    					continue;
-        			}
+						continue;
+					}
 
 					//? Device name
 					char name[NVML_DEVICE_NAME_BUFFER_SIZE];
-    				result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
-        			else {
-        				gpu_names[i] = string(name);
-        				for (const auto& brand : {"NVIDIA", "Nvidia", "(R)", "(TM)"}) {
+					result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
+					if (result != NVML_SUCCESS)
+						Logger::warning(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
+					else {
+						gpu_names[i] = string(name);
+						for (const auto& brand : {"NVIDIA", "Nvidia", "(R)", "(TM)"}) {
 							gpu_names[i] = s_replace(gpu_names[i], brand, "");
 						}
 						gpu_names[i] = trim(gpu_names[i]);
-        			}
+					}
 
-    				//? Power usage
-    				unsigned int max_power;
-    				result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
-    				if (result != NVML_SUCCESS)
+					//? Power usage
+					unsigned int max_power;
+					result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
+					if (result != NVML_SUCCESS)
 						Logger::warning(std::string("NVML: Failed to get maximum GPU power draw, defaulting to 225W: ") + nvmlErrorString(result));
 					else {
 						gpus[i].pwr_max_usage = max_power; // RSMI reports power in microWatts
@@ -1341,10 +1341,10 @@ namespace Gpu {
 
 					//? Get temp_max
 					unsigned int temp_max;
-    				result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
-        			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: ") + nvmlErrorString(result));
-    				else gpus[i].temp_max = (long long)temp_max;
+					result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
+					if (result != NVML_SUCCESS)
+						Logger::warning(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: ") + nvmlErrorString(result));
+					else gpus[i].temp_max = (long long)temp_max;
 				}
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
@@ -1352,7 +1352,7 @@ namespace Gpu {
 					pcie_tx_thread = std::thread([gpus_slice, i]() {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
-    					if (result != NVML_SUCCESS) {
+						if (result != NVML_SUCCESS) {
 							Logger::warning(std::string("NVML: Failed to get PCIe TX throughput: ") + nvmlErrorString(result));
 							if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
 						} else gpus_slice[i].pcie_tx = (long long)tx;
@@ -1361,7 +1361,7 @@ namespace Gpu {
 					pcie_rx_thread = std::thread([gpus_slice, i]() {
 						unsigned int rx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
-    					if (result != NVML_SUCCESS) {
+						if (result != NVML_SUCCESS) {
 							Logger::warning(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
 						} else gpus_slice[i].pcie_rx = (long long)rx;
 					});
@@ -1372,14 +1372,14 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.gpu_utilization) {
 					nvmlUtilization_t utilization;
 					result = nvmlDeviceGetUtilizationRates(devices[i], &utilization);
-    				if (result != NVML_SUCCESS) {
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get GPU utilization: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
-    				} else {
+					} else {
 						gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization.gpu);
 						gpus_slice[i].mem_utilization_percent.push_back((long long)utilization.memory);
-    				}
+					}
 				}
 
 				// nvTimer.stop_rename_reset("Nv clock");
@@ -1387,7 +1387,7 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					unsigned int gpu_clock;
 					result = nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_GRAPHICS, &gpu_clock);
-    				if (result != NVML_SUCCESS) {
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get GPU clock speed: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
 					} else gpus_slice[i].gpu_clock_speed = (long long)gpu_clock;
@@ -1396,47 +1396,47 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.mem_clock) {
 					unsigned int mem_clock;
 					result = nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_MEM, &mem_clock);
-    				if (result != NVML_SUCCESS) {
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get VRAM clock speed: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
 					} else gpus_slice[i].mem_clock_speed = (long long)mem_clock;
 				}
 
 				// nvTimer.stop_rename_reset("Nv power");
-    			//? Power usage & state
+				//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
-    				unsigned int power;
-    				result = nvmlDeviceGetPowerUsage(devices[i], &power);
-    				if (result != NVML_SUCCESS) {
+					unsigned int power;
+					result = nvmlDeviceGetPowerUsage(devices[i], &power);
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get GPU power usage: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else {
-    					gpus_slice[i].pwr_usage = (long long)power;
+					} else {
+						gpus_slice[i].pwr_usage = (long long)power;
 						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
 								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
-    					gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
-    				}
-    			}
+						gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+					}
+				}
 
 				if (gpus_slice[i].supported_functions.pwr_state) {
 					nvmlPstates_t pState;
-    				result = nvmlDeviceGetPowerState(devices[i], &pState);
-    				if (result != NVML_SUCCESS) {
+					result = nvmlDeviceGetPowerState(devices[i], &pState);
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get GPU power state: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
-    				} else gpus_slice[i].pwr_state = static_cast<int>(pState);
-    			}
+					} else gpus_slice[i].pwr_state = static_cast<int>(pState);
+				}
 
 				// nvTimer.stop_rename_reset("Nv temp");
-    			//? GPU temperature
+				//? GPU temperature
 				if (gpus_slice[i].supported_functions.temp_info) {
-    				if (Config::getB("check_temp")) {
+					if (Config::getB("check_temp")) {
 						unsigned int temp;
 						nvmlReturn_t result = nvmlDeviceGetTemperature(devices[i], NVML_TEMPERATURE_GPU, &temp);
-    					if (result != NVML_SUCCESS) {
+						if (result != NVML_SUCCESS) {
 							Logger::warning(std::string("NVML: Failed to get GPU temperature: ") + nvmlErrorString(result));
 							if constexpr(is_init) gpus_slice[i].supported_functions.temp_info = false;
-    					} else gpus_slice[i].temp.push_back((long long)temp);
+						} else gpus_slice[i].temp.push_back((long long)temp);
 					}
 				}
 
@@ -1445,7 +1445,7 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.mem_total) {
 					nvmlMemory_t memory;
 					result = nvmlDeviceGetMemoryInfo(devices[i], &memory);
-    				if (result != NVML_SUCCESS) {
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get VRAM info: ") + nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
@@ -1483,16 +1483,16 @@ namespace Gpu {
 					} else gpus_slice[i].decoder_utilization = (long long)utilization;
 				}
 
-    			//? TODO: Processes using GPU
-    				/*unsigned int proc_info_len;
-    				nvmlProcessInfo_t* proc_info = 0;
-    				result = nvmlDeviceGetComputeRunningProcesses_v3(device, &proc_info_len, proc_info);
-    				if (result != NVML_SUCCESS) {
+				//? TODO: Processes using GPU
+					/*unsigned int proc_info_len;
+					nvmlProcessInfo_t* proc_info = 0;
+					result = nvmlDeviceGetComputeRunningProcesses_v3(device, &proc_info_len, proc_info);
+					if (result != NVML_SUCCESS) {
 						Logger::warning(std::string("NVML: Failed to get compute processes: ") + nvmlErrorString(result));
-    				} else {
-    					for (unsigned int i = 0; i < proc_info_len; ++i)
-    						gpus_slice[i].graphics_processes.push_back({proc_info[i].pid, proc_info[i].usedGpuMemory});
-    				}*/
+					} else {
+						for (unsigned int i = 0; i < proc_info_len; ++i)
+							gpus_slice[i].graphics_processes.push_back({proc_info[i].pid, proc_info[i].usedGpuMemory});
+					}*/
 
 				// nvTimer.stop_rename_reset("Nv pcie thread join");
 				//? Join PCIE TX/RX threads
@@ -1503,11 +1503,11 @@ namespace Gpu {
 					pcie_tx_thread.join();
 					pcie_rx_thread.join();
 				}
-    		}
+			}
 
 			return true;
 		}
-    }
+	}
 
 	//? AMD
 	namespace Rsmi {
@@ -1531,7 +1531,7 @@ namespace Gpu {
 				if (rsmi_dl_handle != nullptr) {
 					break;
 				}
- 			}
+			}
 
 			if (!rsmi_dl_handle) {
 				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: "s + dlerror());
@@ -1547,24 +1547,24 @@ namespace Gpu {
 				} else return sym;
 			};
 
-            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_rsmi_sym(#NAME)) == nullptr) return false
+			#define LOAD_SYM(NAME)	if ((NAME = (decltype(NAME))load_rsmi_sym(#NAME)) == nullptr) return false
 
-		    LOAD_SYM(rsmi_init);
-		    LOAD_SYM(rsmi_shut_down);
+			LOAD_SYM(rsmi_init);
+			LOAD_SYM(rsmi_shut_down);
 			LOAD_SYM(rsmi_version_get);
-		    LOAD_SYM(rsmi_num_monitor_devices);
-		    LOAD_SYM(rsmi_dev_name_get);
-		    LOAD_SYM(rsmi_dev_power_cap_get);
-		    LOAD_SYM(rsmi_dev_temp_metric_get);
-		    LOAD_SYM(rsmi_dev_busy_percent_get);
-		    LOAD_SYM(rsmi_dev_memory_busy_percent_get);
-		    LOAD_SYM(rsmi_dev_power_ave_get);
-		    LOAD_SYM(rsmi_dev_memory_total_get);
-		    LOAD_SYM(rsmi_dev_memory_usage_get);
-		    LOAD_SYM(rsmi_dev_pci_throughput_get);
+			LOAD_SYM(rsmi_num_monitor_devices);
+			LOAD_SYM(rsmi_dev_name_get);
+			LOAD_SYM(rsmi_dev_power_cap_get);
+			LOAD_SYM(rsmi_dev_temp_metric_get);
+			LOAD_SYM(rsmi_dev_busy_percent_get);
+			LOAD_SYM(rsmi_dev_memory_busy_percent_get);
+			LOAD_SYM(rsmi_dev_power_ave_get);
+			LOAD_SYM(rsmi_dev_memory_total_get);
+			LOAD_SYM(rsmi_dev_memory_usage_get);
+			LOAD_SYM(rsmi_dev_pci_throughput_get);
 
-            #undef LOAD_SYM
-        #endif
+			#undef LOAD_SYM
+		#endif
 
 			//? Function calls
 			rsmi_status_t result = rsmi_init(0);
@@ -1616,7 +1616,7 @@ namespace Gpu {
 
 		bool shutdown() {
 			if (!initialized) return false;
-    		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS) {
+			if (rsmi_shut_down() == RSMI_STATUS_SUCCESS) {
 				initialized = false;
 			#if !defined(RSMI_STATIC)
 				dlclose(rsmi_dl_handle);
@@ -1635,15 +1635,15 @@ namespace Gpu {
 				if constexpr(is_init) {
 					//? Device name
 					char name[RSMI_DEVICE_NAME_BUFFER_SIZE];
-    				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[Nvml::device_count + i] = string(name);
+					result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
+					if (result != RSMI_STATUS_SUCCESS)
+						Logger::warning("ROCm SMI: Failed to get device name");
+					else gpu_names[Nvml::device_count + i] = string(name);
 
-    				//? Power usage
-    				uint64_t max_power;
-    				result = rsmi_dev_power_cap_get(i, 0, &max_power);
-    				if (result != RSMI_STATUS_SUCCESS)
+					//? Power usage
+					uint64_t max_power;
+					result = rsmi_dev_power_cap_get(i, 0, &max_power);
+					if (result != RSMI_STATUS_SUCCESS)
 						Logger::warning("ROCm SMI: Failed to get maximum GPU power draw, defaulting to 225W");
 					else {
 						gpus_slice[i].pwr_max_usage = (long long)(max_power/1000); // RSMI reports power in microWatts
@@ -1652,34 +1652,34 @@ namespace Gpu {
 
 					//? Get temp_max
 					int64_t temp_max;
-    				result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_MAX, &temp_max);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
-    				else gpus_slice[i].temp_max = (long long)temp_max;
+					result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_MAX, &temp_max);
+					if (result != RSMI_STATUS_SUCCESS)
+						Logger::warning("ROCm SMI: Failed to get maximum GPU temperature, defaulting to 110°C");
+					else gpus_slice[i].temp_max = (long long)temp_max;
 
 					//? Disable encoder and decoder utilisation on AMD
 					gpus_slice[i].supported_functions.encoder_utilization = false;
 					gpus_slice[i].supported_functions.decoder_utilization = false;
-    			}
+				}
 
 				//? GPU utilization
 				if (gpus_slice[i].supported_functions.gpu_utilization) {
 					uint32_t utilization;
 					result = rsmi_dev_busy_percent_get(i, &utilization);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU utilization");
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
-    				} else gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization);
+					} else gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization);
 				}
 
 				//? Memory utilization
 				if (gpus_slice[i].supported_functions.mem_utilization) {
 					uint32_t utilization;
 					result = rsmi_dev_memory_busy_percent_get(i, &utilization);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM utilization");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
-    				} else gpus_slice[i].mem_utilization_percent.push_back((long long)utilization);
+					} else gpus_slice[i].mem_utilization_percent.push_back((long long)utilization);
 				}
 			#if !defined(RSMI_STATIC)
 				//? Clock speeds
@@ -1725,30 +1725,30 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					rsmi_frequencies_t frequencies;
 					result = rsmi_dev_gpu_clk_freq_get(i, RSMI_CLK_TYPE_SYS, &frequencies);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
-    				} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
 
 				if (gpus_slice[i].supported_functions.mem_clock) {
 					rsmi_frequencies_t frequencies;
 					result = rsmi_dev_gpu_clk_freq_get(i, RSMI_CLK_TYPE_MEM, &frequencies);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
-    				} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
+					} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
 			#endif
 
-    			//? Power usage & state
+				//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
-    				uint64_t power;
-    				result = rsmi_dev_power_ave_get(i, 0, &power);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					uint64_t power;
+					result = rsmi_dev_power_ave_get(i, 0, &power);
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU power usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else {
+					} else {
 							gpus_slice[i].pwr_usage = (long long)power / 1000;
 							if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
 								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
@@ -1758,23 +1758,23 @@ namespace Gpu {
 					if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
 				}
 
-    			//? GPU temperature
+				//? GPU temperature
 				if (gpus_slice[i].supported_functions.temp_info) {
-    				if (Config::getB("check_temp") or is_init) {
+					if (Config::getB("check_temp") or is_init) {
 						int64_t temp;
-    					result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_CURRENT, &temp);
-        				if (result != RSMI_STATUS_SUCCESS) {
-    						Logger::warning("ROCm SMI: Failed to get GPU temperature");
+						result = rsmi_dev_temp_metric_get(i, RSMI_TEMP_TYPE_EDGE, RSMI_TEMP_CURRENT, &temp);
+						if (result != RSMI_STATUS_SUCCESS) {
+							Logger::warning("ROCm SMI: Failed to get GPU temperature");
 							if constexpr(is_init) gpus_slice[i].supported_functions.temp_info = false;
-    					} else gpus_slice[i].temp.push_back((long long)temp/1000);
-    				}
+						} else gpus_slice[i].temp.push_back((long long)temp/1000);
+					}
 				}
 
 				//? Memory info
 				if (gpus_slice[i].supported_functions.mem_total) {
 					uint64_t total;
 					result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_VRAM, &total);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get total VRAM");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
 					} else gpus_slice[i].mem_total = total;
@@ -1783,7 +1783,7 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.mem_used) {
 					uint64_t used;
 					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &used);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
 					} else {
@@ -1797,7 +1797,7 @@ namespace Gpu {
 				if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) {
 					uint64_t tx, rx;
 					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, nullptr);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get PCIe throughput");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
 					} else {
@@ -1805,7 +1805,7 @@ namespace Gpu {
 						gpus_slice[i].pcie_rx = (long long)rx;
 					}
 				}
-    		}
+			}
 
 			return true;
 		}
@@ -1987,32 +1987,32 @@ namespace Gpu {
 
 /// Convert ascii escapes like \040 into chars.
 static auto convert_ascii_escapes(const std::string& input) -> std::string {
-    std::string out;
-    out.reserve(input.size());
+	std::string out;
+	out.reserve(input.size());
 
-    for (std::size_t i = 0; i < input.size(); ++i) {
-        if (input[i] == '\\' &&
-	    	// Peek the next three characters.
-            i + 3 < input.size() &&
-            std::isdigit(input[i + 1]) &&
-            std::isdigit(input[i + 2]) &&
-            std::isdigit(input[i + 3])) {
+	for (std::size_t i = 0; i < input.size(); ++i) {
+		if (input[i] == '\\' &&
+			// Peek the next three characters.
+			i + 3 < input.size() &&
+			std::isdigit(input[i + 1]) &&
+			std::isdigit(input[i + 2]) &&
+			std::isdigit(input[i + 3])) {
 
 			// Convert octal chars to decimal int.
-			//   '0' - '0' -> 0, '4' - '0' -> 4, '0' - '0' -> 0.
-			//   0 * 64 (0)
-			//   + 4 * 8 (32)
-			//   + 0
-			//   = 32 (ascii space)
-            int value = ((input[i + 1] - '0') * 64) + ((input[i + 2] - '0') * 8) + (input[i + 3] - '0');
-            out.push_back(static_cast<char>(value));
-            // Consume the three digits.
-            i += 3;
-        } else {
-            out.push_back(input[i]);
-        }
-    }
-    return out;
+			//	 '0' - '0' -> 0, '4' - '0' -> 4, '0' - '0' -> 0.
+			//	 0 * 64 (0)
+			//	 + 4 * 8 (32)
+			//	 + 0
+			//	 = 32 (ascii space)
+			int value = ((input[i + 1] - '0') * 64) + ((input[i + 2] - '0') * 8) + (input[i + 3] - '0');
+			out.push_back(static_cast<char>(value));
+			// Consume the three digits.
+			i += 3;
+		} else {
+			out.push_back(input[i]);
+		}
+	}
+	return out;
 }
 
 namespace Mem {
@@ -2745,7 +2745,7 @@ namespace Net {
 				//? Sort interfaces by total upload + download bytes
 				auto sorted_interfaces = interfaces;
 				rng::sort(sorted_interfaces, [&](const auto& a, const auto& b){
-					return 	cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
+					return	cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
 										net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
 				});
 				selected_iface.clear();
@@ -3338,6 +3338,6 @@ namespace Tools {
 			catch (const std::invalid_argument&) {}
 			catch (const std::out_of_range&) {}
 		}
-        throw std::runtime_error("Failed to get uptime from " + string{Shared::procPath} + "/uptime");
+		throw std::runtime_error("Failed to get uptime from " + string{Shared::procPath} + "/uptime");
 	}
 }
