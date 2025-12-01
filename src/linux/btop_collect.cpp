@@ -1055,29 +1055,50 @@ namespace Cpu {
         return value;
     }
 
-    static constexpr auto detect_active_cpus() {
+    static auto detect_active_cpus() {
         auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
         auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
 
+        std::vector<std::int32_t> cpus;
+        cpus.reserve(Shared::coreCount);
+
         if (buf.empty()) {
-            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+			for (int i = 0; i < Shared::coreCount; ++i) {
+				cpus.push_back(i);
+			}
+            return cpus;
         }
 
-        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
-                   auto view = std::string_view { range };
-                   auto dash = view.find('-');
+        std::string current;
+        auto flush_token = [&](const std::string& token) {
+            if (token.empty()) return;
+            auto view = std::string_view { token };
+            auto dash = view.find('-');
 
-                   if (dash == std::string_view::npos) {
-                       // Single CPU, return iota of single element
-                       auto value = to_int(view);
-                       return std::views::iota(value, value + 1);
-                   }
+            if (dash == std::string_view::npos) {
+                auto value = static_cast<std::int32_t>(to_int(view));
+                cpus.push_back(value);
+                return;
+            }
 
-                   auto start = to_int(view.substr(0, dash));
-                   auto end = to_int(view.substr(dash + 1));
-                   return std::views::iota(start, end + 1);
-               }) |
-               std::views::join | std::ranges::to<std::vector<std::int32_t>>();
+            auto start = static_cast<std::int32_t>(to_int(view.substr(0, dash)));
+            auto end = static_cast<std::int32_t>(to_int(view.substr(dash + 1)));
+            for (auto v = start; v <= end; ++v) {
+                cpus.push_back(v);
+            }
+        };
+
+        for (char ch : buf) {
+            if (ch == ',') {
+                flush_token(current);
+                current.clear();
+            } else if (!std::isspace(static_cast<unsigned char>(ch))) {
+                current.push_back(ch);
+            }
+        }
+        flush_token(current);
+
+        return cpus;
     }
 
 	auto collect(bool no_update) -> cpu_info& {
