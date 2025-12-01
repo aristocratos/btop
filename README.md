@@ -421,7 +421,9 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
     You must use an official NVIDIA driver, both the closed-source and [open-source](https://github.com/NVIDIA/open-gpu-kernel-modules) ones have been verified to work.
 
-    In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+   In addition to that you must also have the `nvidia-ml` dynamic library installed, which should be included with the driver package of your distribution.
+
+   If you build btop with `-DBTOP_DCGM=ON` and have NVIDIA's Data Center GPU Manager (DCGM) development files installed (libdcgm and headers), btop will prefer DCGM as the NVIDIA backend where available (for example on DGX systems such as DGX Spark), and fall back to NVML when DCGM is not present.
 
  * **AMD**
 
@@ -571,9 +573,8 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
    | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
+   | `-DBTOP_DCGM=<ON\|OFF>`         | Prefer DCGM (libdcgm) as NVIDIA GPU backend when available (OFF by default) |
    | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 

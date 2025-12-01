@@ -31,6 +31,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BTOP_STATIC "Link btop statically" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
+# Optional: enable NVIDIA GPU monitoring via DCGM (Data Center GPU Manager).
+# When enabled, btop will prefer DCGM as the NVIDIA backend on Linux systems
+# where the DCGM development libraries are installed.
+option(BTOP_DCGM "Enable NVIDIA GPU monitoring via DCGM" OFF)
 
 # Enable LTO in release builds by default
 if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
@@ -162,6 +166,15 @@ target_link_libraries(libbtop Threads::Threads)
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+  if(BTOP_DCGM)
+    target_compile_definitions(libbtop PUBLIC DCGM_SUPPORT)
+    # Link against DCGM if requested; assumes libdcgm is available on the system.
+    # If your DCGM installation uses a non-standard library name or path,
+    # you may need to extend this with a proper find_library() call.
+    if(NOT BTOP_STATIC)
+      target_link_libraries(libbtop dcgm)
+    endif()
+  endif()
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already

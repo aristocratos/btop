@@ -48,6 +48,10 @@ tab-size = 4
 	#include <pwd.h>
 #endif
 
+#if defined(GPU_SUPPORT) && defined(DCGM_SUPPORT)
+	#include <dcgm_agent.h>
+#endif
+
 #include "../btop_shared.hpp"
 #include "../btop_config.hpp"
 #include "../btop_tools.hpp"
@@ -131,6 +135,46 @@ namespace Cpu {
 namespace Gpu {
 	vector<gpu_info> gpus;
 #ifdef GPU_SUPPORT
+	// Total number of NVIDIA GPUs regardless of backend (NVML or DCGM).
+	uint32_t nvidia_device_count = 0;
+
+#ifdef DCGM_SUPPORT
+	// Set to true once the DCGM backend has successfully initialized.
+	bool dcgm_active = false;
+
+	//? NVIDIA data collection via DCGM
+	namespace Dcgm {
+		// DCGM handle and group/bookkeeping
+		dcgmHandle_t handle;
+		dcgmGpuGrp_t groupId;
+		dcgmFieldGrp_t fieldGroupId;
+
+		// Fields we monitor for each GPU. These map directly into Gpu::gpu_info.
+		const array<unsigned short, 9> monitored_field_ids = {
+			DCGM_FI_DEV_GPU_UTIL,         // core GPU utilization
+			DCGM_FI_DEV_MEM_COPY_UTIL,    // memory utilization
+			DCGM_FI_DEV_FB_USED,          // used framebuffer memory (bytes)
+			DCGM_FI_DEV_FB_TOTAL,         // total framebuffer memory (bytes)
+			DCGM_FI_DEV_POWER_USAGE,      // current power draw
+			DCGM_FI_DEV_POWER_MGMT_LIMIT, // power cap
+			DCGM_FI_DEV_GPU_TEMP,         // GPU temperature
+			DCGM_FI_DEV_SM_CLOCK,         // SM clock (MHz)
+			DCGM_FI_DEV_MEM_CLOCK         // memory clock (MHz)
+		};
+
+		// Mapping from 0..device_count-1 to DCGM GPU IDs.
+		vector<unsigned int> gpu_ids;
+
+		bool initialized = false;
+		bool embedded = false;
+		uint32_t device_count = 0;
+
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+	}
+#endif
+
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -325,7 +369,14 @@ namespace Shared {
 	#ifdef GPU_SUPPORT
 		auto shown_gpus = Config::getS("shown_gpus");
 		if (shown_gpus.contains("nvidia")) {
+		#ifdef DCGM_SUPPORT
+			// Prefer DCGM as the NVIDIA backend when available; fall back to NVML otherwise.
+			if (!Gpu::Dcgm::init()) {
+				Gpu::Nvml::init();
+			}
+		#else
 		    Gpu::Nvml::init();
+		#endif
 		}
 
 		if (shown_gpus.contains("amd")) {
@@ -1177,6 +1228,243 @@ namespace Cpu {
 
 #ifdef GPU_SUPPORT
 namespace Gpu {
+    //? NVIDIA via DCGM
+#ifdef DCGM_SUPPORT
+    namespace Dcgm {
+		bool init() {
+			if (initialized) return false;
+
+			dcgmReturn_t result = dcgmInit();
+			if (result != DCGM_ST_OK) {
+				Logger::info("DCGM: Failed to initialize library, NVIDIA GPUs will not be detected via DCGM");
+				return false;
+			}
+
+			// Prefer embedded mode for simplicity; can be extended to dcgmConnect() later.
+			result = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &handle);
+			if (result != DCGM_ST_OK) {
+				Logger::info("DCGM: Failed to start embedded hostengine, falling back to other backends");
+				dcgmShutdown();
+				return false;
+			}
+			embedded = true;
+
+			unsigned int id_list[DCGM_MAX_NUM_DEVICES];
+			int gpu_count = 0;
+			result = dcgmGetAllSupportedDevices(handle, id_list, &gpu_count);
+			if (result != DCGM_ST_OK || gpu_count <= 0) {
+				Logger::info("DCGM: No supported NVIDIA devices found");
+				shutdown();
+				return false;
+			}
+
+			device_count = static_cast<uint32_t>(gpu_count);
+			gpu_ids.assign(id_list, id_list + device_count);
+
+			gpus.resize(device_count);
+			gpu_names.resize(device_count);
+			nvidia_device_count = device_count;
+
+			// Create a group containing all local GPUs.
+			result = dcgmGroupCreate(handle, DCGM_GROUP_EMPTY, "btop_dcgm", &groupId);
+			if (result != DCGM_ST_OK) {
+				Logger::warning("DCGM: Failed to create GPU group for monitoring");
+				shutdown();
+				return false;
+			}
+
+			for (auto gpu_id : gpu_ids) {
+				result = dcgmGroupAddDevice(handle, groupId, gpu_id);
+				if (result != DCGM_ST_OK) {
+					Logger::warning("DCGM: Failed to add GPU to monitoring group");
+				}
+			}
+
+			// Register the fields we care about.
+			const auto field_count = static_cast<int>(monitored_field_ids.size());
+			result = dcgmFieldGroupCreate(handle,
+										  field_count,
+										  monitored_field_ids.data(),
+										  "btop_dcgm_fields",
+										  &fieldGroupId);
+			if (result != DCGM_ST_OK) {
+				Logger::warning("DCGM: Failed to create field group for monitoring");
+				shutdown();
+				return false;
+			}
+
+			// Start watching the fields with an update frequency of ~1s.
+			result = dcgmWatchFields(handle, groupId, fieldGroupId, 1000000, 3600.0, 0.0);
+			if (result != DCGM_ST_OK) {
+				Logger::warning("DCGM: Failed to watch DCGM fields, DCGM backend will be disabled");
+				shutdown();
+				return false;
+			}
+
+			initialized = true;
+			dcgm_active = true;
+
+			// Initial collection to populate supported_functions and limits.
+			Dcgm::collect<1>(gpus.data());
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+
+			if (fieldGroupId != 0) {
+				dcgmFieldGroupDestroy(handle, fieldGroupId);
+				fieldGroupId = 0;
+			}
+			if (groupId != 0) {
+				dcgmGroupDestroy(handle, groupId);
+				groupId = 0;
+			}
+
+			if (embedded) {
+				dcgmStopEmbedded(handle);
+				embedded = false;
+			}
+
+			dcgmShutdown();
+
+			initialized = false;
+			dcgm_active = false;
+
+			return true;
+		}
+
+		template <bool is_init>
+		bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			dcgmReturn_t result = dcgmUpdateAllFields(handle, 0);
+			if (result != DCGM_ST_OK) {
+				Logger::warning("DCGM: Failed to update field values");
+				if constexpr(is_init) {
+					// Disable DCGM on initialization failure so that other backends can be used.
+					shutdown();
+				}
+				return false;
+			}
+
+			const unsigned int field_count = static_cast<unsigned int>(monitored_field_ids.size());
+			// Allocate enough space for values for all GPUs and all watched fields.
+			std::vector<dcgmFieldValue_v1> values(field_count * device_count);
+
+			result = dcgmGetLatestValuesForFields(handle,
+												  groupId,
+												  monitored_field_ids.data(),
+												  field_count,
+												  values.data());
+			if (result != DCGM_ST_OK) {
+				Logger::warning("DCGM: Failed to get latest field values");
+				if constexpr(is_init) {
+					shutdown();
+				}
+				return false;
+			}
+
+			// Map DCGM GPU IDs to indices in gpus_slice.
+			std::unordered_map<unsigned int, size_t> gpu_index;
+			for (size_t i = 0; i < gpu_ids.size(); ++i)
+				gpu_index[gpu_ids[i]] = i;
+
+			for (const auto& v : values) {
+				auto it = gpu_index.find(v.gpuId);
+				if (it == gpu_index.end()) continue;
+
+				auto idx = it->second;
+				auto& gpu = gpus_slice[idx];
+
+				if (v.status != DCGM_ST_OK) {
+					continue;
+				}
+
+				long long val = v.value.i64;
+
+				switch (v.fieldId) {
+					case DCGM_FI_DEV_GPU_UTIL:
+						gpu.gpu_percent.at("gpu-totals").push_back(val);
+						break;
+
+					case DCGM_FI_DEV_MEM_COPY_UTIL:
+						gpu.mem_utilization_percent.push_back(val);
+						break;
+
+					case DCGM_FI_DEV_FB_TOTAL:
+						gpu.mem_total = val;
+						break;
+
+					case DCGM_FI_DEV_FB_USED:
+						gpu.mem_used = val;
+						if (gpu.mem_total > 0) {
+							auto used_percent = (long long)round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total);
+							gpu.gpu_percent.at("gpu-vram-totals").push_back(used_percent);
+						}
+						break;
+
+					case DCGM_FI_DEV_POWER_USAGE:
+						gpu.pwr_usage = val * 1000; // W -> mW
+						if (gpu.pwr_usage > gpu.pwr_max_usage)
+							gpu.pwr_max_usage = gpu.pwr_usage;
+						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+							clamp((long long)round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0ll, 100ll));
+						break;
+
+					case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+						gpu.pwr_max_usage = val * 1000; // W -> mW
+						break;
+
+					case DCGM_FI_DEV_GPU_TEMP:
+						gpu.temp.push_back(val);
+						break;
+
+					case DCGM_FI_DEV_SM_CLOCK:
+						gpu.gpu_clock_speed = (unsigned int)val;
+						break;
+
+					case DCGM_FI_DEV_MEM_CLOCK:
+						gpu.mem_clock_speed = (unsigned int)val;
+						break;
+
+					default:
+						break;
+				}
+			}
+
+			if constexpr(is_init) {
+				// Log a brief summary for the first GPU to help compare against dcgmi/nvidia-smi.
+				if (device_count > 0) {
+					auto& gpu = gpus_slice[0];
+					long long util = 0;
+					if (!gpu.gpu_percent.at("gpu-totals").empty())
+						util = gpu.gpu_percent.at("gpu-totals").back();
+					long long mem_util = 0;
+					if (!gpu.mem_utilization_percent.empty())
+						mem_util = gpu.mem_utilization_percent.back();
+
+					Logger::debug(
+						"DCGM: GPU0 init "
+						"util=" + to_string(util) +
+						"% mem_util=" + to_string(mem_util) +
+						"% mem_used=" + to_string(gpu.mem_used) +
+						"B mem_total=" + to_string(gpu.mem_total) +
+						"B pwr=" + to_string(gpu.pwr_usage) +
+						"mW pwr_cap=" + to_string(gpu.pwr_max_usage) +
+						"mW temp=" + (gpu.temp.empty() ? "n/a" : to_string(gpu.temp.back())) +
+						"C sm_clk=" + to_string(gpu.gpu_clock_speed) +
+						"MHz mem_clk=" + to_string(gpu.mem_clock_speed) + "MHz"
+					);
+				}
+			}
+
+			return true;
+		}
+    }
+#endif
+
     //? NVIDIA
     namespace Nvml {
 		bool init() {
@@ -1249,6 +1537,9 @@ namespace Gpu {
 				devices.resize(device_count);
 				gpus.resize(device_count);
 				gpu_names.resize(device_count);
+
+				// Update shared NVIDIA device count used for vendor offsets.
+				nvidia_device_count = device_count;
 
 				initialized = true;
 
@@ -1579,7 +1870,7 @@ namespace Gpu {
 				initialized = true;
 
 				//? Check supported functions & get maximums
-				Rsmi::collect<1>(gpus.data() + Nvml::device_count);
+				Rsmi::collect<1>(gpus.data() + nvidia_device_count);
 
 				return true;
 			} else {initialized = true; shutdown(); return false;}
@@ -1598,7 +1889,7 @@ namespace Gpu {
 		}
 
 		template <bool is_init>
-		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
+		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by nvidia_device_count elements
 			if (!initialized) return false;
 			rsmi_status_t result;
 
@@ -1609,7 +1900,7 @@ namespace Gpu {
     				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
         			if (result != RSMI_STATUS_SUCCESS)
     					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[Nvml::device_count + i] = string(name);
+        			else gpu_names[nvidia_device_count + i] = string(name);
 
     				//? Power usage
     				uint64_t max_power;
@@ -1825,9 +2116,9 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+				gpu_names[nvidia_device_count + Rsmi::device_count] = string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
+				gpu_names[nvidia_device_count + Rsmi::device_count] = "Intel GPU";
 			}
 
 			free(gpu_device_name);
@@ -1904,9 +2195,16 @@ namespace Gpu {
 		// DebugTimer gpu_timer("GPU Total");
 
 		//* Collect data
-		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
-		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
-		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+#ifdef DCGM_SUPPORT
+		if (dcgm_active) {
+			Dcgm::collect<0>(gpus.data()); // raw pointer to vector data, size == Dcgm::device_count
+		} else
+#endif
+		{
+			Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
+		}
+		Rsmi::collect<0>(gpus.data() + nvidia_device_count); // size = Rsmi::device_count
+		Intel::collect<0>(gpus.data() + nvidia_device_count + Rsmi::device_count); // size = Intel::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
