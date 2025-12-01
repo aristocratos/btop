@@ -150,7 +150,8 @@ namespace Gpu {
 		dcgmFieldGrp_t fieldGroupId;
 
 		// Fields we monitor for each GPU. These map directly into Gpu::gpu_info.
-		const array<unsigned short, 9> monitored_field_ids = {
+		// Note: not const because DCGM APIs take non-const unsigned short*.
+		array<unsigned short, 9> monitored_field_ids = {
 			DCGM_FI_DEV_GPU_UTIL,         // core GPU utilization
 			DCGM_FI_DEV_MEM_COPY_UTIL,    // memory utilization
 			DCGM_FI_DEV_FB_USED,          // used framebuffer memory (bytes)
@@ -1387,71 +1388,66 @@ namespace Gpu {
 				return false;
 			}
 
-			// Map DCGM GPU IDs to indices in gpus_slice.
-			std::unordered_map<unsigned int, size_t> gpu_index;
-			for (size_t i = 0; i < gpu_ids.size(); ++i)
-				gpu_index[gpu_ids[i]] = i;
+			// Iterate over GPUs and fields; values are laid out as [gpu0_field0, gpu0_field1, ..., gpu1_field0, ...].
+			for (uint32_t gpuIdx = 0; gpuIdx < device_count; ++gpuIdx) {
+				auto& gpu = gpus_slice[gpuIdx];
 
-			for (const auto& v : values) {
-				auto it = gpu_index.find(v.gpuId);
-				if (it == gpu_index.end()) continue;
+				for (unsigned int fi = 0; fi < field_count; ++fi) {
+					auto& v = values[gpuIdx * field_count + fi];
+					if (v.status != DCGM_ST_OK)
+						continue;
 
-				auto idx = it->second;
-				auto& gpu = gpus_slice[idx];
+					unsigned short fieldId = monitored_field_ids[fi];
+					long long val = v.value.i64;
 
-				if (v.status != DCGM_ST_OK) {
-					continue;
-				}
+					switch (fieldId) {
+						case DCGM_FI_DEV_GPU_UTIL:
+							gpu.gpu_percent.at("gpu-totals").push_back(val);
+							break;
 
-				long long val = v.value.i64;
+						case DCGM_FI_DEV_MEM_COPY_UTIL:
+							gpu.mem_utilization_percent.push_back(val);
+							break;
 
-				switch (v.fieldId) {
-					case DCGM_FI_DEV_GPU_UTIL:
-						gpu.gpu_percent.at("gpu-totals").push_back(val);
-						break;
+						case DCGM_FI_DEV_FB_TOTAL:
+							gpu.mem_total = val;
+							break;
 
-					case DCGM_FI_DEV_MEM_COPY_UTIL:
-						gpu.mem_utilization_percent.push_back(val);
-						break;
+						case DCGM_FI_DEV_FB_USED:
+							gpu.mem_used = val;
+							if (gpu.mem_total > 0) {
+								auto used_percent = (long long)round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total);
+								gpu.gpu_percent.at("gpu-vram-totals").push_back(used_percent);
+							}
+							break;
 
-					case DCGM_FI_DEV_FB_TOTAL:
-						gpu.mem_total = val;
-						break;
+						case DCGM_FI_DEV_POWER_USAGE:
+							gpu.pwr_usage = val * 1000; // W -> mW
+							if (gpu.pwr_usage > gpu.pwr_max_usage)
+								gpu.pwr_max_usage = gpu.pwr_usage;
+							gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+								clamp((long long)round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0ll, 100ll));
+							break;
 
-					case DCGM_FI_DEV_FB_USED:
-						gpu.mem_used = val;
-						if (gpu.mem_total > 0) {
-							auto used_percent = (long long)round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total);
-							gpu.gpu_percent.at("gpu-vram-totals").push_back(used_percent);
-						}
-						break;
+						case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+							gpu.pwr_max_usage = val * 1000; // W -> mW
+							break;
 
-					case DCGM_FI_DEV_POWER_USAGE:
-						gpu.pwr_usage = val * 1000; // W -> mW
-						if (gpu.pwr_usage > gpu.pwr_max_usage)
-							gpu.pwr_max_usage = gpu.pwr_usage;
-						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
-							clamp((long long)round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0ll, 100ll));
-						break;
+						case DCGM_FI_DEV_GPU_TEMP:
+							gpu.temp.push_back(val);
+							break;
 
-					case DCGM_FI_DEV_POWER_MGMT_LIMIT:
-						gpu.pwr_max_usage = val * 1000; // W -> mW
-						break;
+						case DCGM_FI_DEV_SM_CLOCK:
+							gpu.gpu_clock_speed = (unsigned int)val;
+							break;
 
-					case DCGM_FI_DEV_GPU_TEMP:
-						gpu.temp.push_back(val);
-						break;
+						case DCGM_FI_DEV_MEM_CLOCK:
+							gpu.mem_clock_speed = (unsigned int)val;
+							break;
 
-					case DCGM_FI_DEV_SM_CLOCK:
-						gpu.gpu_clock_speed = (unsigned int)val;
-						break;
-
-					case DCGM_FI_DEV_MEM_CLOCK:
-						gpu.mem_clock_speed = (unsigned int)val;
-						break;
-
-					default:
-						break;
+						default:
+							break;
+					}
 				}
 			}
 

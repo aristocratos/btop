@@ -671,7 +671,7 @@ namespace Config {
 			if (not v_contains(valid_boxes, box)) return false;
 		#ifdef GPU_SUPPORT
 			if (box.starts_with("gpu")) {
-				int gpu_num = stoi(box.substr(3)) + 1;
+				int gpu_num = std::stoi(box.substr(3)) + 1;
 				if (gpu_num > Gpu::count) return false;
 			}
 		#endif
