@@ -1347,7 +1347,15 @@ namespace Gpu {
 			dcgm_active = true;
 
 			// Initial collection to populate supported_functions and limits.
-			Dcgm::collect<1>(gpus.data());
+			// If collection fails, it calls shutdown() which sets dcgm_active=false.
+			// We must detect this and return false so NVML fallback can initialize.
+			if (!Dcgm::collect<1>(gpus.data()) || !dcgm_active) {
+				// Reset nvidia_device_count since DCGM failed; NVML will set it correctly.
+				nvidia_device_count = 0;
+				gpus.clear();
+				gpu_names.clear();
+				return false;
+			}
 
 			return true;
 		}
