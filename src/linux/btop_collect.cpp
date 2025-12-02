@@ -2141,7 +2141,7 @@ namespace Gpu {
 			free(gpu_device_name);
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+			Intel::collect<1>(gpus.data() + nvidia_device_count + Rsmi::device_count);
 
 			return true;
 		}
