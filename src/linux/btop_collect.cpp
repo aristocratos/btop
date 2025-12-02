@@ -1429,8 +1429,16 @@ namespace Gpu {
 					if (v.status != DCGM_ST_OK)
 						continue;
 
-					unsigned short fieldId = monitored_field_ids[fi];
-					long long val = v.value.i64;
+					// Use v.fieldId from the response, not the requested order
+					unsigned short fieldId = v.fieldId;
+
+					// Read value based on field type - power fields are doubles
+					long long val;
+					if (fieldId == DCGM_FI_DEV_POWER_USAGE || fieldId == DCGM_FI_DEV_POWER_MGMT_LIMIT) {
+						val = static_cast<long long>(v.value.dbl);
+					} else {
+						val = v.value.i64;
+					}
 
 					switch (fieldId) {
 						case DCGM_FI_DEV_GPU_UTIL:
