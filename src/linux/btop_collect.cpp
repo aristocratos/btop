@@ -1287,6 +1287,23 @@ namespace Gpu {
 			gpu_names.resize(device_count);
 			nvidia_device_count = device_count;
 
+			// Get GPU names using device attributes
+			for (uint32_t i = 0; i < device_count; ++i) {
+				dcgmDeviceAttributes_t attrs;
+				attrs.version = dcgmDeviceAttributes_version;
+				result = dcgmGetDeviceAttributes(handle, gpu_ids[i], &attrs);
+				if (result == DCGM_ST_OK) {
+					gpu_names[i] = string(attrs.identifiers.deviceName);
+					// Clean up name similar to NVML
+					for (const auto& brand : {"NVIDIA", "Nvidia", "(R)", "(TM)"}) {
+						gpu_names[i] = s_replace(gpu_names[i], brand, "");
+					}
+					gpu_names[i] = trim(gpu_names[i]);
+				} else {
+					gpu_names[i] = "NVIDIA GPU " + to_string(i);
+				}
+			}
+
 			// Create a group containing all local GPUs.
 			result = dcgmGroupCreate(handle, DCGM_GROUP_EMPTY, "btop_dcgm", &groupId);
 			if (result != DCGM_ST_OK) {
@@ -1392,6 +1409,10 @@ namespace Gpu {
 			for (uint32_t gpuIdx = 0; gpuIdx < device_count; ++gpuIdx) {
 				auto& gpu = gpus_slice[gpuIdx];
 
+				// Track which fields succeeded for this GPU (used during init)
+				bool got_gpu_util = false, got_mem_util = false, got_mem_total = false, got_mem_used = false;
+				bool got_pwr_usage = false, got_temp = false, got_gpu_clock = false, got_mem_clock = false;
+
 				for (unsigned int fi = 0; fi < field_count; ++fi) {
 					auto& v = values[gpuIdx * field_count + fi];
 					if (v.status != DCGM_ST_OK)
@@ -1403,18 +1424,22 @@ namespace Gpu {
 					switch (fieldId) {
 						case DCGM_FI_DEV_GPU_UTIL:
 							gpu.gpu_percent.at("gpu-totals").push_back(val);
+							got_gpu_util = true;
 							break;
 
 						case DCGM_FI_DEV_MEM_COPY_UTIL:
 							gpu.mem_utilization_percent.push_back(val);
+							got_mem_util = true;
 							break;
 
 						case DCGM_FI_DEV_FB_TOTAL:
 							gpu.mem_total = val;
+							got_mem_total = true;
 							break;
 
 						case DCGM_FI_DEV_FB_USED:
 							gpu.mem_used = val;
+							got_mem_used = true;
 							if (gpu.mem_total > 0) {
 								auto used_percent = (long long)round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total);
 								gpu.gpu_percent.at("gpu-vram-totals").push_back(used_percent);
@@ -1423,6 +1448,7 @@ namespace Gpu {
 
 						case DCGM_FI_DEV_POWER_USAGE:
 							gpu.pwr_usage = val * 1000; // W -> mW
+							got_pwr_usage = true;
 							if (gpu.pwr_usage > gpu.pwr_max_usage)
 								gpu.pwr_max_usage = gpu.pwr_usage;
 							gpu.gpu_percent.at("gpu-pwr-totals").push_back(
@@ -1435,32 +1461,60 @@ namespace Gpu {
 
 						case DCGM_FI_DEV_GPU_TEMP:
 							gpu.temp.push_back(val);
+							got_temp = true;
 							break;
 
 						case DCGM_FI_DEV_SM_CLOCK:
 							gpu.gpu_clock_speed = (unsigned int)val;
+							got_gpu_clock = true;
 							break;
 
 						case DCGM_FI_DEV_MEM_CLOCK:
 							gpu.mem_clock_speed = (unsigned int)val;
+							got_mem_clock = true;
 							break;
 
 						default:
 							break;
 					}
 				}
+
+				if constexpr(is_init) {
+					// Set supported_functions based on which fields returned valid data
+					gpu.supported_functions.gpu_utilization = got_gpu_util;
+					gpu.supported_functions.mem_utilization = got_mem_util;
+					gpu.supported_functions.mem_total = got_mem_total;
+					gpu.supported_functions.mem_used = got_mem_used;
+					gpu.supported_functions.pwr_usage = got_pwr_usage;
+					gpu.supported_functions.temp_info = got_temp;
+					gpu.supported_functions.gpu_clock = got_gpu_clock;
+					gpu.supported_functions.mem_clock = got_mem_clock;
+					// DCGM doesn't provide these
+					gpu.supported_functions.pwr_state = false;
+					gpu.supported_functions.pcie_txrx = false;
+					gpu.supported_functions.encoder_utilization = false;
+					gpu.supported_functions.decoder_utilization = false;
+				}
+
+				// Ensure deques have at least one value to prevent .back() crash
+				if (gpu.gpu_percent.at("gpu-totals").empty())
+					gpu.gpu_percent.at("gpu-totals").push_back(0);
+				if (gpu.gpu_percent.at("gpu-vram-totals").empty())
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(0);
+				if (gpu.gpu_percent.at("gpu-pwr-totals").empty())
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(0);
+				if (gpu.mem_utilization_percent.empty())
+					gpu.mem_utilization_percent.push_back(0);
+				if (gpu.temp.empty())
+					gpu.temp.push_back(0);
 			}
 
 			if constexpr(is_init) {
 				// Log a brief summary for the first GPU to help compare against dcgmi/nvidia-smi.
 				if (device_count > 0) {
 					auto& gpu = gpus_slice[0];
-					long long util = 0;
-					if (!gpu.gpu_percent.at("gpu-totals").empty())
-						util = gpu.gpu_percent.at("gpu-totals").back();
-					long long mem_util = 0;
-					if (!gpu.mem_utilization_percent.empty())
-						mem_util = gpu.mem_utilization_percent.back();
+					long long util = gpu.gpu_percent.at("gpu-totals").back();
+					long long mem_util = gpu.mem_utilization_percent.back();
 
 					Logger::debug(
 						"DCGM: GPU0 init "
@@ -1470,7 +1524,7 @@ namespace Gpu {
 						"B mem_total=" + to_string(gpu.mem_total) +
 						"B pwr=" + to_string(gpu.pwr_usage) +
 						"mW pwr_cap=" + to_string(gpu.pwr_max_usage) +
-						"mW temp=" + (gpu.temp.empty() ? "n/a" : to_string(gpu.temp.back())) +
+						"mW temp=" + to_string(gpu.temp.back()) +
 						"C sm_clk=" + to_string(gpu.gpu_clock_speed) +
 						"MHz mem_clk=" + to_string(gpu.mem_clock_speed) + "MHz"
 					);
