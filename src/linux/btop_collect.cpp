@@ -1417,6 +1417,7 @@ namespace Gpu {
 			}
 
 			// Iterate over GPUs and fields; values are laid out as [gpu0_field0, gpu0_field1, ..., gpu1_field0, ...].
+			bool any_metric_global = false;
 			for (uint32_t gpuIdx = 0; gpuIdx < device_count; ++gpuIdx) {
 				auto& gpu = gpus_slice[gpuIdx];
 
@@ -1514,6 +1515,8 @@ namespace Gpu {
 					if (!any_metric) {
 						Logger::warning("DCGM: GPU" + to_string(gpuIdx) + " returned no valid metrics, enabling minimal display");
 						got_gpu_util = true;  // Enable basic display so GPU box renders
+					} else {
+						any_metric_global = true;
 					}
 
 					// Set supported_functions based on which fields returned valid data
@@ -1546,6 +1549,14 @@ namespace Gpu {
 			}
 
 			if constexpr(is_init) {
+				// If DCGM failed to return any valid metrics for all GPUs, disable it so that
+				// other backends (e.g. NVML) can be used instead.
+				if (!any_metric_global) {
+					Logger::info("DCGM: No GPUs reported usable metrics, falling back to other backends");
+					shutdown();
+					return false;
+				}
+
 				// Log a brief summary for the first GPU to help compare against dcgmi/nvidia-smi.
 				if (device_count > 0) {
 					auto& gpu = gpus_slice[0];
