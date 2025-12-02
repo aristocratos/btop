@@ -397,12 +397,15 @@ namespace Shared {
 			using namespace Gpu;
 			count = gpus.size();
 			gpu_b_height_offsets.resize(gpus.size());
-			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
-				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
+			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i) {
+				int calculated_offset = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
 					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
 						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
+				// Ensure minimum height of 1 so GPU box is visible even with limited metrics
+				gpu_b_height_offsets[i] = std::max(1, calculated_offset);
+			}
 		}
 	#endif
 
@@ -1480,6 +1483,23 @@ namespace Gpu {
 				}
 
 				if constexpr(is_init) {
+					// Log field support for diagnosis (especially on Grace Blackwell / GB10 systems)
+					Logger::info("DCGM: GPU" + to_string(gpuIdx) + " field support: "
+						"util=" + to_string(got_gpu_util) + " mem_util=" + to_string(got_mem_util) +
+						" mem_total=" + to_string(got_mem_total) + " mem_used=" + to_string(got_mem_used) +
+						" pwr=" + to_string(got_pwr_usage) + " temp=" + to_string(got_temp) +
+						" gpu_clk=" + to_string(got_gpu_clock) + " mem_clk=" + to_string(got_mem_clock));
+
+					// If no metrics succeeded but GPU was detected, enable minimal display
+					// This ensures the GPU box renders even on systems like Grace Blackwell
+					// where traditional metrics may not be supported
+					bool any_metric = got_gpu_util || got_mem_util || got_mem_total || got_mem_used ||
+									  got_pwr_usage || got_temp || got_gpu_clock || got_mem_clock;
+					if (!any_metric) {
+						Logger::warning("DCGM: GPU" + to_string(gpuIdx) + " returned no valid metrics, enabling minimal display");
+						got_gpu_util = true;  // Enable basic display so GPU box renders
+					}
+
 					// Set supported_functions based on which fields returned valid data
 					gpu.supported_functions.gpu_utilization = got_gpu_util;
 					gpu.supported_functions.mem_utilization = got_mem_util;
