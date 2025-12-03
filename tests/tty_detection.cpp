@@ -74,6 +74,16 @@ TEST_F(TtyDetectionTest, term_program_unsupported) {
 	EXPECT_FALSE(supports_truecolor());
 }
 
+TEST_F(TtyDetectionTest, term_program_uppercase) {
+	setenv("TERM_PROGRAM", "VSCODE", 1);
+	EXPECT_TRUE(supports_truecolor());
+}
+
+TEST_F(TtyDetectionTest, term_program_mixed_case_iterm) {
+	setenv("TERM_PROGRAM", "ITERM.APP", 1);
+	EXPECT_TRUE(supports_truecolor());
+}
+
 //* Test TERM environment variable detection
 TEST_F(TtyDetectionTest, term_with_truecolor) {
 	setenv("TERM", "xterm-truecolor", 1);
@@ -98,6 +108,16 @@ TEST_F(TtyDetectionTest, term_regular_xterm) {
 TEST_F(TtyDetectionTest, term_basic) {
 	setenv("TERM", "xterm", 1);
 	EXPECT_FALSE(supports_truecolor());
+}
+
+TEST_F(TtyDetectionTest, term_uppercase_truecolor) {
+	setenv("TERM", "XTERM-TRUECOLOR", 1);
+	EXPECT_TRUE(supports_truecolor());
+}
+
+TEST_F(TtyDetectionTest, term_mixed_case_direct) {
+	setenv("TERM", "xterm-DIRECT", 1);
+	EXPECT_TRUE(supports_truecolor());
 }
 
 //* Test no environment variables set

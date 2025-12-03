@@ -830,20 +830,20 @@ auto supports_truecolor() -> bool {
 
 	//? Check TERM_PROGRAM for known truecolor-capable terminals
 	if (const auto* term_program = std::getenv("TERM_PROGRAM")) {
-		const string tp = term_program;
-		if (tp == "iTerm.app" or tp == "vscode" or tp == "WezTerm" or tp == "Hyper") {
-			Logger::debug("Truecolor support detected via TERM_PROGRAM=" + tp);
+		const string tp = str_to_lower(term_program);
+		if (tp == "iterm.app" or tp == "vscode" or tp == "wezterm" or tp == "hyper") {
+			Logger::debug("Truecolor support detected via TERM_PROGRAM=" + string(term_program));
 			return true;
 		}
 	}
 
 	//? Check TERM variable for truecolor indicators
 	if (const auto* term = std::getenv("TERM")) {
-		const string t = term;
+		const string t = str_to_lower(term);
 		if (t.find("truecolor") != string::npos or
 		    t.find("24bit") != string::npos or
 		    t.find("direct") != string::npos) {
-			Logger::debug("Truecolor support detected via TERM=" + t);
+			Logger::debug("Truecolor support detected via TERM=" + string(term));
 			return true;
 		}
 	}
