@@ -463,16 +463,20 @@ namespace Tools {
 		}
 
 		if (shorten) {
-			auto f_pos = out.find(".");
-			if (f_pos == 1 and out.size() > 3) {
+			auto has_sep = out.find(".") != string::npos;
+			if (has_sep) {
 				out = fmt::format("{:.1f}", stod(out));
 			}
-			else if (f_pos != string::npos) {
-				out = fmt::format("{:.0f}", stod(out));
-			}
 			if (out.size() > 3) {
-				out = fmt::format("{:d}.0", out[0] - '0');
-				start++;
+				// if out is of the form xy.z
+				if (has_sep) {
+					out = fmt::format("{:.0f}", stod(out));
+				}
+				// if out is of the form xyzw (only when not using base 10)
+				else {
+					out = fmt::format("{:d}.0", out[0] - '0');
+					start++;
+				}
 			}
 			out.push_back(units[start][0]);
 		}
