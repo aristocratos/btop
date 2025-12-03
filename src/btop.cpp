@@ -817,6 +817,40 @@ namespace Runner {
 
 }
 
+//* Check if terminal supports truecolor based on environment variables
+auto supports_truecolor() -> bool {
+	//? Check COLORTERM environment variable (standard truecolor indicator)
+	if (const auto* colorterm = std::getenv("COLORTERM")) {
+		const string ct = str_to_lower(colorterm);
+		if (ct == "truecolor" or ct == "24bit") {
+			Logger::debug("Truecolor support detected via COLORTERM=" + string(colorterm));
+			return true;
+		}
+	}
+
+	//? Check TERM_PROGRAM for known truecolor-capable terminals
+	if (const auto* term_program = std::getenv("TERM_PROGRAM")) {
+		const string tp = term_program;
+		if (tp == "iTerm.app" or tp == "vscode" or tp == "WezTerm" or tp == "Hyper") {
+			Logger::debug("Truecolor support detected via TERM_PROGRAM=" + tp);
+			return true;
+		}
+	}
+
+	//? Check TERM variable for truecolor indicators
+	if (const auto* term = std::getenv("TERM")) {
+		const string t = term;
+		if (t.find("truecolor") != string::npos or
+		    t.find("24bit") != string::npos or
+		    t.find("direct") != string::npos) {
+			Logger::debug("Truecolor support detected via TERM=" + t);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static auto configure_tty_mode(std::optional<bool> force_tty) {
 	if (force_tty.has_value()) {
 		Config::set("tty_mode", force_tty.value());
@@ -824,9 +858,9 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
   	}
 
 #if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
-	else if (Term::current_tty.starts_with("/dev/tty")) {
+	else if (Term::current_tty.starts_with("/dev/tty") and not supports_truecolor()) {
 		Config::set("tty_mode", true);
-		Logger::debug("Auto detect real TTY");
+		Logger::debug("Auto detect real TTY without truecolor support");
   	}
 #endif
 
