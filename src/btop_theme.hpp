@@ -48,6 +48,11 @@ namespace Theme {
 	//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
 	string dec_to_color(int r, int g, int b, bool t_to_256=false, const string& depth="fg");
 
+	//* Convert RGB colors to nearest ANSI 16-color escape sequence
+	//* Args	r: [0-255], g: [0-255], b: [0-255]
+	//* 		depth: ["fg"|"bg"] for either a foreground color or a background color
+	string rgb_to_ansi16(const int& r, const int& g, const int& b, const string& depth="fg");
+
 	//* Update list of paths for available themes
 	void updateThemes();
 

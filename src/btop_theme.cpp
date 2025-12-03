@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <climits>
 #include <cmath>
 #include <fstream>
 #include <unistd.h>
@@ -149,6 +150,67 @@ namespace Theme {
 			//? Else use 6x6x6 color cube to calculate approximate colors
 			else {
 				return round((double)r / 51) * 36 + round((double)g / 51) * 6 + round((double)b / 51) + 16;
+			}
+		}
+	}
+
+	//* Convert RGB colors to nearest ANSI 16-color code using Euclidean distance
+	string rgb_to_ansi16(const int& r, const int& g, const int& b, const string& depth) {
+		//? Clamp RGB values to valid range
+		const int red = std::clamp(r, 0, 255);
+		const int green = std::clamp(g, 0, 255);
+		const int blue = std::clamp(b, 0, 255);
+
+		//? Standard ANSI 16-color palette RGB values (xterm standard)
+		constexpr array<array<int, 3>, 16> ansi_palette = {{
+			{0, 0, 0},       // 0: Black
+			{128, 0, 0},     // 1: Maroon
+			{0, 128, 0},     // 2: Green
+			{128, 128, 0},   // 3: Olive
+			{0, 0, 128},     // 4: Navy
+			{128, 0, 128},   // 5: Purple
+			{0, 128, 128},   // 6: Teal
+			{192, 192, 192}, // 7: Silver
+			{128, 128, 128}, // 8: Grey
+			{255, 0, 0},     // 9: Red
+			{0, 255, 0},     // 10: Lime
+			{255, 255, 0},   // 11: Yellow
+			{0, 0, 255},     // 12: Blue
+			{255, 0, 255},   // 13: Fuchsia/Magenta
+			{0, 255, 255},   // 14: Aqua/Cyan
+			{255, 255, 255}  // 15: White
+		}};
+
+		//? Find closest color using Euclidean distance in RGB space
+		int min_distance = INT_MAX;
+		int color_code = 0;
+
+		for (size_t i = 0; i < ansi_palette.size(); ++i) {
+			const int dr = red - ansi_palette[i][0];
+			const int dg = green - ansi_palette[i][1];
+			const int db = blue - ansi_palette[i][2];
+			const int distance = dr * dr + dg * dg + db * db;
+
+			if (distance < min_distance) {
+				min_distance = distance;
+				color_code = i;
+			}
+		}
+
+		//? Convert color code to ANSI escape sequence
+		//? Foreground: 30-37 (normal), 90-97 (bright 8-15)
+		//? Background: 40-47 (normal), 100-107 (bright 8-15)
+		if (depth == "fg") {
+			if (color_code >= 8) {
+				return Fx::e + to_string(82 + color_code) + "m";  // 90-97
+			} else {
+				return Fx::e + to_string(30 + color_code) + "m";  // 30-37
+			}
+		} else {
+			if (color_code >= 8) {
+				return Fx::e + to_string(92 + color_code) + "m";  // 100-107
+			} else {
+				return Fx::e + to_string(40 + color_code) + "m";  // 40-47
 			}
 		}
 	}
@@ -351,13 +413,92 @@ namespace Theme {
 		}
 
 		//* Set colors and generate gradients for the TTY theme
-		void generateTTYColors() {
+		void generateTTYColors(const std::unordered_map<string, string>& source) {
+			vector<string> t_rgb;
+			string depth;
 			rgbs.clear();
 			gradients.clear();
-			colors = TTY_theme;
-			if (not Config::getB("theme_background"))
-				colors["main_bg"] = "\x1b[49m";
+			colors.clear();
 
+			//? Convert user theme colors to ANSI 16-color equivalents
+			for (const auto& [name, color] : Default_theme) {
+				if (name == "main_bg" and not Config::getB("theme_background")) {
+					colors[name] = "\x1b[49m";
+					rgbs[name] = {-1, -1, -1};
+					continue;
+				}
+
+				depth = (name.ends_with("bg") and name != "meter_bg") ? "bg" : "fg";
+
+				//? Try to use color from user's theme
+				if (source.contains(name)) {
+					if (name == "main_bg" and source.at(name).empty()) {
+						colors[name] = "\x1b[49m";
+						rgbs[name] = {-1, -1, -1};
+						continue;
+					}
+					else if (source.at(name).empty() and (name.ends_with("_mid") or name.ends_with("_end"))) {
+						colors[name] = "";
+						rgbs[name] = {-1, -1, -1};
+						continue;
+					}
+					else if (source.at(name).starts_with('#')) {
+						//? Convert hex color to ANSI 16-color
+						auto rgb_arr = hex_to_dec(source.at(name));
+						if (rgb_arr[0] >= 0) {
+							colors[name] = rgb_to_ansi16(rgb_arr[0], rgb_arr[1], rgb_arr[2], depth);
+							rgbs[name] = rgb_arr;
+							continue;
+						}
+					}
+					else if (not source.at(name).empty()) {
+						//? Convert RGB decimal to ANSI 16-color
+						t_rgb = ssplit(source.at(name));
+						if (t_rgb.size() == 3) {
+							try {
+								int r = stoi(t_rgb[0]);
+								int g = stoi(t_rgb[1]);
+								int b = stoi(t_rgb[2]);
+								colors[name] = rgb_to_ansi16(r, g, b, depth);
+								rgbs[name] = array{r, g, b};
+								continue;
+							} catch (const std::invalid_argument& e) {
+								Logger::error("Invalid argument in RGB decimal value for TTY mode: \"" + source.at(name) + "\". Exception: " + string(e.what()));
+							} catch (const std::out_of_range& e) {
+								Logger::error("Out of range in RGB decimal value for TTY mode: \"" + source.at(name) + "\". Exception: " + string(e.what()));
+							} catch (...) {
+								Logger::error("Unknown error parsing RGB decimal value for TTY mode: \"" + source.at(name) + "\"");
+							}
+						}
+					}
+				}
+
+				//? Fallback to hardcoded TTY_theme if user theme doesn't have this color
+				if (TTY_theme.contains(name)) {
+					colors[name] = TTY_theme.at(name);
+					rgbs[name] = {-1, -1, -1};  //? TTY colors don't need RGB values
+				}
+			}
+
+			//? Set fallback values for optional colors not defined
+			if (not colors.contains("meter_bg")) {
+				colors["meter_bg"] = colors.at("inactive_fg");
+				rgbs["meter_bg"] = rgbs.at("inactive_fg");
+			}
+			if (not colors.contains("process_start")) {
+				colors["process_start"] = colors.at("cpu_start");
+				colors["process_mid"] = colors.at("cpu_mid");
+				colors["process_end"] = colors.at("cpu_end");
+				rgbs["process_start"] = rgbs.at("cpu_start");
+				rgbs["process_mid"] = rgbs.at("cpu_mid");
+				rgbs["process_end"] = rgbs.at("cpu_end");
+			}
+			if (not colors.contains("graph_text")) {
+				colors["graph_text"] = colors.at("inactive_fg");
+				rgbs["graph_text"] = rgbs.at("inactive_fg");
+			}
+
+			//? Generate gradients by repeating colors (no interpolation in TTY mode)
 			for (const auto& c : colors) {
 				if (not c.first.ends_with("_start")) continue;
 				const string base_name { rtrim(c.first, "_start") };
@@ -440,8 +581,11 @@ namespace Theme {
 				break;
 			}
 		}
-		if (theme == "TTY" or Config::getB("tty_mode"))
-			generateTTYColors();
+		if (theme == "TTY" or Config::getB("tty_mode")) {
+			//? Load user's theme and convert colors to ANSI 16-color
+			auto theme_source = (theme == "Default" or (theme == "TTY" and theme_path.empty())) ? Default_theme : loadFile(theme_path);
+			generateTTYColors(theme_source);
+		}
 		else {
 			generateColors((theme == "Default" or theme_path.empty() ? Default_theme : loadFile(theme_path)));
 			generateGradients();
