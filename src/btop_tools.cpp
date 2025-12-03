@@ -436,20 +436,12 @@ namespace Tools {
 		if (mega) {
 			while (value >= 100000) {
 				value /= 1000;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
 		else {
 			while (value >= 102400) {
 				value >>= 10;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
