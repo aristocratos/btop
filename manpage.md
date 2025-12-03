@@ -8,7 +8,7 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 # SYNOPSIS
 
-**btop** [**-c**] [**-d**] [**-l**] [**-t**] [**-p** _id_] [**-u** _ms_] [**\-\-force-utf**]
+**btop** [**-c**] [**-d**] [**-l**] [**-t**] [**-p** _id_] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
 
 **btop** [{**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
@@ -44,6 +44,9 @@ starting with two dashes ('-'). A summary of options is included below.
 
 **\-\-tty-off**
 :   Force disable tty mode.
+
+**\-\-themes-dir _dir_**
+:   Path to a custom themes directory. When specified, this directory takes priority over the default theme search paths.
 
 **-u**, **\-\-update _ms_**
 :   Set an initial update rate in milliseconds.
