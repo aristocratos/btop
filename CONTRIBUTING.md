@@ -34,9 +34,9 @@
 
 * Use [RAII](https://en.cppreference.com/w/cpp/language/raii).
 
-* Make use of the standard algorithms library, (re)watch [C++ Seasoning](https://www.youtube.com/watch?v=W2tWOdzgXHA) and [105 STL Algorithms](https://www.youtube.com/watch?v=bFSnXNIsK4A) for inspiration.
+* Make use of the standard algorithms library, watch [C++ Seasoning](https://www.youtube.com/watch?v=W2tWOdzgXHA) and [105 STL Algorithms](https://www.youtube.com/watch?v=bFSnXNIsK4A) for inspiration.
 
-* Make use of the included [robin_hood unordered map & set](https://github.com/martinus/robin-hood-hashing)
+* Use the included `fmt` library for string formatting, see issue #535 for more info and examples.
 
 * Do not add includes if the same functionality can be achieved using the already included libraries.
 
