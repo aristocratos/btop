@@ -47,6 +47,14 @@
 
 ## News
 
+##### 4 December 2025
+
+Since there is a increasing amount of AI generated/assisted PR's, the following guidlines have been added to CONTRIBUTING.md:
+
+* Submissions where the majority of the code is AI generated must be marked with [AI generated].
+
+* "Vibe coded" PR's where it seems like the author doesn't understand the generated code will be dismissed.
+
 ##### 22 September 2024
 
 Btop release v1.4.0
