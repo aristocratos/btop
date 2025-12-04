@@ -32,6 +32,9 @@ tab-size = 4
 #include <filesystem>
 #include <unordered_map>
 #include <utility>
+#include <ranges>
+#include <algorithm>
+#include <iterator>
 
 using std::array;
 using std::ceil;
@@ -1438,23 +1441,51 @@ static int optionsMenu(const string& key) {
 			}
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				int i = -1;
+				if (option == "color_theme") {
+					const auto current_theme = Config::getS(option);
+					const auto it = std::ranges::find_if(optList, [&](const auto& p) {
+						return (p == current_theme or fs::path(p).filename().string() == current_theme);
+					});
+					if (it != optList.end()) i = std::distance(optList.begin(), it);
+					else i = optList.size();
+				}
+				else {
+					i = v_index(optList, Config::getS(option));
+				}
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
-				Config::set(option, optList.at(i));
 
-				if (option == "color_theme")
+				if (option == "color_theme") {
+					const auto theme_path = fs::path(optList.at(i));
+					const auto theme_filename = theme_path.filename().string();
+					
+					//? Check if the selected theme is the first one that matches this filename (handling shadowing)
+					const auto first_match = std::ranges::find_if(optList, [&](const string& p) {
+						return fs::path(p).filename().string() == theme_filename;
+					});
+
+					if (first_match != optList.end() and *first_match == optList.at(i))
+						Config::set(option, theme_filename);
+					else
+						Config::set(option, theme_path.string());
+					
 					theme_refresh = true;
-				else if (option == "log_level") {
-					Logger::set(optList.at(i));
-					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (option == "base_10_bitrate") {
-				    recollect = true;
+				else {
+					Config::set(option, optList.at(i));
+
+					if (option == "log_level") {
+						Logger::set(optList.at(i));
+						Logger::info("Logger set to " + optList.at(i));
+					}
+					else if (option == "base_10_bitrate") {
+						recollect = true;
+					}
+					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+						screen_redraw = true;
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
-					screen_redraw = true;
 			}
 			else
 				retval = NoChange;
