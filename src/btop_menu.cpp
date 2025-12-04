@@ -32,6 +32,9 @@ tab-size = 4
 #include <filesystem>
 #include <unordered_map>
 #include <utility>
+#include <ranges>
+#include <algorithm>
+#include <iterator>
 
 using std::array;
 using std::ceil;
@@ -1438,23 +1441,51 @@ static int optionsMenu(const string& key) {
 			}
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				int i = -1;
+				if (option == "color_theme") {
+					const auto current_theme = Config::getS(option);
+					const auto it = std::ranges::find_if(optList, [&](const auto& p) {
+						return (p == current_theme or fs::path(p).filename().string() == current_theme);
+					});
+					if (it != optList.end()) i = std::distance(optList.begin(), it);
+					else i = optList.size();
+				}
+				else {
+					i = v_index(optList, Config::getS(option));
+				}
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
-				Config::set(option, optList.at(i));
 
-				if (option == "color_theme")
+				if (option == "color_theme") {
+					const auto theme_path = fs::path(optList.at(i));
+					const auto theme_filename = theme_path.filename().string();
+					
+					//? Check if the selected theme is the first one that matches this filename (handling shadowing)
+					const auto first_match = std::ranges::find_if(optList, [&](const string& p) {
+						return fs::path(p).filename().string() == theme_filename;
+					});
+
+					if (first_match != optList.end() and *first_match == optList.at(i))
+						Config::set(option, theme_filename);
+					else
+						Config::set(option, theme_path.string());
+					
 					theme_refresh = true;
-				else if (option == "log_level") {
-					Logger::set(optList.at(i));
-					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (option == "base_10_bitrate") {
-				    recollect = true;
+				else {
+					Config::set(option, optList.at(i));
+
+					if (option == "log_level") {
+						Logger::set(optList.at(i));
+						Logger::info("Logger set to " + optList.at(i));
+					}
+					else if (option == "base_10_bitrate") {
+						recollect = true;
+					}
+					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+						screen_redraw = true;
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
-					screen_redraw = true;
 			}
 			else
 				retval = NoChange;
@@ -1526,11 +1557,31 @@ static int optionsMenu(const string& key) {
 				const auto& option = categories[selected_cat][i][0];
 				const auto& value = (option == "color_theme" ? fs::path(Config::getS("color_theme")).stem().string() : Config::getAsString(option));
 
+				string idx_str;
+				if (c-1 == selected and selPred.test(isBrowsable)) {
+					const auto& optList = optionsList.at(option).get();
+					int idx = 0;
+					if (option == "color_theme") {
+						const auto current_theme = Config::getS(option);
+						const auto current_theme_path = fs::path(current_theme);
+						const auto it = std::ranges::find_if(optList, [&](const string& p) {
+							const auto p_path = fs::path(p);
+							//? Match against full path, filename, stem or legacy absolute path
+							return p == current_theme 
+								or p_path.filename() == current_theme 
+								or p_path.stem() == current_theme
+								or (current_theme_path.is_absolute() and current_theme_path.filename() == p_path.filename());
+						});
+						if (it != optList.end()) idx = std::distance(optList.begin(), it);
+						else idx = optList.size();
+					} else {
+						idx = v_index(optList, value);
+					}
+					idx_str = " " + to_string(idx + 1) + '/' + to_string(optList.size());
+				}
+
 				out += Mv::to(cy++, x + 1) + (c-1 == selected ? Theme::c("selected_bg") + Theme::c("selected_fg") : Theme::c("title"))
-					+ Fx::b + cjust(capitalize(s_replace(option, "_", " "))
-						+ (c-1 == selected and selPred.test(isBrowsable)
-							? ' ' + to_string(v_index(optionsList.at(option).get(), (option == "color_theme" ? Config::getS("color_theme") : value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
-							: ""), 29);
+					+ Fx::b + cjust(capitalize(s_replace(option, "_", " ")) + idx_str, 29);
 				out	+= Mv::to(cy++, x + 1) + (c-1 == selected ? "" : Theme::c("main_fg")) + Fx::ub + "  "
 					+ (c-1 == selected and editing ? cjust(editor(24), 34, true) : cjust(value, 25, true)) + "  ";
 
