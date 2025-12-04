@@ -88,3 +88,10 @@ CMakeUserPresets.json
 
 # CLion
 cmake-build-*
+
+# Devenv (local development environment)
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+.direnv
+.pre-commit-config.yaml
