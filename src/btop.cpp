@@ -931,6 +931,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		}
 	}
 
+	//? Set custom themes directory from command line if provided
+	if (cli.themes_dir.has_value()) {
+		Theme::custom_theme_dir = cli.themes_dir.value();
+		Logger::info("Using custom themes directory: " + Theme::custom_theme_dir.string());
+	}
+
 	//? Config init
 	init_config(cli.low_color, cli.filter);
 

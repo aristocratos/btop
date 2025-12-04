@@ -226,6 +226,9 @@ The user themes directory depends on which environment variables are set:
 The `make install` command places the default themes in `[$PREFIX or /usr/local]/share/btop/themes`.
 User created themes should be placed in the user themes directory.
 
+Use the `--themes-dir` command-line option to specify a custom themes directory.
+When specified, this directory takes priority over the default search paths.
+
 Let me know if you want to contribute with new themes.
 
 ## Support and funding
