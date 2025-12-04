@@ -12,6 +12,10 @@
 
 * Purely cosmetic changes won't be accepted without a very good explanation of its value.
 
+* Submissions where the majority of the code is AI generated must be marked with [AI generated].
+
+* "Vibe coded" PR's where it seems like the author doesn't understand the generated code will be dismissed.
+
 ## Formatting
 
 ### Follow the current syntax design
