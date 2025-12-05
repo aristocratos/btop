@@ -258,8 +258,8 @@ For the best experience run within a terminal with support for:
 
 Also necessary is a UTF8 locale and a font that includes:
 
-* Unicode Block “Braille Patterns” U+2800 - U+28FF (Not needed in TTY mode or with graphs set to type: block or tty.)
-* Unicode Block “Geometric Shapes” U+25A0 - U+25FF
+* Unicode Block "Braille Patterns" U+2800 - U+28FF (Not needed in TTY mode or with graphs set to type: block or tty.)
+* Unicode Block "Geometric Shapes" U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
 ### **Optional Dependencies (Needed for GPU monitoring) (Only Linux)**
@@ -1279,19 +1279,77 @@ If you want to disable building tests, pass `-DBUILD_TESTING=OFF` to the configu
    sudo snap install btop-desktop --edge
    ```
 
- * **Connect the interface**
-
-    ```bash
-	sudo snap connect btop:removable-media
-	or
-	sudo snap connect btop-desktop:removable-media
-	```
-
 
 ## Configurability
 
 All options changeable from within UI.
 Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
+
+
+## Building btop-gl (Vulkan/Screensaver Version)
+
+This section details how to build the `btop-gl` fork which uses Vulkan for rendering and is intended to be used as a high-performance screensaver.
+
+### Prerequisites (macOS)
+
+*   **Xcode Command Line Tools:** Install with `xcode-select --install`
+*   **Homebrew:** Package manager for macOS. Install from [brew.sh](https://brew.sh/)
+*   **Required Packages via Homebrew:**
+    ```bash
+    brew install cmake glfw glm fmt vulkan-loader vulkan-headers vulkan-tools molten-vk
+    ```
+    *   `cmake`: Build system generator.
+    *   `glfw`: Windowing and input library.
+    *   `glm`: Mathematics library for graphics.
+    *   `fmt`: Modern formatting library.
+    *   `vulkan-loader`, `vulkan-headers`, `vulkan-tools`: Core Vulkan components.
+    *   `molten-vk`: Vulkan portability layer over Metal for macOS.
+
+### Building Steps (macOS)
+
+1.  **Clone the `btop-gl` repository (this fork):**
+    ```bash
+    git clone <URL_of_this_btop-gl_fork> btop-gl
+    cd btop-gl
+    ```
+
+2.  **Copy NanoVG source files:**
+    This version uses a specific fork of NanoVG for Vulkan. These commands copy the necessary files into the `btop-gl` directory.
+    ```bash
+    git clone https://github.com/SubiyaCryolite/nanovg_vulkan.git nanovg-vulkan
+    cp nanovg-vulkan/src/nanovg.h nanovg-vulkan/src/nanovg_vk.h nanovg-vulkan/src/nanovg.c .
+    cp nanovg-vulkan/src/stb_truetype.h nanovg-vulkan/src/fontstash.h nanovg-vulkan/src/stb_image.h .
+    cp -r nanovg-vulkan/src/shader .
+    ```
+
+3.  **Create a build directory and run CMake:**
+    ```bash
+    mkdir build
+    cd build
+    cmake ..
+    ```
+
+4.  **Compile the project:**
+    ```bash
+    make -j$(sysctl -n hw.ncpu) # Uses all available CPU cores for faster compilation
+    ```
+
+5.  **Run the application:**
+    Before running, you need to set up the environment variables for MoltenVK to find the Vulkan ICD (Installable Client Driver).
+    ```bash
+    export VK_ICD_FILENAMES="/opt/homebrew/Cellar/molten-vk/1.3.0/etc/vulkan/icd.d/MoltenVK_icd.json" # Adjust version if necessary
+    # Or for Intel Macs, the path might be /usr/local/Cellar/...
+    ./btop-gl-vulkan
+    ```
+    *   **Note:** The exact path to `MoltenVK_icd.json` might vary slightly depending on your Homebrew installation and MoltenVK version. Use `find /opt/homebrew -name "MoltenVK_icd.json"` or `find /usr/local -name "MoltenVK_icd.json"` to locate it if the above path doesn't work.
+    *   You can add the `export VK_ICD_FILENAMES=...` line to your shell configuration file (e.g., `~/.zshrc`, `~/.bash_profile`) to set it permanently.
+
+### Troubleshooting (btop-gl)
+
+*   **`Failed to create instance!` or Vulkan errors:** Ensure `VK_ICD_FILENAMES` is set correctly and points to your `MoltenVK_icd.json`.
+*   **Text not visible:** This is often a font loading issue. The application tries to load Helvetica or DejaVuSans. If these are not found, text might not render. Ensure you have common system fonts installed, or modify `VulkanRenderer::initializeNanoVG()` in `btop-gl/src/vulkan_renderer.cpp` to load a specific `.ttf` font file available on your system.
+*   **Compile errors related to missing headers (e.g., `vulkan/vulkan.h`, `GLFW/glfw3.h`):** Make sure you've installed all prerequisite packages via Homebrew and that Homebrew's include path (`/opt/homebrew/include` or `/usr/local/include`) is recognized by your compiler/linker.
+
 
 #### btop.conf: (auto generated if not found)
 
