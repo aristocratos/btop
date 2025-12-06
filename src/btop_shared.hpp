@@ -110,7 +110,7 @@ namespace Shared {
 namespace Gpu {
 #ifdef GPU_SUPPORT
 	extern vector<string> box;
-	extern int width, height, min_width, min_height;
+	extern int width, total_height, min_width, min_height;
 	extern vector<int> x_vec, y_vec;
 	extern vector<bool> redraw;
 	extern int shown;

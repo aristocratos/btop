@@ -47,6 +47,14 @@
 
 ## News
 
+##### 4 December 2025
+
+Since there is a increasing amount of AI generated/assisted PR's, the following guidlines have been added to CONTRIBUTING.md:
+
+* Submissions where the majority of the code is AI generated must be marked with [AI generated].
+
+* "Vibe coded" PR's where it seems like the author doesn't understand the generated code will be dismissed.
+
 ##### 22 September 2024
 
 Btop release v1.4.0
@@ -225,6 +233,9 @@ The user themes directory depends on which environment variables are set:
 
 The `make install` command places the default themes in `[$PREFIX or /usr/local]/share/btop/themes`.
 User created themes should be placed in the user themes directory.
+
+Use the `--themes-dir` command-line option to specify a custom themes directory.
+When specified, this directory takes priority over the default search paths.
 
 Let me know if you want to contribute with new themes.
 

@@ -12,6 +12,10 @@
 
 * Purely cosmetic changes won't be accepted without a very good explanation of its value.
 
+* Submissions where the majority of the code is AI generated must be marked with [AI generated].
+
+* "Vibe coded" PR's where it seems like the author doesn't understand the generated code will be dismissed.
+
 ## Formatting
 
 ### Follow the current syntax design
@@ -30,9 +34,9 @@
 
 * Use [RAII](https://en.cppreference.com/w/cpp/language/raii).
 
-* Make use of the standard algorithms library, (re)watch [C++ Seasoning](https://www.youtube.com/watch?v=W2tWOdzgXHA) and [105 STL Algorithms](https://www.youtube.com/watch?v=bFSnXNIsK4A) for inspiration.
+* Make use of the standard algorithms library, watch [C++ Seasoning](https://www.youtube.com/watch?v=W2tWOdzgXHA) and [105 STL Algorithms](https://www.youtube.com/watch?v=bFSnXNIsK4A) for inspiration.
 
-* Make use of the included [robin_hood unordered map & set](https://github.com/martinus/robin-hood-hashing)
+* Use the included `fmt` library for string formatting, see issue [#535](https://github.com/aristocratos/btop/issues/535) for more info and examples.
 
 * Do not add includes if the same functionality can be achieved using the already included libraries.
 

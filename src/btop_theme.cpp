@@ -41,6 +41,7 @@ namespace Theme {
 
 	fs::path theme_dir;
 	fs::path user_theme_dir;
+	fs::path custom_theme_dir;
 	vector<string> themes;
 	std::unordered_map<string, string> colors;
 	std::unordered_map<string, array<int, 3>> rgbs;
@@ -418,7 +419,8 @@ namespace Theme {
 		themes.push_back("Default");
 		themes.push_back("TTY");
 
-		for (const auto& path : { user_theme_dir, theme_dir } ) {
+		//? Priority: custom_theme_dir -> user_theme_dir -> theme_dir
+		for (const auto& path : { custom_theme_dir, user_theme_dir, theme_dir } ) {
 			if (path.empty()) continue;
 			for (auto& file : fs::directory_iterator(path)) {
 				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1 and not v_contains(themes, file.path().c_str())) {

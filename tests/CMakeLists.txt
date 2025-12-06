@@ -9,9 +9,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-add_library(libbtop_test INTERFACE)
-target_include_directories(libbtop_test INTERFACE ${PROJECT_SOURCE_DIR}/src)
-target_link_libraries(libbtop_test INTERFACE libbtop GTest::gtest_main)
+add_library(libbtop_test)
+target_include_directories(libbtop_test PUBLIC ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(libbtop_test libbtop GTest::gtest_main)
 
 add_executable(btop_test tools.cpp)
 target_link_libraries(btop_test libbtop_test)
