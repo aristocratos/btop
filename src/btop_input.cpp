@@ -85,6 +85,7 @@ namespace Input {
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
 	std::unordered_map<string, Mouse_loc> mouse_mappings;
+	bool dragging_scroll;
 
 	deque<string> history(50, "");
 	string old_filter;
@@ -133,10 +134,14 @@ namespace Input {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-				// 	mouse_event = "mouse_release";
-				// 	key_view.remove_prefix(4);
-				// }
+				else if (key_view.starts_with("[<32;")) {
+					mouse_event = "mouse_drag";
+					key_view.remove_prefix(5);
+				}
+				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+					mouse_event = "mouse_release";
+					key_view.remove_prefix(4);
+				}
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
@@ -165,7 +170,7 @@ namespace Input {
 
 					key = mouse_event;
 
-					if (key == "mouse_click") {
+					if (key == "mouse_click" or key == "mouse_drag") {
 						const auto& [col, line] = mouse_pos;
 
 						for (const auto& [mapped_key, pos] : (Menu::active ? Menu::mouse_mappings : mouse_mappings)) {
@@ -271,6 +276,8 @@ namespace Input {
 				} else if (is_in(key, "ctrl_r")) {
 					kill(getpid(), SIGUSR2);
 					return;
+				} else if (key == "mouse_release") {
+					dragging_scroll = false;
 				} else
 					keep_going = true;
 
@@ -375,11 +382,22 @@ namespace Input {
 							else if (line == y + height - 2) {
 								if (Proc::selection("page_down") == -1) return;
 							}
+							else if (line == y + 2 + Proc::scroll_pos) {
+								dragging_scroll = true;
+							}
 							else if (Proc::selection("mousey" + to_string(line - y - 2)) == -1)
 								return;
 						}
-						else
+						else if (key.starts_with("mouse_scroll_")) {
 							goto proc_mouse_scroll;
+						}
+						else if (key == "mouse_drag" and dragging_scroll) {
+							goto proc_scroll_drag;
+						}
+					}
+					else if (key == "mouse_drag" and dragging_scroll) {
+						proc_scroll_drag:
+						Proc::selection("mousey" + to_string(line - y - 2));
 					}
 					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
 						Config::set("proc_selected", 0);
