@@ -60,7 +60,7 @@ jobs:
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: btop-x86_64-freebsd-14-${{ matrix.compiler }}
           path: 'bin/*'
