@@ -355,8 +355,9 @@ namespace Input {
 					const auto& [col, line] = mouse_pos;
 					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
 					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
-					if (col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1) {
-						if (key == "mouse_click") {
+					const auto in_proc_box = col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1;
+					if (key == "mouse_click") {
+						if (in_proc_box) {
 							if (col < Proc::x + Proc::width - 2) {
 								const auto& current_selection = Config::getI("proc_selected");
 								if (current_selection == line - y - 1) {
@@ -388,20 +389,16 @@ namespace Input {
 							else if (Proc::selection("mousey" + to_string(line - y - 2)) == -1)
 								return;
 						}
-						else if (key.starts_with("mouse_scroll_")) {
-							goto proc_mouse_scroll;
+						else if (Config::getI("proc_selected") > 0){
+							Config::set("proc_selected", 0);
+							redraw = true;
 						}
-						else if (key == "mouse_drag" and dragging_scroll) {
-							goto proc_scroll_drag;
-						}
+					}
+					else if (key.starts_with("mouse_scroll_") and in_proc_box) {
+						goto proc_mouse_scroll;
 					}
 					else if (key == "mouse_drag" and dragging_scroll) {
-						proc_scroll_drag:
 						Proc::selection("mousey" + to_string(line - y - 2));
-					}
-					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
-						Config::set("proc_selected", 0);
-						redraw = true;
 					}
 					else
 						keep_going = true;
