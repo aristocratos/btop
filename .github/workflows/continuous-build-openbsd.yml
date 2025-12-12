@@ -49,7 +49,7 @@ jobs:
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-"$GIT_HASH"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: btop-x86_64-openbsd-7.8
           path: 'bin/*'
