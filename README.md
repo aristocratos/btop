@@ -1296,7 +1296,7 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 #### btop.conf: (auto generated if not found)
 
 ```bash
-#? Config file for btop v. 1.2.2
+#? Config file for btop v.1.4.5
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
 #* Themes should be placed in "../share/btop/themes" relative to binary or "$HOME/.config/btop/themes"
@@ -1325,6 +1325,9 @@ vim_keys = False
 #* Rounded corners on boxes, is ignored if TTY mode is ON.
 rounded_corners = True
 
+#* Use terminal synchronized output sequences to reduce flickering on supported terminals.
+terminal_sync = True
+
 #* Default symbols to use for graph creation, "braille", "block" or "tty".
 #* "braille" offers the highest resolution but might not be included in all fonts.
 #* "block" has half the resolution of braille but uses more common characters.
@@ -1345,10 +1348,10 @@ graph_symbol_net = "default"
 graph_symbol_proc = "default"
 
 #* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
-shown_boxes = "proc cpu mem net"
+shown_boxes = "cpu mem net proc"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
-update_ms = 1500
+update_ms = 2000
 
 #* Processes sorting, "pid" "program" "arguments" "threads" "user" "memory" "cpu lazy" "cpu direct",
 #* "cpu lazy" sorts top process over time (easier to follow), "cpu direct" updates top process directly.
@@ -1367,13 +1370,13 @@ proc_colors = True
 proc_gradient = True
 
 #* If process cpu usage should be of the core it's running on or usage of the total available cpu power.
-proc_per_core = True
+proc_per_core = False
 
 #* Show process memory as bytes instead of percent.
 proc_mem_bytes = True
 
-#* Choose to preserve last cpu and memory usage of dead processes for when paused.
-keep_dead_proc_usage = False
+#* Show cpu graph for each process.
+proc_cpu_graphs = True
 
 #* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)
 proc_info_smaps = False
@@ -1381,13 +1384,22 @@ proc_info_smaps = False
 #* Show proc box on left side of screen instead of right.
 proc_left = False
 
+#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop).
+proc_filter_kernel = False
+
+#* In tree-view, always accumulate child process resources in the parent process.
+proc_aggregate = False
+
+#* Should cpu and memory usage display be preserved for dead processes when paused.
+keep_dead_proc_usage = False
+
 #* Sets the CPU stat shown in upper half of the CPU graph, "total" is always available.
 #* Select from a list of detected attributes from the options menu.
-cpu_graph_upper = "total"
+cpu_graph_upper = "Auto"
 
 #* Sets the CPU stat shown in lower half of the CPU graph, "total" is always available.
 #* Select from a list of detected attributes from the options menu.
-cpu_graph_lower = "total"
+cpu_graph_lower = "Auto"
 
 #* Toggles if the lower CPU graph should be inverted.
 cpu_invert_lower = True
@@ -1433,7 +1445,7 @@ freq_mode = "first"
 
 #* Draw a clock at top of screen, formatting according to strftime, empty string to disable.
 #* Special formatting: /host = hostname | /user = username | /uptime = system uptime
-clock_format = "%H:%M"
+clock_format = "%X"
 
 #* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort.
 background_update = True
@@ -1442,8 +1454,8 @@ background_update = True
 custom_cpu_name = ""
 
 #* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace " ".
-#* Begin line with "exclude=" to change to exclude filter, otherwise defaults to "most include" filter. Example: disks_filter="exclude=/boot /home/user".
-disks_filter = "exclude=/boot"
+#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
+disks_filter = ""
 
 #* Show graphs instead of meters for memory values.
 mem_graphs = True
@@ -1467,7 +1479,10 @@ show_disks = True
 only_physical = True
 
 #* Read disks list from /etc/fstab. This also disables only_physical.
-use_fstab = False
+use_fstab = True
+
+#* Setting this to True will hide all datasets, and only show ZFS pools. (IO stats will be calculated per-pool)
+zfs_hide_datasets = False
 
 #* Set to true to show available disk space for privileged users.
 disk_free_priv = False
@@ -1494,10 +1509,13 @@ net_upload = 100
 net_auto = True
 
 #* Sync the auto scaling for download and upload to whichever currently has the highest scale.
-net_sync = False
+net_sync = True
 
 #* Starts with the Network Interface specified here.
-net_iface = "br0"
+net_iface = ""
+
+#* "True" shows bitrates in base 10 (Kbps, Mbps). "False" shows bitrates in binary sizes (Kibps, Mibps, etc.). "Auto" uses base_10_sizes.
+base_10_bitrate = "Auto"
 
 #* Show battery stats in top right if battery is present.
 show_battery = True
@@ -1505,9 +1523,13 @@ show_battery = True
 #* Which battery to use if multiple are present. "Auto" for auto detection.
 selected_battery = "Auto"
 
+#* Show power stats of battery next to charge indicator.
+show_battery_watts = True
+
 #* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
-log_level = "DEBUG"
+log_level = "WARNING"
+
 ```
 
 #### Command line options
@@ -1525,6 +1547,7 @@ Options:
   -t, --tty               Force tty mode with ANSI graph symbols and 16 colors only
       --no-tty            Force disable tty mode
   -u, --update <ms>       Set an initial update rate in milliseconds
+      --default-config    Print default config to standard output
   -h, --help              Show this help message and exit
   -V, --version           Show a version message and exit (more with --version)
 ```

@@ -132,4 +132,7 @@ namespace Config {
 	void write();
 
 	auto get_log_file() -> std::optional<std::filesystem::path>;
+
+	// Write default config to an in-memory buffer
+	[[nodiscard]] auto current_config() -> std::string;
 }

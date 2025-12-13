@@ -10,7 +10,7 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 **btop** [**-c**] [**-d**] [**-l**] [**-t**] [**-p** _id_] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
 
-**btop** [{**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
+**btop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
 
@@ -50,6 +50,9 @@ starting with two dashes ('-'). A summary of options is included below.
 
 **-u**, **\-\-update _ms_**
 :   Set an initial update rate in milliseconds.
+
+**\-\-default-config**
+:   Print default config to standard output.
 
 **-h**, **\-\-help**
 :   Show summary of options.

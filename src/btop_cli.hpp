@@ -39,6 +39,9 @@ namespace Cli {
 	// Parse the command line arguments
 	[[nodiscard]] auto parse(std::span<const std::string_view> args) noexcept -> Result;
 
+	// Print default config to standard output
+	[[nodiscard]] auto default_config() noexcept -> Result;
+
 	// Print a usage header
 	void usage() noexcept;
 
