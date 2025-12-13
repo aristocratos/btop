@@ -425,7 +425,7 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
-			    else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 				    if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 				    Menu::show(Menu::Menus::Renice);
