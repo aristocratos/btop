@@ -1287,7 +1287,6 @@ If you want to disable building tests, pass `-DBUILD_TESTING=OFF` to the configu
 	sudo snap connect btop-desktop:removable-media
 	```
 
-
 ## Configurability
 
 All options changeable from within UI.
@@ -1295,7 +1294,7 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 
 #### btop.conf: (auto generated if not found)
 
-```bash
+```toml
 #? Config file for btop v.1.4.5
 
 #* Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.
@@ -1303,14 +1302,14 @@ Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` f
 color_theme = "Default"
 
 #* If the theme set background should be shown, set to False if you want terminal background transparency.
-theme_background = True
+theme_background = true
 
 #* Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false.
-truecolor = True
+truecolor = true
 
 #* Set to true to force tty mode regardless if a real tty has been detected or not.
 #* Will force 16-color mode and TTY theme, set all graph symbols to "tty" and swap out other non tty friendly symbols.
-force_tty = False
+force_tty = false
 
 #* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.
 #* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positions, G=graph symbol to use for box.
@@ -1320,13 +1319,13 @@ presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:defaul
 
 #* Set to True to enable "h,j,k,l,g,G" keys for directional control in lists.
 #* Conflicting keys for h:"help" and k:"kill" is accessible while holding shift.
-vim_keys = False
+vim_keys = false
 
 #* Rounded corners on boxes, is ignored if TTY mode is ON.
-rounded_corners = True
+rounded_corners = true
 
 #* Use terminal synchronized output sequences to reduce flickering on supported terminals.
-terminal_sync = True
+terminal_sync = true
 
 #* Default symbols to use for graph creation, "braille", "block" or "tty".
 #* "braille" offers the highest resolution but might not be included in all fonts.
@@ -1358,40 +1357,40 @@ update_ms = 2000
 proc_sorting = "cpu lazy"
 
 #* Reverse sorting order, True or False.
-proc_reversed = False
+proc_reversed = false
 
 #* Show processes as a tree.
-proc_tree = False
+proc_tree = false
 
 #* Use the cpu graph colors in the process list.
-proc_colors = True
+proc_colors = true
 
 #* Use a darkening gradient in the process list.
-proc_gradient = True
+proc_gradient = true
 
 #* If process cpu usage should be of the core it's running on or usage of the total available cpu power.
-proc_per_core = False
+proc_per_core = false
 
 #* Show process memory as bytes instead of percent.
-proc_mem_bytes = True
+proc_mem_bytes = true
 
 #* Show cpu graph for each process.
-proc_cpu_graphs = True
+proc_cpu_graphs = true
 
 #* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)
-proc_info_smaps = False
+proc_info_smaps = false
 
 #* Show proc box on left side of screen instead of right.
-proc_left = False
+proc_left = false
 
 #* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop).
-proc_filter_kernel = False
+proc_filter_kernel = false
 
 #* In tree-view, always accumulate child process resources in the parent process.
-proc_aggregate = False
+proc_aggregate = false
 
 #* Should cpu and memory usage display be preserved for dead processes when paused.
-keep_dead_proc_usage = False
+keep_dead_proc_usage = false
 
 #* Sets the CPU stat shown in upper half of the CPU graph, "total" is always available.
 #* Select from a list of detected attributes from the options menu.
@@ -1402,28 +1401,28 @@ cpu_graph_upper = "Auto"
 cpu_graph_lower = "Auto"
 
 #* Toggles if the lower CPU graph should be inverted.
-cpu_invert_lower = True
+cpu_invert_lower = true
 
 #* Set to True to completely disable the lower CPU graph.
-cpu_single_graph = False
+cpu_single_graph = false
 
 #* Show cpu box at bottom of screen instead of top.
-cpu_bottom = False
+cpu_bottom = false
 
 #* Shows the system uptime in the CPU box.
-show_uptime = True
+show_uptime = true
 
 #* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo.
-show_cpu_watts = True
+show_cpu_watts = true
 
 #* Show cpu temperature.
-check_temp = True
+check_temp = true
 
 #* Which sensor to use for cpu temperature, use options menu to select from list of available sensors.
 cpu_sensor = "Auto"
 
 #* Show temperatures for cpu cores also if check_temp is True and sensors has been found.
-show_coretemp = True
+show_coretemp = true
 
 #* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.
 #* Use lm-sensors or similar to see which cores are reporting temperatures on your machine.
@@ -1435,10 +1434,10 @@ cpu_core_map = ""
 temp_scale = "celsius"
 
 #* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024.
-base_10_sizes = False
+base_10_sizes = false
 
 #* Show CPU frequency.
-show_cpu_freq = True
+show_cpu_freq = true
 
 #* How to calculate CPU frequency, available values: "first", "range", "lowest", "highest" and "average".
 freq_mode = "first"
@@ -1448,7 +1447,7 @@ freq_mode = "first"
 clock_format = "%X"
 
 #* Update main ui in background when menus are showing, set this to false if the menus is flickering too much for comfort.
-background_update = True
+background_update = true
 
 #* Custom cpu model name, empty string to disable.
 custom_cpu_name = ""
@@ -1458,43 +1457,43 @@ custom_cpu_name = ""
 disks_filter = ""
 
 #* Show graphs instead of meters for memory values.
-mem_graphs = True
+mem_graphs = true
 
 #* Show mem box below net box instead of above.
-mem_below_net = False
+mem_below_net = false
 
 #* Count ZFS ARC in cached and available memory.
-zfs_arc_cached = True
+zfs_arc_cached = true
 
 #* If swap memory should be shown in memory box.
-show_swap = True
+show_swap = true
 
 #* Show swap as a disk, ignores show_swap value above, inserts itself after first disk.
-swap_disk = True
+swap_disk = true
 
 #* If mem box should be split to also show disks info.
-show_disks = True
+show_disks = true
 
 #* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar.
-only_physical = True
+only_physical = true
 
 #* Read disks list from /etc/fstab. This also disables only_physical.
-use_fstab = True
+use_fstab = true
 
 #* Setting this to True will hide all datasets, and only show ZFS pools. (IO stats will be calculated per-pool)
-zfs_hide_datasets = False
+zfs_hide_datasets = false
 
 #* Set to true to show available disk space for privileged users.
-disk_free_priv = False
+disk_free_priv = false
 
 #* Toggles if io activity % (disk busy time) should be shown in regular disk usage view.
-show_io_stat = True
+show_io_stat = true
 
 #* Toggles io mode for disks, showing big graphs for disk read/write speeds.
-io_mode = False
+io_mode = false
 
 #* Set to True to show combined read/write io graphs in io mode.
-io_graph_combined = False
+io_graph_combined = false
 
 #* Set the top speed for the io graphs in MiB/s (100 by default), use format "mountpoint:speed" separate disks with whitespace " ".
 #* Example: "/mnt/media:100 /:20 /boot:1".
@@ -1506,10 +1505,10 @@ net_download = 100
 net_upload = 100
 
 #* Use network graphs auto rescaling mode, ignores any values set above and rescales down to 10 Kibibytes at the lowest.
-net_auto = True
+net_auto = true
 
 #* Sync the auto scaling for download and upload to whichever currently has the highest scale.
-net_sync = True
+net_sync = true
 
 #* Starts with the Network Interface specified here.
 net_iface = ""
@@ -1518,18 +1517,17 @@ net_iface = ""
 base_10_bitrate = "Auto"
 
 #* Show battery stats in top right if battery is present.
-show_battery = True
+show_battery = true
 
 #* Which battery to use if multiple are present. "Auto" for auto detection.
 selected_battery = "Auto"
 
 #* Show power stats of battery next to charge indicator.
-show_battery_watts = True
+show_battery_watts = true
 
 #* Set loglevel for "~/.local/state/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
 log_level = "WARNING"
-
 ```
 
 #### Command line options
