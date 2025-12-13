@@ -838,7 +838,7 @@ namespace Config {
 			} else if (ints.contains(name)) {
 				fmt::format_to(std::back_inserter(buffer), std::locale::classic(), "{:L}", ints[name]);
 			} else if (bools.contains(name)) {
-				fmt::format_to(std::back_inserter(buffer), "{}", bools[name] ? "True" : "False");
+				fmt::format_to(std::back_inserter(buffer), "{}", bools[name] ? "true" : "false");
 			}
 			fmt::format_to(std::back_inserter(buffer), "\n");
 		}
