@@ -1526,7 +1526,7 @@ selected_battery = "Auto"
 #* Show power stats of battery next to charge indicator.
 show_battery_watts = True
 
-#* Set loglevel for "~/.config/btop/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
+#* Set loglevel for "~/.local/state/btop.log" levels are: "ERROR" "WARNING" "INFO" "DEBUG".
 #* The level set includes all lower levels, i.e. "DEBUG" will show all logging info.
 log_level = "WARNING"
 
