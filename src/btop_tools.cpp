@@ -436,20 +436,12 @@ namespace Tools {
 		if (mega) {
 			while (value >= 100000) {
 				value /= 1000;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
 		else {
 			while (value >= 102400) {
 				value >>= 10;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
@@ -471,15 +463,17 @@ namespace Tools {
 		}
 
 		if (shorten) {
-			auto f_pos = out.find(".");
-			if (f_pos == 1 and out.size() > 3) {
+			if (out.find(".") != string::npos) {
 				out = fmt::format("{:.1f}", stod(out));
 			}
-			else if (f_pos != string::npos) {
+			auto f_pos = out.find(".");
+			// if out is of the form xy.z
+			if (out.size() > 3 and f_pos != string::npos) {
 				out = fmt::format("{:.0f}", stod(out));
 			}
-			if (out.size() > 3) {
-				out = fmt::format("{:d}.0", out[0] - '0');
+			// if out is of the form xyzw (only when not using base 10)
+			else if (out.size() > 3 and f_pos == string::npos) {
+				out= fmt::format("{:d}.0", out[0] - '0');
 				start++;
 			}
 			out.push_back(units[start][0]);
