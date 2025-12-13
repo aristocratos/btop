@@ -20,12 +20,14 @@ tab-size = 4
 #include <atomic>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <locale>
 #include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
 
+#include <fmt/base.h>
 #include <fmt/core.h>
 #include <sys/statvfs.h>
 
@@ -782,20 +784,9 @@ namespace Config {
 		Logger::debug("Writing new config file");
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
-		cwrite.imbue(std::locale::classic());
+		// TODO: Report error when stream is in a bad state.
 		if (cwrite.good()) {
-			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
-			for (const auto& [name, description] : descriptions) {
-				cwrite << "\n" << (description.empty() ? "" : description + "\n")
-						<< name << " = ";
-				if (strings.contains(name))
-					cwrite << "\"" << strings.at(name) << "\"";
-				else if (ints.contains(name))
-					cwrite << ints.at(name);
-				else if (bools.contains(name))
-					cwrite << (bools.at(name) ? "True" : "False");
-				cwrite << "\n";
-			}
+			cwrite << current_config();
 		}
 	}
 
@@ -827,5 +818,30 @@ namespace Config {
 
 	auto get_log_file() -> std::optional<fs::path> {
 		return get_xdg_state_dir().transform([](auto&& state_home) -> auto { return state_home / "btop.log"; });
+	}
+
+	auto current_config() -> std::string {
+		auto buffer = std::string {};
+		fmt::format_to(std::back_inserter(buffer), "#? Config file for btop v.{}\n", Global::Version);
+
+		for (const auto& [name, description] : descriptions) {
+			// Write a description comment if available.
+			fmt::format_to(std::back_inserter(buffer), "\n");
+			if (!description.empty()) {
+				fmt::format_to(std::back_inserter(buffer), "{}\n", description);
+			}
+
+			fmt::format_to(std::back_inserter(buffer), "{} = ", name);
+			// Lookup default value by name and write it out.
+			if (strings.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), R"("{}")", strings[name]);
+			} else if (ints.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), std::locale::classic(), "{:L}", ints[name]);
+			} else if (bools.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), "{}", bools[name] ? "True" : "False");
+			}
+			fmt::format_to(std::back_inserter(buffer), "\n");
+		}
+		return buffer;
 	}
 }
