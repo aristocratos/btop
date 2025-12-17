@@ -165,7 +165,8 @@ namespace Term {
 				linebuffered(false);
 				refresh();
 
-				cout << alt_screen << hide_cursor << mouse_on << flush;
+				const auto is_mouse_enabled = !Config::getB("disable_mouse");
+				cout << alt_screen << hide_cursor << (is_mouse_enabled ? mouse_on : mouse_off) << flush;
 				Global::resized = false;
 			}
 		}
