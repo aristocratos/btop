@@ -1,0 +1,31 @@
+---
+Checks: >
+  -*,
+  # bugprone-*,
+  clang-analyzer-*,
+  misc-*,
+  # modernize-*,
+  performance-*,
+  portability-*,
+  # readability-*,
+  -bugprone-assignment-in-if-condition,
+  -modernize-use-trailing-return-type,
+  -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+
+HeaderFilterRegex: '^.*\.cpp$'
+
+CheckOptions:
+  readability-identifier-length.IgnoredParameterNames: "i|x|y|z"
+  readability-identifier-length.IgnoredVariableNames: "i|x|y|z"
+  readability-identifier-naming.ClassCase: "CamelCase"
+  readability-identifier-naming.ConstexprVariableCase: "UPPER_CASE"
+  readability-identifier-naming.EnumCase: "UPPER_CASE"
+  readability-identifier-naming.FunctionCase: "lower_case"
+  readability-identifier-naming.GlobalConstexprVariableCase: "UPPER_CASE"
+  readability-identifier-naming.MemberCase: "lower_case"
+  readability-identifier-naming.MethodCase: "lower_case"
+  readability-identifier-naming.ParameterCase: "lower_case"
+  readability-identifier-naming.StructCase: "CamelCase"
+  readability-identifier-naming.VariableCase: "lower_case"
