@@ -37,6 +37,7 @@ jobs:
             version: 20
           - compiler: clang
             version: 21
+            lint: true
           - compiler: gcc
             version: 14
     steps:
@@ -46,21 +47,44 @@ jobs:
         if: ${{ matrix.compiler == 'clang' }}
         run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
 
+      - name: Install clang-tidy-sarif
+        if: ${{ matrix.lint }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: clang-tidy-sarif
+
       - name: Configure
         run: |
           if [[ "${{ matrix.compiler }}" == "clang" ]]; then
             export CC=clang-${{ matrix.version }}
             export CXX=clang++-${{ matrix.version }}
+            export CLANG_TIDY=clang-tidy-${{ matrix.version }}
             export CXXFLAGS="-stdlib=libc++"
             export LDFLAGS="-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind"
           else
             export CC=gcc-${{ matrix.version }}
             export CXX=g++-${{ matrix.version }}
           fi
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Compile
         run: cmake --build build --verbose
+
+      - name: Lint
+        if: ${{ matrix.lint }}
+        run: |
+          mkdir -pv ../results
+          function clang_tidy() {
+            clang-tidy-${{ matrix.version }} -quiet -p build \
+              -checks='-*,clang-analyzer-*,clang-diagnostics-*,performance-*' \
+              $1 | clang-tidy-sarif > ../results/$(head -c10 /dev/urandom | base32).sarif
+          }
+          export -f clang_tidy
+          jq -r '.[].file' build/compile_commands.json | grep -v 'collect' | grep '\.cpp$' | parallel clang_tidy {}
+
+      - name: Upload lints
+        if: ${{ matrix.lint }}
+        uses: github/codeql-action/upload-sarif@v4
 
       - name: Test
         run: ctest --test-dir build
