@@ -69,6 +69,7 @@ namespace Config {
 		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
 								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
+		{"disable_mouse", "#* Disable all mouse events."},
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
 		{"terminal_sync", 		"#* Use terminal synchronized output sequences to reduce flickering on supported terminals."},
@@ -331,7 +332,8 @@ namespace Config {
 		{"rsmi_measure_pcie_speeds", true},
 		{"gpu_mirror_graph", true},
 	#endif
-		{"terminal_sync", true}
+		{"terminal_sync", true},
+		{"disable_mouse", false}
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 
