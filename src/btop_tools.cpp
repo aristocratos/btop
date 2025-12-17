@@ -23,8 +23,6 @@ tab-size = 4
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <optional>
-#include <ranges>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -35,6 +33,7 @@ tab-size = 4
 #include <unistd.h>
 
 #include "widechar_width.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -49,7 +48,6 @@ using std::to_string;
 using namespace std::literals; // to use operator""s
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -541,7 +539,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
+			Logger::error("readfile() : Exception when reading {} : {}", path, e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -622,13 +620,13 @@ namespace Tools {
 		if (delayed_report)
 			report_buffer.emplace_back(report_line);
 		else
-			Logger::log_write(log_level, report_line);
+			Logger::debug("{}", report_line);
 	}
 
 	void DebugTimer::force_report() {
 		if (report_buffer.empty()) return;
 		for (const auto& line : report_buffer)
-			Logger::log_write(log_level, line);
+			Logger::debug("{}", line);
 		report_buffer.clear();
 	}
 
@@ -640,75 +638,5 @@ namespace Tools {
 
 	bool DebugTimer::is_running() {
 		return running;
-	}
-}
-
-namespace Logger {
-	using namespace Tools;
-	std::atomic<bool> busy (false);
-	bool first = true;
-	const string tdf = "%Y/%m/%d (%T) | ";
-
-	size_t loglevel;
-	std::optional<std::filesystem::path> logfile;
-
-	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
-	class lose_priv {
-		int status = -1;
-	public:
-		lose_priv() {
-			if (geteuid() != Global::real_uid) {
-				this->status = seteuid(Global::real_uid);
-			}
-		}
-		~lose_priv() noexcept {
-			if (status == 0) {
-				status = seteuid(Global::set_uid);
-			}
-		}
-		lose_priv(const lose_priv& other) = delete;
-		lose_priv& operator=(const lose_priv& other) = delete;
-		lose_priv(lose_priv&& other) = delete;
-		lose_priv& operator=(lose_priv&& other) = delete;
-	};
-
-	void set(const string& level) {
-		loglevel = v_index(log_levels, level);
-	}
-
-	void log_write(const Level level, const std::string_view msg) {
-		if (loglevel < level or !logfile.has_value()) {
-			return;
-		}
-		auto& log_file = logfile.value();
-		atomic_lock lck(busy, true);
-		lose_priv neutered{};
-		std::error_code ec;
-		try {
-			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
-			if (fs::exists(log_file) and fs::file_size(log_file, ec) > 1024 << 10 and not ec) {
-				auto old_log = log_file;
-				old_log += ".1";
-
-				if (fs::exists(old_log))
-					fs::remove(old_log, ec);
-
-				if (not ec)
-					fs::rename(log_file, old_log, ec);
-			}
-			if (not ec) {
-				std::ofstream lwrite(log_file, std::ios::app);
-				if (first) {
-					first = false;
-					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
-				}
-				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
-			}
-			else log_file.clear();
-		}
-		catch (const std::exception& e) {
-			log_file.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
-		}
 	}
 }

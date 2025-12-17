@@ -68,7 +68,10 @@ tab-size = 4
 #include <utility>
 #include <unordered_set>
 
+#include <fmt/format.h>
+
 #include "../btop_config.hpp"
+#include "../btop_log.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
@@ -232,7 +235,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			return got_sensors;
 		}
 
@@ -255,7 +258,7 @@ namespace Cpu {
 		for(const string &sensor : sensors) {
 			fields_array = prop_dictionary_get(prop_dictionary_t(dict), sensor.c_str());
 			if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
-				Logger::warning("unknown device " + sensor);
+				Logger::warning("unknown device {}", sensor);
 			} else {
 				Cpu::cpu_sensor = sensor;
 				break;
@@ -281,7 +284,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			return;
 		}
 
@@ -302,7 +305,7 @@ namespace Cpu {
 
 		prop_object_t fields_array = prop_dictionary_get(prop_dictionary_t(dict), Cpu::cpu_sensor.c_str());
 		if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
-			Logger::warning("unknown device " + Cpu::cpu_sensor);
+			Logger::warning("unknown device {}", Cpu::cpu_sensor);
 			return;
 		}
 
@@ -429,7 +432,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			has_battery = false;
 			return {0, 0.0, 0, ""};
 		}
@@ -575,9 +578,9 @@ namespace Cpu {
 				//? Reduce size if there are more values than needed for graph
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
-			} catch (const std::exception &e) {
-				Logger::error("Cpu::collect() : " + (string)e.what());
-				throw std::runtime_error("collect() : " + (string)e.what());
+			} catch (const std::exception& e) {
+				Logger::error("Cpu::collect() : {}", e.what());
+				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
 
 		}
@@ -824,7 +827,7 @@ namespace Mem {
 					continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 					continue;
 				}
 				disk.total = vfs.f_blocks * vfs.f_frsize;
@@ -892,7 +895,7 @@ namespace Net {
 			IfAddrsPtr if_addrs {};
 			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
+				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_addrs.get_status());
 				redraw = true;
 				return empty_net;
 			}
@@ -927,7 +930,7 @@ namespace Net {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}
@@ -938,7 +941,7 @@ namespace Net {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
