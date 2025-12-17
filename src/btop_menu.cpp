@@ -31,6 +31,7 @@ tab-size = 4
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <unordered_map>
 #include <utility>
 
@@ -260,7 +261,8 @@ namespace Menu {
 				"Conflicting keys for",
 				"h (help) and k (kill)",
 				"is accessible while holding shift."},
-
+			{"disable_mouse",
+				"Disable all mouse events."},
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -1447,6 +1449,8 @@ static int optionsMenu(const string& key) {
 			else if (selPred.test(isBool)) {
 				Config::flip(option);
 				screen_redraw = true;
+
+				// Special handling for options that need additional action.
 				if (option == "truecolor") {
 					theme_refresh = true;
 					Config::flip("lowcolor");
@@ -1468,6 +1472,10 @@ static int optionsMenu(const string& key) {
 					Config::write_new = true;
 					Config::write();
 					Config::write_new = old_write_new;
+				}
+				else if (option == "disable_mouse") {
+					const auto is_mouse_enabled = !Config::getB("disable_mouse");
+					std::cout << (is_mouse_enabled ? Term::mouse_on : Term::mouse_off) << std::flush;
 				}
 			}
 			else if (selPred.test(isBrowsable)) {
