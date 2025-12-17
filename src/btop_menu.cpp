@@ -20,6 +20,7 @@ tab-size = 4
 
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_theme.hpp"
 #include "btop_tools.hpp"
@@ -1478,8 +1479,8 @@ static int optionsMenu(const string& key) {
 				if (option == "color_theme")
 					theme_refresh = true;
 				else if (option == "log_level") {
-					Logger::set(optList.at(i));
-					Logger::info("Logger set to " + optList.at(i));
+					Logger::set_log_level(optList.at(i));
+					Logger::info("Logger set to {}", optList.at(i));
 				}
 				else if (option == "base_10_bitrate") {
 				    recollect = true;
