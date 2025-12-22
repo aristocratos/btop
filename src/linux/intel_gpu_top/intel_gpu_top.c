@@ -50,39 +50,6 @@
 #include "i915_drm.h"
 #include "igt_perf.h"
 
-#ifdef __clang__ //? Workaround for missing asprintf when compiling with clang, taken from https://stackoverflow.com/a/4899487
-int asprintf(char **ret, const char *format, ...)
-{
-    va_list ap;
-
-    *ret = NULL;  /* Ensure value can be passed to free() */
-
-    va_start(ap, format);
-    int count = vsnprintf(NULL, 0, format, ap);
-    va_end(ap);
-
-    if (count >= 0)
-    {
-        char* buffer = malloc(count + 1);
-        if (buffer == NULL)
-            return -1;
-
-        va_start(ap, format);
-        count = vsnprintf(buffer, count + 1, format, ap);
-        va_end(ap);
-
-        if (count < 0)
-        {
-            free(buffer);
-            return count;
-        }
-        *ret = buffer;
-    }
-
-    return count;
-}
-#endif
-
 __attribute__((format(scanf,3,4)))
 static int igt_sysfs_scanf(int dir, const char *attr, const char *fmt, ...)
 {
