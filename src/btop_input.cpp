@@ -85,6 +85,7 @@ namespace Input {
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
 	std::unordered_map<string, Mouse_loc> mouse_mappings;
+	bool dragging_scroll;
 
 	deque<string> history(50, "");
 	string old_filter;
@@ -133,10 +134,14 @@ namespace Input {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-				// 	mouse_event = "mouse_release";
-				// 	key_view.remove_prefix(4);
-				// }
+				else if (key_view.starts_with("[<32;")) {
+					mouse_event = "mouse_drag";
+					key_view.remove_prefix(5);
+				}
+				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+					mouse_event = "mouse_release";
+					key_view.remove_prefix(4);
+				}
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
@@ -165,7 +170,7 @@ namespace Input {
 
 					key = mouse_event;
 
-					if (key == "mouse_click") {
+					if (key == "mouse_click" or key == "mouse_drag") {
 						const auto& [col, line] = mouse_pos;
 
 						for (const auto& [mapped_key, pos] : (Menu::active ? Menu::mouse_mappings : mouse_mappings)) {
@@ -271,6 +276,8 @@ namespace Input {
 				} else if (is_in(key, "ctrl_r")) {
 					kill(getpid(), SIGUSR2);
 					return;
+				} else if (key == "mouse_release") {
+					dragging_scroll = false;
 				} else
 					keep_going = true;
 
@@ -348,8 +355,9 @@ namespace Input {
 					const auto& [col, line] = mouse_pos;
 					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
 					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
-					if (col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1) {
-						if (key == "mouse_click") {
+					const auto in_proc_box = col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1;
+					if (key == "mouse_click") {
+						if (in_proc_box) {
 							if (col < Proc::x + Proc::width - 2) {
 								const auto& current_selection = Config::getI("proc_selected");
 								if (current_selection == line - y - 1) {
@@ -375,15 +383,22 @@ namespace Input {
 							else if (line == y + height - 2) {
 								if (Proc::selection("page_down") == -1) return;
 							}
+							else if (line == y + 2 + Proc::scroll_pos) {
+								dragging_scroll = true;
+							}
 							else if (Proc::selection("mousey" + to_string(line - y - 2)) == -1)
 								return;
 						}
-						else
-							goto proc_mouse_scroll;
+						else if (Config::getI("proc_selected") > 0){
+							Config::set("proc_selected", 0);
+							redraw = true;
+						}
 					}
-					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
-						Config::set("proc_selected", 0);
-						redraw = true;
+					else if (key.starts_with("mouse_scroll_") and in_proc_box) {
+						goto proc_mouse_scroll;
+					}
+					else if (key == "mouse_drag" and dragging_scroll) {
+						Proc::selection("mousey" + to_string(line - y - 2));
 					}
 					else
 						keep_going = true;
@@ -425,7 +440,7 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
-			    else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 				    if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 				    Menu::show(Menu::Menus::Renice);

@@ -1533,6 +1533,7 @@ namespace Proc {
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
 	int selected_pid = 0, selected_depth = 0;
+	int scroll_pos;
 	string selected_name;
 	std::unordered_map<size_t, Draw::Graph> p_graphs;
 	std::unordered_map<size_t, bool> p_wide_cmd;
@@ -1999,7 +2000,7 @@ namespace Proc {
 
 		//? Draw scrollbar if needed
 		if (numpids > select_max) {
-			const int scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
+			scroll_pos = clamp((int)round((double)start * select_max / (numpids - select_max)), 0, height - 5);
 			out += Mv::to(y + 1, x + width - 2) + Fx::b + Theme::c("main_fg") + Symbols::up
 				+ Mv::to(y + height - 2, x + width - 2) + Symbols::down;
 
