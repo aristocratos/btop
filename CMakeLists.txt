@@ -82,6 +82,8 @@ else()
   message(FATAL_ERROR "${CMAKE_SYSTEM_NAME} is not supported")
 endif()
 
+target_include_directories(libbtop PUBLIC src)
+
 # Generate build info
 execute_process(
   COMMAND "git" "rev-parse" "--short" "HEAD"
