@@ -92,4 +92,7 @@ char* find_intel_gpu_dir();
 char* get_intel_device_id(const char* vendor_path);
 char *get_intel_device_name(const char *device_id);
 
+const char *find_xe_pmu_device(char *buf, int buflen);
+const char *find_i915_pmu_device(char *buf, int buflen);
+
 #endif

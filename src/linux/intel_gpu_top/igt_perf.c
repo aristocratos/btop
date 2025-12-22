@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -139,6 +140,60 @@ int igt_perf_events_dir(int i915)
 	i915_perf_device(i915, buf, sizeof(buf));
 	snprintf(path, sizeof(path), "/sys/bus/event_source/devices/%s/events", buf);
 	return open(path, O_RDONLY);
+}
+
+const char *find_xe_pmu_device(char *buf, int buflen)
+{
+	DIR *dir;
+	struct dirent *entry;
+	const char *path = "/sys/bus/event_source/devices";
+
+	dir = opendir(path);
+	if (!dir)
+		return NULL;
+
+	while ((entry = readdir(dir)) != NULL) {
+		/* Look for xe_XXXX_XX_XX.X pattern or plain "xe" */
+		if (strcmp(entry->d_name, "xe") == 0 ||
+		    strncmp(entry->d_name, "xe_", 3) == 0) {
+			int len = strlen(entry->d_name);
+			if (len < buflen) {
+				strcpy(buf, entry->d_name);
+				closedir(dir);
+				return buf;
+			}
+		}
+	}
+
+	closedir(dir);
+	return NULL;
+}
+
+const char *find_i915_pmu_device(char *buf, int buflen)
+{
+	DIR *dir;
+	struct dirent *entry;
+	const char *path = "/sys/bus/event_source/devices";
+
+	dir = opendir(path);
+	if (!dir)
+		return NULL;
+
+	while ((entry = readdir(dir)) != NULL) {
+		/* Look for i915 or i915_XXXX pattern */
+		if (strcmp(entry->d_name, "i915") == 0 ||
+		    strncmp(entry->d_name, "i915_", 5) == 0) {
+			int len = strlen(entry->d_name);
+			if (len < buflen) {
+				strcpy(buf, entry->d_name);
+				closedir(dir);
+				return buf;
+			}
+		}
+	}
+
+	closedir(dir);
+	return NULL;
 }
 
 static int

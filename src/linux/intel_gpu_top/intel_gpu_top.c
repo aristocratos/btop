@@ -50,6 +50,13 @@
 #include "i915_drm.h"
 #include "igt_perf.h"
 
+/* Xe PMU event configs (from kernel drivers/gpu/drm/xe/xe_pmu.c) */
+#define XE_PMU_C6_RESIDENCY		0x01
+#define XE_PMU_ENGINE_ACTIVE_TICKS	0x02
+#define XE_PMU_ENGINE_TOTAL_TICKS	0x03
+#define XE_PMU_ACTUAL_FREQUENCY		0x04
+#define XE_PMU_REQUESTED_FREQUENCY	0x05
+
 #ifdef __clang__ //? Workaround for missing asprintf when compiling with clang, taken from https://stackoverflow.com/a/4899487
 int asprintf(char **ret, const char *format, ...)
 {
@@ -278,6 +285,7 @@ static int engine_cmp(const void *__a, const void *__b)
 }
 
 #define is_igpu(x) (strcmp(x, "i915") == 0)
+#define is_xe(x) (strncmp(x, "xe", 2) == 0)
 
 struct engines *discover_engines(const char *device)
 {
@@ -298,12 +306,37 @@ struct engines *discover_engines(const char *device)
 
 	engines->num_engines = 0;
 	engines->device = device;
-	engines->discrete = !is_igpu(device);
+	engines->discrete = !is_igpu(device) && !is_xe(device);
 
 	d = opendir(sysfs_root);
 	if (!d)
 		goto err;
 
+	/*
+	 * For xe driver: no per-engine events, use aggregate engine metrics.
+	 * Create a single virtual engine to represent overall GPU utilization.
+	 */
+	if (is_xe(device)) {
+		struct engine *engine = engine_ptr(engines, 0);
+		memset(engine, 0, sizeof(*engine));
+
+		engine->name = strdup("gpu");
+		engine->display_name = strdup("GPU");
+		engine->short_name = strdup("GPU");
+		engine->class = I915_ENGINE_CLASS_RENDER;
+		engine->instance = 0;
+
+		engines->num_engines = 1;
+		engines = realloc(engines, sizeof(struct engines) +
+				  sizeof(struct engine));
+		if (!engines)
+			goto err;
+
+		engines->root = d;
+		return engines;
+	}
+
+	/* i915 driver: discover per-engine events */
 	while ((dent = readdir(d)) != NULL) {
 		const char *endswith = "-busy";
 		const unsigned int endlen = strlen(endswith);
@@ -486,9 +519,13 @@ static void imc_reads_open(struct pmu_counter *pmu, struct engines *engines)
 	imc_open(pmu, "data_reads", engines);
 }
 
-static int get_num_gts(uint64_t type)
+static int get_num_gts(uint64_t type, const char *device)
 {
 	int fd, cnt;
+
+	/* xe driver: always 1 GT for now */
+	if (is_xe(device))
+		return 1;
 
 	errno = 0;
 	for (cnt = 0; cnt < MAX_GTS; cnt++) {
@@ -509,23 +546,88 @@ static void init_aggregate_counters(struct engines *engines)
 {
 	struct pmu_counter *pmu;
 
-	pmu = &engines->freq_req;
-	pmu->type = igt_perf_type_id(engines->device);
-	pmu->config = I915_PMU_REQUESTED_FREQUENCY;
-	pmu->present = true;
+	if (is_xe(engines->device)) {
+		/* xe driver: use xe-specific PMU events */
+		pmu = &engines->freq_req;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = XE_PMU_REQUESTED_FREQUENCY;
+		pmu->present = true;
 
-	pmu = &engines->freq_act;
-	pmu->type = igt_perf_type_id(engines->device);
-	pmu->config = I915_PMU_ACTUAL_FREQUENCY;
-	pmu->present = true;
+		pmu = &engines->freq_act;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = XE_PMU_ACTUAL_FREQUENCY;
+		pmu->present = true;
 
-	pmu = &engines->rc6;
-	pmu->type = igt_perf_type_id(engines->device);
-	pmu->config = I915_PMU_RC6_RESIDENCY;
-	pmu->present = true;
+		pmu = &engines->rc6;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = XE_PMU_C6_RESIDENCY;
+		pmu->present = true;
+	} else {
+		/* i915 driver */
+		pmu = &engines->freq_req;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = I915_PMU_REQUESTED_FREQUENCY;
+		pmu->present = true;
+
+		pmu = &engines->freq_act;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = I915_PMU_ACTUAL_FREQUENCY;
+		pmu->present = true;
+
+		pmu = &engines->rc6;
+		pmu->type = igt_perf_type_id(engines->device);
+		pmu->config = I915_PMU_RC6_RESIDENCY;
+		pmu->present = true;
+	}
 }
 
-int pmu_init(struct engines *engines)
+static int pmu_init_xe(struct engines *engines)
+{
+	int fd;
+	uint64_t type = igt_perf_type_id(engines->device);
+	struct engine *engine = engine_ptr(engines, 0);
+
+	engines->fd = -1;
+	engines->num_counters = 0;
+	engines->num_gts = 1;
+
+	init_aggregate_counters(engines);
+
+	/* For xe: use engine-active-ticks for the virtual GPU engine's busy counter */
+	engine->busy.config = XE_PMU_ENGINE_ACTIVE_TICKS;
+	fd = _open_pmu(type, engines->num_counters, &engine->busy, engines->fd);
+	if (fd < 0)
+		return -1;
+	engine->num_counters++;
+
+	/* Also track total ticks for calculating utilization percentage */
+	engine->wait.config = XE_PMU_ENGINE_TOTAL_TICKS;
+	fd = _open_pmu(type, engines->num_counters, &engine->wait, engines->fd);
+	if (fd >= 0)
+		engine->num_counters++;
+
+	/* Frequency tracking for xe */
+	engines->freq_req_gt[0].config = XE_PMU_REQUESTED_FREQUENCY;
+	_open_pmu(type, engines->num_counters, &engines->freq_req_gt[0], engines->fd);
+
+	engines->freq_act_gt[0].config = XE_PMU_ACTUAL_FREQUENCY;
+	_open_pmu(type, engines->num_counters, &engines->freq_act_gt[0], engines->fd);
+
+	engines->rc6_gt[0].config = XE_PMU_C6_RESIDENCY;
+	_open_pmu(type, engines->num_counters, &engines->rc6_gt[0], engines->fd);
+
+	engines->rapl_fd = -1;
+	gpu_power_open(&engines->r_gpu, engines);
+	pkg_power_open(&engines->r_pkg, engines);
+
+	engines->imc_fd = -1;
+	imc_reads_open(&engines->imc_reads, engines);
+	imc_writes_open(&engines->imc_writes, engines);
+
+	return 0;
+}
+
+static int pmu_init_i915(struct engines *engines)
 {
 	unsigned int i;
 	int fd;
@@ -533,7 +635,7 @@ int pmu_init(struct engines *engines)
 
 	engines->fd = -1;
 	engines->num_counters = 0;
-	engines->num_gts = get_num_gts(type);
+	engines->num_gts = get_num_gts(type, engines->device);
 	if (engines->num_gts <= 0)
 		return -1;
 
@@ -591,6 +693,14 @@ int pmu_init(struct engines *engines)
 	imc_writes_open(&engines->imc_writes, engines);
 
 	return 0;
+}
+
+int pmu_init(struct engines *engines)
+{
+	if (is_xe(engines->device))
+		return pmu_init_xe(engines);
+	else
+		return pmu_init_i915(engines);
 }
 
 static uint64_t pmu_read_multi(int fd, unsigned int num, uint64_t *val)

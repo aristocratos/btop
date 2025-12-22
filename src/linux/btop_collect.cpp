@@ -241,7 +241,8 @@ namespace Gpu {
 
 	//? Intel data collection
 	namespace Intel {
-		const char* device = "i915";
+		char device_buf[80] = {0};
+		const char* device = nullptr;
 		struct engines *engines = nullptr;
 
 		bool initialized = false;
@@ -1786,6 +1787,17 @@ namespace Gpu {
 		bool init() {
 			if (initialized) return false;
 
+			//? Try to find xe PMU device first (Lunar Lake, etc.), then fall back to i915
+			device = find_xe_pmu_device(device_buf, sizeof(device_buf));
+			if (!device) {
+				device = find_i915_pmu_device(device_buf, sizeof(device_buf));
+			}
+			if (!device) {
+				Logger::debug("Failed to find Intel GPU PMU device (xe or i915), Intel GPUs will not be detected");
+				return false;
+			}
+			Logger::debug("Intel GPU: Using PMU device: " + string(device));
+
 			char *gpu_path = find_intel_gpu_dir();
 			if (!gpu_path) {
 				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
@@ -1821,13 +1833,14 @@ namespace Gpu {
 
 			device_count = 1;
 
-			gpus.resize(gpus.size() + device_count);
-			gpu_names.resize(gpus.size() + device_count);
+			size_t gpu_index = Nvml::device_count + Rsmi::device_count;
+			gpus.resize(gpu_index + device_count);
+			gpu_names.resize(gpu_index + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+				gpu_names[gpu_index] = string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
+				gpu_names[gpu_index] = "Intel GPU";
 			}
 
 			free(gpu_device_name);
@@ -1852,12 +1865,15 @@ namespace Gpu {
 			if (!initialized) return false;
 
 			if constexpr(is_init) {
+				//? Check if RAPL GPU power is available
+				bool has_power = engines->r_gpu.present;
+
 				gpus_slice->supported_functions = {
 					.gpu_utilization = true,
 					.mem_utilization = false,
 					.gpu_clock = true,
 					.mem_clock = false,
-					.pwr_usage = true,
+					.pwr_usage = has_power,
 					.pwr_state = false,
 					.temp_info = false,
 					.mem_total = false,
@@ -1867,28 +1883,48 @@ namespace Gpu {
 					.decoder_utilization = false
 				};
 
-				gpus_slice->pwr_max_usage = 10'000; //? 10W
+				if (has_power) {
+					gpus_slice->pwr_max_usage = 10'000; //? 10W
+				}
 			}
 
 			pmu_sample(engines);
 			double t = (double)(engines->ts.cur - engines->ts.prev) / 1e9;
 
 			double max_util = 0;
+			bool is_xe = (device && strncmp(device, "xe", 2) == 0);
+
 			for (unsigned int i = 0; i < engines->num_engines; i++) {
 				struct engine *engine = &(&engines->engine)[i];
-				double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
+				double util;
+				if (is_xe) {
+					//? xe: calculate utilization from active_ticks / total_ticks
+					uint64_t active_delta = engine->busy.val.cur - engine->busy.val.prev;
+					uint64_t total_delta = engine->wait.val.cur - engine->wait.val.prev;
+					if (total_delta > 0) {
+						util = (double)active_delta / (double)total_delta * 100.0;
+					} else {
+						util = 0;
+					}
+				} else {
+					//? i915: use standard pmu_calc
+					util = pmu_calc(&engine->busy.val, 1e9, t, 100);
+				}
 				if (util > max_util) {
 					max_util = util;
 				}
 			}
 			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
 
-			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
-			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
-			if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
-				gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
+			//? Power usage (only if RAPL GPU power is available)
+			if (engines->r_gpu.present) {
+				double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
+				gpus_slice->pwr_usage = (long long)round(pwr * 1000);
+				if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
+					gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
 
-			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
+			}
 
 			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
 			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
