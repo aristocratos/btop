@@ -1,0 +1,37 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 130
+UseTab: Never
+
+AccessModifierOffset: -4
+AlignAfterOpenBracket: BlockIndent
+AlignOperands: AlignAfterOperator
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackLongBracedList: false
+BinPackParameters: OnePerLine
+Cpp11BracedListStyle: false
+ExperimentalAutoDetectBinPacking: true
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+NamespaceIndentation: All
+PointerAlignment: Left
+QualifierAlignment: Left
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCpp11BracedList: true
+
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^".*"$'
+    Priority: 1
+  - Regex: '^<.*\.h(pp)?>$'
+    Priority: 3
+  - Regex: "^<.*>"
+    Priority: 2

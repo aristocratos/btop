@@ -58,8 +58,8 @@ endif
 override CXX_VERSION := $(shell $(CXX) -dumpfullversion -dumpversion || echo 0)
 override CXX_VERSION_MAJOR := $(shell echo $(CXX_VERSION) | cut -d '.' -f 1)
 
-ifeq ($(DEBUG),true)
-	override ADDFLAGS += -DBTOP_DEBUG
+ifneq ($(DEBUG),true)
+	override ADDFLAGS += -DNDEBUG
 endif
 
 #? Any flags added to TESTFLAGS must not contain whitespace for the testing to work
