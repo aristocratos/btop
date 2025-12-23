@@ -1395,11 +1395,11 @@ static int optionsMenu(const string& key) {
 			page = selected = 0;
 		}
 #ifdef GPU_SUPPORT
-		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "0", "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
 #else
-		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "0", "1", "2", "3", "4") or key.starts_with("select_cat_")) {
 #endif
-		selected_cat = key.back() - '0' - 1;
+			selected_cat = key.back() - '0';
 			page = selected = 0;
 		}
 		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
@@ -1500,19 +1500,19 @@ static int optionsMenu(const string& key) {
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
 		#ifdef GPU_SUPPORT
-			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
+			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc", "gpu"}) {
 		#else
 			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
 		#endif
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
-						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
+						: Theme::c("hi_fg") + to_string(i) + Theme::c("title") + m + ' ')
 				#ifdef GPU_SUPPORT
 					+ Mv::r(7);
 				#else
 					+ Mv::r(10);
 				#endif
-				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
+				if (string button_name = "select_cat_" + to_string(i); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;
 			}
