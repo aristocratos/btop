@@ -256,7 +256,8 @@ namespace Menu {
 				"Conflicting keys for",
 				"h (help) and k (kill)",
 				"is accessible while holding shift."},
-
+			{"disable_mouse",
+				"Disable all mouse events."},
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",

@@ -126,8 +126,10 @@ namespace Input {
 			if (key.length() > 1 and key.at(0) == Fx::e.at(0)) {
 				key.erase(0, 1);
 			}
-			//? Detect if input is an mouse event
-			if (key.starts_with("[<")) {
+			
+			const auto is_mouse_enabled = !Config::getB("disable_mouse");
+			//? Detect if input is a mouse event.
+			if (is_mouse_enabled && key.starts_with("[<")) {
 				std::string_view key_view = key;
 				string mouse_event;
 				if (key_view.starts_with("[<0;") and key_view.find('M') != std::string_view::npos) {
