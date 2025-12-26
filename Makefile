@@ -232,7 +232,7 @@ info:
 	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
 	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
 	@$(SHOW_CC_INFO) || printf "\033[1;93mCC           \033[1;93m?| \033[0m$(CC) \033[1;93m(\033[97m$(CC_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n" gcc -dumpfullversion -dumpversion
+	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
 	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
 	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
 	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
