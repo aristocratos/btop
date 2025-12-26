@@ -377,7 +377,17 @@ namespace Menu {
 				"\"ERROR\", \"WARNING\", \"INFO\" and \"DEBUG\".",
 				"",
 				"The level set includes all lower levels,",
-				"i.e. \"DEBUG\" will show all logging info."}
+				"i.e. \"DEBUG\" will show all logging info."},
+			{"save_config_on_exit",
+				"Save config on exit.",
+				"",
+				"Automatically save current settings to",
+				"config file on exit.",
+				"",
+				"When this is toggled from True to False",
+				"a save is immediately triggered.",
+				"This way a manual save can be done by",
+				"toggling this setting on and off again."}
 		},
 		{
 			{"cpu_bottom",
@@ -1434,6 +1444,12 @@ static int optionsMenu(const string& key) {
 				}
 				else if (option == "base_10_sizes") {
 					recollect = true;
+				}
+				else if (option == "save_config_on_exit" and not Config::getB("save_config_on_exit")) {
+					const bool old_write_new = Config::write_new;
+					Config::write_new = true;
+					Config::write();
+					Config::write_new = old_write_new;
 				}
 			}
 			else if (selPred.test(isBrowsable)) {
