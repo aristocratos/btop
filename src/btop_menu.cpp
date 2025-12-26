@@ -534,6 +534,11 @@ namespace Menu {
 				"Highest, the highest frequency.",
 				"",
 				"Average, sum and divide."},
+			{"show_cores_freq",
+				"Show each CPU core frequency next to core utilization.",
+				"",
+				"Can cause slowdowns on systems with many",
+				"cores and certain kernel versions."},
 		#endif
 			{"custom_cpu_name",
 				"Custom cpu model name in cpu percentage box.",
