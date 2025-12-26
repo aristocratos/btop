@@ -43,7 +43,7 @@ jobs:
           usesh: true
           prepare: |
             export PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            export PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
+            export PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/$(uname -m)/$(uname -r)/All/"
             /usr/sbin/pkg_add pkgin
             pkgin -y install cmake gcc14 git ninja-build
           run: |
