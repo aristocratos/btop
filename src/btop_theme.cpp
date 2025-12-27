@@ -20,9 +20,10 @@ tab-size = 4
 #include <fstream>
 #include <unistd.h>
 
-#include "btop_tools.hpp"
 #include "btop_config.hpp"
+#include "btop_log.hpp"
 #include "btop_theme.hpp"
+#include "btop_tools.hpp"
 
 using std::round;
 using std::stoi;
@@ -158,7 +159,7 @@ namespace Theme {
 			hexa.erase(0, 1);
 			for (auto& c : hexa) {
 				if (not isxdigit(c)) {
-					Logger::error("Invalid hex value: " + hexa);
+					Logger::error("Invalid hex value: {}", hexa);
 					return "";
 				}
 			}
@@ -186,9 +187,9 @@ namespace Theme {
 						to_string(stoi(hexa.substr(4, 2), nullptr, 16)) + "m";
 				}
 			}
-			else Logger::error("Invalid size of hex value: " + hexa);
+			else Logger::error("Invalid size of hex value: {}", hexa);
 		}
-		else Logger::error("Hex value missing: " + hexa);
+		else Logger::error("Hex value missing: {}", hexa);
 		return "";
 	}
 
@@ -257,7 +258,7 @@ namespace Theme {
 					else if (not source.at(name).empty()) {
 						t_rgb = ssplit(source.at(name));
 						if (t_rgb.size() != 3) {
-							Logger::error("Invalid RGB decimal value: \"" + source.at(name) + "\"");
+							Logger::error("Invalid RGB decimal value: \"{}\"", source.at(name));
 						} else {
 							colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), t_to_256, depth);
 							rgbs[name] = array{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
@@ -266,7 +267,7 @@ namespace Theme {
 					}
 				}
 				if (not colors.contains(name) and not is_in(name, "meter_bg", "process_start", "process_mid", "process_end", "graph_text")) {
-					Logger::debug("Missing color value for \"" + name + "\". Using value from default.");
+					Logger::debug("Missing color value for \"{}\". Using value from default.", name);
 					colors[name] = hex_to_color(color, t_to_256, depth);
 					rgbs[name] = hex_to_dec(color);
 				}
@@ -382,7 +383,7 @@ namespace Theme {
 			std::ifstream themefile(filepath);
 			if (themefile.good()) {
 				std::unordered_map<string, string> theme_out;
-				Logger::debug("Loading theme file: " + filename);
+				Logger::debug("Loading theme file: {}", filename);
 				while (not themefile.bad()) {
 					if (themefile.peek() == '#') {
 						themefile.ignore(SSmax, '\n');

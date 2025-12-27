@@ -26,15 +26,16 @@ tab-size = 4
 #include <string_view>
 #include <utility>
 
-#include "btop_draw.hpp"
-#include "btop_config.hpp"
-#include "btop_theme.hpp"
-#include "btop_shared.hpp"
-#include "btop_tools.hpp"
-#include "btop_input.hpp"
-#include "btop_menu.hpp"
 #include <fmt/format.h>
 
+#include "btop_config.hpp"
+#include "btop_draw.hpp"
+#include "btop_input.hpp"
+#include "btop_log.hpp"
+#include "btop_menu.hpp"
+#include "btop_shared.hpp"
+#include "btop_theme.hpp"
+#include "btop_tools.hpp"
 
 using std::array;
 using std::clamp;
@@ -229,7 +230,7 @@ namespace Draw {
 				c_upos = ulen(first);
 			}
 			catch (const std::exception& e) {
-				Logger::error("In TextEdit::operator() : " + string{e.what()});
+				Logger::error("In TextEdit::operator() : {}", e.what());
 				return "";
 			}
 		}
