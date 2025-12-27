@@ -554,64 +554,6 @@ namespace Menu {
 				"",
 				"True or False."},
 		},
-	#ifdef GPU_SUPPORT
-		{
-			{"nvml_measure_pcie_speeds",
-				"Measure PCIe throughput on NVIDIA cards.",
-				"",
-				"May impact performance on certain cards.",
-				"",
-				"True or False."},
-			{"rsmi_measure_pcie_speeds",
-				"Measure PCIe throughput on AMD cards.",
-				"",
-				"May impact performance on certain cards.",
-				"",
-				"True or False."},
-			{"graph_symbol_gpu",
-				"Graph symbol to use for graphs in gpu box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
-			{"gpu_mirror_graph",
-				"Horizontally mirror the GPU graph.",
-				"",
-				"True or False."},
-			{"shown_gpus",
-				"Manually set which gpu vendors to show.",
-				"",
-				"Available values are",
-				"\"nvidia\", \"amd\", and \"intel\".",
-				"Separate values with whitespace.",
-				"",
-				"A restart is required to apply changes."},
-			{"custom_gpu_name0",
-				"Custom gpu0 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-			{"custom_gpu_name1",
-				"Custom gpu1 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-			{"custom_gpu_name2",
-				"Custom gpu2 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-			{"custom_gpu_name3",
-				"Custom gpu3 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-			{"custom_gpu_name4",
-				"Custom gpu4 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-			{"custom_gpu_name5",
-				"Custom gpu5 model name in gpu stats box.",
-				"",
-				"Empty string to disable."},
-		},
-	#endif
 		{
 			{"mem_below_net",
 				"Mem box location.",
@@ -854,7 +796,65 @@ namespace Menu {
 				"",
 				"Set to 'True' to filter out internal",
 				"processes started by the Linux kernel."},
+		},
+	#ifdef GPU_SUPPORT
+		{
+			{"nvml_measure_pcie_speeds",
+				"Measure PCIe throughput on NVIDIA cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"rsmi_measure_pcie_speeds",
+				"Measure PCIe throughput on AMD cards.",
+				"",
+				"May impact performance on certain cards.",
+				"",
+				"True or False."},
+			{"graph_symbol_gpu",
+				"Graph symbol to use for graphs in gpu box.",
+				"",
+				"\"default\", \"braille\", \"block\" or \"tty\".",
+				"",
+				"\"default\" for the general default symbol.",},
+			{"gpu_mirror_graph",
+				"Horizontally mirror the GPU graph.",
+				"",
+				"True or False."},
+			{"shown_gpus",
+				"Manually set which gpu vendors to show.",
+				"",
+				"Available values are",
+				"\"nvidia\", \"amd\", and \"intel\".",
+				"Separate values with whitespace.",
+				"",
+				"A restart is required to apply changes."},
+			{"custom_gpu_name0",
+				"Custom gpu0 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name1",
+				"Custom gpu1 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name2",
+				"Custom gpu2 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name3",
+				"Custom gpu3 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name4",
+				"Custom gpu4 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
+			{"custom_gpu_name5",
+				"Custom gpu5 model name in gpu stats box.",
+				"",
+				"Empty string to disable."},
 		}
+	#endif
 	};
 
 	msgBox::msgBox() {}
@@ -1405,11 +1405,11 @@ static int optionsMenu(const string& key) {
 			page = selected = 0;
 		}
 #ifdef GPU_SUPPORT
-		else if (is_in(key, "1", "2", "3", "4", "5", "6") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "0", "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
 #else
-		else if (is_in(key, "1", "2", "3", "4", "5") or key.starts_with("select_cat_")) {
+		else if (is_in(key, "0", "1", "2", "3", "4") or key.starts_with("select_cat_")) {
 #endif
-		selected_cat = key.back() - '0' - 1;
+			selected_cat = key.back() - '0';
 			page = selected = 0;
 		}
 		else if (is_in(key, "left", "right") or (vim_keys and is_in(key, "h", "l"))) {
@@ -1516,19 +1516,19 @@ static int optionsMenu(const string& key) {
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
 		#ifdef GPU_SUPPORT
-			for (int i = 0; const auto& m : {"general", "cpu", "gpu", "mem", "net", "proc"}) {
+			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc", "gpu"}) {
 		#else
 			for (int i = 0; const auto& m : {"general", "cpu", "mem", "net", "proc"}) {
 		#endif
 				out += Fx::b + (i == selected_cat
 						? Theme::c("hi_fg") + '[' + Theme::c("title") + m + Theme::c("hi_fg") + ']'
-						: Theme::c("hi_fg") + to_string(i + 1) + Theme::c("title") + m + ' ')
+						: Theme::c("hi_fg") + to_string(i) + Theme::c("title") + m + ' ')
 				#ifdef GPU_SUPPORT
 					+ Mv::r(7);
 				#else
 					+ Mv::r(10);
 				#endif
-				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
+				if (string button_name = "select_cat_" + to_string(i); not editing and not mouse_mappings.contains(button_name))
 					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
 				i++;
 			}
