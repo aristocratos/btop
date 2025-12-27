@@ -50,6 +50,12 @@ white   = $(call cecho,$(B_WHITE)$(1)$(RST)$(2)\n)
 # inline colors (no newline)
 red_i = $(call cecho,$(B_RED)$(1)$(RST)$(2))
 
+COMMA := ,
+
+file_with_size = $(WHITE)$(1) $(2)$(YELLOW)($(WHITE)$$(du -ah "$(1)" 2>/dev/null |cut -f1)iB$(YELLOW))
+step_duration = $$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $(1) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null |sed 's/^00m://' || echo 'unk')
+
+
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
 override DATESTAMP := $(shell date '+%Y-%m-%d %H:%M:%S' || echo "5 minutes ago")
@@ -119,7 +125,7 @@ endif
 ifeq ($(STATIC),true)
 	ifeq ($(CXX_IS_CLANG),true)
 		ifeq ($(shell $(CXX) -print-target-triple | grep gnu >/dev/null; echo $$?),0)
-$(error $(shell printf "\033[1;91mERROR: \033[97m$(CXX) can't statically link glibc\033[0m"))
+$(error $(call red_i,ERROR: $(WHITE)$(CXX) can't statically link glibc))
 		endif
 	endif
 
@@ -178,7 +184,7 @@ else ifeq ($(PLATFORM_LC),netbsd)
 	export MAKE = gmake
 	SU_GROUP := wheel
 else
-$(error $(shell printf "\033[1;91mERROR: \033[97mUnsupported platform ($(PLATFORM))\033[0m"))
+$(error $(call red_i,ERROR: $(WHITE)Unsupported platform ($(PLATFORM))))
 endif
 
 #? Use all CPU cores (will only be set if using Make 4.3+)
@@ -259,8 +265,6 @@ else
 	PROGRESS = expr $$(find $(BUILDDIR) -type f -name *.o | wc -l || echo 1) '*' 90 / $(SOURCE_COUNT) | cut -c1-2
 endif
 
-P := %%
-
 ifeq ($(VERBOSE),true)
 	# Doesn't work with `&>`
 	override SUPPRESS := > /dev/null 2> /dev/null
@@ -275,29 +279,30 @@ all: | info rocm_smi info-quiet directories btop.1 config.h btop
 ifneq ($(QUIET),true)
 info:
 	@printf " $(BANNER)\n"
-	@printf "\033[1;92mPLATFORM     \033[1;93m?| \033[0m$(PLATFORM)\n"
-	@printf "\033[1;96mARCH         \033[1;93m?| \033[0m$(ARCH)\n"
-	@printf "\033[1;95mGPU_SUPPORT  \033[1;94m:| \033[0m$(GPU_SUPPORT)\n"
-	@printf "\033[1;93mCXX          \033[1;93m?| \033[0m$(CXX) \033[1;93m(\033[97m$(CXX_VERSION)\033[93m)\n"
-	@$(SHOW_CC_INFO) || printf "\033[1;93mCC           \033[1;93m?| \033[0m$(CC) \033[1;93m(\033[97m$(CC_VERSION)\033[93m)\n"
-	@printf "\033[1;94mTHREADS      \033[1;94m:| \033[0m$(THREADS)\n"
-	@printf "\033[1;92mREQFLAGS     \033[1;91m!| \033[0m$(REQFLAGS)\n"
-	@printf "\033[1;91mWARNFLAGS    \033[1;94m:| \033[0m$(WARNFLAGS)\n"
-	@printf "\033[1;94mOPTFLAGS     \033[1;94m:| \033[0m$(OPTFLAGS)\n"
-	@printf "\033[1;93mLDCXXFLAGS   \033[1;94m:| \033[0m$(LDCXXFLAGS)\n"
-	@printf "\033[1;95mCXXFLAGS     \033[1;92m+| \033[0;37m\$$(\033[92mREQFLAGS\033[37m) \$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDCXX)\n"
-	@printf "\033[1;95mLDFLAGS      \033[1;92m+| \033[0;37m\$$(\033[93mLDCXXFLAGS\033[37m) \$$(\033[94mOPTFLAGS\033[37m) \$$(\033[91mWARNFLAGS\033[37m) $(OLDLD)\n"
+	@$(call green  ,PLATFORM     $(YELLOW)?| ,$(PLATFORM))
+	@$(call cyan   ,ARCH         $(YELLOW)?| ,$(ARCH))
+	@$(call magenta,GPU_SUPPORT  $(BLUE):| ,$(GPU_SUPPORT))
+	@$(call yellow ,CXX          ?| ,$(CXX) $(B_YELLOW)($(WHITE)$(CXX_VERSION)$(YELLOW)))
+	@$(SHOW_CC_INFO) || \
+	 $(call yellow ,CC           ?| ,$(CC) $(B_YELLOW)($(WHITE)$(CC_VERSION)$(YELLOW)))
+	@$(call blue   ,THREADS      :| ,$(THREADS))
+	@$(call green  ,REQFLAGS     $(RED)!| ,$(REQFLAGS))
+	@$(call red    ,WARNFLAGS    $(BLUE):| ,$(WARNFLAGS))
+	@$(call blue   ,OPTFLAGS     :| ,$(OPTFLAGS))
+	@$(call yellow ,LDCXXFLAGS   $(BLUE):| ,$(LDCXXFLAGS))
+	@$(call magenta,CXXFLAGS     $(GREEN)+| ,\$$($(GREEN)REQFLAGS$(RST)) \$$($(YELLOW)LDCXXFLAGS$(RST)) \$$($(BLUE)OPTFLAGS$(RST)) \$$($(RED)WARNFLAGS$(RST)) $(OLDCXX))
+	@$(call magenta,LDFLAGS      $(GREEN)+| ,\$$($(YELLOW)LDCXXFLAGS$(RST)) \$$($(BLUE)OPTFLAGS$(RST)) \$$($(RED)WARNFLAGS$(RST)) $(OLDLD))
 else
 info:
 	 @true
 endif
 
 info-quiet: | info rocm_smi
-	@printf "\n\033[1;92mBuilding btop++ \033[91m(\033[97mv$(BTOP_VERSION)\033[91m) \033[93m$(PLATFORM) \033[96m$(ARCH)\033[0m\n"
+	@$(call green,Building btop++ $(RED)($(WHITE)v$(BTOP_VERSION)$(RED)) $(YELLOW)$(PLATFORM) $(CYAN)$(ARCH))
 
 help:
 	@printf " $(BANNER)\n"
-	@printf "\033[1;97mbtop++ makefile\033[0m\n"
+	@$(call white,btop++ makefile)
 	@printf "usage: make [argument]\n\n"
 	@printf "arguments:\n"
 	@printf "  all          Compile btop (default argument)\n"
@@ -319,84 +324,84 @@ directories:
 config.h: $(BUILDDIR)/config.h
 
 $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
-	@$(QUIET) || printf "\033[1mConfiguring $(BUILDDIR)/config.h\033[0m\n"
+	@$(QUIET) || printf "$(BLD)Configuring $(BUILDDIR)/config.h$(RST)\n"
 	@$(VERBOSE) || printf 'sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null\n'
 	@sed -e "s|@GIT_COMMIT@|$(GIT_COMMIT)|" -e "s|@CONFIGURE_COMMAND@|$(CONFIGURE_COMMAND)|" -e "s|@COMPILER@|$(CXX)|" -e "s|@COMPILER_VERSION@|$(CXX_VERSION)|" $< | tee $@ > /dev/null
 
 #? Man page
 btop.1: manpage.md | directories
 ifeq ($(shell command -v lowdown >/dev/null; echo $$?),0)
-	@printf "\n\033[1;92mGenerating man page $@\033[37m...\033[0m\n"
+	@$(call green,\nGenerating man page $@,...)
 	lowdown -s -Tman -o $@ $<
 else
-	@printf "\n\033[1;93mCommand 'lowdown' not found: skipping generating man page $@\033[0m\n"
+	@$(call yellow,\nCommand 'lowdown' not found: skipping generating man page $@)
 endif
 
 #? Clean only Objects
 clean:
-	@printf "\033[1;91mRemoving: \033[1;97mbuilt objects...\033[0m\n"
+	@$(call red,Removing: $(WHITE)built objects,...)
 	@rm -rf $(BUILDDIR)
 	@test -e lib/rocm_smi_lib/build && cmake --build lib/rocm_smi_lib/build --target clean &> /dev/null || true
 
 #? Clean Objects and Binaries
 distclean: clean
-	@printf "\033[1;91mRemoving: \033[1;97mbuilt binaries...\033[0m\n"
+	@$(call red,Removing: $(WHITE)built binaries,...)
 	@rm -rf $(TARGETDIR)
 	@test -e lib/rocm_smi_lib/build && rm -rf lib/rocm_smi_lib/build || true
 
 install:
-	@printf "\033[1;92mInstalling binary to: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
+	@$(call green,Installing binary to: $(WHITE)$(DESTDIR)$(PREFIX)/bin/btop)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@cp -p $(TARGETDIR)/btop $(DESTDIR)$(PREFIX)/bin/btop
 	@chmod 755 $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;92mInstalling doc to: \033[1;97m$(DESTDIR)$(PREFIX)/share/doc/btop\033[0m\n"
+	@$(call green,Installing doc to: $(WHITE)$(DESTDIR)$(PREFIX)/share/doc/btop)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/btop
 	@cp -p README.md $(DESTDIR)$(PREFIX)/share/doc/btop
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling themes to: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop/themes\033[0m\n"
+	@$(call green,Installing themes to: $(WHITE)$(DESTDIR)$(PREFIX)/share/btop/themes)
 	@cp -pr themes $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;92mInstalling desktop entry to: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
+	@$(call green,Installing desktop entry to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/applications/btop.desktop)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/applications/
 	@cp -p btop.desktop $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
-	@printf "\033[1;92mInstalling PNG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\033[0m\n"
+	@$(call green,Installing PNG icon to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps
 	@cp -p Img/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
-	@printf "\033[1;92mInstalling SVG icon to: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\033[0m\n"
+	@$(call green,Installing SVG icon to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	@cp -p Img/icon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
 ifneq ($(wildcard btop.1),)
-	@printf "\033[1;92mInstalling man page to: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\033[0m\n"
+	@$(call green,Installing man page to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/man/man1/btop.1)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
 	@cp -p btop.1 $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
 endif
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
 setuid:
-	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
-	@printf "\033[1;92mSetting owner \033[1;97m$(SU_USER):$(SU_GROUP)\033[0m\n"
+	@$(call white,File: $(DESTDIR)$(PREFIX)/bin/btop)
+	@$(call green,Setting owner ,$(WHITE)$(SU_USER):$(SU_GROUP))
 	@chown $(SU_USER):$(SU_GROUP) $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;92mSetting SUID bit\033[0m\n"
+	@$(call green,Setting SUID bit)
 	@chmod u+s $(DESTDIR)$(PREFIX)/bin/btop
 
 #? Run setcap on btop for extended capabilities
 setcap:
-	@printf "\033[1;97mFile: $(DESTDIR)$(PREFIX)/bin/btop\n"
-	@printf "\033[1;92mSetting capabilities...\033[0m\n"
+	@$(call white,File: $(DESTDIR)$(PREFIX)/bin/btop)
+	@$(call green,Setting capabilities,...)
 	@setcap "cap_perfmon=+ep cap_dac_read_search=+ep" $(DESTDIR)$(PREFIX)/bin/btop
 
 # With 'rm -v' user will see what files (if any) got removed
 uninstall:
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/bin/btop\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/bin/btop)
 	@rm -rfv $(DESTDIR)$(PREFIX)/bin/btop
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/btop\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/btop)
 	@rm -rfv $(DESTDIR)$(PREFIX)/share/btop
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/applications/btop.desktop\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/applications/btop.desktop)
 	@rm -rfv $(DESTDIR)$(PREFIX)/share/applications/btop.desktop
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png)
 	@rm -rfv $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/btop.png
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg)
 	@rm -rfv $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/btop.svg
-	@printf "\033[1;91mRemoving: \033[1;97m$(DESTDIR)$(PREFIX)/share/man/man1/btop.1\033[0m\n"
+	@$(call red,Removing: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/man/man1/btop.1)
 	@rm -rfv $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
 
 #? Pull in dependency info for *existing* .o files
@@ -413,14 +418,19 @@ ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
 	endif
 .ONESHELL:
 rocm_smi:
-	@printf "\n\033[1;92mBuilding ROCm SMI static library\033[37m...\033[0m\n"
-	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@$(QUIET) || printf "\033[1;97mRunning CMake...\033[0m\n"
-	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DCMAKE_POLICY_DEFAULT_CMP0069=NEW -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || { printf "\033[1;91mCMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
-	@$(QUIET) || printf "\n\033[1;97mBuilding and linking...\033[0m\n"
-	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || { printf "\033[1;91mMake failed, continuing build without statically linking ROCm SMI\033[37m...\033[0m\n"; exit 0; }
-	@printf "\033[1;92m100$(P)\033[10D\033[5C-> \033[1;37m$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a \033[1;93m(\033[1;97m$$(du -ah $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a | cut -f1)iB\033[1;93m)\033[0m\n"
-	@printf "\033[1;92mROCm SMI build complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(call green,\nBuilding ROCm SMI static library,...)
+	@$(QUIET) || $(call white,Running CMake,...)
+	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) \
+		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
+		-DCMAKE_POLICY_DEFAULT_CMP0069=NEW \
+		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+		-DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || \
+		{ $(call red,CMake failed$(COMMA) continuing build without statically linking ROCm SMI,...); exit 0; }
+	@$(QUIET) || $(call white,\nBuilding and linking,...)
+	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || \
+		{ $(call red,Make failed$(COMMA) continuing build without statically linking ROCm SMI,...); exit 0; }
+	@$(call green,100% -> $(call file_with_size,$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a))
+	@$(call green,ROCm SMI build complete in ($(WHITE)$(call step_duration,$(TIMESTAMP))$(GREEN)))
 	@$(eval override LDFLAGS += $(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a -DRSMI_STATIC) # TODO: this seems to execute every time, no matter if the compilation failed or succeeded
 	@$(eval override CXXFLAGS += -DRSMI_STATIC)
 else
@@ -433,31 +443,32 @@ endif
 btop: $(OBJECTS) | rocm_smi directories
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@$(QUIET) || printf "\n\033[1;92mLinking and optimizing binary\033[37m...\033[0m\n"
+	@$(QUIET) || $(call green,\nLinking and optimizing binary,...)
 	@$(VERBOSE) || printf "$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS)\n"
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
-	@printf "\033[1;92m100$(P) -> \033[1;37m$(TARGETDIR)/btop \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $(TARGETDIR)/btop | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
-	@printf "\n\033[1;92mBuild complete in \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$(date +%s 2>/dev/null || echo "0") - $(TIMESTAMP) 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo "unknown")\033[92m)\033[0m\n"
+	@$(call green,100% -> $(call file_with_size,$(TARGETDIR)/btop,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
+	@$(call green,\nBuild complete in $(GREEN)($(WHITE)$(call step_duration,$(TIMESTAMP))$(GREEN)))
+	exit 1
 
 #? Compile
 .ONESHELL:
 $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories config.h
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
+	@$(QUIET) || $(call white,Compiling $<)
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
-	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@$(call green,$$($(PROGRESS))%$(call CUR_LEFT,10)$(call CUR_RIGHT,5)-> $(call file_with_size,$@,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
 
 #? Compile intel_gpu_top C sources for Intel GPU support
 .ONESHELL:
 $(BUILDDIR)/%.c.o: $(SRCDIR)/$(PLATFORM_DIR)/intel_gpu_top/%.c | directories
 	@sleep 0.3 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@$(QUIET) || printf "\033[1;97mCompiling $<\033[0m\n"
+	@$(QUIET) || $(call white,Compiling $<)
 	@$(VERBOSE) || printf "$(CC) $(INC) -c -o $@ $<\n"
 	@$(CC) $(INC) -w -c -o $@ $< || exit 1
-	@printf "\033[1;92m$$($(PROGRESS))$(P)\033[10D\033[5C-> \033[1;37m$@ \033[100D\033[38C\033[1;93m(\033[1;97m$$(du -ah $@ | cut -f1)iB\033[1;93m) \033[92m(\033[97m$$($(DATE_CMD) -d @$$(expr $$($(DATE_CMD) +%s 2>/dev/null || echo "0") - $${TSTAMP} 2>/dev/null) -u +%Mm:%Ss 2>/dev/null | sed 's/^00m://' || echo '')\033[92m)\033[0m\n"
+	@$(call green,$$($(PROGRESS))%$(call CUR_LEFT,10)$(call CUR_RIGHT,5)-> $(call file_with_size,$@,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
 
 
 #? Non-File Targets
