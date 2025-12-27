@@ -45,6 +45,13 @@
 * [Configurability](#configurability)
 * [License](#license)
 
+If you are considering donating, please first consider donating to:
+
+[<img src="https://images.squarespace-cdn.com/content/v1/66fd17c779966209da4359da/9dcb67db-433e-41cb-94d7-cecba280dc0b/Picture+1.png" height="100px">](https://https://www.qm4ua.org)
+[<img src="https://secure2.convio.net/stccad/images/content/pagebuilder/stc-logo2022.png" width="400px">](https://donate.savethechildren.org)
+
+
+
 ## News
 
 ##### 4 December 2025
