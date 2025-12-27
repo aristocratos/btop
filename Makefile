@@ -3,6 +3,53 @@
 BANNER_FILE := ansi_banner.utf8
 BANNER = $(shell cat "$(BANNER_FILE)")
 
+E = \033[
+RST = $(E)0m
+BLD = $(E)1m
+
+CUR_LEFT = $(E)$(1)D
+CUR_RIGHT = $(E)$(1)C
+
+# LT_GRAY    = $(E)30m
+# LT_RED     = $(E)31m
+# LT_GREEN   = $(E)32m
+# LT_YELLOW  = $(E)33m
+# LT_BLUE    = $(E)34m
+# LT_MAGENTA = $(E)35m
+# LT_CYAN    = $(E)36m
+# LT_WHITE   = $(E)37m
+
+# GRAY    = $(E)90m
+RED     = $(E)91m
+GREEN   = $(E)92m
+YELLOW  = $(E)93m
+BLUE    = $(E)94m
+MAGENTA = $(E)95m
+CYAN    = $(E)96m
+WHITE   = $(E)97m
+
+# B_GRAY    = $(BLD)$(GRAY)
+B_RED     = $(BLD)$(RED)
+B_GREEN   = $(BLD)$(GREEN)
+B_YELLOW  = $(BLD)$(YELLOW)
+B_BLUE    = $(BLD)$(BLUE)
+B_MAGENTA = $(BLD)$(MAGENTA)
+B_CYAN    = $(BLD)$(CYAN)
+B_WHITE   = $(BLD)$(WHITE)
+
+cecho = printf "%b" "$(1)"
+
+# line-based colors (with newline)
+red     = $(call cecho,$(B_RED)$(1)$(RST)$(2)\n)
+green   = $(call cecho,$(B_GREEN)$(1)$(RST)$(2)\n)
+yellow  = $(call cecho,$(B_YELLOW)$(1)$(RST)$(2)\n)
+blue    = $(call cecho,$(B_BLUE)$(1)$(RST)$(2)\n)
+magenta = $(call cecho,$(B_MAGENTA)$(1)$(RST)$(2)\n)
+cyan    = $(call cecho,$(B_CYAN)$(1)$(RST)$(2)\n)
+white   = $(call cecho,$(B_WHITE)$(1)$(RST)$(2)\n)
+# inline colors (no newline)
+red_i = $(call cecho,$(B_RED)$(1)$(RST)$(2))
+
 override BTOP_VERSION := $(shell head -n100 src/btop.cpp 2>/dev/null | grep "Version =" | cut -f2 -d"\"" || echo " unknown")
 override TIMESTAMP := $(shell date +%s 2>/dev/null || echo "0")
 override DATESTAMP := $(shell date '+%Y-%m-%d %H:%M:%S' || echo "5 minutes ago")
