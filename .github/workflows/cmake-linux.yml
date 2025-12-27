@@ -11,6 +11,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
+      - 'tests/*'
   pull_request:
     branches: main
     paths:
@@ -20,6 +21,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
+      - 'tests/*'
 
 jobs:
   build:
