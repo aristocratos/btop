@@ -448,7 +448,6 @@ btop: $(OBJECTS) | rocm_smi directories
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
 	@$(call green,100% -> $(call file_with_size,$(TARGETDIR)/btop,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
 	@$(call green,\nBuild complete in $(GREEN)($(WHITE)$(call step_duration,$(TIMESTAMP))$(GREEN)))
-	exit 1
 
 #? Compile
 .ONESHELL:
