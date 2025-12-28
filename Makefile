@@ -298,7 +298,7 @@ info:
 endif
 
 info-quiet: | info rocm_smi
-	@$(call green,Building btop++ $(RED)($(WHITE)v$(BTOP_VERSION)$(RED)) $(YELLOW)$(PLATFORM) $(CYAN)$(ARCH))
+	@$(call green,\nBuilding btop++ $(RED)($(WHITE)v$(BTOP_VERSION)$(RED)) $(YELLOW)$(PLATFORM) $(CYAN)$(ARCH))
 
 help:
 	@printf " $(BANNER)\n"
