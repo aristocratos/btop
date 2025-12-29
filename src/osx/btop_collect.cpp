@@ -65,6 +65,10 @@ tab-size = 4
 #endif
 #include "smc.hpp"
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
+#define kIOMainPortDefault kIOMasterPortDefault
+#endif
+
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
 namespace fs = std::filesystem;
