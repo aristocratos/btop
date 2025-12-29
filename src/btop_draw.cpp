@@ -1776,7 +1776,8 @@ namespace Proc {
 			int mouse_x = x + 14;
 			out += Mv::to(y + height - 1, x + 1) + title_left_down + Fx::b + hi_color + Symbols::up + Theme::c("title") + " select " + down_button + Fx::ub + title_right_down
 				+ title_left_down + Fx::b + t_color + "info " + hi_color + Symbols::enter + Fx::ub + title_right_down;
-				if (selected > 0) Input::mouse_mappings["enter"] = {y + height - 1, mouse_x, 1, 6};
+				if (selected > 0) Input::mouse_mappings["info_enter"] = {y + height - 1, mouse_x, 1, 6};
+				else Input::mouse_mappings.erase("info_enter");
 				mouse_x += 8;
 			if (width > 60) {
 				out += title_left_down + Fx::b + hi_color + 't' + t_color + "erminate" + Fx::ub + title_right_down;
@@ -2042,6 +2043,7 @@ namespace Proc {
 				greyed_out ? "" : Theme::c("hi_fg"), Symbols::enter,
 				Fx::ub, Theme::c("proc_box"), Symbols::title_right);
 			if (not greyed_out) Input::mouse_mappings["enter"] = {d_y, d_x + d_width - 9, 1, 6};
+			else Input::mouse_mappings.erase("enter");
 		}
 
 		if (selected == 0 and selected_pid != 0) {
