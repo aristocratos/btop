@@ -403,7 +403,7 @@ namespace Input {
 					else
 						keep_going = true;
 				}
-				else if (key == "enter") {
+				else if (is_in(key, "enter", "info_enter")) {
 					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
 						return;
 					}
