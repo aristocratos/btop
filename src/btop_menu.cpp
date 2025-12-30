@@ -185,7 +185,7 @@ namespace Menu {
 		{"Up, Down", "Select in process list."},
 		{"Enter", "Show detailed information for selected process."},
 		{"Spacebar", "Expand/collapse the selected process in tree view."},
-		{"u", "Expand/collapse the selected process' children."},
+		{"C", "Expand/collapse the selected process' children."},
 		{"Pg Up, Pg Down", "Jump 1 page in process list."},
 		{"Home, End", "Jump to first or last page in process list."},
 		{"Left, Right", "Select previous/next sorting column."},
@@ -195,7 +195,8 @@ namespace Menu {
 		{"a", "Toggle auto scaling for the network graphs."},
 		{"y", "Toggle synced scaling mode for network graphs."},
 		{"f, /", "To enter a process filter. Start with ! for regex."},
-		{"F", "Pause process list."},
+		{"F", "Follow selected process."},
+		{"u", "Pause process list."},
 		{"delete", "Clear any entered filter."},
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
@@ -854,6 +855,14 @@ namespace Menu {
 				"",
 				"Set to 'True' to filter out internal",
 				"processes started by the Linux kernel."},
+			{"proc_follow_detailed",
+				"Follow selected process with detailed view",
+				"",
+				"If set to 'True' then when opening the",
+				"detailed view, the process will be",
+				"followed in the list. Pressing enter",
+				"again will close the detailed view",
+				"and stop following the process."},
 		}
 	};
 

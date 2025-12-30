@@ -246,6 +246,19 @@ When specified, this directory takes priority over the default search paths.
 
 Let me know if you want to contribute with new themes.
 
+The new Process list pausing and Process following features introduce a few new theme attributes.
+These attributes still need to be added to all of the existing themes (except the default one).
+
+Process list banner attributes:
+* proc_pause_bg: background color of the banner when the list is paused.
+* proc_follow_bg: background color of the banner when the process following feature is active.
+* proc_banner_bg: background color of the banner when the process following feature is active AND the list is paused.
+* proc_banner_fg: foreground (text) color of the banner
+
+Process following attributes:
+* followed_bg: background color of the followed process in the list.
+* followed_fg: foreground color of the followed process in the list.
+
 ## Support and funding
 
 You can sponsor this project through GitHub. See [my sponsors page](https://github.com/sponsors/aristocratos) for options.
@@ -1392,6 +1405,9 @@ proc_left = false
 
 #* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop).
 proc_filter_kernel = false
+
+#* Should the process list follow the selected process when detailed view is open.
+proc_follow_detailed = true
 
 #* In tree-view, always accumulate child process resources in the parent process.
 proc_aggregate = false
