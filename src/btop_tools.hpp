@@ -49,8 +49,10 @@ tab-size = 4
 	#endif
 #endif
 
-#include "fmt/core.h"
-#include "fmt/format.h"
+#include <fmt/core.h>
+#include <fmt/format.h>
+
+#include "btop_log.hpp"
 
 using std::array;
 using std::atomic;
@@ -153,47 +155,6 @@ namespace Term {
 
 	//* Restore terminal options
 	void restore();
-}
-
-//* Simple logging implementation
-namespace Logger {
-	const vector<string> log_levels = {
-		"DISABLED",
-		"ERROR",
-		"WARNING",
-		"INFO",
-		"DEBUG",
-	};
-	extern std::optional<std::filesystem::path> logfile;
-
-	enum Level : std::uint8_t {
-		DISABLED = 0,
-		ERROR = 1,
-		WARNING = 2,
-		INFO = 3,
-		DEBUG = 4,
-	};
-
-	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const string& level);
-
-	void log_write(const Level level, const std::string_view msg);
-
-	inline void error(const std::string_view msg) {
-		log_write(ERROR, msg);
-	}
-
-	inline void warning(const std::string_view msg) {
-		log_write(WARNING, msg);
-	}
-
-	inline void info(const std::string_view msg) {
-		log_write(INFO, msg);
-	}
-
-	inline void debug(const std::string_view msg) {
-		log_write(DEBUG, msg);
-	}
 }
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -363,7 +324,7 @@ namespace Tools {
 		if (auto it = map.find(key); it != map.end()) {
 			return it->second;
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
+			Logger::error("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line());
 			return fallback;
 		}
 	};
@@ -372,7 +333,7 @@ namespace Tools {
 		if (auto it = map.find(key); it != map.end()) {
 			return it->second;
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
+			Logger::error("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key);
 			return fallback;
 		}
 	};
@@ -384,7 +345,7 @@ namespace Tools {
 		if (index < vec.size()) {
 			return vec[index];
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
+			Logger::error("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line());
 			return fallback;
 		}
 	};
@@ -393,7 +354,7 @@ namespace Tools {
 		if (index < vec.size()) {
 			return vec[index];
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
+			Logger::error("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index);
 			return fallback;
 		}
 	};
@@ -457,7 +418,6 @@ namespace Tools {
 		vector<string> report_buffer{};
 		string name{};
 		bool delayed_report{};
-		Logger::Level log_level = Logger::DEBUG;
 	public:
 		DebugTimer() = default;
 		explicit DebugTimer(string name, bool start = true, bool delayed_report = true);
