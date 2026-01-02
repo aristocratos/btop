@@ -33,6 +33,8 @@ tab-size = 4
 #include <unordered_map>
 #include <utility>
 
+#include <fmt/format.h>
+
 using std::array;
 using std::ceil;
 using std::max;
@@ -1537,8 +1539,20 @@ static int optionsMenu(const string& key) {
 				#else
 					+ Mv::r(10);
 				#endif
-				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
-					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
+
+#if !defined(GPU_SUPPORT)
+				constexpr static auto option_menu_tab_width = 15;
+#else
+				constexpr static auto option_menu_tab_width = 12;
+#endif
+				if (const auto button_name = fmt::format("select_cat_{}", i + 1); not editing and not mouse_mappings.contains(button_name)) {
+					mouse_mappings[button_name] = {
+						.line = y + 6,
+						.col = x + 2 + (option_menu_tab_width * i),
+						.height = 3,
+						.width = option_menu_tab_width,
+					};
+				}
 				i++;
 			}
 			if (pages > 1) {
