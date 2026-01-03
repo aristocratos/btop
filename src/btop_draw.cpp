@@ -1443,6 +1443,7 @@ namespace Net {
 		auto net_sync = Config::getB("net_sync");
 		auto net_auto = Config::getB("net_auto");
 		auto tty_mode = Config::getB("tty_mode");
+		auto swap_upload_download = Config::getB("swap_upload_download");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
 		string ip_addr = (net.ipv4.empty() ? net.ipv6 : net.ipv4);
 		if (old_ip != ip_addr) {
@@ -1464,13 +1465,14 @@ namespace Net {
 			graphs.clear();
 			if (safeVal(net.bandwidth, "download"s).empty() or safeVal(net.bandwidth, "upload"s).empty())
 				return out + Fx::reset;
+
 			graphs["download"] = Draw::Graph{
 				width - b_width - 2, u_graph_height, "download",
 				net.bandwidth.at("download"), graph_symbol,
-				false, true, down_max};
+				swap_upload_download, true, down_max};
 			graphs["upload"] = Draw::Graph{
 				width - b_width - 2, d_graph_height, "upload",
-				net.bandwidth.at("upload"), graph_symbol, true, true, up_max};
+				net.bandwidth.at("upload"), graph_symbol, !swap_upload_download, true, up_max};
 
 			//? Interface selector and buttons
 
@@ -1498,9 +1500,13 @@ namespace Net {
 		}
 
 		//? Graphs and stats
-		int cy = 0;
 		for (const string dir : {"download", "upload"}) {
-			out += Mv::to(y+1 + (dir == "upload" ? u_graph_height : 0), x + 1) + graphs.at(dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
+			//         |  upload  |  download  |
+			// no swap |  bottom  |     top    |
+			//  swap   |    top   |   bottom   |
+			// XNOR operation (==)
+			int graph_y = ((dir == "upload") == (!swap_upload_download)) * u_graph_height;
+			out += Mv::to(y+1 + graph_y, x + 1) + graphs.at(dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
 				+ Mv::to(y+1 + (dir == "upload" ? height - 3: 0), x + 1) + Fx::ub + Theme::c("graph_text")
 				+ floating_humanizer((dir == "upload" ? up_max : down_max), true);
 			const string speed = floating_humanizer(safeVal(net.stat, dir).speed, false, 0, false, true);
@@ -1508,15 +1514,20 @@ namespace Net {
 			const string top = floating_humanizer(safeVal(net.stat, dir).top, false, 0, true, true);
 			const string total = floating_humanizer(safeVal(net.stat, dir).total);
 			const string symbol = (dir == "upload" ? "▲" : "▼");
-			out += Mv::to(b_y+1+cy, b_x+1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
-			cy += (b_height == 5 ? 2 : 1);
-			if (b_height >= 8) {
-				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
-				cy++;
-			}
-			if (b_height >= 6) {
-				out += Mv::to(b_y+1+cy, b_x+1) + symbol + ' ' + "Total: " + rjust(total, (b_width >= 20 ? 16 : 8));
-				cy += (b_height > 6 and b_height % 2 ? 2 : 1);
+			if ((swap_upload_download and dir == "upload") or (not swap_upload_download and dir == "download")) {
+				// Top graph
+				out += Mv::to(b_y+1, b_x+1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
+				if (b_height >= 8)
+					out += Mv::to(b_y+2, b_x+1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
+				if (b_height >= 6)
+					out += Mv::to(b_y+2 + (b_height >= 8), b_x+1) + symbol + ' ' + "Total: " + rjust(total, (b_width >= 20 ? 16 : 8));
+			} else {
+				// Bottom graph
+				out += Mv::to(b_y + b_height - (b_height / 2), b_x + 1) + Fx::ub + Theme::c("main_fg") + symbol + ' ' + ljust(speed, 10) + (b_width >= 20 ? rjust('(' + speed_bits + ')', 13) : "");
+				if (b_height >= 8)
+					out += Mv::to(b_y + b_height - (b_height / 2) + 1, b_x + 1) + symbol + ' ' + "Top: " + rjust('(' + top, (b_width >= 20 ? 17 : 9)) + ')';
+				if (b_height >= 6)
+					out += Mv::to(b_y + b_height - (b_height / 2) + 1 + (b_height >= 8), b_x + 1) + symbol + ' ' + "Total: " + rjust(total, (b_width >= 20 ? 16 : 8));
 			}
 		}
 
@@ -2388,7 +2399,11 @@ namespace Draw {
 			u_graph_height = height - 2 - d_graph_height;
 
 			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);
-			box += createBox(b_x, b_y, b_width, b_height, "", false, "download", "upload");
+			auto swap_up_down = Config::getB("swap_upload_download");
+			if (swap_up_down)
+				box += createBox(b_x, b_y, b_width, b_height, "", false, "upload", "download");
+			else
+				box += createBox(b_x, b_y, b_width, b_height, "", false, "download", "upload");
 		}
 
 		//* Calculate and draw proc box outlines
