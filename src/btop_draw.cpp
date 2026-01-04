@@ -1505,8 +1505,12 @@ namespace Net {
 			// no swap |  bottom  |     top    |
 			//  swap   |    top   |   bottom   |
 			// XNOR operation (==)
-			int graph_y = ((dir == "upload") == (!swap_upload_download)) * u_graph_height;
-			out += Mv::to(y+1 + graph_y, x + 1) + graphs.at(dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
+			if ((not swap_upload_download and dir == "download") or (swap_upload_download and dir == "upload")) {
+				out += Mv::to(y+1, x + 1);
+			} else {
+				out += Mv::to(y + u_graph_height + 1 + ((height * swap_upload_download) % 2), x + 1);
+			}
+			out += graphs.at(dir)(safeVal(net.bandwidth, dir), redraw or data_same or not net.connected)
 				+ Mv::to(y+1 + (((dir == "upload") == (!swap_upload_download)) * (height - 3)), x + 1) + Fx::ub + Theme::c("graph_text")
 				+ floating_humanizer((dir == "upload" ? up_max : down_max), true);
 			const string speed = floating_humanizer(safeVal(net.stat, dir).speed, false, 0, false, true);
