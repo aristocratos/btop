@@ -19,6 +19,7 @@ tab-size = 4
 #include <cmath>
 #include <fstream>
 #include <unistd.h>
+#include <algorithm>
 
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -439,13 +440,20 @@ namespace Theme {
 			}
 		}
 
+		//? Sort themes alphabetically
+		std::stable_sort(themes.begin() + 2, themes.end(), [](const string& a, const string& b) {
+			return fs::path(a).filename().string() < fs::path(b).filename().string();
+		});
+
 	}
 
 	void setTheme() {
 		const auto& theme = Config::getS("color_theme");
+		const auto theme_cfg_path = fs::path(theme);
 		fs::path theme_path;
 		for (const fs::path p : themes) {
-			if (p == theme or p.stem() == theme or p.filename() == theme) {
+			//? Check for match by full path, filename, stem or legacy absolute path
+			if (p == theme or p.filename() == theme or p.stem() == theme or (theme_cfg_path.is_absolute() and theme_cfg_path.filename() == p.filename())) {
 				theme_path = p;
 				break;
 			}
