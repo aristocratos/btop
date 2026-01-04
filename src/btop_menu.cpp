@@ -1314,7 +1314,7 @@ static int optionsMenu(const string& key) {
 			height = min(Term::height - 7, max_items * 2 + 4);
 			if (height % 2 != 0) height--;
 			bg 	= Draw::banner_gen(y, 0, true)
-				+ Draw::createBox(x, y + 6, 78, height, Theme::c("hi_fg"), true, "tab" + Symbols::right)
+				+ Draw::createBox(x, y + 6, 78, height, Theme::c("hi_fg"), true, Theme::c("hi_fg") + "tab" + Theme::c("main_fg") + Symbols::right)
 				+ Mv::to(y+8, x) + Theme::c("hi_fg") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * 29
 				+ Symbols::div_up + Symbols::h_line * (78 - 32) + Theme::c("hi_fg") + Symbols::div_right
 				+ Mv::to(y+6+height - 1, x+30) + Symbols::div_down + Theme::c("div_line");
