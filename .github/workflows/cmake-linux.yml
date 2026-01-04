@@ -1,6 +1,7 @@
 name: Linux CMake
 
 on:
+  workflow_dispatch:
   push:
     branches: main
     tags-ignore: '*.*'
