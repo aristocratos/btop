@@ -68,6 +68,10 @@ tab-size = 4
 #endif
 #include "smc.hpp"
 
+#if defined(GPU_SUPPORT) && __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#include "apple_silicon_gpu.hpp"
+#endif
+
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
 #define kIOMainPortDefault kIOMasterPortDefault
 #endif
@@ -114,6 +118,157 @@ namespace Cpu {
 namespace Mem {
 	double old_uptime;
 }
+
+#ifdef GPU_SUPPORT
+namespace Gpu {
+	vector<gpu_info> gpus;
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+	namespace AppleSilicon {
+		bool initialized = false;
+		unsigned int device_count = 0;
+
+		bool init() {
+			if (initialized) return false;
+
+			if (not apple_silicon_gpu.init()) {
+				Logger::debug("Apple Silicon GPU not available");
+				return false;
+			}
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.push_back(apple_silicon_gpu.get_name());
+
+			//? Set supported functions for Apple Silicon GPU
+			gpu_info& gpu = gpus.back();
+			gpu.supported_functions = {
+				.gpu_utilization = true,
+				.mem_utilization = false,  // Apple Silicon uses unified memory
+				.gpu_clock = true,
+				.mem_clock = false,
+				.pwr_usage = true,
+				.pwr_state = false,
+				.temp_info = true,
+				.mem_total = false,  // Unified memory
+				.mem_used = false,   // Unified memory
+				.pcie_txrx = false,  // No PCIe on Apple Silicon
+				.encoder_utilization = false,
+				.decoder_utilization = false
+			};
+
+			//? Set maximum power based on chip variant (approximate values)
+			double max_freq = apple_silicon_gpu.get_max_freq_mhz();
+			if (max_freq > 1500) {
+				gpu.pwr_max_usage = 60000;  // M1/M2/M3 Max/Ultra: ~60W GPU TDP
+			} else if (max_freq > 1200) {
+				gpu.pwr_max_usage = 35000;  // M1/M2/M3 Pro: ~35W GPU TDP
+			} else {
+				gpu.pwr_max_usage = 20000;  // Base M1/M2/M3: ~20W GPU TDP
+			}
+
+			initialized = true;
+
+			//? Do initial collection
+			collect();
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			apple_silicon_gpu.shutdown();
+			initialized = false;
+			return true;
+		}
+
+		bool collect() {
+			if (not initialized) return false;
+
+			auto metrics = apple_silicon_gpu.collect();
+			gpu_info& gpu = gpus[0];
+
+			//? GPU utilization
+			if (gpu.supported_functions.gpu_utilization) {
+				gpu.gpu_percent.at("gpu-totals").push_back(static_cast<long long>(round(metrics.gpu_usage_percent)));
+			}
+
+			//? GPU clock speed
+			if (gpu.supported_functions.gpu_clock) {
+				gpu.gpu_clock_speed = static_cast<unsigned int>(round(metrics.gpu_freq_mhz));
+			}
+
+			//? Power usage
+			if (gpu.supported_functions.pwr_usage) {
+				gpu.pwr_usage = static_cast<long long>(round(metrics.gpu_power_watts * 1000));  // Convert W to mW
+				if (gpu.pwr_usage > gpu.pwr_max_usage) {
+					gpu.pwr_max_usage = gpu.pwr_usage;
+				}
+				if (gpu.pwr_max_usage > 0) {
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						clamp(static_cast<long long>(round(static_cast<double>(gpu.pwr_usage) * 100.0 / static_cast<double>(gpu.pwr_max_usage))), 0ll, 100ll)
+					);
+				}
+			}
+
+			//? Temperature
+			if (gpu.supported_functions.temp_info and Config::getB("check_temp")) {
+				if (metrics.gpu_temp_celsius > 0) {
+					gpu.temp.push_back(static_cast<long long>(round(metrics.gpu_temp_celsius)));
+				}
+			}
+
+			return true;
+		}
+	}
+#endif
+
+	auto collect(bool no_update) -> vector<gpu_info>& {
+		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+		AppleSilicon::collect();
+#endif
+
+		//* Calculate average usage and trim vectors
+		if (not gpus.empty()) {
+			long long avg = 0;
+			for (auto& gpu : gpus) {
+				if (gpu.supported_functions.gpu_utilization and not gpu.gpu_percent.at("gpu-totals").empty()) {
+					avg += gpu.gpu_percent.at("gpu-totals").back();
+				}
+
+				//* Trim vectors if there are more values than needed for graphs
+				if (width != 0) {
+					while (cmp_greater(gpu.gpu_percent.at("gpu-totals").size(), width * 2)) gpu.gpu_percent.at("gpu-totals").pop_front();
+					while (cmp_greater(gpu.gpu_percent.at("gpu-pwr-totals").size(), width)) gpu.gpu_percent.at("gpu-pwr-totals").pop_front();
+					while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+					while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width/2)) gpu.gpu_percent.at("gpu-vram-totals").pop_front();
+				}
+			}
+
+			shared_gpu_percent.at("gpu-average").push_back(avg / static_cast<long long>(gpus.size()));
+
+			if (width != 0) {
+				while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
+				while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) shared_gpu_percent.at("gpu-pwr-total").pop_front();
+				while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) shared_gpu_percent.at("gpu-vram-total").pop_front();
+			}
+		}
+
+		count = gpus.size();
+		return gpus;
+	}
+
+	//? Stub implementations for Nvml and Rsmi (not available on macOS)
+	namespace Nvml {
+		bool shutdown() { return false; }
+	}
+	namespace Rsmi {
+		bool shutdown() { return false; }
+	}
+}  // namespace Gpu
+#endif
 
 	class MachProcessorInfo {
 	public:
@@ -187,6 +342,29 @@ namespace Shared {
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
 		Cpu::core_mapping = Cpu::get_core_mapping();
+
+#ifdef GPU_SUPPORT
+		//? Init for namespace Gpu
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+		Gpu::AppleSilicon::init();
+
+		if (not Gpu::gpu_names.empty()) {
+			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
+				Cpu::available_fields.push_back(key);
+			for (auto const& [key, _] : Gpu::shared_gpu_percent)
+				Cpu::available_fields.push_back(key);
+
+			Gpu::count = Gpu::gpus.size();
+			Gpu::gpu_b_height_offsets.resize(Gpu::gpus.size());
+			for (size_t i = 0; i < Gpu::gpu_b_height_offsets.size(); ++i)
+				Gpu::gpu_b_height_offsets[i] = Gpu::gpus[i].supported_functions.gpu_utilization
+					+ Gpu::gpus[i].supported_functions.pwr_usage
+					+ (Gpu::gpus[i].supported_functions.encoder_utilization or Gpu::gpus[i].supported_functions.decoder_utilization)
+					+ (Gpu::gpus[i].supported_functions.mem_total or Gpu::gpus[i].supported_functions.mem_used)
+					* (1 + 2*(Gpu::gpus[i].supported_functions.mem_total and Gpu::gpus[i].supported_functions.mem_used) + 2*Gpu::gpus[i].supported_functions.mem_utilization);
+		}
+#endif
+#endif
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();

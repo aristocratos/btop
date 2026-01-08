@@ -67,7 +67,7 @@ if(BTOP_LTO)
 endif()
 
 if(APPLE)
-  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
+  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp src/osx/apple_silicon_gpu.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   target_sources(libbtop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
@@ -163,6 +163,14 @@ target_link_libraries(libbtop Threads::Threads)
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+elseif(APPLE AND BTOP_GPU)
+  # Apple Silicon GPU support via IOReport
+  target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+  # Link with dl for dynamic loading of IOReport library
+  target_link_libraries(libbtop ${CMAKE_DL_LIBS})
+endif()
+
+if(LINUX AND BTOP_GPU)
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
