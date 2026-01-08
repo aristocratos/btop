@@ -58,10 +58,10 @@ tab-size = 4
 
 #include <fmt/format.h>
 
-#include "../btop_config.hpp"
-#include "../btop_log.hpp"
-#include "../btop_shared.hpp"
-#include "../btop_tools.hpp"
+#include "../config.hpp"
+#include "../log.hpp"
+#include "../shared.hpp"
+#include "../tools.hpp"
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 #include "sensors.hpp"

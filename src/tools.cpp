@@ -33,10 +33,10 @@ tab-size = 4
 #include <unistd.h>
 
 #include "widechar_width.hpp"
-#include "btop_log.hpp"
-#include "btop_shared.hpp"
-#include "btop_tools.hpp"
-#include "btop_config.hpp"
+#include "log.hpp"
+#include "shared.hpp"
+#include "tools.hpp"
+#include "config.hpp"
 
 using std::cout;
 using std::floor;
