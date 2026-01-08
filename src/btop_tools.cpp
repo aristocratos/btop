@@ -19,6 +19,7 @@ tab-size = 4
 #include <cmath>
 #include <codecvt>
 #include <ctime>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -31,6 +32,8 @@ tab-size = 4
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <wchar.h>
+#include <locale.h>
 
 #include "widechar_width.hpp"
 #include "btop_log.hpp"
@@ -168,6 +171,9 @@ namespace Term {
 				const auto is_mouse_enabled = !Config::getB("disable_mouse");
 				cout << alt_screen << hide_cursor << (is_mouse_enabled ? mouse_on : mouse_off) << flush;
 				Global::resized = false;
+
+				// set locale
+				setlocale(LC_CTYPE, "");
 			}
 		}
 		return initialized;
@@ -212,17 +218,32 @@ namespace Term {
 namespace Tools {
 
 	size_t wide_ulen(const std::string_view str) {
-		unsigned int chars = 0;
-		try {
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
+		size_t chars = 0;
 
-			for (auto c : w_str) {
-				chars += utf8::wcwidth(c);
+		mbstate_t state{};
+		const char* ptr = str.data();
+		size_t len = str.size();
+
+		while (len > 0) {
+			wchar_t wc;
+			size_t n = mbrtowc(&wc, ptr, len, &state);
+
+			if (n == static_cast<size_t>(-1)) {
+				// invalid UTF-8
+				return ulen(str);
 			}
-		}
-		catch (...) {
-			return ulen(str);
+			if (n == static_cast<size_t>(-2)) {
+				// truncated sequence;
+				break;
+			}
+			if (n == 0) {
+				// null terminator
+				break;
+			}
+
+			chars += wcwidth(wc);
+			ptr += n;
+			len -= n;
 		}
 
 		return chars;
@@ -239,32 +260,42 @@ namespace Tools {
 	}
 
 	string uresize(string str, const size_t len, bool wide) {
-		if (len < 1 or str.empty())
+		if (len < 1 || str.empty())
 			return "";
 
-		if (wide) {
-			try {
-				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
-				while (wide_ulen(w_str) > len)
-					w_str.pop_back();
-				string n_str = conv.to_bytes(w_str);
-				return n_str;
+		mbstate_t state{};
+		const char* ptr = str.data();
+		size_t remaining = str.size();
+		size_t width = 0;
+		size_t bytes_used = 0;
+
+		while (remaining > 0) {
+			wchar_t wc;
+			size_t n = mbrtowc(&wc, ptr, remaining, &state);
+			if (n == static_cast<size_t>(-1)) {
+				// invalid UTF-8
+				return wide ? uresize(str, len, false) : str;
 			}
-			catch (...) {
-				return uresize(str, len, false);
+			if (n == static_cast<size_t>(-2)) {
+				// truncated UTF-8
+				break;
 			}
+			if (n == 0) {
+				break;
+			}
+
+			size_t inc = wide ? wcwidth(wc) : 1;
+			if (width + inc > len) break;
+
+			width += inc;
+			ptr += n;
+			remaining -= n;
+			bytes_used += n;
 		}
-		else {
-			for (size_t x = 0, i = 0; i < str.size(); i++) {
-				if ((static_cast<unsigned char>(str.at(i)) & 0xC0) != 0x80) x++;
-				if (x >= len + 1) {
-					str.resize(i);
-					break;
-				}
-			}
-		}
+
+		str.resize(bytes_used);
 		str.shrink_to_fit();
+
 		return str;
 	}
 
