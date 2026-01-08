@@ -511,7 +511,7 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
+		atom.wait(old, std::memory_order_relaxed);
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
@@ -522,10 +522,12 @@ namespace Tools {
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
 		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
+		this->atom.notify_all();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
+		this->atom.notify_all();
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
