@@ -24,7 +24,7 @@ tab-size = 4
 #include <string_view>
 #include <vector>
 
-#include "btop_input.hpp"
+#include "input.hpp"
 
 using std::atomic;
 using std::bitset;

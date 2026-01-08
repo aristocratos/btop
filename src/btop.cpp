@@ -58,15 +58,15 @@ tab-size = 4
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
-#include "btop_cli.hpp"
-#include "btop_config.hpp"
-#include "btop_draw.hpp"
-#include "btop_input.hpp"
-#include "btop_log.hpp"
-#include "btop_menu.hpp"
-#include "btop_shared.hpp"
-#include "btop_theme.hpp"
-#include "btop_tools.hpp"
+#include "cli.hpp"
+#include "config.hpp"
+#include "draw.hpp"
+#include "input.hpp"
+#include "log.hpp"
+#include "menu.hpp"
+#include "shared.hpp"
+#include "theme.hpp"
+#include "tools.hpp"
 
 using std::atomic;
 using std::cout;

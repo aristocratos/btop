@@ -33,7 +33,7 @@ using std::string;
 /* The input functions rely on the following termios parameters being set:
 	Non-canonical mode (c_lflags & ~(ICANON))
 	VMIN and VTIME (c_cc) set to 0
-	These will automatically be set when running Term::init() from btop_tools.cpp
+	These will automatically be set when running Term::init() from tools.cpp
 */
 
 //* Functions and variables for handling keyboard and mouse input

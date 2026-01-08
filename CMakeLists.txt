@@ -47,15 +47,15 @@ endif()
 add_executable(btop src/main.cpp)
 add_library(libbtop OBJECT
   src/btop.cpp
-  src/btop_cli.cpp
-  src/btop_config.cpp
-  src/btop_draw.cpp
-  src/btop_input.cpp
-  src/btop_log.cpp
-  src/btop_menu.cpp
-  src/btop_shared.cpp
-  src/btop_theme.cpp
-  src/btop_tools.cpp
+  src/cli.cpp
+  src/config.cpp
+  src/draw.cpp
+  src/input.cpp
+  src/log.cpp
+  src/menu.cpp
+  src/shared.cpp
+  src/theme.cpp
+  src/tools.cpp
 )
 
 target_link_libraries(btop libbtop)
@@ -67,15 +67,15 @@ if(BTOP_LTO)
 endif()
 
 if(APPLE)
-  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
+  target_sources(libbtop PRIVATE src/osx/collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
-  target_sources(libbtop PRIVATE src/freebsd/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/freebsd/collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
-  target_sources(libbtop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
+  target_sources(libbtop PRIVATE src/openbsd/collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
-  target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/netbsd/collect.cpp)
 elseif(LINUX)
-  target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
+  target_sources(libbtop PRIVATE src/linux/collect.cpp)
   if(BTOP_GPU)
     add_subdirectory(src/linux/intel_gpu_top)
   endif()
