@@ -348,9 +348,15 @@ namespace Input {
 						Config::set("followed_pid", Config::getI("selected_pid"));
 						Config::set("update_following", true);
 					}
+					else if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Config::getI("followed_pid") != Config::getI("detailed_pid")) {
+						Config::set("follow_process", true);
+						Config::set("followed_pid", Config::getI("detailed_pid"));
+						Config::set("update_following", true);
+					}
 					else if (Config::getB("follow_process")) {
 						Config::flip("follow_process");
 						Config::set("followed_pid", 0);
+						Config::set("proc_followed", 0);
 					}
 				}
 				else if (key == "r") {
@@ -391,11 +397,14 @@ namespace Input {
 								}
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
-								else if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
+
+								if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
 									Config::flip("follow_process");
 									Config::set("followed_pid", 0);
+									Config::set("proc_followed", 0);
 									redraw = true;
 								}
+
 								Config::set("proc_selected", line - y - 1);
 							}
 							else if (line == y + 1) {
@@ -412,6 +421,11 @@ namespace Input {
 						}
 						else if (Config::getI("proc_selected") > 0){
 							Config::set("proc_selected", 0);
+							if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
+								Config::flip("follow_process");
+								Config::set("followed_pid", 0);
+								Config::set("proc_followed", 0);
+							}
 							redraw = true;
 						}
 					}
@@ -440,7 +454,7 @@ namespace Input {
 						Config::set("show_detailed", true);
 					}
 					else if (Config::getB("show_detailed")) {
-						const int proc_start_offset = Config::getB("proc_follow_detailed") ? Proc::selected - Config::getI("proc_last_selected") : 0;
+						const int proc_start_offset = Config::getB("proc_follow_detailed") ? Config::getI("proc_followed") - Config::getI("proc_last_selected") : 0;
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
 						Config::set("proc_start", std::max(0, Config::getI("proc_start") + proc_start_offset));
 						Config::set("proc_last_selected", 0);
@@ -449,6 +463,7 @@ namespace Input {
 						if (Config::getB("follow_process") and Config::getB("proc_follow_detailed")) {
 							Config::flip("follow_process");
 							Config::set("followed_pid", 0);
+							Config::set("proc_followed", 0);
 						}
 					}
 				}

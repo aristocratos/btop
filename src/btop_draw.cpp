@@ -1564,16 +1564,22 @@ namespace Proc {
 	string box;
 
 	int selection(const std::string_view cmd_key) {
-		if ((Config::getB("follow_process") and not Config::getB("pause_proc_list"))) {
-			Config::flip("follow_process");
-			Config::set("followed_pid", 0);
-			redraw = true;
-		}
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
 		const int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
 																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
+
+		if (Config::getB("follow_process")) {
+			if (selected == 0) selected = Config::getI("proc_followed");;
+			if (not Config::getB("pause_proc_list")) {
+				Config::flip("follow_process");
+				Config::set("followed_pid", 0);
+				Config::set("proc_followed", 0);
+			}
+			redraw = true;
+		}
+
 		auto vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
@@ -1674,12 +1680,15 @@ namespace Proc {
 
 			if (can_follow) {
 				start = max(0, loc - (select_max / 2));
-				selected = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+				const int followed = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+				Config::set("proc_followed", followed);
+				selected = followed_pid != Config::getI("detailed_pid") ? followed : 0;
 			}
 			else {
 				Config::set("followed_pid", followed_pid = 0);
 				Config::set("follow_process", follow_process = false);
 				Config::set("proc_banner_shown", proc_banner_shown = pause_proc_list);
+				Config::set("proc_followed", 0);
 			}
 		}
 
@@ -1748,6 +1757,14 @@ namespace Proc {
 					Input::mouse_mappings["s"] = {d_y, mouse_x, 1, 7};
 				    mouse_x += 9;
 					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
+				    mouse_x += 7;
+				}
+				if (width > 77) {
+				    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}",
+				    	title_left, follow_process ? Fx::b : "",
+				    	hi_color, 'F', t_color, "ollow",
+				    	Fx::ub, title_right);
+				    if (selected == 0) Input::mouse_mappings["F"] = {d_y, mouse_x, 1, 6};
 				}
 
 				//? Labels
