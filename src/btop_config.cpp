@@ -336,7 +336,6 @@ namespace Config {
 		{"proc_aggregate", false},
 		{"pause_proc_list", false},
 		{"keep_dead_proc_usage", false},
-		{"proc_banner_shown", false},
 		{"proc_follow_detailed", true},
 		{"follow_process", false},
 		{"update_following", false},
