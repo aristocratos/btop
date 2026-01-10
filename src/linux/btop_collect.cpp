@@ -1826,6 +1826,10 @@ namespace Gpu {
 	}
 
 	namespace Xe {
+		constexpr uint32_t MAX_QUERY_SIZE = 64 * 1024;
+		constexpr double MIN_DT_SECONDS = 1e-6;
+		constexpr double MAX_GPU_CLOCK_MHZ = 10000.0;
+
 		static long perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
 			return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
 		}
@@ -1834,8 +1838,10 @@ namespace Gpu {
 			string path = "/sys/bus/event_source/devices/" + pmu_device + "/type";
 			ifstream file(path);
 			if (!file) return -1;
-			int type;
-			file >> type;
+			int type = -1;
+			if (!(file >> type) || type < 0) {
+				return -1;
+			}
 			return type;
 		}
 
@@ -1847,15 +1853,19 @@ namespace Gpu {
 			getline(file, line);
 			size_t pos = line.find("event=");
 			if (pos == string::npos) return 0;
-			return stoull(line.substr(pos + 6), nullptr, 0);
+			try {
+				return stoull(line.substr(pos + 6), nullptr, 0);
+			} catch (const std::exception&) {
+				return 0;
+			}
 		}
 
 		static uint64_t build_config(uint64_t event_id, uint16_t gt_id, uint16_t engine_class, uint16_t engine_instance) {
 			uint64_t config = 0;
-			config |= (event_id & 0xFFF);
-			config |= ((uint64_t)engine_instance & 0xFF) << 12;
-			config |= ((uint64_t)engine_class & 0xFF) << 20;
-			config |= ((uint64_t)gt_id & 0xF) << 60;
+			config |= (event_id & 0xFFFull);
+			config |= (static_cast<uint64_t>(engine_instance) & 0xFFull) << 12;
+			config |= (static_cast<uint64_t>(engine_class) & 0xFFull) << 20;
+			config |= (static_cast<uint64_t>(gt_id) & 0xFull) << 60;
 			return config;
 		}
 
@@ -1881,7 +1891,7 @@ namespace Gpu {
 				return false;
 			}
 
-			if (query.size == 0) return false;
+			if (query.size == 0 || query.size > MAX_QUERY_SIZE) return false;
 
 			vector<uint8_t> buffer(query.size);
 			query.data = reinterpret_cast<uint64_t>(buffer.data());
@@ -1892,7 +1902,11 @@ namespace Gpu {
 
 			auto* result = reinterpret_cast<struct drm_xe_query_engines*>(buffer.data());
 
-			for (uint32_t i = 0; i < result->num_engines; ++i) {
+			constexpr size_t header_size = offsetof(struct drm_xe_query_engines, engines);
+			size_t max_engines = (query.size > header_size) ? (query.size - header_size) / sizeof(struct drm_xe_engine) : 0;
+			uint32_t num_engines = (result->num_engines <= max_engines) ? result->num_engines : static_cast<uint32_t>(max_engines);
+
+			for (uint32_t i = 0; i < num_engines; ++i) {
 				auto& inst = result->engines[i].instance;
 				if (inst.engine_class == DRM_XE_ENGINE_CLASS_VM_BIND) continue;
 				engines.push_back({inst.gt_id, inst.engine_class, inst.engine_instance, -1, -1, 0, 0});
@@ -1938,7 +1952,9 @@ namespace Gpu {
 
 				if (state.group_fd == -1) {
 					eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, -1);
-					state.group_fd = eng.active_fd;
+					if (eng.active_fd >= 0) {
+						state.group_fd = eng.active_fd;
+					}
 				} else {
 					eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, state.group_fd);
 				}
@@ -1955,12 +1971,24 @@ namespace Gpu {
 			}
 
 			if (state.group_fd >= 0) {
-				ioctl(state.group_fd, PERF_EVENT_IOC_ENABLE, 0);
+				if (ioctl(state.group_fd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
+					Logger::warning("Xe: Failed to enable PMU counters");
+				}
 			}
 
 			struct timespec ts;
-			clock_gettime(CLOCK_MONOTONIC, &ts);
-			state.prev_time_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+			if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) {
+				Logger::warning("Xe: clock_gettime failed during init");
+				state.prev_time_ns = 0;
+			} else {
+				state.prev_time_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+			}
+
+			for (auto& eng : state.engines) {
+				if (eng.active_fd >= 0) (void)read(eng.active_fd, &eng.prev_active, sizeof(eng.prev_active));
+				if (eng.total_fd >= 0) (void)read(eng.total_fd, &eng.prev_total, sizeof(eng.prev_total));
+			}
+			if (state.freq_fd >= 0) (void)read(state.freq_fd, &state.prev_freq_counter, sizeof(state.prev_freq_counter));
 
 			initialized = true;
 			return true;
@@ -2005,9 +2033,12 @@ namespace Gpu {
 			}
 
 			struct timespec ts;
-			clock_gettime(CLOCK_MONOTONIC, &ts);
+			if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) {
+				return false;
+			}
 			uint64_t now_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 			double dt = (double)(now_ns - state.prev_time_ns) / 1e9;
+			if (dt < MIN_DT_SECONDS) dt = MIN_DT_SECONDS;
 			state.prev_time_ns = now_ns;
 
 			double max_util = 0;
@@ -2034,9 +2065,9 @@ namespace Gpu {
 				if (read(state.freq_fd, &freq_val, sizeof(freq_val)) >= 0) {
 					uint64_t d_freq = freq_val - state.prev_freq_counter;
 					state.prev_freq_counter = freq_val;
-					if (dt > 0) {
-						gpus_slice->gpu_clock_speed = (unsigned int)(d_freq / dt);
-					}
+					double freq_mhz = (d_freq / dt) / 1e6;
+					if (freq_mhz > MAX_GPU_CLOCK_MHZ) freq_mhz = MAX_GPU_CLOCK_MHZ;
+					gpus_slice->gpu_clock_speed = (unsigned int)freq_mhz;
 				}
 			}
 
@@ -2056,12 +2087,13 @@ namespace Gpu {
 		}
 
 		static string get_pci_slot(const string& gpu_path) {
+			constexpr const char* PCI_SLOT_PREFIX = "PCI_SLOT_NAME=";
 			fs::path uevent = fs::path(gpu_path) / "device" / "uevent";
 			ifstream file(uevent);
 			string line;
 			while (getline(file, line)) {
-				if (line.rfind("PCI_SLOT_NAME=", 0) == 0) {
-					return line.substr(14);
+				if (line.rfind(PCI_SLOT_PREFIX, 0) == 0) {
+					return line.substr(strlen(PCI_SLOT_PREFIX));
 				}
 			}
 			return "";
@@ -2131,6 +2163,8 @@ namespace Gpu {
 				int ret = pmu_init(engines);
 				if (ret) {
 					Logger::warning("Intel GPU: Failed to initialize PMU");
+					free_engines(engines);
+					engines = nullptr;
 					return false;
 				}
 				pmu_sample(engines);
