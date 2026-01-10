@@ -17,7 +17,6 @@ tab-size = 4
 */
 
 #include <cmath>
-#include <codecvt>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -26,6 +25,7 @@ tab-size = 4
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <cstdlib>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -211,28 +211,53 @@ namespace Term {
 
 namespace Tools {
 
-	size_t wide_ulen(const std::string_view str) {
-		unsigned int chars = 0;
-		try {
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
-
-			for (auto c : w_str) {
-				chars += utf8::wcwidth(c);
-			}
+	string replace_ascii_control(string str, const char replacement) {
+		if (str.empty())
+			return str;
+		const char* str_data = &str.data()[0];
+		size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)	{
+			std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+			return str;
 		}
-		catch (...) {
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+		for (size_t i = 0; i < w_str.size(); i++) {
+			if (widechar_wcwidth(w_str[i]) > 1)
+				continue;
+			if (w_str[i] < 0x20)
+				w_str[i] = replacement;
+		}
+		str.resize(w_str.size());
+		std::wcstombs(&str[0], &w_str[0], w_str.size());
+
+		return str;
+	}
+
+	size_t wide_ulen(const std::string_view str) {
+		if (str.empty())
+			return 0;
+		unsigned int chars = 0;
+
+		const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)
 			return ulen(str);
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+
+		for (auto c : w_str) {
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
 	}
 
-	size_t wide_ulen(const std::wstring_view w_str) {
+	size_t wide_ulen(const vector<wchar_t> w_str) {
 		unsigned int chars = 0;
 
 		for (auto c : w_str) {
-			chars += utf8::wcwidth(c);
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
@@ -243,17 +268,20 @@ namespace Tools {
 			return "";
 
 		if (wide) {
-			try {
-				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
-				while (wide_ulen(w_str) > len)
-					w_str.pop_back();
-				string n_str = conv.to_bytes(w_str);
-				return n_str;
-			}
-			catch (...) {
+			const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+			if (w_len <= 1)
 				return uresize(str, len, false);
-			}
+			vector<wchar_t> w_str(w_len);
+			std::mbstowcs(&w_str[0], str_data, w_len);
+
+			while (wide_ulen(w_str) > len) w_str.pop_back();
+
+			string n_str;
+			n_str.resize(w_str.size());
+			std::wcstombs(&n_str[0], &w_str[0], w_str.size());
+
+			return n_str;
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {

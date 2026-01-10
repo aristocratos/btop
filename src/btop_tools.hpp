@@ -169,7 +169,7 @@ namespace Tools {
 	};
 
 	size_t wide_ulen(const std::string_view str);
-	size_t wide_ulen(const std::wstring_view w_str);
+	size_t wide_ulen(const vector<wchar_t> w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
 	inline size_t ulen(const std::string_view str, bool wide = false) {
@@ -186,10 +186,7 @@ namespace Tools {
 	string s_replace(const string& str, const string& from, const string& to);
 
 	//* Replace ascii control characters with <replacement> in <str> and return new string
-	inline string replace_ascii_control(string str, const char replacement = ' ') {
-		std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
-		return str;
-	}
+	string replace_ascii_control(string str, const char replacement = ' ');
 
 	//* Capitalize <str>
 	inline string capitalize(string str) {
