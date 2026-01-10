@@ -1567,7 +1567,7 @@ namespace Proc {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
-		const int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
+		int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
 																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
 
 		if (Config::getB("follow_process")) {
@@ -1576,6 +1576,7 @@ namespace Proc {
 				Config::flip("follow_process");
 				Config::set("followed_pid", 0);
 				Config::set("proc_followed", 0);
+				select_max++;
 			}
 			redraw = true;
 		}
@@ -1650,6 +1651,7 @@ namespace Proc {
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
+		int followed = Config::getI("proc_followed");
 		auto proc_banner_shown = pause_proc_list or follow_process;
 		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
@@ -1680,7 +1682,7 @@ namespace Proc {
 
 			if (can_follow) {
 				start = max(0, loc - (select_max / 2));
-				const int followed = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+				followed = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
 				Config::set("proc_followed", followed);
 				selected = followed_pid != Config::getI("detailed_pid") ? followed : 0;
 			}
@@ -2100,7 +2102,7 @@ namespace Proc {
 		}
 
 		//? Current selection and number of processes
-		string location = to_string(start + selected) + '/' + to_string(numpids);
+		string location = to_string(start + (follow_process ? followed : selected)) + '/' + to_string(numpids);
 		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
 		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
