@@ -454,7 +454,8 @@ namespace Input {
 						Config::set("show_detailed", true);
 					}
 					else if (Config::getB("show_detailed")) {
-						const int proc_start_offset = Config::getB("proc_follow_detailed") ? Config::getI("proc_followed") - Config::getI("proc_last_selected") : 0;
+						const int proc_start_offset = Config::getB("proc_follow_detailed") ? (Config::getB("follow_process") ? 
+							Config::getI("proc_followed") : Config::getI("proc_selected")) - Config::getI("proc_last_selected") : 0;
 						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
 						Config::set("proc_start", std::max(0, Config::getI("proc_start") + proc_start_offset));
 						Config::set("proc_last_selected", 0);

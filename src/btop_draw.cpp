@@ -1560,6 +1560,9 @@ namespace Proc {
 	Draw::Graph detailed_mem_graph;
 	int user_size, thread_size, prog_size, cmd_size, tree_size;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
+	bool proc_banner_shown = false;
+	bool proc_banner_last = false;
+	bool return_to_followed = true;
 
 	string box;
 
@@ -1567,11 +1570,14 @@ namespace Proc {
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
-		int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
-																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
+		int select_max = (Config::getB("show_detailed") ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) :
+																(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max));
 
 		if (Config::getB("follow_process")) {
-			if (selected == 0) selected = Config::getI("proc_followed");;
+			if (Config::getB("show_detailed") and selected == 0 and return_to_followed) {
+				selected = Config::getI("proc_followed");;
+				return_to_followed = false;
+			}
 			if (not Config::getB("pause_proc_list")) {
 				Config::flip("follow_process");
 				Config::set("followed_pid", 0);
@@ -1652,8 +1658,7 @@ namespace Proc {
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
 		int followed = Config::getI("proc_followed");
-		auto proc_banner_shown = pause_proc_list or follow_process;
-		Config::set("proc_banner_shown", proc_banner_shown);
+		proc_banner_shown = pause_proc_list or follow_process;
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
@@ -1681,16 +1686,18 @@ namespace Proc {
 			}
 
 			if (can_follow) {
-				start = max(0, loc - (select_max / 2));
-				followed = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+				const int list_middle = select_max % 2 == 0 ? select_max / 2 : select_max / 2 + 1;
+				start = max(0, loc - list_middle);
+				followed = loc < list_middle ? loc : start > numpids - select_max ? select_max - numpids + loc : list_middle;
 				Config::set("proc_followed", followed);
 				selected = followed_pid != Config::getI("detailed_pid") ? followed : 0;
+				return_to_followed = true;
 			}
 			else {
 				Config::set("followed_pid", followed_pid = 0);
 				Config::set("follow_process", follow_process = false);
-				Config::set("proc_banner_shown", proc_banner_shown = pause_proc_list);
 				Config::set("proc_followed", 0);
+				proc_banner_shown = pause_proc_list;
 			}
 		}
 
@@ -1935,6 +1942,18 @@ namespace Proc {
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
 		}
+
+		//? Handle selection edge cases when list view is showing bottom of list
+		//? for Pause and Following modes
+		const bool proc_banner_changed = proc_banner_shown != proc_banner_last;
+		proc_banner_last = proc_banner_shown;
+		if (not proc_banner_shown and proc_banner_changed) {
+			if ((start + selected == numpids) 
+			or (start + select_max - 1 == numpids and selected >= select_max / 2 - 1))
+				selected++;
+		}
+		else if (pause_proc_list and selected > select_max)
+			start++;
 
 		//? Check bounds of current selection and view
 		if (start > 0 and numpids <= select_max)
