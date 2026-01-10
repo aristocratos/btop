@@ -1548,6 +1548,7 @@ namespace Proc {
 	int x, y, width = 20, height;
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
+	bool is_last_process_in_list = false;
 	int selected_pid = 0, selected_depth = 0;
 	int scroll_pos;
 	string selected_name;
@@ -1691,6 +1692,18 @@ namespace Proc {
 				Config::set("follow_process", follow_process = false);
 				Config::set("proc_banner_shown", proc_banner_shown = pause_proc_list);
 				Config::set("proc_followed", 0);
+			}
+		}
+
+		//? redraw if selection reaches or leaves the end of the list
+		if (selected != Config::getI("proc_last_selected")) {
+			if (selected >= select_max and start >= numpids - select_max) {
+				redraw = true;
+				is_last_process_in_list = true;
+			}
+			else if (is_last_process_in_list) {
+				redraw = true;
+				is_last_process_in_list = false;
 			}
 		}
 
@@ -1846,7 +1859,7 @@ namespace Proc {
 				Input::mouse_mappings["right"] = {y, sort_pos + sort_len + 3, 1, 2};
 
 			//? select, info, signal, and follow buttons
-			const string down_button = (selected == select_max and start == numpids - select_max ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
+			const string down_button = (is_last_process_in_list ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
 			const string t_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 			const string hi_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("hi_fg"));
 			int mouse_x = x + 14;
