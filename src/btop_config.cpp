@@ -361,7 +361,8 @@ namespace Config {
 		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
-		{"proc_last_selected", 0}
+		{"proc_last_selected", 0},
+		{"proc_followed", 0},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
