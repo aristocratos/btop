@@ -1690,7 +1690,7 @@ namespace Proc {
 			const string title_right = Theme::c("proc_box") + Symbols::title_right;
 			const string title_left_down = Theme::c("proc_box") + Symbols::title_left_down;
 			const string title_right_down = Theme::c("proc_box") + Symbols::title_right_down;
-			for (const auto& key : {"T", "K", "S", "enter"})
+			for (const auto& key : {"t", "K", "k", "s", "N", "F", "enter", "info_enter"})
 				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
 
 			//? Adapt sizes of text fields
@@ -1743,7 +1743,7 @@ namespace Proc {
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right;
 				if (alive and selected == 0) {
-					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
+					Input::mouse_mappings[vim_keys ? "K" : "k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
 					Input::mouse_mappings["s"] = {d_y, mouse_x, 1, 7};
 				    mouse_x += 9;
@@ -1843,7 +1843,7 @@ namespace Proc {
 			}
 			if (width > 55) {
 				out += title_left_down + Fx::b + hi_color + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right_down;
-				if (selected > 0) Input::mouse_mappings["k"] = {y + height - 1, mouse_x, 1, 4};
+				if (selected > 0) Input::mouse_mappings[vim_keys ? "K" : "k"] = {y + height - 1, mouse_x, 1, 4};
 				mouse_x += 6;
 			}
 			out += title_left_down + Fx::b + hi_color + 's' + t_color + "ignals" + Fx::ub + title_right_down;
