@@ -274,16 +274,16 @@ namespace Gpu {
 			uint64_t prev_total = 0;
 		};
 
-	struct XeState {
-		string pmu_device;
-		string freq_sysfs_path;
-		int pmu_type = -1;
-		int drm_fd = -1;
-		int group_fd = -1;
-		vector<XeEngine> engines;
-		vector<int> member_fds;
-		uint64_t prev_time_ns = 0;
-	};
+		struct XeState {
+			string pmu_device;
+			string freq_sysfs_path;
+			int pmu_type = -1;
+			int drm_fd = -1;
+			int group_fd = -1;
+			vector<XeEngine> engines;
+			vector<int> member_fds;
+			uint64_t prev_time_ns = 0;
+		};
 
 		XeState state;
 		bool initialized = false;
