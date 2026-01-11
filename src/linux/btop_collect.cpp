@@ -274,17 +274,16 @@ namespace Gpu {
 			uint64_t prev_total = 0;
 		};
 
-		struct XeState {
-			string pmu_device;
-			int pmu_type = -1;
-			int drm_fd = -1;
-			int group_fd = -1;
-			int freq_fd = -1;
-			vector<XeEngine> engines;
-			vector<int> member_fds;
-			uint64_t prev_time_ns = 0;
-			uint64_t prev_freq_counter = 0;
-		};
+	struct XeState {
+		string pmu_device;
+		string freq_sysfs_path;
+		int pmu_type = -1;
+		int drm_fd = -1;
+		int group_fd = -1;
+		vector<XeEngine> engines;
+		vector<int> member_fds;
+		uint64_t prev_time_ns = 0;
+	};
 
 		XeState state;
 		bool initialized = false;
@@ -1937,7 +1936,6 @@ namespace Gpu {
 
 			uint64_t active_event = read_event_config(pmu_dev, "engine-active-ticks");
 			uint64_t total_event = read_event_config(pmu_dev, "engine-total-ticks");
-			uint64_t freq_event = read_event_config(pmu_dev, "gt-actual-frequency");
 
 			if (active_event == 0 || total_event == 0) {
 				Logger::debug("Xe: Required PMU events not found");
@@ -1964,10 +1962,18 @@ namespace Gpu {
 				if (eng.total_fd >= 0) state.member_fds.push_back(eng.total_fd);
 			}
 
-			if (freq_event != 0) {
-				uint64_t freq_cfg = build_config(freq_event, 0, 0, 0);
-				state.freq_fd = open_perf_counter(state.pmu_type, freq_cfg, state.group_fd);
-				if (state.freq_fd >= 0) state.member_fds.push_back(state.freq_fd);
+			// Find sysfs path for GPU frequency (e.g., /sys/class/drm/card1/device/tile0/gt0/freq0/cur_freq)
+			fs::path device_path = fs::path(card_path) / "device" / "tile0";
+			if (fs::exists(device_path)) {
+				for (const auto& gt_entry : fs::directory_iterator(device_path)) {
+					if (gt_entry.path().filename().string().rfind("gt", 0) == 0) {
+						fs::path freq_path = gt_entry.path() / "freq0" / "cur_freq";
+						if (fs::exists(freq_path)) {
+							state.freq_sysfs_path = freq_path.string();
+							break;
+						}
+					}
+				}
 			}
 
 			if (state.group_fd >= 0) {
@@ -1988,7 +1994,6 @@ namespace Gpu {
 				if (eng.active_fd >= 0) (void)read(eng.active_fd, &eng.prev_active, sizeof(eng.prev_active));
 				if (eng.total_fd >= 0) (void)read(eng.total_fd, &eng.prev_total, sizeof(eng.prev_total));
 			}
-			if (state.freq_fd >= 0) (void)read(state.freq_fd, &state.prev_freq_counter, sizeof(state.prev_freq_counter));
 
 			initialized = true;
 			return true;
@@ -2005,7 +2010,6 @@ namespace Gpu {
 				state.drm_fd = -1;
 			}
 			state.group_fd = -1;
-			state.freq_fd = -1;
 			state.engines.clear();
 			initialized = false;
 			return true;
@@ -2018,7 +2022,7 @@ namespace Gpu {
 				gpus_slice->supported_functions = {
 					.gpu_utilization = !state.engines.empty(),
 					.mem_utilization = false,
-					.gpu_clock = (state.freq_fd >= 0),
+					.gpu_clock = !state.freq_sysfs_path.empty(),
 					.mem_clock = false,
 					.pwr_usage = false,
 					.pwr_state = false,
@@ -2060,14 +2064,13 @@ namespace Gpu {
 			}
 			gpus_slice->gpu_percent.at("gpu-totals").push_back(clamp((long long)round(max_util), 0ll, 100ll));
 
-			if (state.freq_fd >= 0) {
-				uint64_t freq_val = 0;
-				if (read(state.freq_fd, &freq_val, sizeof(freq_val)) >= 0) {
-					uint64_t d_freq = freq_val - state.prev_freq_counter;
-					state.prev_freq_counter = freq_val;
-					double freq_mhz = (d_freq / dt) / 1e6;
-					if (freq_mhz > MAX_GPU_CLOCK_MHZ) freq_mhz = MAX_GPU_CLOCK_MHZ;
-					gpus_slice->gpu_clock_speed = (unsigned int)freq_mhz;
+			if (!state.freq_sysfs_path.empty()) {
+				ifstream freq_file(state.freq_sysfs_path);
+				if (freq_file) {
+					unsigned int freq_mhz = 0;
+					if (freq_file >> freq_mhz) {
+						gpus_slice->gpu_clock_speed = freq_mhz;
+					}
 				}
 			}
 
