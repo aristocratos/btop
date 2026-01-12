@@ -273,11 +273,22 @@ publish:binaries:
       optional: true
     - job: build:linux-x86_64
       artifacts: true
-  variables:
-    VERSION: "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
   script:
     - |
-      echo "Publishing binaries to GitLab Package Registry..."
+      # Set version (use tag if available, otherwise commit SHA)
+      if [ -n "${CI_COMMIT_TAG}" ]; then
+        VERSION="${CI_COMMIT_TAG}"
+      else
+        VERSION="${CI_COMMIT_SHORT_SHA}"
+      fi
+      echo "Publishing version: ${VERSION}"
+      echo "Package Registry URL: ${PACKAGE_REGISTRY_URL}"
+
+      # Debug: show available artifacts
+      echo "=== Available artifacts ==="
+      ls -la artifacts/ 2>/dev/null || echo "No artifacts directory found!"
+
+      UPLOADED=0
 
       # Publish Linux binary
       if [ -d "artifacts" ]; then
@@ -285,9 +296,12 @@ publish:binaries:
           if [ -f "$file" ]; then
             FILENAME=$(basename "$file")
             echo "Uploading $FILENAME..."
-            curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            curl --fail --show-error \
+                 --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
                  --upload-file "$file" \
                  "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+            echo " -> Upload complete"
+            UPLOADED=$((UPLOADED + 1))
           fi
         done
 
@@ -296,14 +310,22 @@ publish:binaries:
           if [ -f "$file" ]; then
             FILENAME=$(basename "$file")
             echo "Uploading $FILENAME..."
-            curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            curl --fail --show-error \
+                 --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
                  --upload-file "$file" \
                  "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+            echo " -> Upload complete"
+            UPLOADED=$((UPLOADED + 1))
           fi
         done
       fi
 
-      echo "Binaries published to: ${CI_PROJECT_URL}/-/packages"
+      echo "=== Summary ==="
+      echo "Uploaded ${UPLOADED} file(s) to: ${CI_PROJECT_URL}/-/packages"
+      if [ "$UPLOADED" -eq 0 ]; then
+        echo "WARNING: No files were uploaded!"
+        exit 1
+      fi
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -316,23 +338,41 @@ publish:tarball:
   needs:
     - job: package:tarball
       artifacts: true
-  variables:
-    VERSION: "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
   script:
     - |
-      echo "Publishing tarball to GitLab Package Registry..."
+      # Set version (use tag if available, otherwise commit SHA)
+      if [ -n "${CI_COMMIT_TAG}" ]; then
+        VERSION="${CI_COMMIT_TAG}"
+      else
+        VERSION="${CI_COMMIT_SHORT_SHA}"
+      fi
+      echo "Publishing version: ${VERSION}"
+
+      # Debug: show available tarballs
+      echo "=== Available tarballs ==="
+      ls -la *.tar.gz 2>/dev/null || echo "No tarballs found!"
+
+      UPLOADED=0
 
       for file in *.tar.gz; do
         if [ -f "$file" ]; then
           FILENAME=$(basename "$file")
           echo "Uploading $FILENAME..."
-          curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          curl --fail --show-error \
+               --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
                --upload-file "$file" \
                "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+          echo " -> Upload complete"
+          UPLOADED=$((UPLOADED + 1))
         fi
       done
 
-      echo "Tarball published to: ${CI_PROJECT_URL}/-/packages"
+      echo "=== Summary ==="
+      echo "Uploaded ${UPLOADED} tarball(s) to: ${CI_PROJECT_URL}/-/packages"
+      if [ "$UPLOADED" -eq 0 ]; then
+        echo "WARNING: No tarballs were uploaded!"
+        exit 1
+      fi
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
