@@ -1,0 +1,337 @@
+# GitLab CI/CD Pipeline for btop++
+# Builds for macOS (Apple Silicon) and Linux
+
+stages:
+  - build
+  - test
+  - package
+  - release
+
+variables:
+  GIT_DEPTH: 50
+  GIT_STRATEGY: fetch
+
+# Default settings
+default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# Cache configuration
+.cache_template: &cache_template
+  cache:
+    key: ${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}
+    paths:
+      - obj/
+    policy: pull-push
+
+# =============================================================================
+# macOS Builds (Apple Silicon with GPU support)
+# =============================================================================
+
+.macos_template: &macos_template
+  tags:
+    - macos
+    - arm64
+  before_script:
+    - export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+    - which brew && brew --version || echo "Homebrew not found"
+  <<: *cache_template
+
+build:macos-arm64:
+  <<: *macos_template
+  stage: build
+  script:
+    - echo "Building btop++ for macOS ARM64 with Apple Silicon GPU support"
+    - make clean || true
+    - make -j$(sysctl -n hw.ncpu)
+    - ./bin/btop --version || echo "Version check skipped"
+    - |
+      GIT_HASH=$(git rev-parse --short HEAD)
+      ARTIFACT_NAME="btop-macos-arm64-${GIT_HASH}"
+      mkdir -p artifacts
+      cp bin/btop "artifacts/${ARTIFACT_NAME}"
+      cp README.md artifacts/
+      cp LICENSE artifacts/
+  artifacts:
+    name: btop-macos-arm64-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - artifacts/
+      - bin/btop
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build:macos-arm64-debug:
+  <<: *macos_template
+  stage: build
+  script:
+    - echo "Building btop++ DEBUG for macOS ARM64"
+    - make clean || true
+    - make DEBUG=true -j$(sysctl -n hw.ncpu)
+  artifacts:
+    name: btop-macos-arm64-debug-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - bin/btop
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+# =============================================================================
+# Linux Builds
+# =============================================================================
+
+.linux_template: &linux_template
+  image: ubuntu:24.04
+  tags:
+    - linux
+    - docker
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential g++ git lowdown
+  <<: *cache_template
+
+build:linux-x86_64:
+  <<: *linux_template
+  stage: build
+  script:
+    - echo "Building btop++ for Linux x86_64"
+    - make clean || true
+    - make -j$(nproc)
+    - |
+      GIT_HASH=$(git rev-parse --short HEAD)
+      ARTIFACT_NAME="btop-linux-x86_64-${GIT_HASH}"
+      mkdir -p artifacts
+      cp bin/btop "artifacts/${ARTIFACT_NAME}"
+  artifacts:
+    name: btop-linux-x86_64-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - artifacts/
+      - bin/btop
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build:linux-x86_64-static:
+  <<: *linux_template
+  stage: build
+  script:
+    - echo "Building btop++ STATIC for Linux x86_64"
+    - make clean || true
+    - make STATIC=true -j$(nproc)
+    - |
+      GIT_HASH=$(git rev-parse --short HEAD)
+      ARTIFACT_NAME="btop-linux-x86_64-static-${GIT_HASH}"
+      mkdir -p artifacts
+      cp bin/btop "artifacts/${ARTIFACT_NAME}"
+  artifacts:
+    name: btop-linux-x86_64-static-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - artifacts/
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_TAG
+
+# =============================================================================
+# Alpine/musl Build (smaller binary)
+# =============================================================================
+
+build:linux-alpine:
+  image: alpine:latest
+  tags:
+    - linux
+    - docker
+  stage: build
+  before_script:
+    - apk add --no-cache build-base g++ git coreutils sed lowdown
+  script:
+    - echo "Building btop++ for Alpine Linux (musl)"
+    - make clean || true
+    - make STATIC=true -j$(nproc)
+    - |
+      GIT_HASH=$(git rev-parse --short HEAD)
+      mkdir -p artifacts
+      cp bin/btop "artifacts/btop-linux-musl-x86_64-${GIT_HASH}"
+  artifacts:
+    name: btop-linux-musl-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - artifacts/
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_TAG
+
+# =============================================================================
+# Test Stage
+# =============================================================================
+
+test:macos-smoke:
+  <<: *macos_template
+  stage: test
+  needs:
+    - job: build:macos-arm64
+      artifacts: true
+  script:
+    - echo "Running smoke tests on macOS"
+    - test -f bin/btop || exit 1
+    - file bin/btop
+    - ./bin/btop --version
+    - ./bin/btop --help
+    - echo "Smoke test passed"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+test:linux-smoke:
+  <<: *linux_template
+  stage: test
+  needs:
+    - job: build:linux-x86_64
+      artifacts: true
+  script:
+    - echo "Running smoke tests on Linux"
+    - test -f bin/btop || exit 1
+    - file bin/btop
+    - ./bin/btop --version
+    - ./bin/btop --help
+    - echo "Smoke test passed"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# =============================================================================
+# Package Stage
+# =============================================================================
+
+package:tarball:
+  image: alpine:latest
+  tags:
+    - linux
+    - docker
+  stage: package
+  needs:
+    - job: build:macos-arm64
+      artifacts: true
+    - job: build:linux-x86_64
+      artifacts: true
+  script:
+    - apk add --no-cache tar gzip
+    - |
+      VERSION=$(grep -oP 'Version = "\K[^"]+' src/btop.cpp || echo "${CI_COMMIT_SHORT_SHA}")
+      RELEASE_DIR="btop-${VERSION}"
+      mkdir -p "${RELEASE_DIR}"
+      cp -r artifacts/* "${RELEASE_DIR}/" 2>/dev/null || true
+      cp README.md LICENSE CHANGELOG.md "${RELEASE_DIR}/" 2>/dev/null || true
+      cp -r themes "${RELEASE_DIR}/"
+      tar -czvf "btop-${VERSION}-${CI_COMMIT_SHORT_SHA}.tar.gz" "${RELEASE_DIR}"
+  artifacts:
+    name: btop-release-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - "*.tar.gz"
+    expire_in: 90 days
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+
+# =============================================================================
+# Release Stage
+# =============================================================================
+
+release:gitlab:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - linux
+    - docker
+  stage: release
+  needs:
+    - job: package:tarball
+      artifacts: true
+  script:
+    - echo "Creating GitLab release for ${CI_COMMIT_TAG}"
+  release:
+    tag_name: ${CI_COMMIT_TAG}
+    name: "btop++ ${CI_COMMIT_TAG}"
+    description: |
+      ## btop++ ${CI_COMMIT_TAG}
+
+      ### Downloads
+      - macOS ARM64 (Apple Silicon with GPU support)
+      - Linux x86_64
+
+      ### Changelog
+      See CHANGELOG.md for details.
+
+      ### Installation
+      ```bash
+      # Extract and install
+      tar -xzf btop-*.tar.gz
+      sudo make install PREFIX=/usr/local
+      ```
+    assets:
+      links:
+        - name: "Release Tarball"
+          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/download"
+          link_type: package
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# =============================================================================
+# Scheduled/Manual Jobs
+# =============================================================================
+
+build:nightly:
+  <<: *macos_template
+  stage: build
+  script:
+    - echo "Nightly build - full clean rebuild"
+    - make distclean || true
+    - make -j$(sysctl -n hw.ncpu)
+    - |
+      DATE=$(date +%Y%m%d)
+      GIT_HASH=$(git rev-parse --short HEAD)
+      mkdir -p artifacts
+      cp bin/btop "artifacts/btop-nightly-${DATE}-${GIT_HASH}"
+  artifacts:
+    name: btop-nightly-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - artifacts/
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+# =============================================================================
+# Code Quality (Optional)
+# =============================================================================
+
+lint:cppcheck:
+  image: ubuntu:24.04
+  tags:
+    - linux
+    - docker
+  stage: test
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq cppcheck
+  script:
+    - echo "Running cppcheck static analysis"
+    - cppcheck --enable=warning,performance --error-exitcode=0 --quiet src/ || true
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
