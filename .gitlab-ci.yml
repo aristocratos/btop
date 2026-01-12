@@ -29,12 +29,12 @@ default:
 
 # =============================================================================
 # macOS Builds (Apple Silicon with GPU support)
+# REQUIRES: A runner with shell executor and 'macos-shell' tag
+# To register: gitlab-runner register --executor shell --tag-list "macos-shell"
 # =============================================================================
-
-# macOS builds use the instance runner with 'macos' tag (KALYPSO.local)
 .macos_template: &macos_template
   tags:
-    - macos
+    - macos-shell
   before_script:
     - export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
     - which brew && brew --version || echo "Homebrew not found"
@@ -63,7 +63,11 @@ build:macos-arm64:
     expire_in: 30 days
   rules:
     - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
     - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: true
 
 build:macos-arm64-debug:
   <<: *macos_template
@@ -189,7 +193,11 @@ test:macos-smoke:
     - echo "Smoke test passed"
   rules:
     - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
     - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: true
 
 test:linux-smoke:
   <<: *linux_template
@@ -220,6 +228,7 @@ package:tarball:
   needs:
     - job: build:macos-arm64
       artifacts: true
+      optional: true
     - job: build:linux-x86_64
       artifacts: true
   script:
