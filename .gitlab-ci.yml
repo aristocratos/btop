@@ -256,7 +256,7 @@ package:tarball:
     expire_in: 90 days
   rules:
     - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "main"
 
 # =============================================================================
 # Publish Stage - Push binaries to GitLab Package Registry
@@ -328,7 +328,7 @@ publish:binaries:
       fi
   rules:
     - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "main"
 
 publish:tarball:
   image: curlimages/curl:latest
@@ -375,7 +375,7 @@ publish:tarball:
       fi
   rules:
     - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "main"
 
 # =============================================================================
 # Release Stage
