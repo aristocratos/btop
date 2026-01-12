@@ -47,6 +47,7 @@ namespace Config {
 		"cpu", "mem", "net", "proc"
 #ifdef GPU_SUPPORT
 		,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
+		,"pwr"  //? Power panel for Apple Silicon
 #endif
 		};
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };

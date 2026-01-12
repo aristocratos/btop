@@ -367,7 +367,8 @@ namespace Runner {
 	public:
 		int status;
 		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-			pthread_mutex_init(&pt_mutex, nullptr);
+			// Note: mutex must be pre-initialized (e.g., with PTHREAD_MUTEX_INITIALIZER)
+			// Calling pthread_mutex_init on an already-initialized mutex is undefined behavior
 			status = pthread_mutex_lock(&pt_mutex);
 		}
 		~thread_lock() noexcept {
@@ -403,7 +404,7 @@ namespace Runner {
 	bool pause_output{};
 	sigset_t mask;
 	pthread_t runner_id;
-	pthread_mutex_t mtx;
+	pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
 	enum debug_actions {
 		collect_begin,
@@ -594,6 +595,21 @@ namespace Runner {
                         throw std::runtime_error("Gpu:: -> " + string{e.what()});
 					}
 				}
+
+				//? PWR (Power panel for Apple Silicon)
+				if (v_contains(conf.boxes, "pwr")) {
+					try {
+						if (Global::debug) debug_timer("pwr", draw_begin_only);
+
+						//? Draw box (no collect needed, data comes from Shared namespace)
+						if (not pause_output) output += Pwr::draw(conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("pwr", draw_done);
+					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Pwr:: -> " + string{e.what()});
+					}
+				}
 			#endif
 				//? MEM
 				if (v_contains(conf.boxes, "mem")) {
@@ -747,6 +763,12 @@ namespace Runner {
 			Logger::error("Stall in Runner thread, restarting!");
 			active = false;
 			// exit(1);
+
+			// Signal the semaphore to wake up the runner thread from thread_wait()
+			// This is necessary because std::binary_semaphore::acquire() is not a POSIX
+			// cancellation point, so pthread_cancel alone won't interrupt it
+			thread_trigger();
+
 			pthread_cancel(Runner::runner_id);
 
 			// Wait for the thread to actually terminate before creating a new one
@@ -1111,7 +1133,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	//? Print out box outlines
 	const bool term_sync = Config::getB("terminal_sync");
-	cout << (term_sync ? Term::sync_start : "") << Cpu::box << Mem::box << Net::box << Proc::box << (term_sync ? Term::sync_end : "") << flush;
+	cout << (term_sync ? Term::sync_start : "") << Cpu::box << Mem::box << Net::box << Proc::box << Pwr::box << (term_sync ? Term::sync_end : "") << flush;
 
 
 	//? ------------------------------------------------ MAIN LOOP ----------------------------------------------------

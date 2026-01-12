@@ -239,6 +239,25 @@ namespace Input {
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = std::atoi(key.data());
 				#ifdef GPU_SUPPORT
+					//? Apple Silicon: Key "6" toggles ANE split view when ANE is available
+					if (intKey == 6 and Shared::aneCoreCount > 0 and Gpu::shown > 0) {
+						atomic_wait(Runner::active);
+						Gpu::ane_split = not Gpu::ane_split;
+						Runner::run("all", false, true);
+						return;
+					}
+					//? Apple Silicon: Key "7" toggles power panel when GPU metrics available
+					if (intKey == 7 and Shared::gpuCoreCount > 0) {
+						atomic_wait(Runner::active);
+						if (not Config::toggle_box("pwr")) {
+							Menu::show(Menu::Menus::SizeError);
+							return;
+						}
+						Config::current_preset = -1;
+						Draw::calcSizes();
+						Runner::run("all", false, true);
+						return;
+					}
 					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
 					if ((intKey == 0 and Gpu::count < 5) or (intKey >= 5 and intKey - 4 > Gpu::count))
 						return;

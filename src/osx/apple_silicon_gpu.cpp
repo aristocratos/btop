@@ -32,6 +32,7 @@ tab-size = 4
 #include <cstring>
 
 #include "../btop_log.hpp"
+#include "../btop_shared.hpp"
 
 //? IOHIDSensor declarations for GPU temperature
 extern "C" {
@@ -124,6 +125,40 @@ namespace Gpu {
 		shutdown();
 	}
 
+	//? Helper to get GPU core count from IORegistry
+	static int get_gpu_core_count() {
+		io_iterator_t iterator;
+		CFMutableDictionaryRef matching = IOServiceMatching("AGXAccelerator");
+		if (matching == nullptr) {
+			matching = IOServiceMatching("AppleAGXHW");
+		}
+		if (matching == nullptr) {
+			return 0;
+		}
+
+		if (IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) != kIOReturnSuccess) {
+			return 0;
+		}
+
+		int gpu_cores = 0;
+		io_object_t device;
+		while ((device = IOIteratorNext(iterator)) != 0) {
+			CFMutableDictionaryRef properties = nullptr;
+			if (IORegistryEntryCreateCFProperties(device, &properties, kCFAllocatorDefault, 0) == kIOReturnSuccess) {
+				//? Try to get gpu-core-count property
+				CFNumberRef core_count = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("gpu-core-count"));
+				if (core_count != nullptr && CFGetTypeID(core_count) == CFNumberGetTypeID()) {
+					CFNumberGetValue(core_count, kCFNumberIntType, &gpu_cores);
+				}
+				CFRelease(properties);
+			}
+			IOObjectRelease(device);
+			if (gpu_cores > 0) break;
+		}
+		IOObjectRelease(iterator);
+		return gpu_cores;
+	}
+
 	bool AppleSiliconGpu::init() {
 		if (initialized) return true;
 
@@ -143,30 +178,23 @@ namespace Gpu {
 			return false;
 		}
 
-		//? Set GPU name based on chip
-		if (brand.find("M1") != std::string::npos) {
-			if (brand.find("Max") != std::string::npos) gpu_name = "Apple M1 Max GPU";
-			else if (brand.find("Pro") != std::string::npos) gpu_name = "Apple M1 Pro GPU";
-			else if (brand.find("Ultra") != std::string::npos) gpu_name = "Apple M1 Ultra GPU";
-			else gpu_name = "Apple M1 GPU";
-		} else if (brand.find("M2") != std::string::npos) {
-			if (brand.find("Max") != std::string::npos) gpu_name = "Apple M2 Max GPU";
-			else if (brand.find("Pro") != std::string::npos) gpu_name = "Apple M2 Pro GPU";
-			else if (brand.find("Ultra") != std::string::npos) gpu_name = "Apple M2 Ultra GPU";
-			else gpu_name = "Apple M2 GPU";
-		} else if (brand.find("M3") != std::string::npos) {
-			if (brand.find("Max") != std::string::npos) gpu_name = "Apple M3 Max GPU";
-			else if (brand.find("Pro") != std::string::npos) gpu_name = "Apple M3 Pro GPU";
-			else gpu_name = "Apple M3 GPU";
-		} else if (brand.find("M4") != std::string::npos) {
-			if (brand.find("Max") != std::string::npos) gpu_name = "Apple M4 Max GPU";
-			else if (brand.find("Pro") != std::string::npos) gpu_name = "Apple M4 Pro GPU";
-			else gpu_name = "Apple M4 GPU";
-		} else {
-			gpu_name = "Apple Silicon GPU";
+		//? Get GPU core count
+		int gpu_cores = get_gpu_core_count();
+		Shared::gpuCoreCount = gpu_cores;  //? Store in shared namespace for CPU box display
+		std::string cores_str = (gpu_cores > 0) ? " " + std::to_string(gpu_cores) + " GPUs" : " GPU";
+
+		//? Set GPU name based on chip (use brand string + core count)
+		gpu_name = brand + cores_str;
+
+		//? Determine ANE core count based on chip
+		//? All M1/M2/M3/M4 variants have 16-core Neural Engine, Ultra has 32 (2x fused)
+		if (brand.find("Ultra") != std::string::npos) {
+			Shared::aneCoreCount = 32;
+		} else if (brand.find("Apple M") != std::string::npos) {
+			Shared::aneCoreCount = 16;
 		}
 
-		Logger::debug("AppleSiliconGpu: Detected {}", gpu_name);
+		Logger::debug("AppleSiliconGpu: Detected {} ({} GPU cores, {} ANE cores)", gpu_name, gpu_cores, Shared::aneCoreCount);
 
 		//? Load IOReport library
 		if (not load_ioreport_library()) {
@@ -258,7 +286,7 @@ namespace Gpu {
 			return false;
 		}
 
-		//? Get Energy Model channels (for power consumption)
+		//? Get Energy Model channels (for power consumption - CPU, GPU, ANE)
 		CFStringRef energy_group = CFStringCreateWithCString(kCFAllocatorDefault, "Energy Model", kCFStringEncodingUTF8);
 		CFDictionaryRef energy_channels = IOReportCopyChannelsInGroup(energy_group, nullptr, 0, 0, 0);
 		CFRelease(energy_group);
@@ -269,9 +297,19 @@ namespace Gpu {
 			return false;
 		}
 
+		//? Get H11ANE channels (for ANE activity tracking)
+		CFStringRef ane_group = CFStringCreateWithCString(kCFAllocatorDefault, "H11ANE", kCFStringEncodingUTF8);
+		CFDictionaryRef ane_channels = IOReportCopyChannelsInGroup(ane_group, nullptr, 0, 0, 0);
+		CFRelease(ane_group);
+
 		//? Merge channels
 		channels = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, gpu_stats_channels);
 		IOReportMergeChannels(channels, energy_channels, nullptr);
+		if (ane_channels != nullptr) {
+			IOReportMergeChannels(channels, ane_channels, nullptr);
+			CFRelease(ane_channels);
+			Logger::debug("AppleSiliconGpu: Added H11ANE channels for ANE tracking");
+		}
 		CFRelease(gpu_stats_channels);
 		CFRelease(energy_channels);
 
@@ -358,14 +396,13 @@ namespace Gpu {
 	}
 
 	double AppleSiliconGpu::get_gpu_temperature() {
-		//? Try IOHIDSensors first (works on M1 and some M2/M3)
+		//? Try IOHIDSensors for GPU temperature
 		CFDictionaryRef matching = create_hid_matching(0xff00, 5);
 		IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 		IOHIDEventSystemClientSetMatching(system, matching);
 		CFArrayRef services = IOHIDEventSystemClientCopyServices(system);
 
-		double gpu_temp = 0.0;
-		int temp_count = 0;
+		double max_gpu_temp = 0.0;  //? Track maximum temperature (hottest sensor)
 
 		if (services != nullptr) {
 			CFIndex count = CFArrayGetCount(services);
@@ -377,18 +414,28 @@ namespace Gpu {
 						std::string sensor_name = cf_string_to_string(name);
 						CFRelease(name);
 
-						//? Look for GPU temperature sensors (e.g., "GPU MTR Temp Sensor1")
-						//? or general GPU temp sensors
-						if (sensor_name.find("GPU") != std::string::npos) {
+						//? Look for GPU/SoC temperature sensors:
+						//? - "GPU MTR Temp Sensor" - GPU metal temperature (older chips)
+						//? - "PMU tdie" - SoC die temperature (M4+, GPU integrated in SoC)
+						//? - Sensors with "GPU" in name
+						//? - "Tg" prefixed sensors (GPU die temperatures on some chips)
+						bool is_gpu_sensor = (sensor_name.find("GPU") != std::string::npos) or
+						                     (sensor_name.find("gpu") != std::string::npos) or
+						                     (sensor_name.find("PMU tdie") != std::string::npos) or
+						                     (sensor_name.substr(0, 2) == "Tg");
+
+						if (is_gpu_sensor) {
 							IOHIDEventRef event = IOHIDServiceClientCopyEvent(service,
 								kIOHIDEventTypeTemperature, 0, 0);
 							if (event != nullptr) {
 								double temp = IOHIDEventGetFloatValue(event,
 									IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
 								if (temp > 0 and temp < 150) {  // Sanity check
-									gpu_temp += temp;
-									temp_count++;
-									Logger::debug("AppleSiliconGpu: Found GPU temp sensor '{}' = {:.1f}C", sensor_name, temp);
+									if (temp > max_gpu_temp) {
+										max_gpu_temp = temp;
+									}
+									Logger::debug("AppleSiliconGpu: Found GPU temp sensor '{}' = {:.1f}C (max so far: {:.1f}C)",
+									              sensor_name, temp, max_gpu_temp);
 								}
 								CFRelease(event);
 							}
@@ -402,18 +449,110 @@ namespace Gpu {
 		CFRelease(system);
 		CFRelease(matching);
 
-		if (temp_count > 0) {
-			return gpu_temp / temp_count;
+		if (max_gpu_temp > 0) {
+			return max_gpu_temp;
 		}
 
-		//? Fallback: Try SMC keys starting with "Tg" for GPU temperature
-		// This is handled by the existing SMC infrastructure in btop
+		return 0.0;
+	}
+
+	double AppleSiliconGpu::get_cpu_temperature() {
+		//? Use IOHIDSensors directly to find CPU temperature sensors
+		//? Similar approach to get_gpu_temperature() but looking for CPU-related sensors
+		CFDictionaryRef matching = create_hid_matching(0xff00, 5);
+		IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+		IOHIDEventSystemClientSetMatching(system, matching);
+		CFArrayRef services = IOHIDEventSystemClientCopyServices(system);
+
+		std::vector<double> cpu_temps;
+		static bool first_call = true;
+
+		if (services != nullptr) {
+			CFIndex count = CFArrayGetCount(services);
+			for (CFIndex i = 0; i < count; i++) {
+				IOHIDServiceClientRef service = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(services, i);
+				if (service != nullptr) {
+					CFStringRef name = IOHIDServiceClientCopyProperty(service, CFSTR("Product"));
+					if (name != nullptr) {
+						std::string sensor_name = cf_string_to_string(name);
+						CFRelease(name);
+
+						//? Look for CPU temperature sensors:
+						//? - "PMU TP*" - CPU thermal protection sensors (M1/M2/M3)
+						//? - "pACC*" / "eACC*" - Performance/Efficiency core temps (some chips)
+						//? - "Tp*" prefix - CPU die temperatures
+						//? - "SOC MTR Temp Sensor*" - SoC (includes CPU) temp
+						//? - "PMU tdie*" - Die temperature (CPU is part of die)
+						//? - Sensors with "CPU" in name
+						bool is_cpu_sensor = false;
+
+						//? Check prefixes: PMU TP, Tp, pACC, eACC
+						if (sensor_name.substr(0, 6) == "PMU TP" or
+						    sensor_name.substr(0, 2) == "Tp" or
+						    sensor_name.substr(0, 4) == "pACC" or
+						    sensor_name.substr(0, 4) == "eACC") {
+							is_cpu_sensor = true;
+						}
+						//? Check for CPU in name
+						else if (sensor_name.find("CPU") != std::string::npos or
+						         sensor_name.find("cpu") != std::string::npos) {
+							is_cpu_sensor = true;
+						}
+						//? SOC temperature (CPU is integrated in SoC)
+						else if (sensor_name.find("SOC MTR") != std::string::npos) {
+							is_cpu_sensor = true;
+						}
+						//? PMU tdie sensors (die temp which includes CPU)
+						//? Note: Exclude GPU-related ones (already handled by get_gpu_temperature)
+						else if (sensor_name.find("PMU tdie") != std::string::npos and
+						         sensor_name.find("GPU") == std::string::npos) {
+							is_cpu_sensor = true;
+						}
+
+						if (is_cpu_sensor) {
+							IOHIDEventRef event = IOHIDServiceClientCopyEvent(service,
+								kIOHIDEventTypeTemperature, 0, 0);
+							if (event != nullptr) {
+								double temp = IOHIDEventGetFloatValue(event,
+									IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
+								if (temp > 0 and temp < 150) {  // Sanity check
+									cpu_temps.push_back(temp);
+									if (first_call) {
+										Logger::debug("AppleSiliconGpu: Found CPU temp sensor '{}' = {:.1f}C",
+										              sensor_name, temp);
+									}
+								}
+								CFRelease(event);
+							}
+						}
+					}
+				}
+			}
+			CFRelease(services);
+		}
+
+		CFRelease(system);
+		CFRelease(matching);
+
+		first_call = false;
+
+		//? Return average of all CPU temperature sensors
+		if (not cpu_temps.empty()) {
+			double sum = 0.0;
+			for (double t : cpu_temps) {
+				sum += t;
+			}
+			return sum / static_cast<double>(cpu_temps.size());
+		}
+
 		return 0.0;
 	}
 
 	void AppleSiliconGpu::parse_channels(CFDictionaryRef delta, double elapsed_seconds,
 	                                     double& out_freq_mhz, double& out_usage_percent,
-	                                     double& out_power_watts, double& out_temp_celsius) {
+	                                     double& out_gpu_power_watts, double& out_temp_celsius,
+	                                     double& out_cpu_power_watts, double& out_ane_power_watts,
+	                                     double& out_ane_activity_cmds) {
 		//? Only log every Nth call to avoid spam
 		static int parse_count = 0;
 		static bool first_call = true;
@@ -432,12 +571,21 @@ namespace Gpu {
 
 		out_freq_mhz = 0.0;
 		out_usage_percent = 0.0;
-		out_power_watts = 0.0;
+		out_gpu_power_watts = 0.0;
 		out_temp_celsius = 0.0;
+		out_cpu_power_watts = 0.0;
+		out_ane_power_watts = 0.0;
+		out_ane_activity_cmds = 0.0;
 
 		double gpu_energy_joules = 0.0;
+		double cpu_energy_joules = 0.0;
+		double ane_energy_joules = 0.0;
+		int64_t ane_commands_delta = 0;
 		bool found_gpuph = false;
 		bool found_gpu_energy = false;
+		bool found_cpu_energy = false;
+		bool found_ane_energy = false;
+		bool found_ane_commands = false;
 
 		//? For temperature: accumulate sum and count from IOReport
 		double temp_sum = 0.0;
@@ -456,8 +604,13 @@ namespace Gpu {
 			std::string subgroup = cf_string_to_string(IOReportChannelGetSubGroup(channel));
 			std::string channel_name = cf_string_to_string(IOReportChannelGetChannelName(channel));
 
-			//? Log GPU-related channels for debugging (only on first call)
-			if (first_call and (group.find("GPU") != std::string::npos or channel_name.find("GPU") != std::string::npos)) {
+			//? Log relevant channels for debugging (only on first call)
+			if (first_call and (group.find("GPU") != std::string::npos or
+			                    group.find("ANE") != std::string::npos or
+			                    group == "H11ANE" or
+			                    channel_name.find("GPU") != std::string::npos or
+			                    channel_name.find("ANE") != std::string::npos or
+			                    channel_name.find("CPU") != std::string::npos)) {
 				Logger::debug("AppleSiliconGpu: Found channel group='{}' subgroup='{}' name='{}'",
 				              group, subgroup, channel_name);
 			}
@@ -547,28 +700,61 @@ namespace Gpu {
 				}
 			}
 
-			//? GPU power from "Energy Model" / "GPU Energy" (or "DIE_X_GPU Energy" for multi-die)
-			if (group == "Energy Model" and
-			    (channel_name == "GPU Energy" or
-			     channel_name.find("GPU Energy") != std::string::npos)) {
-				found_gpu_energy = true;
+			//? Energy Model channels for power consumption
+			if (group == "Energy Model") {
 				std::string unit = cf_string_to_string(IOReportChannelGetUnitLabel(channel));
 				int64_t energy_value = IOReportSimpleGetIntegerValue(channel, 0);
 
-				if (do_debug) Logger::debug("AppleSiliconGpu: GPU Energy channel: value={} unit='{}'", energy_value, unit);
+				//? Helper lambda to convert energy to joules
+				auto to_joules = [&](int64_t value) -> double {
+					if (unit == "mJ") {
+						return value / 1000.0;
+					} else if (unit == "uJ") {
+						return value / 1000000.0;
+					} else if (unit == "nJ") {
+						return value / 1000000000.0;
+					} else {
+						//? Assume nanojoules if unit is unknown
+						return value / 1000000000.0;
+					}
+				};
 
-				//? Convert to joules based on unit
-				if (unit == "mJ") {
-					gpu_energy_joules += energy_value / 1000.0;
-				} else if (unit == "uJ") {
-					gpu_energy_joules += energy_value / 1000000.0;
-				} else if (unit == "nJ") {
-					gpu_energy_joules += energy_value / 1000000000.0;
-				} else {
-					//? Assume nanojoules if unit is unknown
-					gpu_energy_joules += energy_value / 1000000000.0;
-					if (do_debug) Logger::debug("AppleSiliconGpu: Unknown energy unit '{}', assuming nJ", unit);
+				//? GPU power from "GPU Energy" (or "DIE_X_GPU Energy" for multi-die)
+				if (channel_name == "GPU Energy" or
+				    channel_name.find("GPU Energy") != std::string::npos) {
+					found_gpu_energy = true;
+					gpu_energy_joules += to_joules(energy_value);
+					if (do_debug) Logger::debug("AppleSiliconGpu: GPU Energy channel: value={} unit='{}'", energy_value, unit);
 				}
+
+				//? ANE power from "ANE" subgroup channels
+				if (subgroup == "ANE" or channel_name == "ANE" or
+				    channel_name.find("ANE Energy") != std::string::npos) {
+					found_ane_energy = true;
+					ane_energy_joules += to_joules(energy_value);
+					if (do_debug) Logger::debug("AppleSiliconGpu: ANE Energy channel: value={} unit='{}'", energy_value, unit);
+				}
+
+				//? CPU power from CPU core channels (EACC_CPU*, PACC0_CPU*, etc.)
+				//? CPU cores show up as individual channels or aggregate "CPU Energy"
+				if (channel_name.find("CPU") != std::string::npos and
+				    channel_name.find("GPU") == std::string::npos) {
+					found_cpu_energy = true;
+					cpu_energy_joules += to_joules(energy_value);
+					if (do_debug and first_call) {
+						Logger::debug("AppleSiliconGpu: CPU Energy channel '{}': value={} unit='{}'",
+						              channel_name, energy_value, unit);
+					}
+				}
+			}
+
+			//? ANE activity from H11ANE / "H11ANE Events" / "ANECPU Commands Sent"
+			if (group == "H11ANE" and subgroup == "H11ANE Events" and
+			    channel_name == "ANECPU Commands Sent") {
+				found_ane_commands = true;
+				int64_t commands = IOReportSimpleGetIntegerValue(channel, 0);
+				ane_commands_delta = commands;  // This is already a delta from IOReportCreateSamplesDelta
+				if (do_debug) Logger::debug("AppleSiliconGpu: ANE Commands Sent delta = {}", commands);
 			}
 		}
 
@@ -578,12 +764,37 @@ namespace Gpu {
 		if (do_debug and not found_gpu_energy) {
 			Logger::debug("AppleSiliconGpu: GPU Energy channel not found");
 		}
+		if (do_debug and not found_cpu_energy) {
+			Logger::debug("AppleSiliconGpu: CPU Energy channel not found");
+		}
+		if (do_debug and not found_ane_energy) {
+			Logger::debug("AppleSiliconGpu: ANE Energy channel not found");
+		}
+		if (do_debug and not found_ane_commands) {
+			Logger::debug("AppleSiliconGpu: ANE Commands channel not found");
+		}
 
 		//? Convert energy to power: watts = joules / seconds
-		if (elapsed_seconds > 0 and gpu_energy_joules > 0) {
-			out_power_watts = gpu_energy_joules / elapsed_seconds;
-			if (do_debug) Logger::debug("AppleSiliconGpu: Power = {} W (energy = {} J, elapsed = {} s)",
-			              out_power_watts, gpu_energy_joules, elapsed_seconds);
+		if (elapsed_seconds > 0) {
+			if (gpu_energy_joules > 0) {
+				out_gpu_power_watts = gpu_energy_joules / elapsed_seconds;
+				if (do_debug) Logger::debug("AppleSiliconGpu: GPU Power = {} W (energy = {} J, elapsed = {} s)",
+				                            out_gpu_power_watts, gpu_energy_joules, elapsed_seconds);
+			}
+			if (cpu_energy_joules > 0) {
+				out_cpu_power_watts = cpu_energy_joules / elapsed_seconds;
+				if (do_debug) Logger::debug("AppleSiliconGpu: CPU Power = {} W", out_cpu_power_watts);
+			}
+			if (ane_energy_joules > 0) {
+				out_ane_power_watts = ane_energy_joules / elapsed_seconds;
+				if (do_debug) Logger::debug("AppleSiliconGpu: ANE Power = {} W", out_ane_power_watts);
+			}
+
+			//? ANE activity: commands per second
+			if (ane_commands_delta > 0) {
+				out_ane_activity_cmds = static_cast<double>(ane_commands_delta) / elapsed_seconds;
+				if (do_debug) Logger::debug("AppleSiliconGpu: ANE Activity = {} C/s", out_ane_activity_cmds);
+			}
 		}
 
 		//? Calculate average temperature
@@ -627,20 +838,91 @@ namespace Gpu {
 				if (delta != nullptr) {
 					double freq_mhz = 0.0;
 					double usage_percent = 0.0;
-					double power_watts = 0.0;
+					double gpu_power_watts = 0.0;
 					double temp_celsius = 0.0;
+					double cpu_power_watts = 0.0;
+					double ane_power_watts = 0.0;
+					double ane_activity_cmds = 0.0;
 
-					parse_channels(delta, elapsed_seconds, freq_mhz, usage_percent, power_watts, temp_celsius);
+					parse_channels(delta, elapsed_seconds, freq_mhz, usage_percent,
+					               gpu_power_watts, temp_celsius,
+					               cpu_power_watts, ane_power_watts, ane_activity_cmds);
 
 					metrics.gpu_freq_mhz = freq_mhz;
 					metrics.gpu_usage_percent = usage_percent;
-					metrics.gpu_power_watts = power_watts;
+					metrics.gpu_power_watts = gpu_power_watts;
 					metrics.gpu_temp_celsius = temp_celsius;
 					metrics.gpu_freq_max_mhz = max_gpu_freq_mhz;
+					metrics.cpu_power_watts = cpu_power_watts;
+					metrics.ane_power_watts = ane_power_watts;
+					metrics.ane_activity_cmds = ane_activity_cmds;
+
+					//? Update power history for averaging
+					if (cpu_power_history.size() < static_cast<size_t>(POWER_AVG_SAMPLES)) {
+						cpu_power_history.push_back(cpu_power_watts);
+						gpu_power_history.push_back(gpu_power_watts);
+						ane_power_history.push_back(ane_power_watts);
+					} else {
+						cpu_power_history[power_history_idx] = cpu_power_watts;
+						gpu_power_history[power_history_idx] = gpu_power_watts;
+						ane_power_history[power_history_idx] = ane_power_watts;
+						power_history_idx = (power_history_idx + 1) % POWER_AVG_SAMPLES;
+					}
+
+					//? Calculate average power
+					double cpu_avg = 0.0, gpu_avg = 0.0, ane_avg = 0.0;
+					for (size_t i = 0; i < cpu_power_history.size(); i++) {
+						cpu_avg += cpu_power_history[i];
+						gpu_avg += gpu_power_history[i];
+						ane_avg += ane_power_history[i];
+					}
+					if (not cpu_power_history.empty()) {
+						cpu_avg /= static_cast<double>(cpu_power_history.size());
+						gpu_avg /= static_cast<double>(gpu_power_history.size());
+						ane_avg /= static_cast<double>(ane_power_history.size());
+					}
+
+					//? Update Shared namespace power variables
+					Shared::cpuPower = cpu_power_watts;
+					Shared::gpuPower = gpu_power_watts;
+					Shared::anePower = ane_power_watts;
+					Shared::cpuPowerAvg = cpu_avg;
+					Shared::gpuPowerAvg = gpu_avg;
+					Shared::anePowerAvg = ane_avg;
+
+					//? Update peak power
+					if (cpu_power_watts > Shared::cpuPowerPeak) Shared::cpuPowerPeak = cpu_power_watts;
+					if (gpu_power_watts > Shared::gpuPowerPeak) Shared::gpuPowerPeak = gpu_power_watts;
+					if (ane_power_watts > Shared::anePowerPeak) Shared::anePowerPeak = ane_power_watts;
+
+					//? Update ANE activity
+					Shared::aneActivity = ane_activity_cmds;
+
+					//? Update power history for Pwr panel graphs (in mW for precision)
+					long long cpu_pwr_mw = static_cast<long long>(cpu_power_watts * 1000);
+					long long gpu_pwr_mw = static_cast<long long>(gpu_power_watts * 1000);
+					long long ane_pwr_mw = static_cast<long long>(ane_power_watts * 1000);
+
+					//? Push current values to history deques
+					Pwr::cpu_pwr_history.push_back(cpu_pwr_mw);
+					Pwr::gpu_pwr_history.push_back(gpu_pwr_mw);
+					Pwr::ane_pwr_history.push_back(ane_pwr_mw);
+
+					//? Limit history size (match graph width, ~100 points max)
+					while (Pwr::cpu_pwr_history.size() > 100) Pwr::cpu_pwr_history.pop_front();
+					while (Pwr::gpu_pwr_history.size() > 100) Pwr::gpu_pwr_history.pop_front();
+					while (Pwr::ane_pwr_history.size() > 100) Pwr::ane_pwr_history.pop_front();
+
+					//? Update max values for auto-scaling (in mW)
+					if (cpu_pwr_mw > Pwr::cpu_pwr_max) Pwr::cpu_pwr_max = cpu_pwr_mw;
+					if (gpu_pwr_mw > Pwr::gpu_pwr_max) Pwr::gpu_pwr_max = gpu_pwr_mw;
+					if (ane_pwr_mw > Pwr::ane_pwr_max) Pwr::ane_pwr_max = ane_pwr_mw;
 
 					if (do_debug) {
-						Logger::debug("AppleSiliconGpu: collect() - freq={}MHz usage={}% power={}W temp={}C elapsed={}s",
-						              freq_mhz, usage_percent, power_watts, temp_celsius, elapsed_seconds);
+						Logger::debug("AppleSiliconGpu: collect() - GPU: freq={}MHz usage={}% power={}W temp={}C",
+						              freq_mhz, usage_percent, gpu_power_watts, temp_celsius);
+						Logger::debug("AppleSiliconGpu: collect() - CPU power={}W, ANE power={}W, ANE activity={} C/s",
+						              cpu_power_watts, ane_power_watts, ane_activity_cmds);
 					}
 
 					CFRelease(delta);
@@ -659,12 +941,28 @@ namespace Gpu {
 		prev_sample = current_sample;
 		prev_sample_time = current_time;
 
-		//? If IOReport didn't provide temperature, fall back to IOHIDSensors
-		if (metrics.gpu_temp_celsius <= 0) {
-			metrics.gpu_temp_celsius = get_gpu_temperature();
-			if (do_debug and metrics.gpu_temp_celsius > 0) {
-				Logger::debug("AppleSiliconGpu: Got temperature from IOHIDSensors: {}C", metrics.gpu_temp_celsius);
+		//? Try IOHIDSensors first (more accurate - reads actual GPU temp sensors)
+		//? Fall back to IOReport if IOHIDSensors fails
+		double hid_temp = get_gpu_temperature();
+		if (hid_temp > 0) {
+			metrics.gpu_temp_celsius = hid_temp;
+			if (do_debug) {
+				Logger::debug("AppleSiliconGpu: Using IOHIDSensors temperature: {}C", hid_temp);
 			}
+		} else if (metrics.gpu_temp_celsius <= 0) {
+			if (do_debug) {
+				Logger::debug("AppleSiliconGpu: No temperature from IOHIDSensors or IOReport");
+			}
+		}
+
+		//? Update shared GPU temp for Pwr panel
+		Shared::gpuTemp = static_cast<long long>(metrics.gpu_temp_celsius);
+
+		//? Also get CPU temp via IOHIDSensors for Pwr panel
+		double cpu_temp = get_cpu_temperature();
+		Shared::cpuTemp = static_cast<long long>(cpu_temp);
+		if (do_debug) {
+			Logger::debug("AppleSiliconGpu: CPU temperature: {}C", cpu_temp);
 		}
 
 		return metrics;

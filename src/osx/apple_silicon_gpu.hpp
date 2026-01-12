@@ -57,6 +57,13 @@ namespace Gpu {
 		double gpu_freq_max_mhz = 0.0;       // Maximum GPU frequency in MHz
 		double gpu_power_watts = 0.0;        // GPU power consumption in watts
 		double gpu_temp_celsius = 0.0;       // GPU temperature in Celsius
+
+		// ANE (Neural Engine) metrics
+		double ane_power_watts = 0.0;        // ANE power consumption in watts
+		double ane_activity_cmds = 0.0;      // ANE activity in commands/second
+
+		// CPU power metrics
+		double cpu_power_watts = 0.0;        // CPU power consumption in watts
 	};
 
 	//? Apple Silicon GPU collector class
@@ -96,6 +103,16 @@ namespace Gpu {
 		CFDictionaryRef prev_sample = nullptr;
 		uint64_t prev_sample_time = 0;
 
+		// ANE tracking
+		int64_t prev_ane_commands = 0;       // Previous ANECPU Commands Sent value
+
+		// Power averaging
+		static constexpr int POWER_AVG_SAMPLES = 60;  // Average over ~60 seconds
+		std::vector<double> cpu_power_history;
+		std::vector<double> gpu_power_history;
+		std::vector<double> ane_power_history;
+		int power_history_idx = 0;
+
 		//? Load IOReport library and resolve function pointers
 		bool load_ioreport_library();
 
@@ -108,10 +125,15 @@ namespace Gpu {
 		//? Get GPU temperature via IOHIDSensors or SMC
 		double get_gpu_temperature();
 
+		//? Get CPU temperature via IOHIDSensors
+		double get_cpu_temperature();
+
 		//? Parse channel data from IOReport delta sample
 		void parse_channels(CFDictionaryRef delta, double elapsed_seconds,
 		                    double& out_freq_mhz, double& out_usage_percent,
-		                    double& out_power_watts, double& out_temp_celsius);
+		                    double& out_gpu_power_watts, double& out_temp_celsius,
+		                    double& out_cpu_power_watts, double& out_ane_power_watts,
+		                    double& out_ane_activity_cmds);
 	};
 
 	//? Global Apple Silicon GPU instance

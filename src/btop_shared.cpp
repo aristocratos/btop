@@ -87,10 +87,26 @@ namespace Gpu {
 		{"gpu-average", {}},
 		{"gpu-vram-total", {}},
 		{"gpu-pwr-total", {}},
+		{"ane-activity", {}},  //? ANE activity history for Apple Silicon split graph
 	};
 	long long gpu_pwr_total_max = 0;
 }
 #endif
+
+namespace Pwr {
+	string box;
+	int x = 0, y = 0, width = 0, height = 0;
+	int min_width = 60, min_height = 6;
+	bool shown = false, redraw = true;
+
+	//* Power history deques for braille graphs (in mW for precision)
+	deque<long long> cpu_pwr_history = {0};
+	deque<long long> gpu_pwr_history = {0};
+	deque<long long> ane_pwr_history = {0};
+
+	//* Max observed power for auto-scaling (in mW), start at 1W
+	long long cpu_pwr_max = 1000, gpu_pwr_max = 1000, ane_pwr_max = 1000;
+}
 
 namespace Proc {
 bool set_priority(pid_t pid, int priority) {
