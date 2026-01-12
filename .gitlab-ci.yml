@@ -5,11 +5,13 @@ stages:
   - build
   - test
   - package
+  - publish
   - release
 
 variables:
   GIT_DEPTH: 50
   GIT_STRATEGY: fetch
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/btop"
 
 # Default settings
 default:
@@ -96,7 +98,13 @@ build:macos-arm64-debug:
     - docker
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential g++ git lowdown
+    # Install GCC 14 for full C++23 support (std::ranges::to)
+    - apt-get install -y -qq software-properties-common
+    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - apt-get update -qq
+    - apt-get install -y -qq g++-14 git lowdown
+    - update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+    - g++ --version
   <<: *cache_template
 
 build:linux-x86_64:
@@ -253,6 +261,89 @@ package:tarball:
       allow_failure: true
 
 # =============================================================================
+# Publish Stage - Push binaries to GitLab Package Registry
+# =============================================================================
+
+publish:binaries:
+  image: curlimages/curl:latest
+  tags:
+    - docker
+  stage: publish
+  needs:
+    - job: build:macos-arm64
+      artifacts: true
+      optional: true
+    - job: build:linux-x86_64
+      artifacts: true
+  variables:
+    VERSION: "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+  script:
+    - |
+      echo "Publishing binaries to GitLab Package Registry..."
+
+      # Publish Linux binary
+      if [ -d "artifacts" ]; then
+        for file in artifacts/btop-linux-*; do
+          if [ -f "$file" ]; then
+            FILENAME=$(basename "$file")
+            echo "Uploading $FILENAME..."
+            curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+                 --upload-file "$file" \
+                 "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+          fi
+        done
+
+        # Publish macOS binary if available
+        for file in artifacts/btop-macos-*; do
+          if [ -f "$file" ]; then
+            FILENAME=$(basename "$file")
+            echo "Uploading $FILENAME..."
+            curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+                 --upload-file "$file" \
+                 "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+          fi
+        done
+      fi
+
+      echo "Binaries published to: ${CI_PROJECT_URL}/-/packages"
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+
+publish:tarball:
+  image: curlimages/curl:latest
+  tags:
+    - docker
+  stage: publish
+  needs:
+    - job: package:tarball
+      artifacts: true
+  variables:
+    VERSION: "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+  script:
+    - |
+      echo "Publishing tarball to GitLab Package Registry..."
+
+      for file in *.tar.gz; do
+        if [ -f "$file" ]; then
+          FILENAME=$(basename "$file")
+          echo "Uploading $FILENAME..."
+          curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+               --upload-file "$file" \
+               "${PACKAGE_REGISTRY_URL}/${VERSION}/${FILENAME}"
+        fi
+      done
+
+      echo "Tarball published to: ${CI_PROJECT_URL}/-/packages"
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+
+# =============================================================================
 # Release Stage
 # =============================================================================
 
@@ -262,8 +353,10 @@ release:gitlab:
     - docker
   stage: release
   needs:
-    - job: package:tarball
-      artifacts: true
+    - job: publish:binaries
+      artifacts: false
+    - job: publish:tarball
+      artifacts: false
   script:
     - echo "Creating GitLab release for ${CI_COMMIT_TAG}"
   release:
@@ -273,22 +366,26 @@ release:gitlab:
       ## btop++ ${CI_COMMIT_TAG}
 
       ### Downloads
-      - macOS ARM64 (Apple Silicon with GPU support)
-      - Linux x86_64
+      Download from the [Package Registry](${CI_PROJECT_URL}/-/packages):
+      - **macOS ARM64** (Apple Silicon with GPU support)
+      - **Linux x86_64**
 
       ### Changelog
       See CHANGELOG.md for details.
 
       ### Installation
       ```bash
-      # Extract and install
-      tar -xzf btop-*.tar.gz
-      sudo make install PREFIX=/usr/local
+      # Download and install
+      chmod +x btop-*
+      sudo mv btop-* /usr/local/bin/btop
       ```
     assets:
       links:
-        - name: "Release Tarball"
-          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/download"
+        - name: "Linux x86_64 Binary"
+          url: "${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/btop-linux-x86_64-${CI_COMMIT_SHORT_SHA}"
+          link_type: package
+        - name: "macOS ARM64 Binary"
+          url: "${PACKAGE_REGISTRY_URL}/${CI_COMMIT_TAG}/btop-macos-arm64-${CI_COMMIT_SHORT_SHA}"
           link_type: package
   rules:
     - if: $CI_COMMIT_TAG
