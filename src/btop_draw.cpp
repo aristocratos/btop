@@ -2651,6 +2651,10 @@ namespace Draw {
 		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
 
 		Cpu::shown = boxes.contains("cpu");
+
+		//? Check if only "top panels" are shown (no mem/net/proc) - defined before GPU_SUPPORT for cross-platform use
+		bool only_top_panels = not (boxes.contains("mem") or boxes.contains("net") or boxes.contains("proc"));
+
 	#ifdef GPU_SUPPORT
 		Gpu::box.clear();
 		Gpu::width = 0;
@@ -2669,9 +2673,6 @@ namespace Draw {
 		Pwr::shown = boxes.contains("pwr");
 		Pwr::box.clear();
 		Pwr::redraw = true;
-
-		//? Check if only "top panels" are shown (no mem/net/proc)
-		bool only_top_panels = not (boxes.contains("mem") or boxes.contains("net") or boxes.contains("proc"));
 
 		//? Count how many top panels are active
 		int top_panel_count = (Cpu::shown ? 1 : 0) + (Gpu::shown > 0 ? 1 : 0) + (Pwr::shown ? 1 : 0);
