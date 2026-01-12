@@ -31,10 +31,10 @@ default:
 # macOS Builds (Apple Silicon with GPU support)
 # =============================================================================
 
+# macOS builds use the instance runner with 'macos' tag (KALYPSO.local)
 .macos_template: &macos_template
   tags:
     - macos
-    - arm64
   before_script:
     - export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
     - which brew && brew --version || echo "Homebrew not found"
@@ -89,7 +89,6 @@ build:macos-arm64-debug:
 .linux_template: &linux_template
   image: ubuntu:24.04
   tags:
-    - linux
     - docker
   before_script:
     - apt-get update -qq
@@ -148,7 +147,6 @@ build:linux-x86_64-static:
 build:linux-alpine:
   image: alpine:latest
   tags:
-    - linux
     - docker
   stage: build
   before_script:
@@ -217,7 +215,6 @@ test:linux-smoke:
 package:tarball:
   image: alpine:latest
   tags:
-    - linux
     - docker
   stage: package
   needs:
@@ -253,7 +250,6 @@ package:tarball:
 release:gitlab:
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   tags:
-    - linux
     - docker
   stage: release
   needs:
@@ -322,7 +318,6 @@ build:nightly:
 lint:cppcheck:
   image: ubuntu:24.04
   tags:
-    - linux
     - docker
   stage: test
   before_script:
