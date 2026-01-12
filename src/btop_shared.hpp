@@ -201,6 +201,8 @@ namespace Gpu {
 		// vector<proc_info> compute_processes = {};
 	};
 
+	extern vector<gpu_info> gpus;  //? GPU info vector for PWR panel visibility checks
+
 	namespace Nvml {
 		extern bool shutdown();
 	}

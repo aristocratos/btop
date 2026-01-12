@@ -666,8 +666,26 @@ namespace Cpu {
 			//? Base: "XXXX " label (5 chars) + meter + value (up to 12 chars for "XXXXX C/s") + power (6 chars)
 			int brief_meter_width = b_width - (show_temps ? 26 - (b_column_size <= 1 and b_columns == 1 ? 7 : 0) : 13);
 			if (show_watts) {
-				brief_meter_width -= 6;
+				brief_meter_width -= 6;  //? Reserve space for CPU watts
 			}
+		#ifdef GPU_SUPPORT
+			//? When PWR panel is visible, GPU/ANE watts are hidden so bars can be longer
+			bool gpu_or_ane_has_power = false;
+			if (show_gpu) {
+				for (const auto& gpu : gpus) {
+					if (gpu.supported_functions.pwr_usage) {
+						gpu_or_ane_has_power = true;
+						break;
+					}
+				}
+			}
+			if (Shared::aneCoreCount > 0) {
+				gpu_or_ane_has_power = true;
+			}
+			if (Pwr::shown and gpu_or_ane_has_power) {
+				brief_meter_width += 9;  //? Use the space saved by not showing GPU/ANE watts
+			}
+		#endif
 
 		#ifdef GPU_SUPPORT
 			if (show_gpu and b_columns > 1) {
@@ -675,8 +693,8 @@ namespace Cpu {
 				gpu_mem_graphs.resize(gpus.size());
 				gpu_meters.resize(gpus.size());
 
-				// Shrink gpu graph width in small boxes to prevent line width extending past box border
-				auto gpu_graph_width = b_width < 42 ? 4 : 5;
+				// GPU temp graph width - 6 chars to match CPU braille graphs
+				auto gpu_graph_width = 6;
 
 				for (size_t i = 0; i < gpus.size(); i++) {
 					if (gpu_auto and v_contains(Gpu::shown_panels, i))
@@ -691,12 +709,14 @@ namespace Cpu {
 						gpu_mem_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol };
 					}
 					if (gpu.supported_functions.gpu_utilization) {
-						gpu_meters[i] = Draw::Meter{brief_meter_width, "cpu"};
+						//? GPU meters: match ANE when PWR visible, -4 when PWR hidden for temp display
+						int gpu_meter_width = Pwr::shown ? brief_meter_width : (brief_meter_width - 4);
+						gpu_meters[i] = Draw::Meter{gpu_meter_width, "cpu"};
 					}
 				}
 			}
 
-			//? ANE meter for Apple Silicon - use same width as CPU/GPU for bar alignment
+			//? ANE meter for Apple Silicon - 4 chars longer than CPU/GPU bars (room for C/s values)
 			if (Shared::aneCoreCount > 0 and b_columns > 1) {
 				ane_meter = Draw::Meter{brief_meter_width, "cpu"};
 			}
@@ -951,30 +971,40 @@ namespace Cpu {
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
 				if (gpu_auto and v_contains(Gpu::shown_panels, i))
 					continue;
-				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
+				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + " GPU";
 				if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
 				if (gpus[i].supported_functions.gpu_utilization) {
 					out += ' ';
 					if (b_columns > 1) {
 						out += gpu_meters[i](safeVal(gpus[i].gpu_percent, "gpu-totals"s).back());
 					}
-					//? Percentage right-aligned
-					out += Mv::to(b_y + cy, b_x + b_width - 17)
-						+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll))
-						+ rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
-				}
-				//? Temperature (only when PWR panel is hidden)
-				if (show_temps and not Pwr::shown and gpus[i].supported_functions.temp_info) {
-					const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
-					out += Mv::to(b_y + cy, b_x + b_width - 12)
-						+ Theme::g("temp").at(clamp(gpus[i].temp.back(), 0ll, 100ll))
-						+ rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
-				}
-				//? Power right-aligned at end
-				if (gpus[i].supported_functions.pwr_usage) {
-					out += Mv::to(b_y + cy, b_x + b_width - 6)
-						+ Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
-						+ fmt::format("{:>4.1f}", gpus[i].pwr_usage / 1000.0) + Theme::c("main_fg") + 'W';
+
+					if (Pwr::shown) {
+						//? PWR visible: percentage right-aligned at edge
+						out += Mv::to(b_y + cy, b_x + b_width - 6)
+							+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll))
+							+ rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
+					} else {
+						//? PWR hidden: XX% + X.XW + space + temp_graph(6) + XX°C
+						out += Mv::to(b_y + cy, b_x + b_width - 23)
+							+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll))
+							+ rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
+
+						//? Power directly after percentage (no space)
+						if (gpus[i].supported_functions.pwr_usage) {
+							out += Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
+								+ fmt::format("{:>4.1f}", gpus[i].pwr_usage / 1000.0) + Theme::c("main_fg") + 'W';
+						}
+
+						//? Temperature graph + temperature (right-aligned at edge)
+						if (show_temps and gpus[i].supported_functions.temp_info) {
+							const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
+							out += ' ' + gpu_temp_graphs[i](gpus[i].temp, data_same)
+								+ Mv::to(b_y + cy, b_x + b_width - 6)
+								+ Theme::g("temp").at(clamp(gpus[i].temp.back(), 0ll, 100ll))
+								+ rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
+						}
+					}
 				}
 
 				if (cy > b_height - 1) break;
@@ -983,7 +1013,7 @@ namespace Cpu {
 
 		//? ANE (Neural Engine) brief info for Apple Silicon
 		if (show_gpu and Shared::aneCoreCount > 0 and cy < b_height - 1) {
-			out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "ANE";
+			out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + " ANE";
 
 			//? Format ANE activity
 			string ane_activity_str;
@@ -1003,15 +1033,18 @@ namespace Cpu {
 				out += ane_meter(ane_percent);
 			}
 
-			//? Activity right-aligned (digit aligns with GPU %)
-			out += Mv::to(b_y + cy, b_x + b_width - 17)
+			//? Activity right-aligned (move to right edge when PWR panel visible)
+			int ane_offset = Pwr::shown ? 8 : 14;
+			out += Mv::to(b_y + cy, b_x + b_width - ane_offset)
 				+ Theme::g("cpu").at(clamp(ane_percent, 0ll, 100ll))
 				+ rjust(ane_activity_str, 3) + Theme::c("main_fg") + " C/s";
 
-			//? Power right-aligned at end
-			out += Mv::to(b_y + cy, b_x + b_width - 6)
-				+ Theme::g("cpu").at(clamp(static_cast<long long>(Shared::anePower * 10), 0ll, 100ll))
-				+ fmt::format("{:>4.1f}", Shared::anePower) + Theme::c("main_fg") + 'W';
+			//? Power right-aligned at end (only when PWR panel is hidden)
+			if (not Pwr::shown) {
+				out += Mv::to(b_y + cy, b_x + b_width - 6)
+					+ Theme::g("cpu").at(clamp(static_cast<long long>(Shared::anePower * 10), 0ll, 100ll))
+					+ fmt::format("{:>4.1f}", Shared::anePower) + Theme::c("main_fg") + 'W';
+			}
 		}
 	#endif
 
@@ -1041,6 +1074,7 @@ namespace Gpu {
 	vector<Draw::Graph> mem_used_graph_vec = {}, mem_util_graph_vec = {};
 	vector<Draw::Meter> gpu_meter_vec = {};
 	vector<Draw::Graph> pwr_graph_vec = {};  //? Power braille graph (auto-scales)
+	vector<Draw::Graph> ane_pwr_graph_vec = {};  //? ANE power braille graph
 	vector<Draw::Meter> enc_meter_vec = {};
 	vector<Draw::Meter> ane_meter_vec = {};
 	vector<string> box = {};
@@ -1064,6 +1098,7 @@ namespace Gpu {
 		auto& mem_util_graph = mem_util_graph_vec[index];
 		auto& gpu_meter = gpu_meter_vec[index];
 		auto& pwr_graph = pwr_graph_vec[index];
+		auto& ane_pwr_graph = ane_pwr_graph_vec[index];
 		auto& enc_meter = enc_meter_vec[index];
 		auto& ane_meter = ane_meter_vec[index];
 
@@ -1122,7 +1157,12 @@ namespace Gpu {
                 	};
             	}
 				//? GPU meter: "  GPU " label is 6 chars (to align with " ⁶ANE ")
-				gpu_meter = Draw::Meter{b_width - (show_temps ? 27 : 14), "cpu"};
+				//? When PWR visible: bar can be 8 chars wider (no PWR braille row needed)
+				if (Pwr::shown) {
+					gpu_meter = Draw::Meter{b_width - (show_temps ? 19 : 6), "cpu"};
+				} else {
+					gpu_meter = Draw::Meter{b_width - (show_temps ? 27 : 14), "cpu"};
+				}
 			}
 			if (gpu.supported_functions.temp_info)
 				temp_graph = Draw::Graph{6, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
@@ -1135,9 +1175,17 @@ namespace Gpu {
 			if (gpu.supported_functions.encoder_utilization)
 				enc_meter = Draw::Meter{b_width/2 - 10, "cpu"};
 			//? ANE meter: " ⁶ANE " label is 6 chars (same as "  GPU " and "  PWR ")
-			//? ANE needs 4 chars less for meter to account for " C/s" suffix (vs GPU's "%" suffix)
-			if (Shared::aneCoreCount > 0)
-				ane_meter = Draw::Meter{b_width - (show_temps ? 31 : 18), "cpu"};
+			//? When PWR visible: bar can be 8 chars wider (no PWR braille row needed)
+			//? When PWR hidden: need room for PWR braille graph row below
+			if (Shared::aneCoreCount > 0) {
+				if (Pwr::shown) {
+					ane_meter = Draw::Meter{b_width - (show_temps ? 19 : 6), "cpu"};
+				} else {
+					ane_meter = Draw::Meter{b_width - (show_temps ? 27 : 14), "cpu"};
+				}
+				//? ANE power braille graph (similar to GPU PWR graph)
+				ane_pwr_graph = Draw::Graph{b_width - 14, 1, "cached", Pwr::ane_pwr_history, graph_symbol, false, false, Pwr::ane_pwr_max, -23};
+			}
 		}
 
 
@@ -1188,8 +1236,8 @@ namespace Gpu {
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 		}
 
-		//? Power usage with braille graph (auto-scales based on observed max)
-		if (gpu.supported_functions.pwr_usage) {
+		//? Power usage with braille graph (auto-scales based on observed max) - hide when PWR panel visible
+		if (gpu.supported_functions.pwr_usage and not Pwr::shown) {
 			int pwr_graph_width = b_width - 14;  //? -1 for extra space in "  PWR "
 			long long pwr_pct = gpu.pwr_max_usage > 0 ? clamp(gpu.pwr_usage * 100 / gpu.pwr_max_usage, 0ll, 100ll) : 0;
 			//? "  PWR " = 6 chars to align with " ⁶ANE "
@@ -1240,14 +1288,22 @@ namespace Gpu {
 			ane_label += "ANE ";
 			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + ane_label + ane_meter(ane_percent);
 
-			//? Position activity value to align with GPU percentage (right-justified before power)
-			out += Mv::to(b_y + rows_used, b_x + b_width - 18)
+			//? Position activity value (right-justified) - text is ~10 chars, offset 11 for 1-char padding
+			int ane_activity_offset = 11;
+			out += Mv::to(b_y + rows_used, b_x + b_width - ane_activity_offset)
 				+ Theme::g("cpu").at(clamp(ane_percent, 0ll, 100ll)) + ane_activity_str + Theme::c("main_fg") + " C/s";
 
-			//? ANE power (right-aligned at box edge, 7 chars from right: "X.XXW" + border)
-			out += Mv::to(b_y + rows_used, b_x + b_width - 7)
-				+ Theme::g("cpu").at(clamp(static_cast<long long>(Shared::anePower * 10), 0ll, 100ll))
-				+ fmt::format("{:>5.2f}", Shared::anePower) + Theme::c("main_fg") + 'W';
+			//? ANE power with braille graph (only when PWR panel is hidden)
+			if (not Pwr::shown) {
+				int ane_pwr_graph_width = b_width - 14;
+				long long ane_pwr_pct = Pwr::ane_pwr_max > 0 ? clamp(static_cast<long long>(Shared::anePower * 1000) * 100 / Pwr::ane_pwr_max, 0ll, 100ll) : 0;
+				out += Mv::to(b_y + rows_used + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "  PWR "
+					+ Theme::c("inactive_fg") + string(ane_pwr_graph_width, ' ') + Mv::l(ane_pwr_graph_width)
+					+ Theme::g("cached").at(clamp(ane_pwr_pct, 0ll, 100ll))
+					+ ane_pwr_graph(Pwr::ane_pwr_history, data_same or redraw[index])
+					+ fmt::format("{:>5.2f}", Shared::anePower) + Theme::c("main_fg") + 'W';
+				rows_used++;
+			}
 			rows_used++;
 		}
 
@@ -2696,7 +2752,14 @@ namespace Draw {
 			//? Default: GPU and Pwr use minimal heights when bottom panels shown
 			for (int i = 0; i < Gpu::shown; i++) {
 				using namespace Gpu;
-				total_height += 4 + gpu_b_height_offsets[shown_panels[i]];
+				int height_offset = gpu_b_height_offsets[shown_panels[i]];
+				//? Subtract 1 row when PWR panel visible (PWR row hidden in GPU panel)
+				if (Pwr::shown and Gpu::gpus[shown_panels[i]].supported_functions.pwr_usage)
+					height_offset -= 1;
+				//? Add 1 row when PWR panel hidden for ANE PWR braille graph
+				if (not Pwr::shown and Shared::aneCoreCount > 0)
+					height_offset += 1;
+				total_height += 4 + height_offset;
 			}
 			if (Pwr::shown) {
 				Pwr::height = Pwr::min_height;
@@ -2742,7 +2805,8 @@ namespace Draw {
 
 		#ifdef GPU_SUPPORT
 			//? Use height - 6 because drawing loop's cy == max_row condition means effective rows = max_row - 1
-			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - ane_extra_height - 6)));
+			//? Minimum 3 columns to keep CPU info box compact and preserve main graph area
+			b_columns = max(3, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - ane_extra_height - 6)));
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 6)));
 		#endif
@@ -2838,6 +2902,7 @@ namespace Draw {
 			mem_used_graph_vec.resize(shown); mem_util_graph_vec.resize(shown);
 			gpu_meter_vec.resize(shown);
 			pwr_graph_vec.resize(shown);
+			ane_pwr_graph_vec.resize(shown);
 			enc_meter_vec.resize(shown);
 			ane_meter_vec.resize(shown);
 			redraw.resize(shown);
@@ -2857,6 +2922,12 @@ namespace Draw {
 						height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
 
 				b_height_vec[i] = gpu_b_height_offsets[shown_panels[i]] + 2;
+				//? Subtract 1 row when PWR panel visible (PWR row hidden in GPU panel)
+				if (Pwr::shown and Gpu::gpus[shown_panels[i]].supported_functions.pwr_usage)
+					b_height_vec[i] -= 1;
+				//? Add 1 row when PWR panel hidden for ANE PWR braille graph
+				if (not Pwr::shown and Shared::aneCoreCount > 0)
+					b_height_vec[i] += 1;
 				height += (height+Cpu::height == Term::height-1);
 				height = max(height, b_height_vec[i] + 1);  //? Reduced padding for tighter GPU panel fit
 				//? Limit gpu height to 13 when bottom panels (mem/net/proc) are shown
