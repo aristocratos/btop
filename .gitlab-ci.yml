@@ -257,8 +257,6 @@ package:tarball:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-      allow_failure: true
 
 # =============================================================================
 # Publish Stage - Push binaries to GitLab Package Registry
@@ -309,8 +307,6 @@ publish:binaries:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-      allow_failure: true
 
 publish:tarball:
   image: curlimages/curl:latest
@@ -340,8 +336,6 @@ publish:tarball:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-      allow_failure: true
 
 # =============================================================================
 # Release Stage
