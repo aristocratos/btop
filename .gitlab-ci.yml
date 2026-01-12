@@ -66,6 +66,7 @@ build:macos-arm64:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -201,6 +202,7 @@ test:macos-smoke:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -255,6 +257,7 @@ package:tarball:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
 
 # =============================================================================
 # Publish Stage - Push binaries to GitLab Package Registry
@@ -327,6 +330,7 @@ publish:binaries:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
 
 publish:tarball:
   image: curlimages/curl:latest
@@ -374,6 +378,7 @@ publish:tarball:
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
 
 # =============================================================================
 # Release Stage
