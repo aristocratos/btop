@@ -96,6 +96,26 @@ namespace Shared {
 
 	extern long coreCount, page_size, clk_tck;
 
+	//* Apple Silicon E-core/P-core counts (0 on non-Apple Silicon systems)
+	extern long eCoreCount, pCoreCount;
+
+	//* Apple Silicon GPU core count (0 on non-Apple Silicon systems)
+	extern long gpuCoreCount;
+
+	//* Apple Silicon ANE (Neural Engine) core count (0 on non-Apple Silicon systems)
+	extern long aneCoreCount;
+
+	//* Apple Silicon power metrics (updated by apple_silicon_gpu.cpp)
+	extern double cpuPower, gpuPower, anePower;  // Current power in Watts
+	extern double cpuPowerAvg, gpuPowerAvg, anePowerAvg;  // Average power
+	extern double cpuPowerPeak, gpuPowerPeak, anePowerPeak;  // Peak power
+
+	//* Apple Silicon ANE activity (commands per second)
+	extern double aneActivity;
+
+	//* Shared temperature values for Pwr panel (updated during collection)
+	extern long long cpuTemp, gpuTemp;  // Current temperatures in Celsius
+
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
 		void operator()(kvm_t* handle) {
@@ -119,6 +139,7 @@ namespace Gpu {
 	extern vector<string> gpu_names;
 	extern vector<int> gpu_b_height_offsets;
 	extern long long gpu_pwr_total_max;
+	extern bool ane_split;  //? Toggle for split GPU/ANE braille graph view (Apple Silicon, key "6")
 
 	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
@@ -158,6 +179,7 @@ namespace Gpu {
 		long long pwr_usage; // mW
 		long long pwr_max_usage = 255000;
 		long long pwr_state;
+		deque<long long> pwr = {0};  //? Power history for braille graph (in mW)
 
 		deque<long long> temp = {0};
 		long long temp_max = 110;
@@ -199,6 +221,23 @@ namespace Gpu {
 		bool supported = false;
 	};
 #endif
+}
+
+namespace Pwr {
+	extern string box;
+	extern int x, y, width, height, min_width, min_height;
+	extern bool shown, redraw;
+
+	//* Power history deques for braille graphs (in mW for precision)
+	extern deque<long long> cpu_pwr_history;
+	extern deque<long long> gpu_pwr_history;
+	extern deque<long long> ane_pwr_history;
+
+	//* Max observed power for auto-scaling (in mW)
+	extern long long cpu_pwr_max, gpu_pwr_max, ane_pwr_max;
+
+	//* Draw contents of power panel
+	string draw(bool force_redraw, bool data_same);
 }
 
 namespace Cpu {

@@ -265,6 +265,13 @@ namespace Shared {
 
 	fs::path procPath, passwd_path;
 	long pageSize, clkTck, coreCount;
+	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on Linux)
+	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on Linux)
+	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on Linux)
+	double cpuPower = 0, gpuPower = 0, anePower = 0;  // Power metrics (0 on Linux)
+	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
+	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
+	double aneActivity = 0;  // ANE activity (0 on Linux)
 
 	void init() {
 

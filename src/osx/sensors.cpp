@@ -59,6 +59,8 @@ CFDictionaryRef matching(int page, int usage) {
 	CFDictionaryRef dict = CFDictionaryCreate(0, (const void **)keys, (const void **)nums, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 	CFRelease(keys[0]);
 	CFRelease(keys[1]);
+	CFRelease(nums[0]);
+	CFRelease(nums[1]);
 	return dict;
 }
 
@@ -92,13 +94,24 @@ long long Cpu::ThermalSensors::getSensors() {
 					char buf[200];
 					CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
 					std::string n(buf);
-					// this is just a guess, nobody knows which sensors mean what
-					// on my system PMU tdie 3 and 9 are missing...
-					// there is also PMU tdev1-8 but it has negative values??
-					// there is also eACC for efficiency package but it only has 2 entries
-					// and pACC for performance but it has 7 entries (2 - 9) WTF
-					if (n.starts_with("eACC") or n.starts_with("pACC")) {
-						temps.push_back(getValue(sc));
+					// CPU temperature sensors vary by Apple Silicon generation
+					// M1/M2 typically have eACC/pACC, M3/M4 use different naming
+					// Broader patterns to support all Apple Silicon chips
+					bool is_cpu_sensor = (
+						n.starts_with("eACC") or      // Efficiency cores (M1/M2)
+						n.starts_with("pACC") or      // Performance cores (M1/M2)
+						n.starts_with("PMU TP") or    // PMU temperature sensors
+						n.starts_with("Tp") or        // Direct CPU temp sensors
+						n.find("CPU") != std::string::npos or  // Any CPU-related sensor
+						n.starts_with("SOC MTR") or   // SoC thermal sensors
+						n.starts_with("PMU tdie")     // Die temperature sensors
+					);
+					if (is_cpu_sensor) {
+						double temp = getValue(sc);
+						// Filter out unreasonable values (some sensors report negative or very high temps)
+						if (temp > 0.0 and temp < 150.0) {
+							temps.push_back(temp);
+						}
 					}
 					CFRelease(name);
 				}

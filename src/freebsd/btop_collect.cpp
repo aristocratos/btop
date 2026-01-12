@@ -118,6 +118,13 @@ namespace Shared {
 	fs::path passwd_path;
 	uint64_t totalMem;
 	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
+	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on FreeBSD)
+	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on FreeBSD)
+	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on FreeBSD)
+	double cpuPower = 0, gpuPower = 0, anePower = 0;  // Power metrics (0 on FreeBSD)
+	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
+	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
+	double aneActivity = 0;  // ANE activity (0 on FreeBSD)
 	int totalMem_len, kfscale;
 	long bootTime;
 
@@ -405,7 +412,8 @@ namespace Cpu {
 
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
-				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
+				// Use max(1ll, ...) to prevent division by zero when CPU deltas are very small
+				const long long calc_totals = max(1ll, totals - core_old_totals.at(i));
 				const long long calc_idles = max(0ll, idles - core_old_idles.at(i));
 				core_old_totals.at(i) = totals;
 				core_old_idles.at(i) = idles;

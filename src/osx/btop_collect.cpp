@@ -157,15 +157,9 @@ namespace Gpu {
 				.decoder_utilization = false
 			};
 
-			//? Set maximum power based on chip variant (approximate values)
-			double max_freq = apple_silicon_gpu.get_max_freq_mhz();
-			if (max_freq > 1500) {
-				gpu.pwr_max_usage = 60000;  // M1/M2/M3 Max/Ultra: ~60W GPU TDP
-			} else if (max_freq > 1200) {
-				gpu.pwr_max_usage = 35000;  // M1/M2/M3 Pro: ~35W GPU TDP
-			} else {
-				gpu.pwr_max_usage = 20000;  // Base M1/M2/M3: ~20W GPU TDP
-			}
+			//? Start with low max power - will auto-scale based on observed usage
+			//? This ensures the braille graph shows meaningful data from the start
+			gpu.pwr_max_usage = 1000;  // Start at 1W, auto-scales up as higher values observed
 
 			initialized = true;
 
@@ -201,6 +195,7 @@ namespace Gpu {
 			//? Power usage
 			if (gpu.supported_functions.pwr_usage) {
 				gpu.pwr_usage = static_cast<long long>(round(metrics.gpu_power_watts * 1000));  // Convert W to mW
+				gpu.pwr.push_back(gpu.pwr_usage);  //? Store for braille graph (auto-scales)
 				if (gpu.pwr_usage > gpu.pwr_max_usage) {
 					gpu.pwr_max_usage = gpu.pwr_usage;
 				}
@@ -243,6 +238,7 @@ namespace Gpu {
 					while (cmp_greater(gpu.gpu_percent.at("gpu-totals").size(), width * 2)) gpu.gpu_percent.at("gpu-totals").pop_front();
 					while (cmp_greater(gpu.gpu_percent.at("gpu-pwr-totals").size(), width)) gpu.gpu_percent.at("gpu-pwr-totals").pop_front();
 					while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
+					while (cmp_greater(gpu.pwr.size(), 18)) gpu.pwr.pop_front();  //? Trim power history
 					while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width/2)) gpu.gpu_percent.at("gpu-vram-totals").pop_front();
 				}
 			}
@@ -253,6 +249,16 @@ namespace Gpu {
 				while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
 				while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) shared_gpu_percent.at("gpu-pwr-total").pop_front();
 				while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) shared_gpu_percent.at("gpu-vram-total").pop_front();
+			}
+
+			//? Update ANE activity history for Apple Silicon split graph (key "6")
+			if (Shared::aneCoreCount > 0) {
+				// Convert ANE activity (C/s) to percentage (0-100), max 650 C/s = 100%
+				long long ane_percent = static_cast<long long>(std::min(100.0, (Shared::aneActivity / 650.0) * 100.0));
+				shared_gpu_percent.at("ane-activity").push_back(ane_percent);
+				if (width != 0) {
+					while (cmp_greater(shared_gpu_percent.at("ane-activity").size(), width * 2)) shared_gpu_percent.at("ane-activity").pop_front();
+				}
 			}
 		}
 
@@ -283,6 +289,21 @@ namespace Shared {
 	fs::path passwd_path;
 	uint64_t totalMem;
 	long pageSize, coreCount, clkTck, physicalCoreCount, arg_max;
+	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts
+	long gpuCoreCount = 0;  // Apple Silicon GPU core count
+	long aneCoreCount = 0;  // Apple Silicon ANE core count
+
+	// Apple Silicon power metrics
+	double cpuPower = 0, gpuPower = 0, anePower = 0;
+	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
+	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
+
+	// Apple Silicon ANE activity (commands per second)
+	double aneActivity = 0;
+
+	// Shared temperature values for Pwr panel
+	long long cpuTemp = 0, gpuTemp = 0;
+
 	double machTck;
 	int totalMem_len;
 
@@ -298,6 +319,24 @@ namespace Shared {
 		size_t physicalCoreCountSize = sizeof(physicalCoreCount);
 		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, nullptr, 0) < 0) {
 			Logger::error("Could not get physical core count");
+		}
+
+		//? Detect Apple Silicon E-cores and P-cores
+		int nperflevels = 0;
+		size_t nperflevels_size = sizeof(nperflevels);
+		if (sysctlbyname("hw.nperflevels", &nperflevels, &nperflevels_size, nullptr, 0) == 0 && nperflevels >= 2) {
+			//? Apple Silicon detected with multiple performance levels
+			//? perflevel0 = P-cores (performance), perflevel1 = E-cores (efficiency)
+			int p_cores = 0, e_cores = 0;
+			size_t core_size = sizeof(p_cores);
+			if (sysctlbyname("hw.perflevel0.logicalcpu", &p_cores, &core_size, nullptr, 0) == 0) {
+				pCoreCount = p_cores;
+			}
+			core_size = sizeof(e_cores);
+			if (sysctlbyname("hw.perflevel1.logicalcpu", &e_cores, &core_size, nullptr, 0) == 0) {
+				eCoreCount = e_cores;
+			}
+			Logger::info("Apple Silicon detected: {} E-cores, {} P-cores", eCoreCount, pCoreCount);
 		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
@@ -361,7 +400,8 @@ namespace Shared {
 					+ Gpu::gpus[i].supported_functions.pwr_usage
 					+ (Gpu::gpus[i].supported_functions.encoder_utilization or Gpu::gpus[i].supported_functions.decoder_utilization)
 					+ (Gpu::gpus[i].supported_functions.mem_total or Gpu::gpus[i].supported_functions.mem_used)
-					* (1 + 2*(Gpu::gpus[i].supported_functions.mem_total and Gpu::gpus[i].supported_functions.mem_used) + 2*Gpu::gpus[i].supported_functions.mem_utilization);
+					* (1 + 2*(Gpu::gpus[i].supported_functions.mem_total and Gpu::gpus[i].supported_functions.mem_used) + 2*Gpu::gpus[i].supported_functions.mem_utilization)
+					+ (Shared::aneCoreCount > 0 ? 1 : 0);  //? Add row for ANE on Apple Silicon
 		}
 #endif
 #endif
@@ -399,7 +439,12 @@ namespace Cpu {
 			Logger::error("Failed to get CPU name");
 			return name;
 		}
-		return trim_name(string(buffer));
+		name = string(buffer);
+		//? For Apple Silicon, format as "Apple MX [Variant] XX CPUs"
+		if (name.find("Apple") != string::npos && Shared::coreCount > 0) {
+			return name + " " + to_string(Shared::coreCount) + " CPUs";
+		}
+		return trim_name(name);
 	}
 
 	bool get_sensors() {
@@ -472,6 +517,10 @@ namespace Cpu {
 							current_cpu.temp.at(core + 1).pop_front();
 					}
 				}
+			}
+			//? Update shared CPU temp for Pwr panel
+			if (not current_cpu.temp.at(0).empty()) {
+				Shared::cpuTemp = current_cpu.temp.at(0).back();
 			}
 		} catch (std::runtime_error &e) {
 			got_sensors = false;
@@ -648,7 +697,8 @@ namespace Cpu {
 
 				//? Calculate cpu total for each core
 				if (i > Shared::coreCount) break;
-				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
+				// Use max(1ll, ...) to prevent division by zero when CPU deltas are very small
+				const long long calc_totals = max(1ll, totals - core_old_totals.at(i));
 				const long long calc_idles = max(0ll, idles - core_old_idles.at(i));
 				core_old_totals.at(i) = totals;
 				core_old_idles.at(i) = idles;

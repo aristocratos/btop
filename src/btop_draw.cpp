@@ -494,6 +494,9 @@ namespace Draw {
 	string& Graph::operator()(const deque<long long>& data, bool data_same) {
 		if (data_same) return out;
 
+		//? Safety check: return empty if Graph wasn't properly initialized
+		if (graphs.empty() or height == 0 or width == 0) return out;
+
 		//? Make room for new characters on graph
 		if (not tty_mode) current = not current;
 		for (const int& i : iota(0, height)) {
@@ -532,6 +535,7 @@ namespace Cpu {
 	vector<Draw::Graph> graphs_lower;
 	Draw::Meter cpu_meter;
 	vector<Draw::Meter> gpu_meters;
+	Draw::Meter ane_meter;
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 	vector<Draw::Graph> gpu_temp_graphs;
@@ -658,12 +662,19 @@ namespace Cpu {
             if (not single_graph)
             	init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
 
-			#ifdef GPU_SUPPORT
+				//? Calculate common meter width for CPU/GPU/ANE alignment in brief view
+			//? Base: "XXXX " label (5 chars) + meter + value (up to 12 chars for "XXXXX C/s") + power (6 chars)
+			int brief_meter_width = b_width - (show_temps ? 26 - (b_column_size <= 1 and b_columns == 1 ? 7 : 0) : 13);
+			if (show_watts) {
+				brief_meter_width -= 6;
+			}
+
+		#ifdef GPU_SUPPORT
 			if (show_gpu and b_columns > 1) {
 				gpu_temp_graphs.resize(gpus.size());
 				gpu_mem_graphs.resize(gpus.size());
 				gpu_meters.resize(gpus.size());
-	
+
 				// Shrink gpu graph width in small boxes to prevent line width extending past box border
 				auto gpu_graph_width = b_width < 42 ? 4 : 5;
 
@@ -672,31 +683,26 @@ namespace Cpu {
 						continue;
 					auto& gpu = gpus[i];
 
-					//? GPU graphs/meters
-					auto width_left = b_width - 10 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0);
+					//? GPU graphs/meters - use consistent width for alignment with CPU/ANE
 					if (gpu.supported_functions.temp_info and show_temps) {
 						gpu_temp_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
-						width_left -= 11;
 					}
 					if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total and b_columns > 1) {
 						gpu_mem_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol };
-						width_left -= 5;
 					}
-					width_left -= (gpu.supported_functions.mem_used ? 5 : 0);
-					width_left -= (gpu.supported_functions.mem_total ? 6 : 0);
-					width_left -= (gpu.supported_functions.pwr_usage ? 6 : 0);
 					if (gpu.supported_functions.gpu_utilization) {
-						gpu_meters[i] = Draw::Meter{width_left, "cpu" };
+						gpu_meters[i] = Draw::Meter{brief_meter_width, "cpu"};
 					}
 				}
 			}
+
+			//? ANE meter for Apple Silicon - use same width as CPU/GPU for bar alignment
+			if (Shared::aneCoreCount > 0 and b_columns > 1) {
+				ane_meter = Draw::Meter{brief_meter_width, "cpu"};
+			}
 			#endif
 
-			int cpu_meter_width = b_width - (show_temps ? 23 - (b_column_size <= 1 and b_columns == 1 ? 6 : 0) : 11);
-			if (show_watts) {
-				cpu_meter_width -= 6;
-			}
-
+			int cpu_meter_width = brief_meter_width;
 			cpu_meter = Draw::Meter{cpu_meter_width, "cpu"};
 
 			if (mid_line) {
@@ -715,7 +721,8 @@ namespace Cpu {
 
 			if (show_temps) {
 				temp_graphs.clear();
-				temp_graphs.emplace_back(5, 1, "temp", safeVal(cpu.temp, 0), graph_symbol, false, false, cpu.temp_max, -23);
+				//? Main CPU temp graph: 6 chars to match GPU panel format
+				temp_graphs.emplace_back(6, 1, "temp", safeVal(cpu.temp, 0), graph_symbol, false, false, cpu.temp_max, -23);
 				if (not hide_cores and b_column_size > 1) {
 					for (const auto& i : iota((size_t)1, cpu.temp.size())) {
 						temp_graphs.emplace_back(5, 1, "temp", safeVal(cpu.temp, i), graph_symbol, false, false, cpu.temp_max, -23);
@@ -834,15 +841,21 @@ namespace Cpu {
 					+ Symbols::h_line * ((freq_range ? 17 : 7) - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
-		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
-			+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
-		if (show_temps) {
+		//? CPU line format matches GPU panel: " CPU " + meter + 5-digit % + 6-char temp graph + temp
+		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + " CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back());
+		if (show_temps and Pwr::shown) {
+			//? Right-align percentage when temp hidden - position at where temp section would end
+			out += Mv::to(b_y + 1, b_x + b_width - 7);  //? Position for "  100%|"
+		}
+		out += Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 5) + Theme::c("main_fg") + '%';
+		if (show_temps and not Pwr::shown) {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
-			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
-			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back(), 0ll, 100ll));  //? 100°C = max red
+			//? Always show temp graph (matching GPU panel behavior)
+			if (temp_graphs.size() >= 1ll)
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + temp_color
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
-			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;  //? Apply temp color to value
 		}
 
 		if (show_watts) {
@@ -862,6 +875,8 @@ namespace Cpu {
 		int n_gpus_to_show = 0;
 	#ifdef GPU_SUPPORT
 		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
+		//? Include ANE row in count when GPU panel is hidden
+		if (show_gpu and Shared::aneCoreCount > 0) n_gpus_to_show++;
 	#endif
 		max_row -= n_gpus_to_show;
 
@@ -872,10 +887,25 @@ namespace Cpu {
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
+		//? Determine if Apple Silicon with E-cores and P-cores
+		const bool has_hybrid_cores = (Shared::eCoreCount > 0 or Shared::pCoreCount > 0);
 		for (const auto& n : iota(0, Shared::coreCount)) {
 			auto enabled = is_cpu_enabled(n);
-			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
-				+ ljust(to_string(n), core_width);
+			//? Use E/P prefix for Apple Silicon cores, C for all other systems
+			char core_prefix = 'C';
+			int display_num = n;  //? Core number to display
+			if (has_hybrid_cores) {
+				//? E-cores are first (0 to eCoreCount-1), P-cores follow (eCoreCount to coreCount-1)
+				if (n < Shared::eCoreCount) {
+					core_prefix = 'E';
+					display_num = n;  //? E0, E1, E2, ...
+				} else {
+					core_prefix = 'P';
+					display_num = n - Shared::eCoreCount;  //? P0, P1, P2, ... (relative to P-core start)
+				}
+			}
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + core_prefix + Fx::ub : "")
+				+ ljust(to_string(display_num), core_width);
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
@@ -885,7 +915,7 @@ namespace Cpu {
 
 			if (show_temps and not hide_cores) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
-				const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
+				const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back(), 0ll, 100ll)) : Theme::c("inactive_fg");  //? 100°C = max red
 				if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
 					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
 						+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
@@ -926,40 +956,62 @@ namespace Cpu {
 				if (gpus[i].supported_functions.gpu_utilization) {
 					out += ' ';
 					if (b_columns > 1) {
-					out += gpu_meters[i](safeVal(gpus[i].gpu_percent, "gpu-totals"s).back())
-						+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll));
+						out += gpu_meters[i](safeVal(gpus[i].gpu_percent, "gpu-totals"s).back());
 					}
-					out += rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
-					if (b_columns == 1)
-						out += ' ';
+					//? Percentage right-aligned
+					out += Mv::to(b_y + cy, b_x + b_width - 17)
+						+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll))
+						+ rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
 				}
-				if (gpus[i].supported_functions.mem_used and gpus[i].supported_functions.mem_total and b_columns > 1) {
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("used").at(safeVal(gpus[i].gpu_percent, "gpu-vram-totals"s).back())
-						+ gpu_mem_graphs[i](safeVal(gpus[i].gpu_percent, "gpu-vram-totals"s), data_same or redraw);
-				}
-				if (gpus[i].supported_functions.mem_used) {
-						out += Theme::c("main_fg")
-						+ rjust(floating_humanizer(gpus[i].mem_used, true), 5);
-				}
-				if (gpus[i].supported_functions.mem_total) {
-						out += Theme::c("inactive_fg") + '/' + Theme::c("main_fg") + ljust(floating_humanizer(gpus[i].mem_total, true), 4);
-				}
-				if (show_temps and gpus[i].supported_functions.temp_info) {
+				//? Temperature (only when PWR panel is hidden)
+				if (show_temps and not Pwr::shown and gpus[i].supported_functions.temp_info) {
 					const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
-					out += ' ';
-					if (b_columns > 1)
-						out += Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll))
-							+ gpu_temp_graphs[i](gpus[i].temp, data_same or redraw);
-					else out += Theme::g("temp").at(clamp(gpus[i].temp.back() * 100 / gpus[i].temp_max, 0ll, 100ll));
-					out += rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
+					out += Mv::to(b_y + cy, b_x + b_width - 12)
+						+ Theme::g("temp").at(clamp(gpus[i].temp.back(), 0ll, 100ll))
+						+ rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
 				}
+				//? Power right-aligned at end
 				if (gpus[i].supported_functions.pwr_usage) {
-					out += ' ' + Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
-						+ fmt::format("{:>4.{}f}", gpus[i].pwr_usage / 1000.0, gpus[i].pwr_usage < 10'000 ? 2 : gpus[i].pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
+					out += Mv::to(b_y + cy, b_x + b_width - 6)
+						+ Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
+						+ fmt::format("{:>4.1f}", gpus[i].pwr_usage / 1000.0) + Theme::c("main_fg") + 'W';
 				}
 
 				if (cy > b_height - 1) break;
 			}
+		}
+
+		//? ANE (Neural Engine) brief info for Apple Silicon
+		if (show_gpu and Shared::aneCoreCount > 0 and cy < b_height - 1) {
+			out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "ANE";
+
+			//? Format ANE activity
+			string ane_activity_str;
+			double ane_activity = Shared::aneActivity;
+			if (ane_activity >= 1000000.0) {
+				ane_activity_str = fmt::format("{:.0f}M", ane_activity / 1000000.0);
+			} else if (ane_activity >= 1000.0) {
+				ane_activity_str = fmt::format("{:.0f}K", ane_activity / 1000.0);
+			} else {
+				ane_activity_str = fmt::format("{:.0f}", ane_activity);
+			}
+
+			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / 650.0) * 100.0));
+
+			out += ' ';
+			if (b_columns > 1) {
+				out += ane_meter(ane_percent);
+			}
+
+			//? Activity right-aligned (digit aligns with GPU %)
+			out += Mv::to(b_y + cy, b_x + b_width - 17)
+				+ Theme::g("cpu").at(clamp(ane_percent, 0ll, 100ll))
+				+ rjust(ane_activity_str, 3) + Theme::c("main_fg") + " C/s";
+
+			//? Power right-aligned at end
+			out += Mv::to(b_y + cy, b_x + b_width - 6)
+				+ Theme::g("cpu").at(clamp(static_cast<long long>(Shared::anePower * 10), 0ll, 100ll))
+				+ fmt::format("{:>4.1f}", Shared::anePower) + Theme::c("main_fg") + 'W';
 		}
 	#endif
 
@@ -980,18 +1032,24 @@ namespace Gpu {
 	vector<bool> redraw = {};
 	int shown = 0;
 	int count = 0;
+	bool ane_split = false;  //? Toggle for split GPU/ANE braille graph (Apple Silicon, key "6")
 	vector<int> shown_panels = {};
 	int graph_up_height;
 	vector<Draw::Graph> graph_upper_vec = {}, graph_lower_vec = {};
+	vector<Draw::Graph> ane_graph_vec = {};  //? ANE braille graph for split view (key "6")
 	vector<Draw::Graph> temp_graph_vec = {};
 	vector<Draw::Graph> mem_used_graph_vec = {}, mem_util_graph_vec = {};
 	vector<Draw::Meter> gpu_meter_vec = {};
-	vector<Draw::Meter> pwr_meter_vec = {};
+	vector<Draw::Graph> pwr_graph_vec = {};  //? Power braille graph (auto-scales)
 	vector<Draw::Meter> enc_meter_vec = {};
+	vector<Draw::Meter> ane_meter_vec = {};
 	vector<string> box = {};
 
     string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
+
+		//? Bounds check for vector access
+		if (index >= ane_graph_vec.size() or index >= graph_upper_vec.size()) return "";
 
 		auto& b_x = b_x_vec[index];
 		auto& b_y = b_y_vec[index];
@@ -1000,12 +1058,14 @@ namespace Gpu {
 
 		auto& graph_upper = graph_upper_vec[index];
 		auto& graph_lower = graph_lower_vec[index];
+		auto& ane_graph = ane_graph_vec[index];
 		auto& temp_graph = temp_graph_vec[index];
 		auto& mem_used_graph = mem_used_graph_vec[index];
 		auto& mem_util_graph = mem_util_graph_vec[index];
 		auto& gpu_meter = gpu_meter_vec[index];
-		auto& pwr_meter = pwr_meter_vec[index];
+		auto& pwr_graph = pwr_graph_vec[index];
 		auto& enc_meter = enc_meter_vec[index];
+		auto& ane_meter = ane_meter_vec[index];
 
 		if (force_redraw) redraw[index] = true;
         bool show_temps = gpu.supported_functions.temp_info and (Config::getB("check_temp"));
@@ -1022,12 +1082,37 @@ namespace Gpu {
 		if (redraw[index]) {
 			out += box[index];
 
-			graph_up_height = single_graph ? b_height_vec[index] : (b_height_vec[index] + 1) / 2;
-			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
+			//? When ane_split is active (Apple Silicon, key "6"), force split mode: GPU top, ANE bottom
+			bool use_ane_split = ane_split and Shared::aneCoreCount > 0;
+			bool is_split = not single_graph or use_ane_split;
+
+			graph_up_height = is_split ? (b_height_vec[index] + 1) / 2 : b_height_vec[index];
+			int graph_low_height = is_split ? b_height_vec[index] - graph_up_height : 0;
 
 			if (gpu.supported_functions.gpu_utilization) {
 				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
-            	if (not single_graph) {
+
+				if (use_ane_split and not Gpu::shared_gpu_percent.at("ane-activity").empty()) {
+					//? ANE graph in lower portion (Apple Silicon split mode)
+					ane_graph = Draw::Graph{
+						x + width - b_width - 3,
+						graph_low_height, "cpu",
+						Gpu::shared_gpu_percent.at("ane-activity"),
+						graph_symbol,
+						Config::getB("cpu_invert_lower"), true
+					};
+				} else if (use_ane_split) {
+					//? ANE split requested but no data yet - use empty graph with single 0 value
+					deque<long long> empty_data = {0};
+					ane_graph = Draw::Graph{
+						x + width - b_width - 3,
+						graph_low_height, "cpu",
+						empty_data,
+						graph_symbol,
+						Config::getB("cpu_invert_lower"), true
+					};
+				} else if (not single_graph) {
+					//? Mirrored GPU graph in lower portion
                 	graph_lower = Draw::Graph{
                     	x + width - b_width - 3,
                     	graph_low_height, "cpu",
@@ -1036,18 +1121,23 @@ namespace Gpu {
                     	Config::getB("cpu_invert_lower"), true
                 	};
             	}
-				gpu_meter = Draw::Meter{b_width - (show_temps ? 25 : 12), "cpu"};
+				//? GPU meter: "  GPU " label is 6 chars (to align with " ⁶ANE ")
+				gpu_meter = Draw::Meter{b_width - (show_temps ? 27 : 14), "cpu"};
 			}
 			if (gpu.supported_functions.temp_info)
 				temp_graph = Draw::Graph{6, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
 			if (gpu.supported_functions.pwr_usage)
-				pwr_meter = Draw::Meter{b_width - (gpu.supported_functions.pwr_state and gpu.pwr_state != 32 ? 25 : 12), "cached"};
+				pwr_graph = Draw::Graph{b_width - 14, 1, "cached", gpu.pwr, graph_symbol, false, false, gpu.pwr_max_usage, -23};
 			if (gpu.supported_functions.mem_utilization)
 				mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% utilization
 			if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total)
 				mem_used_graph = Draw::Graph{b_width/2 - 2, 2 + 2*(gpu.supported_functions.mem_utilization), "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol};
 			if (gpu.supported_functions.encoder_utilization)
 				enc_meter = Draw::Meter{b_width/2 - 10, "cpu"};
+			//? ANE meter: " ⁶ANE " label is 6 chars (same as "  GPU " and "  PWR ")
+			//? ANE needs 4 chars less for meter to account for " C/s" suffix (vs GPU's "%" suffix)
+			if (Shared::aneCoreCount > 0)
+				ane_meter = Draw::Meter{b_width - (show_temps ? 31 : 18), "cpu"};
 		}
 
 
@@ -1056,18 +1146,37 @@ namespace Gpu {
 		//? Gpu graph, meter & clock speed
 		if (gpu.supported_functions.gpu_utilization) {
 			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
-			if (not single_graph)
-				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
 
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
-				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
+			//? Lower graph: ANE (when ane_split, key "6") or mirrored GPU (when gpu_mirror_graph)
+			if (ane_split and Shared::aneCoreCount > 0) {
+				auto& ane_data = Gpu::shared_gpu_percent.at("ane-activity");
+				if (not ane_data.empty()) {
+					out += Mv::to(y + rows_used + graph_up_height, x + 1) + ane_graph(ane_data, (data_same or redraw[index]));
+				}
+				//? Draw mid-line with "gpu ▲▼ ane" label AFTER graphs (so it's not overwritten)
+				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
+					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
+					+ Mv::to(y + graph_up_height + 1, x + ((width - b_width) / 2) - 5)
+					+ Theme::c("main_fg") + "gpu" + Mv::r(1) + "▲▼" + Mv::r(1) + "ane";
+			} else if (not single_graph) {
+				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
+			}
+
+			//? "  GPU " = 6 chars to align with " ⁶ANE " (also 6 chars visually)
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "  GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back());
+			if (show_temps and Pwr::shown) {
+				//? Right-align percentage when temp hidden - position at where temp section would end
+				out += Mv::to(b_y + rows_used, b_x + b_width - 7);  //? Position for "  100%|"
+			}
+			out += Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
 			//? Temperature graph, I assume the device supports utilization if it supports temperature
-			if (show_temps) {
+			if (show_temps and not Pwr::shown) {
 				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
+				const auto temp_color = Theme::g("temp").at(clamp(gpu.temp.back(), 0ll, 100ll));  //? 100°C = max red
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + temp_color
 					+ temp_graph(gpu.temp, data_same or redraw[index]);
-				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;  //? Apply temp color to value
 			}
 			out += Theme::c("div_line") + Symbols::v_line;
 			rows_used++;
@@ -1079,10 +1188,15 @@ namespace Gpu {
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 		}
 
-		//? Power usage meter, power state
+		//? Power usage with braille graph (auto-scales based on observed max)
 		if (gpu.supported_functions.pwr_usage) {
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back())
-				+ Theme::g("cached").at(clamp(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
+			int pwr_graph_width = b_width - 14;  //? -1 for extra space in "  PWR "
+			long long pwr_pct = gpu.pwr_max_usage > 0 ? clamp(gpu.pwr_usage * 100 / gpu.pwr_max_usage, 0ll, 100ll) : 0;
+			//? "  PWR " = 6 chars to align with " ⁶ANE "
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "  PWR "
+				+ Theme::c("inactive_fg") + string(pwr_graph_width, ' ') + Mv::l(pwr_graph_width)
+				+ Theme::g("cached").at(clamp(pwr_pct, 0ll, 100ll))
+				+ pwr_graph(gpu.pwr, data_same or redraw[index])
 				+ fmt::format("{:>5.{}f}", gpu.pwr_usage / 1000.0, gpu.pwr_usage < 10'000 ? 2 : gpu.pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
 			if (gpu.supported_functions.pwr_state and gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
 				out += std::string(" P-state: ") + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(clamp(gpu.pwr_state, 0ll, 100ll)) + to_string(gpu.pwr_state);
@@ -1096,6 +1210,44 @@ namespace Gpu {
 				+ Theme::g("cpu").at(clamp(gpu.encoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.encoder_utilization), 4) + Theme::c("main_fg") + '%'
 				+ Theme::c("div_line") + Symbols::v_line + Theme::c("main_fg") + Fx::b + "DEC " + enc_meter(gpu.decoder_utilization)
 				+ Theme::g("cpu").at(clamp(gpu.decoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.decoder_utilization), 4) + Theme::c("main_fg") + '%';
+			rows_used++;
+		}
+
+		//? ANE (Neural Engine) activity and power for Apple Silicon
+		if (Shared::aneCoreCount > 0) {
+			//? Format ANE activity as commands/second with appropriate suffix
+			string ane_activity_str;
+			double ane_activity = Shared::aneActivity;
+			if (ane_activity >= 1000000.0) {
+				ane_activity_str = fmt::format("{:>5.1f}M", ane_activity / 1000000.0);
+			} else if (ane_activity >= 1000.0) {
+				ane_activity_str = fmt::format("{:>5.1f}K", ane_activity / 1000.0);
+			} else {
+				ane_activity_str = fmt::format("{:>6.0f}", ane_activity);
+			}
+
+			//? Calculate ANE activity as percentage (0-100) for meter display (max 650 C/s)
+			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / 650.0) * 100.0));
+
+			//? Add tiny "6" hint when ane_split is available (Apple Silicon with single GPU)
+			//? Use "  ANE " format to align with "  GPU " (same 6-char width)
+			string ane_label = " ";  //? Leading space for alignment
+			if (Gpu::count == 1) {
+				ane_label += Theme::c("hi_fg") + (tty_mode ? "6" : Symbols::superscript.at(6)) + Theme::c("main_fg");
+			} else {
+				ane_label += " ";  //? Extra space when no superscript to match "  GPU "
+			}
+			ane_label += "ANE ";
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + ane_label + ane_meter(ane_percent);
+
+			//? Position activity value to align with GPU percentage (right-justified before power)
+			out += Mv::to(b_y + rows_used, b_x + b_width - 18)
+				+ Theme::g("cpu").at(clamp(ane_percent, 0ll, 100ll)) + ane_activity_str + Theme::c("main_fg") + " C/s";
+
+			//? ANE power (right-aligned at box edge, 7 chars from right: "X.XXW" + border)
+			out += Mv::to(b_y + rows_used, b_x + b_width - 7)
+				+ Theme::g("cpu").at(clamp(static_cast<long long>(Shared::anePower * 10), 0ll, 100ll))
+				+ fmt::format("{:>5.2f}", Shared::anePower) + Theme::c("main_fg") + 'W';
 			rows_used++;
 		}
 
@@ -1158,6 +1310,133 @@ namespace Gpu {
 		return out + Fx::reset;
 	}
 
+}
+
+namespace Pwr {
+	//? Local variables for layout calculations (not declared in btop_shared.hpp)
+	int width_p = 100, height_p = 25;
+
+	//? Subpanel dimensions
+	int sub_width = 0;  //? Width of each of the 3 subpanels
+	int graph_height = 1;  //? Height of braille graphs (dynamic)
+
+	//? Graphs for power history
+	Draw::Graph cpu_pwr_graph, gpu_pwr_graph, ane_pwr_graph;
+
+	string draw(bool force_redraw, bool data_same) {
+		if (Runner::stopping) return "";
+		if (not shown) return "";
+
+		if (force_redraw) redraw = true;
+
+		auto tty_mode = Config::getB("tty_mode");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_pwr"));
+		string out;
+		out.reserve(width * height);
+
+		//? Calculate subpanel width (3 equal columns)
+		sub_width = (width - 4) / 3;
+		int graph_width = sub_width - 4;
+		if (graph_width < 6) graph_width = 6;
+
+		//? Calculate graph height based on panel height
+		//? Layout: header(1) + label+temp(1) + graph(dynamic) + values(1) + border(1)
+		graph_height = max(1, height - 5);
+
+		//? Redraw structural elements on resize/force
+		if (redraw) {
+			out += box;
+
+			//? Create/update graphs with dynamic height
+			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_pwr_history, graph_symbol, false, false, cpu_pwr_max, -23};
+			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_pwr_history, graph_symbol, false, false, gpu_pwr_max, -23};
+			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_pwr_history, graph_symbol, false, false, ane_pwr_max, -23};
+		}
+
+		//? Get current power values
+		double cpu_pwr = Shared::cpuPower;
+		double gpu_pwr = Shared::gpuPower;
+		double ane_pwr = Shared::anePower;
+		double total_pwr = cpu_pwr + gpu_pwr + ane_pwr;
+
+		//? Get temperatures from Shared namespace
+		long long cpu_temp = Shared::cpuTemp;
+		long long gpu_temp = Shared::gpuTemp;
+
+		//? Header row: Total power with avg/max
+		out += Mv::to(y + 1, x + 2)
+			+ Theme::c("title") + Fx::b
+			+ fmt::format("Power: {:.2f}W", total_pwr)
+			+ Theme::c("main_fg") + Fx::ub
+			+ fmt::format(" (avg {:.2f}W, max {:.2f}W)",
+				Shared::cpuPowerAvg + Shared::gpuPowerAvg + Shared::anePowerAvg,
+				Shared::cpuPowerPeak + Shared::gpuPowerPeak + Shared::anePowerPeak);
+
+		//? Draw vertical dividers between subpanels
+		int div1_x = x + sub_width + 1;
+		int div2_x = x + sub_width * 2 + 2;
+		for (int r = 2; r < height - 1; r++) {
+			out += Mv::to(y + r, div1_x) + Theme::c("div_line") + Symbols::v_line;
+			out += Mv::to(y + r, div2_x) + Theme::c("div_line") + Symbols::v_line;
+		}
+
+		//? CPU Subpanel (left)
+		int col1_x = x + 2;
+		int row = 2;
+		out += Mv::to(y + row, col1_x) + Theme::c("main_fg") + Fx::b + "CPU" + Fx::ub;
+		//? CPU temperature with color gradient (100°C = max red)
+		{
+			long long temp_pct = cpu_temp > 0 ? clamp(cpu_temp, 0ll, 100ll) : 0;
+			out += Mv::to(y + row, col1_x + sub_width - 7)
+				+ Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", cpu_temp);
+		}
+
+		row++;
+		//? CPU power graph (multi-row) - Graph returns complete multi-line output
+		out += Mv::to(y + row, col1_x)
+			+ cpu_pwr_graph(cpu_pwr_history, data_same or redraw);
+
+		row += graph_height;
+		out += Mv::to(y + row, col1_x) + Theme::c("main_fg")
+			+ fmt::format("{:.2f}W avg {:.2f}W", cpu_pwr, Shared::cpuPowerAvg);
+
+		//? GPU Subpanel (middle)
+		int col2_x = div1_x + 2;
+		row = 2;
+		out += Mv::to(y + row, col2_x) + Theme::c("main_fg") + Fx::b + "GPU" + Fx::ub;
+		//? GPU temperature with color gradient (100°C = max red)
+		if (gpu_temp > 0) {
+			long long temp_pct = clamp(gpu_temp, 0ll, 100ll);
+			out += Mv::to(y + row, col2_x + sub_width - 7)
+				+ Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", gpu_temp);
+		}
+
+		row++;
+		//? GPU power graph (multi-row) - Graph returns complete multi-line output
+		out += Mv::to(y + row, col2_x)
+			+ gpu_pwr_graph(gpu_pwr_history, data_same or redraw);
+
+		row += graph_height;
+		out += Mv::to(y + row, col2_x) + Theme::c("main_fg")
+			+ fmt::format("{:.2f}W avg {:.2f}W", gpu_pwr, Shared::gpuPowerAvg);
+
+		//? ANE Subpanel (right)
+		int col3_x = div2_x + 2;
+		row = 2;
+		out += Mv::to(y + row, col3_x) + Theme::c("main_fg") + Fx::b + "ANE" + Fx::ub;
+
+		row++;
+		//? ANE power graph (multi-row) - Graph returns complete multi-line output
+		out += Mv::to(y + row, col3_x)
+			+ ane_pwr_graph(ane_pwr_history, data_same or redraw);
+
+		row += graph_height;
+		out += Mv::to(y + row, col3_x) + Theme::c("main_fg")
+			+ fmt::format("{:.2f}W avg {:.2f}W", ane_pwr, Shared::anePowerAvg);
+
+		redraw = false;
+		return out + Fx::reset;
+	}
 }
 #endif
 
@@ -2233,12 +2512,41 @@ namespace Draw {
 		}
 		Gpu::shown = Gpu::shown_panels.size();
 
-		// Calculate the minimum possible GPU height, store in total_height
-		// The actual total_height value will of course be overwritten later
+		// Calculate layout for top panels (CPU, GPU, Pwr)
+		Pwr::shown = boxes.contains("pwr");
+		Pwr::box.clear();
+		Pwr::redraw = true;
+
+		//? Check if only "top panels" are shown (no mem/net/proc)
+		bool only_top_panels = not (boxes.contains("mem") or boxes.contains("net") or boxes.contains("proc"));
+
+		//? Count how many top panels are active
+		int top_panel_count = (Cpu::shown ? 1 : 0) + (Gpu::shown > 0 ? 1 : 0) + (Pwr::shown ? 1 : 0);
+
+		//? Pre-calculate heights for dynamic splitting
 		Gpu::total_height = 0;
-		for (int i = 0; i < Gpu::shown; i++) {
-			using namespace Gpu;
-			total_height += 4 + gpu_b_height_offsets[shown_panels[i]];
+		Pwr::height = 0;
+
+		if (only_top_panels and top_panel_count > 0) {
+			//? Split space evenly among active top panels
+			int space_per_panel = (Term::height - 1) / top_panel_count;
+
+			if (Gpu::shown > 0) {
+				Gpu::total_height = space_per_panel;
+			}
+			if (Pwr::shown) {
+				Pwr::height = space_per_panel;
+			}
+			//? CPU will get remaining space in its section
+		} else {
+			//? Default: GPU and Pwr use minimal heights when bottom panels shown
+			for (int i = 0; i < Gpu::shown; i++) {
+				using namespace Gpu;
+				total_height += 4 + gpu_b_height_offsets[shown_panels[i]];
+			}
+			if (Pwr::shown) {
+				Pwr::height = Pwr::min_height;
+			}
 		}
 	#endif
 		Mem::shown = boxes.contains("mem");
@@ -2254,16 +2562,21 @@ namespace Draw {
 				Config::getS("show_gpu_info") == "On" ? Gpu::count
 				: Config::getS("show_gpu_info") == "Auto" ? Gpu::count - Gpu::shown
 				: 0;
+			//? Extra row for ANE when GPU panel ("5") is NOT shown (ANE shown inline with GPU)
+			int ane_extra_height = (Shared::aneCoreCount > 0 and Gpu::shown == 0) ? 1 : 0;
 		#endif
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 		#ifdef GPU_SUPPORT
-			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
-				height = Term::height - Gpu::total_height - gpus_extra_height;
+			if (only_top_panels and (Gpu::shown > 0 or Pwr::shown)) {
+				//? When only top panels shown, CPU gets remaining space after GPU and Pwr
+				height = Term::height - Gpu::total_height - Pwr::height - gpus_extra_height - ane_extra_height;
 			} else {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
+				//? Always add extra height for GPU/ANE info when GPU panel is hidden
+				height += gpus_extra_height;
+				if (Shared::aneCoreCount > 0 and Gpu::shown == 0) height += 1;
 			}
-			if (height <= Term::height-gpus_extra_height) height += gpus_extra_height;
 		#else
 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 		#endif
@@ -2271,9 +2584,22 @@ namespace Draw {
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
 		#ifdef GPU_SUPPORT
-			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - 5)));
+			//? Use height - 6 because drawing loop's cy == max_row condition means effective rows = max_row - 1
+			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - ane_extra_height - 6)));
 		#else
-			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
+			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 6)));
+		#endif
+		#ifdef GPU_SUPPORT
+			//? When GPU panel is visible, use most compact format to maximize main CPU graph area
+			//? Important for high core count systems (e.g., M3 Ultra with 32 cores)
+			if (Gpu::shown > 0) {
+				//? Force b_column_size = 0: no per-core braille graphs, just "E0 XX%" format
+				b_column_size = 0;
+				b_width = (8 + 6 * show_temp) * b_columns + 1;
+				//? Cap at available space (2/3 of box width) to preserve main graph area
+				int max_info_width = width - (width / 3) - 1;
+				b_width = min(b_width, max_info_width);
+			} else {
 		#endif
 			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
@@ -2292,9 +2618,21 @@ namespace Draw {
 			}
 
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
+			b_width = min(b_width, 46);  //? Cap to match GPU info box width
+		#ifdef GPU_SUPPORT
+			}
+		#endif
+			//? Recalculate b_column_size based on capped width
+			if (b_column_size == 2 and b_width < (21 + 12 * show_temp) * b_columns - (b_columns - 1)) {
+				b_column_size = 1;
+			}
+			if (b_column_size == 1 and b_width < (15 + 6 * show_temp) * b_columns - (b_columns - 1)) {
+				b_column_size = 0;
+			}
 		#ifdef GPU_SUPPORT
 			//gpus_extra_height = max(0, gpus_extra_height - 1);
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
+			int ane_row = (Shared::aneCoreCount > 0 and Gpu::shown == 0) ? 1 : 0;
+			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height + ane_row);
 		#else
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
 		#endif
@@ -2311,8 +2649,19 @@ namespace Draw {
 		#else
 			static const bool freq_range = false;
 		#endif
+			//? Build CPU title, optionally including GPU info when GPU panel is hidden on Apple Silicon
+			string base_title = (custom.empty() ? Cpu::cpuName : custom);
+		#ifdef GPU_SUPPORT
+			//? On Apple Silicon, append GPU and ANE core count when GPU panel is hidden
+			if (Shared::gpuCoreCount > 0 and Gpu::shown == 0) {
+				base_title += " " + to_string(Shared::gpuCoreCount) + " GPUs";
+				if (Shared::aneCoreCount > 0) {
+					base_title += " " + to_string(Shared::aneCoreCount) + " ANEs";
+				}
+			}
+		#endif
 			const string cpu_title = uresize(
-					(custom.empty() ? Cpu::cpuName : custom),
+					base_title,
 					b_width - (Config::getB("show_cpu_freq") and hasCpuHz ? (freq_range ? 24 : 14) : 5)
 			);
 			box += createBox(b_x, b_y, b_width, b_height, "", false, cpu_title);
@@ -2327,11 +2676,13 @@ namespace Draw {
 			b_height_vec.resize(shown);
 			box.resize(shown);
 			graph_upper_vec.resize(shown); graph_lower_vec.resize(shown);
+			ane_graph_vec.resize(shown);
 			temp_graph_vec.resize(shown);
 			mem_used_graph_vec.resize(shown); mem_util_graph_vec.resize(shown);
 			gpu_meter_vec.resize(shown);
-			pwr_meter_vec.resize(shown);
+			pwr_graph_vec.resize(shown);
 			enc_meter_vec.resize(shown);
+			ane_meter_vec.resize(shown);
 			redraw.resize(shown);
 			total_height = 0;
 			for (auto i = 0; i < shown; ++i) {
@@ -2339,21 +2690,25 @@ namespace Draw {
 				int height = 0;
 				width = Term::width;
 				if (Cpu::shown)
-					if (not (Mem::shown or Net::shown or Proc::shown))
-						height = min_height;
+					if (only_top_panels)
+						height = (Term::height - Cpu::height - Pwr::height) / Gpu::shown;  //? Fill remaining space after CPU and Pwr
 					else height = Cpu::height;
 				else
-					if (not (Mem::shown or Net::shown or Proc::shown))
-						height = (Term::height - total_height) / (Gpu::shown - i) + (i == 0) * ((Term::height - total_height) % (Gpu::shown - i));
+					if (only_top_panels)
+						height = (Term::height - total_height - Pwr::height) / (Gpu::shown - i) + (i == 0) * ((Term::height - total_height - Pwr::height) % (Gpu::shown - i));
 					else
 						height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
 
 				b_height_vec[i] = gpu_b_height_offsets[shown_panels[i]] + 2;
 				height += (height+Cpu::height == Term::height-1);
-				height = max(height, b_height_vec[i] + 2);
+				height = max(height, b_height_vec[i] + 1);  //? Reduced padding for tighter GPU panel fit
 				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
-				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
-				b_width = clamp(width/2, min_width, 65);
+				//? For Apple Silicon with single GPU, display "gpu" instead of "gpu0"
+				string box_name = (Shared::gpuCoreCount > 0 and Gpu::count == 1)
+					? "gpu"
+					: std::string("gpu") + (char)(shown_panels[i]+'0');
+				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, box_name, "", (shown_panels[i]+5)%10); // TODO gpu_box
+				b_width = clamp(width/2, min_width, 46);
 				total_height += height;
 
 				//? Main statistics box
@@ -2362,11 +2717,45 @@ namespace Draw {
 
 				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
 				if (name.empty()) name = gpu_names[shown_panels[i]];
+				//? Add ANE count to GPU panel header for Apple Silicon
+				if (Shared::aneCoreCount > 0) {
+					name += " " + to_string(Shared::aneCoreCount) + " ANEs";
+				}
 
-				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
+				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-3));
 				b_height_vec[i] = height - 2;
 			}
 		}
+
+		//* Calculate and draw pwr (power) box outlines
+		if (Pwr::shown) {
+			using namespace Pwr;
+
+			width = Term::width;
+
+			//? Height was pre-calculated above, but handle edge cases
+			if (only_top_panels) {
+				//? When only top panels shown, Pwr height was pre-calculated
+				//? If Pwr is the only panel, it gets full height
+				if (not Cpu::shown and Gpu::shown == 0) {
+					height = Term::height - 1;
+				}
+				//? Otherwise height was already set in pre-calculation
+			} else {
+				//? When bottom panels shown, use min_height
+				height = min_height;
+			}
+			height = max(height, min_height);
+
+			x = 1;
+			y = (Config::getB("cpu_bottom") ? 1 : Cpu::height + 1) + Gpu::total_height;
+
+			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "pwr", "", 7);
+		}
+
+		//? Calculate Pwr offset for panels below it
+		int pwr_offset = 0;
+		if (Pwr::shown) pwr_offset = Pwr::height;
 	#endif
 
 		//* Calculate and draw mem box outlines
@@ -2378,7 +2767,7 @@ namespace Draw {
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
-			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
+			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - pwr_offset;
 		#else
 			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
 		#endif
@@ -2387,7 +2776,7 @@ namespace Draw {
 		#ifdef GPU_SUPPORT
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
-				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + pwr_offset;
 		#else
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
@@ -2442,14 +2831,14 @@ namespace Draw {
 			using namespace Net;
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
-			height = Term::height - Cpu::height - Gpu::total_height - Mem::height;
+			height = Term::height - Cpu::height - Gpu::total_height - Mem::height - pwr_offset;
 		#else
 			height = Term::height - Cpu::height - Mem::height;
 		#endif
 			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
 			#ifdef GPU_SUPPORT
-				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + pwr_offset;
 			#else
 				y = cpu_bottom ? 1 : Cpu::height + 1;
 			#endif
@@ -2476,13 +2865,13 @@ namespace Draw {
 			using namespace Proc;
 			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
 		#ifdef GPU_SUPPORT
-			height = Term::height - Cpu::height - Gpu::total_height;
+			height = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
 		#else
 			height = Term::height - Cpu::height;
 		#endif
 			x = proc_left ? 1 : Term::width - width + 1;
 		#ifdef GPU_SUPPORT
-			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height;
+			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height + pwr_offset;
 		#else
 			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
 		#endif

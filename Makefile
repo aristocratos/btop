@@ -44,7 +44,7 @@ ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
 	endif
 endif
 #? Apple Silicon GPU support (M1/M2/M3/M4)
-ifeq ($(PLATFORM_LC),darwin)
+ifneq (,$(filter darwin macos,$(PLATFORM_LC)))
 	ifeq ($(shell sysctl -n machdep.cpu.brand_string 2>/dev/null | grep -c Apple),1)
 		GPU_SUPPORT := true
 		APPLE_SILICON_GPU := true
