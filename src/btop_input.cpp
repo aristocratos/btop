@@ -268,6 +268,68 @@ namespace Input {
 				#endif
 					atomic_wait(Runner::active);
 
+					//? Special handling for key "3" (net): cycle through hidden -> stacked -> beside
+					if (intKey == 3) {
+						bool net_shown = Net::shown;
+						bool net_beside = Config::getB("net_beside_mem");
+
+						if (not net_shown) {
+							//? Net hidden -> show net in stacked mode
+							Config::set("net_beside_mem", false);
+							if (not Config::toggle_box("net")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						else if (not net_beside) {
+							//? Net shown stacked -> switch to beside mode
+							Config::set("net_beside_mem", true);
+						}
+						else {
+							//? Net shown beside -> hide net and reset to stacked
+							Config::set("net_beside_mem", false);
+							if (not Config::toggle_box("net")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						Config::current_preset = -1;
+						Draw::calcSizes();
+						Runner::run("all", false, true);
+						return;
+					}
+
+					//? Special handling for key "4" (proc) in side-by-side mode: cycle through positions
+					if (intKey == 4 and Config::getB("net_beside_mem") and Net::shown and Mem::shown) {
+						bool proc_shown = Proc::shown;
+						bool proc_full = Config::getB("proc_full_width");
+
+						if (not proc_shown) {
+							//? Proc hidden -> show proc under net (not full width)
+							Config::set("proc_full_width", false);
+							if (not Config::toggle_box("proc")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						else if (not proc_full) {
+							//? Proc under net -> switch to full width under mem+net
+							Config::set("proc_full_width", true);
+						}
+						else {
+							//? Proc full width -> hide proc and reset
+							Config::set("proc_full_width", false);
+							if (not Config::toggle_box("proc")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						Config::current_preset = -1;
+						Draw::calcSizes();
+						Runner::run("all", false, true);
+						return;
+					}
+
 					if (not Config::toggle_box(boxes.at(intKey))) {
 						Menu::show(Menu::Menus::SizeError);
 						return;
@@ -522,7 +584,8 @@ namespace Input {
 				    Menu::show(Menu::Menus::Renice);
 				    return;
 			    }
-				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G"))) {
+				else if ((is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G")))
+					 and not (Config::getI("disk_selected") > 0 and Config::getB("show_disks"))) {
 					proc_mouse_scroll:
 					redraw = false;
 					auto old_selected = Config::getI("proc_selected");
@@ -584,6 +647,24 @@ namespace Input {
 					Config::flip("show_disks");
 					no_update = false;
 					Draw::calcSizes();
+				}
+				//? Tab toggles disk selection mode
+				else if (key == "tab" and Config::getB("show_disks")) {
+					auto current = Config::getI("disk_selected");
+					Config::set("disk_selected", current > 0 ? 0 : 1);
+					Mem::disk_selected = Config::getI("disk_selected");
+				}
+				//? Handle disk scrolling when disk is selected
+				else if (Config::getI("disk_selected") > 0 and Config::getB("show_disks") and
+						 (is_in(key, "up", "down", "page_up", "page_down", "home", "end", "mouse_scroll_up", "mouse_scroll_down") or
+						  (vim_keys and is_in(key, "j", "k", "g", "G")))) {
+					redraw = false;
+					auto old_selected = Config::getI("disk_selected");
+					auto new_selected = Mem::disk_selection(key, Mem::num_disks);
+					if (new_selected == -1)
+						return;
+					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
+						redraw = true;
 				}
 				else keep_going = true;
 
