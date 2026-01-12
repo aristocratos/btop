@@ -39,6 +39,8 @@ tab-size = 4
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
 #include <sys/socket.h>
+#include <sys/attr.h>
+#include <sys/mount.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -75,6 +77,260 @@ tab-size = 4
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
 #define kIOMainPortDefault kIOMasterPortDefault
 #endif
+
+//? Get available disk space including purgeable space (macOS-specific)
+//? Returns available bytes for "important" usage, which includes space that can be freed by purging
+//? Falls back to statvfs if the API is unavailable
+static int64_t get_avail_with_purgeable(const char* path) {
+	CFURLRef url = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault,
+		(const UInt8*)path, strlen(path), true);
+	if (url == nullptr) return -1;
+
+	CFNumberRef availCapacity = nullptr;
+	// Try to get "available capacity for important usage" (includes purgeable space)
+	// This key is available on macOS 10.13+
+	Boolean success = CFURLCopyResourcePropertyForKey(url,
+		kCFURLVolumeAvailableCapacityForImportantUsageKey, &availCapacity, nullptr);
+
+	int64_t result = -1;
+	if (success && availCapacity != nullptr) {
+		CFNumberGetValue(availCapacity, kCFNumberSInt64Type, &result);
+		CFRelease(availCapacity);
+	}
+	CFRelease(url);
+	return result;
+}
+
+//? Get actual volume name from macOS using CFURL
+static std::string get_volume_name(const char* path) {
+	CFURLRef url = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault,
+		(const UInt8*)path, strlen(path), true);
+	if (url == nullptr) return "";
+
+	CFStringRef nameRef = nullptr;
+	Boolean success = CFURLCopyResourcePropertyForKey(url, kCFURLVolumeNameKey, &nameRef, nullptr);
+
+	std::string result;
+	if (success && nameRef != nullptr) {
+		char buffer[256];
+		if (CFStringGetCString(nameRef, buffer, sizeof(buffer), kCFStringEncodingUTF8)) {
+			result = buffer;
+		}
+		CFRelease(nameRef);
+	}
+	CFRelease(url);
+	return result;
+}
+
+//? Get disk connection type (USB, Thunderbolt, Internal, etc.) using IOKit
+//? Returns short identifier like "USB", "TB3", "TB4", "SATA" or empty string if unknown
+static std::string get_disk_type(const char* bsd_name) {
+	// Extract base disk name (e.g., "disk7" from "/dev/disk7s1" or "disk7s1")
+	std::string name = bsd_name;
+	if (name.starts_with("/dev/")) name = name.substr(5);
+	// Remove slice/partition suffix to get base disk
+	size_t spos = name.find('s', 4);  // Find 's' after "disk"
+	if (spos != std::string::npos) name = name.substr(0, spos);
+
+	CFMutableDictionaryRef matching = IOBSDNameMatching(kIOMainPortDefault, 0, name.c_str());
+	if (matching == nullptr) return "";
+
+	io_service_t disk = IOServiceGetMatchingService(kIOMainPortDefault, matching);
+	if (disk == IO_OBJECT_NULL) return "";
+
+	// Walk up the IOKit tree to find the transport/protocol
+	std::string result;
+	bool isThunderbolt = false;
+	int tbGeneration = 0;
+	io_service_t current = disk;
+
+	for (int depth = 0; depth < 20 && current != IO_OBJECT_NULL; depth++) {
+		bool isExternal = false;
+		std::string interconnect;
+		bool foundConnectionInfo = false;
+
+		// Check "Protocol Characteristics" property for connection info (some controllers)
+		CFTypeRef protocolRef = IORegistryEntryCreateCFProperty(current,
+			CFSTR("Protocol Characteristics"), kCFAllocatorDefault, 0);
+
+		if (protocolRef != nullptr && CFGetTypeID(protocolRef) == CFDictionaryGetTypeID()) {
+			CFDictionaryRef protocolDict = (CFDictionaryRef)protocolRef;
+
+			// Check Physical Interconnect Location (Internal vs External)
+			CFStringRef locationRef = (CFStringRef)CFDictionaryGetValue(protocolDict,
+				CFSTR("Physical Interconnect Location"));
+			CFStringRef interconnectRef = (CFStringRef)CFDictionaryGetValue(protocolDict,
+				CFSTR("Physical Interconnect"));
+
+			if (locationRef != nullptr && CFGetTypeID(locationRef) == CFStringGetTypeID()) {
+				char locBuffer[64];
+				if (CFStringGetCString(locationRef, locBuffer, sizeof(locBuffer), kCFStringEncodingUTF8)) {
+					isExternal = (std::string(locBuffer) == "External");
+					foundConnectionInfo = true;
+				}
+			}
+
+			if (interconnectRef != nullptr && CFGetTypeID(interconnectRef) == CFStringGetTypeID()) {
+				char intBuffer[64];
+				if (CFStringGetCString(interconnectRef, intBuffer, sizeof(intBuffer), kCFStringEncodingUTF8)) {
+					interconnect = intBuffer;
+				}
+			}
+
+			CFRelease(protocolRef);
+		} else if (protocolRef != nullptr) {
+			CFRelease(protocolRef);
+		}
+
+		// Also check for direct properties (IONVMeController uses these instead of Protocol Characteristics)
+		if (!foundConnectionInfo) {
+			CFStringRef directLocationRef = (CFStringRef)IORegistryEntryCreateCFProperty(current,
+				CFSTR("Physical Interconnect Location"), kCFAllocatorDefault, 0);
+			CFStringRef directInterconnectRef = (CFStringRef)IORegistryEntryCreateCFProperty(current,
+				CFSTR("Physical Interconnect"), kCFAllocatorDefault, 0);
+
+			if (directLocationRef != nullptr && CFGetTypeID(directLocationRef) == CFStringGetTypeID()) {
+				char locBuffer[64];
+				if (CFStringGetCString(directLocationRef, locBuffer, sizeof(locBuffer), kCFStringEncodingUTF8)) {
+					isExternal = (std::string(locBuffer) == "External");
+					foundConnectionInfo = true;
+				}
+			}
+
+			if (directInterconnectRef != nullptr && CFGetTypeID(directInterconnectRef) == CFStringGetTypeID()) {
+				char intBuffer[64];
+				if (CFStringGetCString(directInterconnectRef, intBuffer, sizeof(intBuffer), kCFStringEncodingUTF8)) {
+					interconnect = intBuffer;
+				}
+			}
+
+			if (directLocationRef != nullptr) CFRelease(directLocationRef);
+			if (directInterconnectRef != nullptr) CFRelease(directInterconnectRef);
+		}
+
+		// Process connection info if found
+		if (isExternal) {
+			// Map interconnect type to short label
+			if (interconnect == "USB") {
+				result = "USB";
+				break;
+			} else if (interconnect == "PCI-Express" || interconnect == "Thunderbolt") {
+				isThunderbolt = true;  // Mark as TB, continue to find generation
+			} else if (interconnect == "SATA") {
+				result = "SATA";
+				break;
+			} else if (!interconnect.empty()) {
+				result = "EXT";  // Generic external
+				break;
+			}
+		}
+
+		// Check for Thunderbolt controller to get generation
+		io_name_t className;
+		IOObjectGetClass(current, className);
+		std::string classStr = className;
+
+		// IOThunderboltController has "Generation" property
+		if (classStr.find("IOThunderboltController") != std::string::npos) {
+			CFNumberRef genRef = (CFNumberRef)IORegistryEntryCreateCFProperty(current,
+				CFSTR("Generation"), kCFAllocatorDefault, 0);
+			if (genRef != nullptr) {
+				CFNumberGetValue(genRef, kCFNumberIntType, &tbGeneration);
+				CFRelease(genRef);
+			}
+			if (isThunderbolt) break;  // Found generation, done
+		}
+
+		// Check for disk image (DMG, ISO, IMG) - AppleDiskImageDevice
+		if (classStr.find("DiskImage") != std::string::npos) {
+			// Try to get the source file URL to determine image type
+			CFStringRef urlRef = (CFStringRef)IORegistryEntryCreateCFProperty(current,
+				CFSTR("DiskImageURL"), kCFAllocatorDefault, 0);
+			if (urlRef != nullptr && CFGetTypeID(urlRef) == CFStringGetTypeID()) {
+				char urlBuffer[512];
+				if (CFStringGetCString(urlRef, urlBuffer, sizeof(urlBuffer), kCFStringEncodingUTF8)) {
+					std::string url = urlBuffer;
+					// Get file extension (case-insensitive)
+					size_t dotPos = url.rfind('.');
+					if (dotPos != std::string::npos) {
+						std::string ext = url.substr(dotPos + 1);
+						// Convert to uppercase for comparison
+						for (auto& c : ext) c = toupper(c);
+						if (ext == "ISO")
+							result = "ISO";
+						else if (ext == "IMG")
+							result = "IMG";
+						else
+							result = "DMG";  // Default for .dmg and other disk images
+					} else {
+						result = "DMG";
+					}
+				} else {
+					result = "DMG";
+				}
+				CFRelease(urlRef);
+			} else {
+				result = "DMG";
+				if (urlRef != nullptr) CFRelease(urlRef);
+			}
+			break;
+		}
+
+		// Also check class names as fallback for USB devices
+		if (classStr.find("USB") != std::string::npos &&
+			classStr.find("USBHostDevice") == std::string::npos &&
+			classStr.find("Thunderbolt") == std::string::npos) {
+			// Found USB in tree (but not USB in Thunderbolt context)
+			result = "USB";
+			break;
+		}
+
+		// Move to parent
+		io_service_t next = IO_OBJECT_NULL;
+		if (IORegistryEntryGetParentEntry(current, kIOServicePlane, &next) != KERN_SUCCESS) {
+			break;
+		}
+		if (current != disk) IOObjectRelease(current);
+		current = next;
+	}
+
+	if (current != disk && current != IO_OBJECT_NULL) IOObjectRelease(current);
+	IOObjectRelease(disk);
+
+	// Build final result for Thunderbolt with generation
+	if (isThunderbolt) {
+		// If we didn't find TB generation in parent chain, search globally
+		// Thunderbolt controller may be in a different branch of the IO tree
+		if (tbGeneration == 0) {
+			io_iterator_t iter = IO_OBJECT_NULL;
+			CFMutableDictionaryRef tbMatching = IOServiceMatching("IOThunderboltController");
+			if (tbMatching != nullptr) {
+				if (IOServiceGetMatchingServices(kIOMainPortDefault, tbMatching, &iter) == KERN_SUCCESS && iter != IO_OBJECT_NULL) {
+					io_service_t tbController;
+					while ((tbController = IOIteratorNext(iter)) != IO_OBJECT_NULL) {
+						CFNumberRef genRef = (CFNumberRef)IORegistryEntryCreateCFProperty(tbController,
+							CFSTR("Generation"), kCFAllocatorDefault, 0);
+						if (genRef != nullptr) {
+							CFNumberGetValue(genRef, kCFNumberIntType, &tbGeneration);
+							CFRelease(genRef);
+						}
+						IOObjectRelease(tbController);
+						if (tbGeneration > 0) break;  // Found generation, done
+					}
+					IOObjectRelease(iter);
+				}
+			}
+		}
+
+		if (tbGeneration >= 1 && tbGeneration <= 5) {
+			result = "TB" + std::to_string(tbGeneration);
+		} else {
+			result = "TB";  // Fallback if generation unknown
+		}
+	}
+
+	return result;
+}
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -836,6 +1092,10 @@ namespace Mem {
 							string mountpoint = mapping.at(device);
 							if (disks.contains(mountpoint)) {
 								auto& disk = disks.at(mountpoint);
+								//? Skip IO collection for disk images (DMG, ISO, IMG) - they don't have meaningful IO stats
+								if (disk.name.find("(DMG)") != string::npos or
+								    disk.name.find("(ISO)") != string::npos or
+								    disk.name.find("(IMG)") != string::npos) continue;
 								CFDictionaryRef properties;
 								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
 								if (properties) {
@@ -925,7 +1185,7 @@ namespace Mem {
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-			// auto only_physical = Config::getB("only_physical");
+			auto show_network_drives = Config::getB("show_network_drives");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -944,10 +1204,29 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
+				string fstype = stfs[i].f_fstypename;
+				uint32_t flags = stfs[i].f_flags;
 				mapping[dev] = mountpoint;
 
-				if (string(stfs[i].f_fstypename) == "autofs") {
+				//? Skip autofs
+				if (fstype == "autofs") {
 					continue;
+				}
+
+				//? Skip volumes with nobrowse flag (internal macOS APFS volumes like VM, Preboot, Update, Data, etc.)
+				if (flags & MNT_DONTBROWSE) {
+					continue;
+				}
+
+				//? Skip devfs
+				if (fstype == "devfs") {
+					continue;
+				}
+
+				//? Handle remote/network filesystems (SMB, NFS, AFP, WebDAV)
+				bool is_network_drive = not (flags & MNT_LOCAL);
+				if (is_network_drive and not show_network_drives) {
+					continue;  // Skip non-local (remote) filesystems unless enabled
 				}
 
 				//? Match filter if not empty
@@ -959,21 +1238,54 @@ namespace Mem {
 
 				found.push_back(mountpoint);
 				if (not disks.contains(mountpoint)) {
-					disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+					disks[mountpoint] = disk_info{fs::canonical(dev, ec), "", fstype};
 
 					if (disks.at(mountpoint).dev.empty())
 						disks.at(mountpoint).dev = dev;
 
-					if (disks.at(mountpoint).name.empty())
-						disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
+					// Get actual volume name from macOS
+					string vol_name = get_volume_name(mountpoint.c_str());
+
+					if (vol_name.empty()) {
+						// Fallback if volume name query fails
+						if (mountpoint.starts_with("/Volumes/"))
+							vol_name = fs::path(mountpoint).filename();
+						else
+							vol_name = mountpoint;
+					}
+
+					// Append connection/protocol type
+					if (is_network_drive) {
+						// Map filesystem type to protocol label
+						string proto;
+						if (fstype == "smbfs" or fstype == "cifs")
+							proto = "SMB";
+						else if (fstype == "nfs" or fstype == "nfs4")
+							proto = "NFS";
+						else if (fstype == "afpfs")
+							proto = "AFP";
+						else if (fstype == "webdav")
+							proto = "WebDAV";
+						else
+							proto = "NET";  // Generic network
+						vol_name += " (" + proto + ")";
+					} else {
+						// Get connection type for local drives (USB, TB, SATA)
+						string conn_type = get_disk_type(dev.c_str());
+						if (not conn_type.empty())
+							vol_name += " (" + conn_type + ")";
+					}
+
+					disks.at(mountpoint).name = vol_name;
 				}
 
 
 				if (not v_contains(last_found, mountpoint))
 					redraw = true;
 
-				disks.at(mountpoint).free = stfs[i].f_bfree;
-				disks.at(mountpoint).total = stfs[i].f_iosize;
+				//? Set initial disk stats from statfs (fallback if statvfs fails later)
+				disks.at(mountpoint).free = (uint64_t)stfs[i].f_bfree * stfs[i].f_bsize;
+				disks.at(mountpoint).total = (uint64_t)stfs[i].f_blocks * stfs[i].f_bsize;
 			}
 
 			//? Remove disks no longer mounted or filtered out
@@ -996,8 +1308,21 @@ namespace Mem {
 					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 					continue;
 				}
-				disk.total = vfs.f_blocks * vfs.f_frsize;
-				disk.free = vfs.f_bfree * vfs.f_frsize;
+				//? Skip statvfs total for network filesystems (AFP, SMB, NFS report incorrect totals)
+				//? Keep the statfs values set earlier which are more accurate for network shares
+				bool is_network_fs = (disk.fstype == "afpfs" or disk.fstype == "smbfs" or
+				                      disk.fstype == "nfs" or disk.fstype == "nfs4" or
+				                      disk.fstype == "cifs" or disk.fstype == "webdav");
+				if (not is_network_fs)
+					disk.total = vfs.f_blocks * vfs.f_frsize;
+
+				//? Use macOS API to get available space including purgeable (like Finder shows)
+				int64_t avail_with_purgeable = get_avail_with_purgeable(mountpoint.c_str());
+				if (avail_with_purgeable > 0) {
+					disk.free = static_cast<uint64_t>(avail_with_purgeable);
+				} else {
+					disk.free = vfs.f_bfree * vfs.f_frsize;
+				}
 				disk.used = disk.total - disk.free;
 				if (disk.total != 0) {
 					disk.used_percent = round((double)disk.used * 100 / disk.total);

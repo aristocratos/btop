@@ -178,6 +178,10 @@ namespace Config {
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
+		{"net_beside_mem",		"#* Show net box beside mem box instead of above/below. Pressing '3' cycles: hidden -> stacked -> beside."},
+
+		{"proc_full_width",		"#* When net_beside_mem is active, show proc panel full width under both mem+net. Pressing '4' cycles: hidden -> under net -> full width."},
+
 		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
 
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
@@ -187,6 +191,8 @@ namespace Config {
 		{"show_disks", 			"#* If mem box should be split to also show disks info."},
 
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
+
+		{"show_network_drives",	"#* Show network drives (NFS, SMB, AFP) in the disks list. The protocol type will be shown in parentheses."},
 
 		{"use_fstab", 			"#* Read disks list from /etc/fstab. This also disables only_physical."},
 
@@ -312,11 +318,14 @@ namespace Config {
 		{"background_update", true},
 		{"mem_graphs", true},
 		{"mem_below_net", false},
+		{"net_beside_mem", false},
+		{"proc_full_width", false},
 		{"zfs_arc_cached", true},
 		{"show_swap", true},
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"only_physical", true},
+		{"show_network_drives", false},
 		{"use_fstab", true},
 		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},
@@ -365,6 +374,8 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
+		{"disk_selected", 0},
+		{"disk_start", 0}
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 

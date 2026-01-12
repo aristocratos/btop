@@ -335,6 +335,12 @@ namespace Mem {
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, bool force_redraw = false, bool data_same = false);
 
+	//* Disk scroll state
+	extern int disk_start, disk_selected, disk_select_max, num_disks;
+
+	//* Disk selection/scrolling function - returns new selection or -1 if unchanged
+	int disk_selection(const std::string_view cmd_key, int num_disks);
+
 }
 
 namespace Net {
