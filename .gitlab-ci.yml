@@ -64,10 +64,9 @@ build:macos-arm64:
       - bin/btop
     expire_in: 30 days
   rules:
-    - if: $CI_COMMIT_BRANCH
-      when: manual
-      allow_failure: true
     - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
 
@@ -200,10 +199,9 @@ test:macos-smoke:
     - ./bin/btop --help
     - echo "Smoke test passed"
   rules:
-    - if: $CI_COMMIT_BRANCH
-      when: manual
-      allow_failure: true
     - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
 
