@@ -102,7 +102,7 @@ build:macos-arm64-debug:
     - apt-get install -y -qq software-properties-common
     - add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - apt-get update -qq
-    - apt-get install -y -qq build-essential g++-14 git lowdown
+    - apt-get install -y -qq build-essential g++-14 git lowdown file
     - update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
     - g++ --version
   <<: *cache_template
