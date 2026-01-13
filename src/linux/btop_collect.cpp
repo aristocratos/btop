@@ -498,8 +498,8 @@ namespace Cpu {
 						const string basepath = file_path.erase(file_path.find(file_suffix), file_suffix.length());
 						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
-						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
-						const int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
+						const int64_t temp = stol_safe(readfile(fs::path(basepath + "input"), "0")) / 1000;
+						const int64_t crit = stol_safe(readfile(fs::path(basepath + "crit"), "95000"), 95000) / 1000;
 
 						found_sensors[sensor_name] = Sensor { fs::path(basepath + "input"), temp, crit };
 
@@ -522,7 +522,7 @@ namespace Cpu {
 					if (not fs::exists(basepath / "temp")) continue;
 					const string label = readfile(basepath / "type", "temp" + to_string(i));
 					const string sensor_name = "thermal" + to_string(i) + "/" + label;
-					const int64_t temp = stol(readfile(basepath / "temp", "0")) / 1000;
+					const int64_t temp = stol_safe(readfile(basepath / "temp", "0")) / 1000;
 
 					int64_t high = 0;
 					int64_t crit = 0;
@@ -530,7 +530,7 @@ namespace Cpu {
 						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
 						if (not is_in(trip_type, "high", "critical")) continue;
 						auto& val = (trip_type == "high" ? high : crit);
-						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+						val = stol_safe(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
 					}
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
@@ -578,7 +578,7 @@ namespace Cpu {
 
 		const auto& cpu_sensor = (not Config::getS("cpu_sensor").empty() and found_sensors.contains(Config::getS("cpu_sensor")) ? Config::getS("cpu_sensor") : Cpu::cpu_sensor);
 
-		found_sensors.at(cpu_sensor).temp = stol(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
+		found_sensors.at(cpu_sensor).temp = stol_safe(readfile(found_sensors.at(cpu_sensor).path, "0")) / 1000;
 		current_cpu.temp.at(0).push_back(found_sensors.at(cpu_sensor).temp);
 		current_cpu.temp_max = found_sensors.at(cpu_sensor).crit;
 		if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
@@ -586,7 +586,7 @@ namespace Cpu {
 		if (Config::getB("show_coretemp") and not cpu_temp_only) {
 			for (vector<string_view> done; const auto& sensor : core_sensors) {
 				if (v_contains(done, sensor)) continue;
-				found_sensors.at(sensor).temp = stol(readfile(found_sensors.at(sensor).path, "0")) / 1000;
+				found_sensors.at(sensor).temp = stol_safe(readfile(found_sensors.at(sensor).path, "0")) / 1000;
 				done.push_back(sensor);
 			}
 			for (const auto& [core, temp] : core_mapping) {
@@ -880,11 +880,7 @@ namespace Cpu {
 
 		//? Try to get battery percentage
 		if (percent < 0) {
-			try {
-				percent = stoi(readfile(b.base_dir / "capacity", "-1"));
-			}
-			catch (const std::invalid_argument&) { }
-			catch (const std::out_of_range&) { }
+			percent = stoi_safe(readfile(b.base_dir / "capacity", "-1"), -1);
 		}
 		if (b.use_energy_or_charge and percent < 0) {
 			try {
@@ -934,11 +930,7 @@ namespace Cpu {
 			}
 
 			if (seconds < 0 and fs::exists(b.base_dir / "time_to_empty")) {
-				try {
-					seconds = stoll(readfile(b.base_dir / "time_to_empty", "0")) * 60;
-				}
-				catch (const std::invalid_argument&) { }
-				catch (const std::out_of_range&) { }
+				seconds = stoll_safe(readfile(b.base_dir / "time_to_empty", "0")) * 60;
 			}
 		}
 		//? Or get seconds to full
@@ -2939,7 +2931,10 @@ namespace Proc {
 		string long_string;
 		string short_str;
 
-		static vector<size_t> found;
+		//? Use unordered_set for O(1) PID lookup instead of O(n) vector search
+		static std::unordered_set<size_t> found;
+		//? Map from PID to index in current_procs for O(1) lookup
+		static std::unordered_map<size_t, size_t> pid_to_index;
 
 		const double uptime = system_uptime();
 
@@ -2956,6 +2951,12 @@ namespace Proc {
 		else {
 			should_filter = true;
 			found.clear();
+
+			//? Rebuild pid_to_index map for O(1) lookup of existing processes
+			pid_to_index.clear();
+			for (size_t i = 0; i < current_procs.size(); ++i) {
+				pid_to_index[current_procs[i].pid] = i;
+			}
 
 			//? First make sure kernel proc cache is cleared.
 			if (should_filter_kernel and ++proc_clear_count >= 256) {
@@ -3017,23 +3018,28 @@ namespace Proc {
 					continue;
 				}
 
-				found.push_back(pid);
+				found.insert(pid);
 
-				//? Check if pid already exists in current_procs
-				auto find_old = rng::find(current_procs, pid, &proc_info::pid);
+				//? Check if pid already exists in current_procs using O(1) hash map lookup
+				auto idx_it = pid_to_index.find(pid);
 				bool no_cache{};
+				size_t proc_idx;
 				//? Only add new processes if not paused
-				if (find_old == current_procs.end()) {
+				if (idx_it == pid_to_index.end()) {
 					if (not pause_proc_list) {
+						proc_idx = current_procs.size();
 						current_procs.push_back({pid});
-						find_old = current_procs.end() - 1;
+						pid_to_index[pid] = proc_idx;
 						no_cache = true;
 					}
 					else continue;
 				}
-				else if (dead_procs.contains(pid)) continue;
+				else {
+					if (dead_procs.contains(pid)) continue;
+					proc_idx = idx_it->second;
+				}
 
-				auto& new_proc = *find_old;
+				auto& new_proc = current_procs[proc_idx];
 
 				//? Get program name, command and username
 				if (no_cache) {
@@ -3077,9 +3083,10 @@ namespace Proc {
 					}
 					else {
 					#if !(defined(STATIC_BUILD) && defined(__GLIBC__))
-						try {
-							struct passwd* udet;
-							udet = getpwuid(stoi(uid));
+						struct passwd* udet;
+						int uid_int = stoi_safe(uid, -1);
+						if (uid_int >= 0) {
+							udet = getpwuid(uid_int);
 							if (udet != nullptr and udet->pw_name != nullptr) {
 								new_proc.user = string(udet->pw_name);
 							}
@@ -3087,7 +3094,9 @@ namespace Proc {
 								new_proc.user = uid;
 							}
 						}
-						catch (...) { new_proc.user = uid; }
+						else {
+							new_proc.user = uid;
+						}
 					#else
 						new_proc.user = uid;
 					#endif
@@ -3125,7 +3134,7 @@ namespace Proc {
 								next_x = 19;
 								continue;
 							case 19: //? Nice value
-								new_proc.p_nice = stoll(short_str);
+								new_proc.p_nice = stoll_safe(short_str);
 								continue;
 							case 20: //? Number of threads
 								new_proc.threads = stoull(short_str);
@@ -3157,7 +3166,7 @@ namespace Proc {
 
 				if (should_filter_kernel and new_proc.ppid == KTHREADD) {
 					kernels_procs.emplace(new_proc.pid);
-					found.pop_back();
+					found.erase(new_proc.pid);
 				}
 
 				if (x-offset < 24) continue;
@@ -3188,7 +3197,8 @@ namespace Proc {
 
 			//? Clear dead processes from current_procs and remove kernel processes if enabled and not paused
 			if (not pause_proc_list) {
-				auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not v_contains(found, element.pid); });
+				//? Use O(1) set lookup instead of O(n) vector search
+				auto eraser = rng::remove_if(current_procs, [&](const auto& element){ return not found.contains(element.pid); });
 				current_procs.erase(eraser.begin(), eraser.end());
 				if (!dead_procs.empty()) dead_procs.clear();
 			}
@@ -3196,7 +3206,8 @@ namespace Proc {
 			else {
 				const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 				for (auto& r : current_procs) {
-					if (rng::find(found, r.pid) == found.end()) {
+					//? Use O(1) set lookup instead of O(n) linear search
+					if (not found.contains(r.pid)) {
 						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clkTck);
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
@@ -3287,7 +3298,8 @@ namespace Proc {
 
 			if (!pause_proc_list) {
 				for (auto& p : current_procs) {
-					if (not v_contains(found, p.ppid)) p.ppid = 0;
+					//? Use O(1) set lookup instead of O(n) vector search
+					if (not found.contains(p.ppid)) p.ppid = 0;
 				}
 			}
 

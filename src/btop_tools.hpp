@@ -418,6 +418,14 @@ namespace Tools {
 		return (ec == std::errc{}) ? result : fallback;
 	}
 
+	//* Safe string to int conversion with base support (for hex parsing)
+	inline int stoi_safe_base(const std::string_view str, int base, int fallback = 0) noexcept {
+		if (str.empty()) return fallback;
+		int result{};
+		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result, base);
+		return (ec == std::errc{}) ? result : fallback;
+	}
+
 	//* Safe string to unsigned long long conversion, returns fallback on failure
 	inline unsigned long long stoull_safe(const std::string_view str, unsigned long long fallback = 0) noexcept {
 		if (str.empty()) return fallback;
