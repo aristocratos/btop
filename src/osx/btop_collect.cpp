@@ -537,10 +537,14 @@ namespace Gpu {
 
 	class MachProcessorInfo {
 	public:
-		processor_info_array_t info_array;
-		mach_msg_type_number_t info_count;
-		MachProcessorInfo() {}
-		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
+		processor_info_array_t info_array = nullptr;
+		mach_msg_type_number_t info_count = 0;
+		MachProcessorInfo() = default;
+		virtual ~MachProcessorInfo() {
+			if (info_array != nullptr) {
+				vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);
+			}
+		}
 	};
 
 namespace Shared {
@@ -1701,7 +1705,7 @@ namespace Proc {
 		const int cmult = (per_core) ? Shared::coreCount : 1;
 		bool got_detailed = false;
 
-		static vector<size_t> found;
+		static std::unordered_set<size_t> found;
 
 		//* Use pids from last update if only changing filter, sorting or tree options
 		if (no_update and not current_procs.empty()) {
@@ -1746,7 +1750,7 @@ namespace Proc {
 					struct kinfo_proc& kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
-					found.push_back(pid);
+					found.insert(pid);
 
 					//? Check if pid already exists in current_procs
 					bool no_cache = false;
@@ -1844,14 +1848,14 @@ namespace Proc {
 
 				//? Clear dead processes from current_procs if not paused
 				if (not pause_proc_list) {
-					auto eraser = rng::remove_if(current_procs, [&](const auto& element) { return not v_contains(found, element.pid); });
+					auto eraser = rng::remove_if(current_procs, [&](const auto& element) { return not found.contains(element.pid); });
 					current_procs.erase(eraser.begin(), eraser.end());
 					if (!dead_procs.empty()) dead_procs.clear();
 				}
 				//? Set correct state of dead processes if paused
 				else {
 					for (auto& r : current_procs) {
-						if (rng::find(found, r.pid) == found.end()) {
+						if (not found.contains(r.pid)) {
 							if (r.state != 'X') {
 								struct timeval currentTime;
 								gettimeofday(&currentTime, nullptr);
@@ -1947,7 +1951,7 @@ namespace Proc {
 
 			if (!pause_proc_list) {
 				for (auto& p : current_procs) {
-					if (not v_contains(found, p.ppid)) p.ppid = 0;
+					if (not found.contains(p.ppid)) p.ppid = 0;
 				}
 			}
 

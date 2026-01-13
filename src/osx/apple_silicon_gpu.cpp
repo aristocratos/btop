@@ -134,12 +134,14 @@ namespace Gpu {
 
 	//? Atomic max update for floating point values
 	//? Uses compare-exchange loop to ensure thread-safe peak value updates
+	//? Memory ordering: acquire on load, acq_rel on success, acquire on failure
+	//? This ensures proper visibility across threads
 	template<typename T>
 	void atomic_max(std::atomic<T>& target, T value) {
-		T current = target.load(std::memory_order_relaxed);
+		T current = target.load(std::memory_order_acquire);
 		while (value > current) {
 			if (target.compare_exchange_weak(current, value,
-					std::memory_order_release, std::memory_order_relaxed)) {
+					std::memory_order_acq_rel, std::memory_order_acquire)) {
 				break;
 			}
 			// current is updated by compare_exchange_weak on failure
@@ -1031,41 +1033,31 @@ namespace Gpu {
 						ane_avg /= static_cast<double>(ane_power_history.size());
 					}
 
-					//? Update Shared namespace power variables
-					Shared::cpuPower = cpu_power_watts;
-					Shared::gpuPower = gpu_power_watts;
-					Shared::anePower = ane_power_watts;
-					Shared::cpuPowerAvg = cpu_avg;
-					Shared::gpuPowerAvg = gpu_avg;
-					Shared::anePowerAvg = ane_avg;
+					//? Update Shared namespace power variables with proper memory ordering
+					//? Use release semantics so reader threads see consistent values
+					Shared::cpuPower.store(cpu_power_watts, std::memory_order_release);
+					Shared::gpuPower.store(gpu_power_watts, std::memory_order_release);
+					Shared::anePower.store(ane_power_watts, std::memory_order_release);
+					Shared::cpuPowerAvg.store(cpu_avg, std::memory_order_release);
+					Shared::gpuPowerAvg.store(gpu_avg, std::memory_order_release);
+					Shared::anePowerAvg.store(ane_avg, std::memory_order_release);
 
 					//? Update peak power using atomic max for thread safety
 					atomic_max(Shared::cpuPowerPeak, cpu_power_watts);
 					atomic_max(Shared::gpuPowerPeak, gpu_power_watts);
 					atomic_max(Shared::anePowerPeak, ane_power_watts);
 
-					//? Update ANE activity
-					Shared::aneActivity = ane_activity_cmds;
+					//? Update ANE activity with release semantics
+					Shared::aneActivity.store(ane_activity_cmds, std::memory_order_release);
 
 					//? Update power history for Pwr panel graphs (in mW for precision)
+					//? Uses thread-safe update function to prevent race conditions with drawer thread
 					long long cpu_pwr_mw = static_cast<long long>(cpu_power_watts * 1000);
 					long long gpu_pwr_mw = static_cast<long long>(gpu_power_watts * 1000);
 					long long ane_pwr_mw = static_cast<long long>(ane_power_watts * 1000);
 
-					//? Push current values to history deques
-					Pwr::cpu_pwr_history.push_back(cpu_pwr_mw);
-					Pwr::gpu_pwr_history.push_back(gpu_pwr_mw);
-					Pwr::ane_pwr_history.push_back(ane_pwr_mw);
-
-					//? Limit history size (match graph width, ~100 points max)
-					while (Pwr::cpu_pwr_history.size() > 100) Pwr::cpu_pwr_history.pop_front();
-					while (Pwr::gpu_pwr_history.size() > 100) Pwr::gpu_pwr_history.pop_front();
-					while (Pwr::ane_pwr_history.size() > 100) Pwr::ane_pwr_history.pop_front();
-
-					//? Update max values for auto-scaling (in mW)
-					if (cpu_pwr_mw > Pwr::cpu_pwr_max) Pwr::cpu_pwr_max = cpu_pwr_mw;
-					if (gpu_pwr_mw > Pwr::gpu_pwr_max) Pwr::gpu_pwr_max = gpu_pwr_mw;
-					if (ane_pwr_mw > Pwr::ane_pwr_max) Pwr::ane_pwr_max = ane_pwr_mw;
+					//? Thread-safe update of power history deques and max values
+					Pwr::update_history(cpu_pwr_mw, gpu_pwr_mw, ane_pwr_mw, 100);
 
 					if (do_debug) {
 						Logger::debug("AppleSiliconGpu: collect() - GPU: freq={}MHz usage={}% power={}W temp={}C",
