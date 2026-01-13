@@ -27,9 +27,13 @@ tab-size = 4
 #include <sys/sysctl.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
+#include <dispatch/dispatch.h>
+#include <chrono>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
+#include <mutex>
 
 #include "../btop_log.hpp"
 #include "../btop_shared.hpp"
@@ -74,6 +78,89 @@ namespace Gpu {
 
 	//? Global Apple Silicon GPU instance
 	AppleSiliconGpu apple_silicon_gpu;
+
+	//? Cached metrics for fallback when IOReport times out
+	struct CachedGpuMetrics {
+		AppleSiliconGpuMetrics metrics;
+		std::chrono::steady_clock::time_point timestamp;
+		bool valid = false;
+
+		void update(const AppleSiliconGpuMetrics& m) {
+			metrics = m;
+			timestamp = std::chrono::steady_clock::now();
+			valid = true;
+		}
+
+		bool is_fresh(int max_age_seconds = 5) const {
+			if (!valid) return false;
+			auto age = std::chrono::steady_clock::now() - timestamp;
+			return std::chrono::duration_cast<std::chrono::seconds>(age).count() < max_age_seconds;
+		}
+	};
+	static CachedGpuMetrics cached_metrics;
+
+	//? IOReport sampling timeout in nanoseconds (2 seconds)
+	constexpr int64_t IOREPORT_TIMEOUT_NS = 2 * NSEC_PER_SEC;
+
+	//? Track pending async result to prevent memory leaks on timeout
+	static std::atomic<CFDictionaryRef> pending_async_result{nullptr};
+	static std::mutex async_cleanup_mutex;
+
+	//? Async IOReport sample with timeout
+	//? Returns nullptr if timeout occurs, caller should use cached values
+	//? Memory-safe: tracks pending async results and releases them on next call
+	static CFDictionaryRef ioreport_create_samples_with_timeout(
+		IOReportSubscriptionRef subscription,
+		CFMutableDictionaryRef channels,
+		int64_t timeout_ns = IOREPORT_TIMEOUT_NS)
+	{
+		if (IOReportCreateSamples == nullptr) return nullptr;
+
+		//? Clean up any leaked result from previous timeout
+		{
+			std::lock_guard<std::mutex> lock(async_cleanup_mutex);
+			CFDictionaryRef leaked = pending_async_result.exchange(nullptr);
+			if (leaked != nullptr) {
+				CFRelease(leaked);
+				Logger::debug("AppleSiliconGpu: Cleaned up leaked IOReport sample from previous timeout");
+			}
+		}
+
+		__block CFDictionaryRef result = nullptr;
+		__block bool timed_out = false;
+
+		dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+			CFDictionaryRef sample = IOReportCreateSamples(subscription, channels, nullptr);
+
+			//? If we already timed out, store result for cleanup on next call
+			if (timed_out) {
+				std::lock_guard<std::mutex> lock(async_cleanup_mutex);
+				CFDictionaryRef expected = nullptr;
+				if (not pending_async_result.compare_exchange_strong(expected, sample)) {
+					//? Another result was already pending, release this one
+					if (sample != nullptr) CFRelease(sample);
+				}
+			} else {
+				result = sample;
+			}
+
+			dispatch_semaphore_signal(sem);
+		});
+
+		long wait_result = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, timeout_ns));
+
+		if (wait_result != 0) {
+			//? Timeout occurred - mark so async block knows to store result for cleanup
+			timed_out = true;
+			Logger::warning("IOReportCreateSamples timeout after {}ms, using cached values",
+			                timeout_ns / NSEC_PER_MSEC);
+			return nullptr;
+		}
+
+		return result;
+	}
 
 	//? Helper to get current time in nanoseconds
 	static uint64_t get_time_ns() {
@@ -810,23 +897,37 @@ namespace Gpu {
 
 	AppleSiliconGpuMetrics AppleSiliconGpu::collect() {
 		static int collect_count = 0;
+		static int timeout_count = 0;
 		bool do_debug = (collect_count++ % 100 == 0);  // Log every 100th collection
 
 		AppleSiliconGpuMetrics metrics;
 
 		if (not initialized or subscription == nullptr) {
 			if (do_debug) Logger::debug("AppleSiliconGpu: collect() - not initialized or no subscription");
+			//? Return cached metrics if available
+			if (cached_metrics.is_fresh()) {
+				return cached_metrics.metrics;
+			}
 			return metrics;
 		}
 
-		//? Take new sample
-		CFDictionaryRef current_sample = IOReportCreateSamples(subscription, channels, nullptr);
+		//? Take new sample with timeout protection
+		CFDictionaryRef current_sample = ioreport_create_samples_with_timeout(subscription, channels);
 		uint64_t current_time = get_time_ns();
 
 		if (current_sample == nullptr) {
-			if (do_debug) Logger::debug("AppleSiliconGpu: collect() - IOReportCreateSamples returned null");
+			timeout_count++;
+			if (do_debug or timeout_count <= 3) {
+				Logger::debug("AppleSiliconGpu: collect() - IOReportCreateSamples returned null (timeout_count={})", timeout_count);
+			}
+			//? Return cached metrics on timeout/failure
+			if (cached_metrics.is_fresh()) {
+				if (do_debug) Logger::debug("AppleSiliconGpu: Using cached metrics (age < 5s)");
+				return cached_metrics.metrics;
+			}
 			return metrics;
 		}
+		timeout_count = 0;  // Reset on success
 
 		//? Calculate delta
 		if (prev_sample != nullptr) {
@@ -964,6 +1065,9 @@ namespace Gpu {
 		if (do_debug) {
 			Logger::debug("AppleSiliconGpu: CPU temperature: {}C", cpu_temp);
 		}
+
+		//? Update cache with successful metrics
+		cached_metrics.update(metrics);
 
 		return metrics;
 	}
