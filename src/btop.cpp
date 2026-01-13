@@ -251,6 +251,7 @@ void clean_quit(int sig) {
 #ifdef GPU_SUPPORT
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
+	Gpu::Intel::shutdown();
 #endif
 
 

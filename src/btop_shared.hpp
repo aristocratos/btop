@@ -212,6 +212,9 @@ namespace Gpu {
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+	namespace Intel {
+		extern bool shutdown();
+	}
 	namespace AppleSilicon {
 		extern bool shutdown();
 	}

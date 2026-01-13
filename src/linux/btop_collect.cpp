@@ -535,7 +535,12 @@ namespace Cpu {
 			}
 
 		}
-		catch (...) {}
+		catch (const std::exception& e) {
+			Logger::debug("Exception during sensor discovery: {}", e.what());
+		}
+		catch (...) {
+			Logger::debug("Unknown exception during sensor discovery");
+		}
 
 		if (not got_coretemp or core_sensors.empty()) {
 			cpu_temp_only = true;
@@ -758,7 +763,12 @@ namespace Cpu {
 					core_map.at(change_id) = new_id;
 				}
 			}
-			catch (...) {}
+			catch (const std::exception& e) {
+				Logger::warning("Error parsing cpu_core_map config: {}", e.what());
+			}
+			catch (...) {
+				Logger::warning("Unknown error parsing cpu_core_map config");
+			}
 		}
 
 		return core_map;
@@ -798,6 +808,10 @@ namespace Cpu {
 								new_bat.base_dir = d.path();
 								new_bat.device_type = dev_type;
 							}
+						} catch (const std::exception& e) {
+							//? skip power supplies not conforming to the kernel standard
+							Logger::debug("Skipping non-conforming power supply: {}", e.what());
+							continue;
 						} catch (...) {
 							//? skip power supplies not conforming to the kernel standard
 							continue;
@@ -834,7 +848,12 @@ namespace Cpu {
 					}
 				}
 			}
+			catch (const std::exception& e) {
+				Logger::debug("Exception during battery discovery: {}", e.what());
+				batteries.clear();
+			}
 			catch (...) {
+				Logger::debug("Unknown exception during battery discovery");
 				batteries.clear();
 			}
 			if (batteries.empty()) {
@@ -1330,7 +1349,10 @@ namespace Gpu {
 				}
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
-				if (gpus_slice[i].supported_functions.pcie_txrx and (Config::getB("nvml_measure_pcie_speeds") or is_init)) {
+				//? Track whether threads were created for this GPU to ensure proper join
+				const bool pcie_threads_created = gpus_slice[i].supported_functions.pcie_txrx
+					and (Config::getB("nvml_measure_pcie_speeds") or is_init);
+				if (pcie_threads_created) {
 					pcie_tx_thread = std::thread([gpus_slice, i]() {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
@@ -1477,11 +1499,8 @@ namespace Gpu {
     				}*/
 
 				// nvTimer.stop_rename_reset("Nv pcie thread join");
-				//? Join PCIE TX/RX threads
-				if constexpr(is_init) { // there doesn't seem to be a better way to do this, but this should be fine considering it's just 2 lines
-					pcie_tx_thread.join();
-					pcie_rx_thread.join();
-				} else if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("nvml_measure_pcie_speeds")) {
+				//? Join PCIe TX/RX threads only if they were created for this GPU
+				if (pcie_threads_created) {
 					pcie_tx_thread.join();
 					pcie_rx_thread.join();
 				}
@@ -2485,9 +2504,9 @@ namespace Mem {
 				}
 			}
 		}
-		catch (fs::filesystem_error& e) {}
-
-		Logger::debug("Could not read directory: {}", zfs_pool_stat_path);
+		catch (const fs::filesystem_error& e) {
+			Logger::debug("Filesystem error reading ZFS pool stats at {}: {}", zfs_pool_stat_path, e.what());
+		}
 		return "";
 	}
 
