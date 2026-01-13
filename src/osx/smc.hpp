@@ -49,6 +49,8 @@ tab-size = 4
 #define SMC_KEY_CPU1_TEMP "TC1C"
 #define SMC_KEY_CPU2_TEMP "TC2C"  // etc
 #define SMC_KEY_FAN0_RPM_CUR "F0Ac"
+#define SMC_KEY_FAN1_RPM_CUR "F1Ac"
+#define SMC_KEY_FAN_NUM "FNum"
 
 typedef struct {
 	char major;
@@ -102,6 +104,8 @@ namespace Cpu {
 		virtual ~SMCConnection();
 
 		long long getTemp(int core);
+		int getFanCount();
+		long long getFanRPM(int fan);
 
 	   private:
 		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);

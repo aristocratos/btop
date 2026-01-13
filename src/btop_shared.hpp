@@ -123,6 +123,10 @@ namespace Shared {
 	//* Atomic for thread-safe access between collector and drawer threads
 	extern atomic<long long> cpuTemp, gpuTemp;  // Current temperatures in Celsius
 
+	//* Shared fan RPM values for Pwr panel
+	extern atomic<long long> fanRpm;  // Fan speed in RPM (average of all fans)
+	extern atomic<int> fanCount;  // Number of fans detected
+
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
 		void operator()(kvm_t* handle) {
@@ -452,6 +456,7 @@ namespace Proc {
 		"memory",
 		"cpu direct",
 		"cpu lazy",
+		"gpu",
 	};
 
 	//? Translation from process state char to explanative string
@@ -481,6 +486,7 @@ namespace Proc {
 		uint64_t mem{};
 		double cpu_p{};         // defaults to = 0.0
 		double cpu_c{};         // defaults to = 0.0
+		double gpu_p{};         // GPU usage percentage (Apple Silicon only)
 		char state = '0';
 		int64_t p_nice{};
 		uint64_t ppid{};
@@ -502,6 +508,7 @@ namespace Proc {
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;
 		deque<long long> cpu_percent;
+		deque<long long> gpu_percent;
 		deque<long long> mem_bytes;
 	};
 
