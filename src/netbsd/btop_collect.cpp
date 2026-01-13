@@ -287,7 +287,18 @@ namespace Cpu {
 	void update_sensors() {
 		int64_t current_temp = -1;
 		current_cpu.temp_max = 95;
-		prop_dictionary_t dict, fields, props;
+		prop_dictionary_t dict = nullptr;
+		prop_dictionary_t fields, props;
+		prop_object_iterator_t fields_iter = nullptr;
+		bool regex_initialized = false;
+		regex_t r;
+
+		//? RAII-style cleanup lambda to ensure resources are released on all exit paths
+		auto cleanup = [&]() {
+			if (regex_initialized) regfree(&r);
+			if (fields_iter != nullptr) prop_object_iterator_release(fields_iter);
+			if (dict != nullptr) prop_object_release(dict);
+		};
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
@@ -296,10 +307,9 @@ namespace Cpu {
 		}
 
 		if (prop_dictionary_recv_ioctl(fd, ENVSYS_GETDICTIONARY, &dict) != 0) {
-			if (fd != -1) {
-				close(fd);
-			}
+			close(fd);
 			Logger::warning("failed to open envsys dict");
+			cleanup();
 			return;
 		}
 
@@ -307,56 +317,56 @@ namespace Cpu {
 
 		if (prop_dictionary_count(dict) == 0) {
 			Logger::warning("no drivers registered for envsys");
+			cleanup();
 			return;
 		}
 
 		prop_object_t fields_array = prop_dictionary_get(prop_dictionary_t(dict), Cpu::cpu_sensor.c_str());
 		if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
 			Logger::warning("unknown device {}", Cpu::cpu_sensor);
+			cleanup();
 			return;
 		}
 
-		prop_object_iterator_t fields_iter = prop_array_iterator(prop_array_t(fields_array));
-		if (fields_iter == NULL) {
+		fields_iter = prop_array_iterator(prop_array_t(fields_array));
+		if (fields_iter == nullptr) {
+			cleanup();
 			return;
 		}
 
-		regex_t r;
 		if (regcomp(&r, "(cpu[0-9]* )*temperature", REG_EXTENDED)) {
 			Logger::warning("regcomp() failed");
+			cleanup();
 			return;
 		}
+		regex_initialized = true;
 
 		string prop_description = "no description";
 		char buf[64];
-		while ((fields = (prop_dictionary_t) prop_object_iterator_next(prop_object_iterator_t(fields_iter))) != NULL) {
+		while ((fields = (prop_dictionary_t) prop_object_iterator_next(prop_object_iterator_t(fields_iter))) != nullptr) {
 			props = (prop_dictionary_t) prop_dictionary_get(fields, "device-properties");
-			if (props != NULL) continue;
+			if (props != nullptr) continue;
 
 			prop_object_t cur_value = prop_dictionary_get(fields, "cur-value");
 			prop_object_t max_value = prop_dictionary_get(fields, "critical-max");
 			prop_object_t description = prop_dictionary_get(fields, "description");
 
-			if (description == NULL || cur_value == NULL) {
+			if (description == nullptr || cur_value == nullptr) {
 				continue;
 			}
-
 
 			prop_string_copy_value(prop_string_t(description), buf, sizeof buf);
 			prop_description = buf;
 
-			if (regexec(&r, prop_description.c_str(), 0, NULL, 0) == 0) {
+			if (regexec(&r, prop_description.c_str(), 0, nullptr, 0) == 0) {
 				current_temp = prop_number_signed_value(prop_number_t(cur_value));
-				if (max_value != NULL) {
+				if (max_value != nullptr) {
 					current_cpu.temp_max = MUKTOC(prop_number_signed_value(prop_number_t(max_value)));
 				}
 			}
 		}
 
-		regfree(&r);
-
-		prop_object_iterator_release(fields_iter);
-		prop_object_release(dict);
+		cleanup();
 
 		if (current_temp > -1) {
 			current_temp = MUKTOC(current_temp);
@@ -432,10 +442,18 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, float, long, string> {
 		if (not has_battery) return {0, 0.0, 0, ""};
 
-		prop_dictionary_t dict, fields, props;
+		prop_dictionary_t dict = nullptr;
+		prop_dictionary_t fields, props;
+		prop_object_iterator_t fields_iter = nullptr;
 
 		int64_t total_charge = 0;
 		int64_t total_capacity = 0;
+
+		//? RAII-style cleanup lambda to ensure resources are released on all exit paths
+		auto cleanup = [&]() {
+			if (fields_iter != nullptr) prop_object_iterator_release(fields_iter);
+			if (dict != nullptr) prop_object_release(dict);
+		};
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
@@ -445,11 +463,10 @@ namespace Cpu {
 		}
 
 		if (prop_dictionary_recv_ioctl(fd, ENVSYS_GETDICTIONARY, &dict) != 0) {
-			if (fd != -1) {
-				close(fd);
-			}
+			close(fd);
 			has_battery = false;
 			Logger::warning("failed to open envsys dict");
+			cleanup();
 			return {0, 0.0, 0, ""};
 		}
 
@@ -458,6 +475,7 @@ namespace Cpu {
 		if (prop_dictionary_count(dict) == 0) {
 			has_battery = false;
 			Logger::warning("no drivers registered for envsys");
+			cleanup();
 			return {0, 0.0, 0, ""};
 		}
 
@@ -465,12 +483,14 @@ namespace Cpu {
 		if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
 			has_battery = false;
 			Logger::warning("unknown device 'acpibat0'");
+			cleanup();
 			return {0, 0.0, 0, ""};
 		}
 
-		prop_object_iterator_t fields_iter = prop_array_iterator(prop_array_t(fields_array));
-		if (fields_iter == NULL) {
+		fields_iter = prop_array_iterator(prop_array_t(fields_array));
+		if (fields_iter == nullptr) {
 			has_battery = false;
+			cleanup();
 			return {0, 0.0, 0, ""};
 		}
 
@@ -483,24 +503,23 @@ namespace Cpu {
 		string prop_description = "no description";
 		char buf[64];
 
-		while ((fields = (prop_dictionary_t) prop_object_iterator_next(prop_object_iterator_t(fields_iter))) != NULL) {
+		while ((fields = (prop_dictionary_t) prop_object_iterator_next(prop_object_iterator_t(fields_iter))) != nullptr) {
 			props = (prop_dictionary_t) prop_dictionary_get(fields, "device-properties");
-			if (props != NULL) continue;
+			if (props != nullptr) continue;
 
 			prop_object_t cur_value = prop_dictionary_get(fields, "cur-value");
 			prop_object_t max_value = prop_dictionary_get(fields, "max-value");
 			prop_object_t description = prop_dictionary_get(fields, "description");
 
-			if (description == NULL || cur_value == NULL) {
+			if (description == nullptr || cur_value == nullptr) {
 				continue;
 			}
-
 
 			prop_string_copy_value(prop_string_t(description), buf, sizeof buf);
 			prop_description = buf;
 
 			if (prop_description == "charge") {
-				if (max_value == NULL) {
+				if (max_value == nullptr) {
 					continue;
 				}
 				cur_charge = prop_number_signed_value(prop_number_t(cur_value));
@@ -513,9 +532,9 @@ namespace Cpu {
 
 			if (prop_description == "charging") {
 				status = prop_description;
-				char buf[64];
-				prop_string_copy_value(prop_string_t(prop_dictionary_get(fields, "type")), buf, sizeof buf);
-				string charging_type = buf;
+				char type_buf[64];
+				prop_string_copy_value(prop_string_t(prop_dictionary_get(fields, "type")), type_buf, sizeof type_buf);
+				string charging_type = type_buf;
 				is_battery = charging_type == "Battery charge" ? true : false;
 			}
 
@@ -525,8 +544,7 @@ namespace Cpu {
 			}
 		}
 
-		prop_object_iterator_release(fields_iter);
-		prop_object_release(dict);
+		cleanup();
 
 		uint32_t percent = ((double)total_charge / (double)total_capacity) * 100.0;
 

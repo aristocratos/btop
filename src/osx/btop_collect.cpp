@@ -522,11 +522,14 @@ namespace Gpu {
 		return gpus;
 	}
 
-	//? Stub implementations for Nvml and Rsmi (not available on macOS)
+	//? Stub implementations for Nvml, Rsmi, and Intel (not available on macOS)
 	namespace Nvml {
 		bool shutdown() { return false; }
 	}
 	namespace Rsmi {
+		bool shutdown() { return false; }
+	}
+	namespace Intel {
 		bool shutdown() { return false; }
 	}
 }  // namespace Gpu
