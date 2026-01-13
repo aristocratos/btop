@@ -37,6 +37,9 @@ tab-size = 4
 
 #include "../btop_log.hpp"
 #include "../btop_shared.hpp"
+#include "../btop_tools.hpp"
+
+using namespace Tools;
 
 //? IOHIDSensor declarations for GPU temperature
 extern "C" {
@@ -782,21 +785,20 @@ namespace Gpu {
 					//? P-states are named "P1", "P2", etc. - map P1 -> freq_table[0], P2 -> freq_table[1]
 					double freq = 0.0;
 					if (state_name.length() > 1 and state_name[0] == 'P') {
-						try {
-							int pstate_idx = std::stoi(state_name.substr(1)) - 1;  // P1 = index 0
-							if (pstate_idx >= 0 and static_cast<size_t>(pstate_idx) < gpu_freq_table.size()) {
-								freq = gpu_freq_table[pstate_idx];
-							} else if (do_debug) {
-								Logger::debug("AppleSiliconGpu: P-state index {} out of freq_table range", pstate_idx);
-							}
-						} catch (...) {
-							if (do_debug) Logger::debug("AppleSiliconGpu: Could not parse P-state index from '{}'", state_name);
+						int pstate_idx = stoi_safe(state_name.substr(1), -1) - 1;  // P1 = index 0
+						if (pstate_idx >= 0 and static_cast<size_t>(pstate_idx) < gpu_freq_table.size()) {
+							freq = gpu_freq_table[pstate_idx];
+						} else if (do_debug and pstate_idx >= -1) {
+							Logger::debug("AppleSiliconGpu: P-state index {} out of freq_table range", pstate_idx);
+						} else if (do_debug) {
+							Logger::debug("AppleSiliconGpu: Could not parse P-state index from '{}'", state_name);
 						}
 					} else {
 						//? Try parsing as direct frequency value (fallback for older systems)
-						try {
-							freq = std::stod(state_name);
-						} catch (...) {
+						double parsed_freq = stod_safe(state_name, -1.0);
+						if (parsed_freq >= 0.0) {
+							freq = parsed_freq;
+						} else {
 							if (do_debug) Logger::debug("AppleSiliconGpu: Could not parse '{}' as frequency", state_name);
 						}
 					}

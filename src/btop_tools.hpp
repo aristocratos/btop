@@ -25,6 +25,7 @@ tab-size = 4
 #include <algorithm>        // for std::ranges::count_if
 #include <array>
 #include <atomic>
+#include <charconv>          // for std::from_chars (safe numeric conversion)
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -387,6 +388,80 @@ namespace Tools {
 
 	//* Convert a celsius value to celsius, fahrenheit, kelvin or rankin and return tuple with new value and unit.
 	auto celsius_to(const long long& celsius, const string& scale) -> tuple<long long, string>;
+
+	//? --------------------------------- SAFE NUMERIC CONVERSIONS ---------------------------------
+	//? These functions provide safe alternatives to stoi/stol/stoll/stod that don't throw exceptions
+	//? They return a default value on failure instead of throwing std::invalid_argument or std::out_of_range
+
+	//* Safe string to int conversion, returns fallback on failure
+	//* Uses std::from_chars for efficiency and safety
+	inline int stoi_safe(const std::string_view str, int fallback = 0) noexcept {
+		if (str.empty()) return fallback;
+		int result{};
+		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		return (ec == std::errc{}) ? result : fallback;
+	}
+
+	//* Safe string to long conversion, returns fallback on failure
+	inline long stol_safe(const std::string_view str, long fallback = 0) noexcept {
+		if (str.empty()) return fallback;
+		long result{};
+		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		return (ec == std::errc{}) ? result : fallback;
+	}
+
+	//* Safe string to long long conversion, returns fallback on failure
+	inline long long stoll_safe(const std::string_view str, long long fallback = 0) noexcept {
+		if (str.empty()) return fallback;
+		long long result{};
+		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		return (ec == std::errc{}) ? result : fallback;
+	}
+
+	//* Safe string to unsigned long long conversion, returns fallback on failure
+	inline unsigned long long stoull_safe(const std::string_view str, unsigned long long fallback = 0) noexcept {
+		if (str.empty()) return fallback;
+		unsigned long long result{};
+		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		return (ec == std::errc{}) ? result : fallback;
+	}
+
+	//* Safe string to double conversion, returns fallback on failure
+	//* Note: std::from_chars for floating point may not be available on all platforms
+	inline double stod_safe(const std::string_view str, double fallback = 0.0) noexcept {
+		if (str.empty()) return fallback;
+		try {
+			//? Use stod with string conversion as from_chars for doubles may not be available
+			return std::stod(std::string(str));
+		} catch (...) {
+			return fallback;
+		}
+	}
+
+	//* Safe division that returns 0 on division by zero
+	template<typename T>
+	constexpr T safe_div(T numerator, T denominator, T fallback = T{}) noexcept {
+		return (denominator != T{}) ? (numerator / denominator) : fallback;
+	}
+
+	//* Safe modulo that returns 0 on division by zero
+	template<typename T>
+	constexpr T safe_mod(T numerator, T denominator, T fallback = T{}) noexcept {
+		return (denominator != T{}) ? (numerator % denominator) : fallback;
+	}
+
+	//* Safe vector access with bounds checking, returns fallback if index out of range
+	template<typename T>
+	const T& safe_at(const vector<T>& vec, size_t index, const T& fallback) noexcept {
+		return (index < vec.size()) ? vec[index] : fallback;
+	}
+
+	//* Safe subtraction that prevents underflow for unsigned types
+	template<typename T>
+	constexpr T safe_sub(T a, T b) noexcept {
+		static_assert(std::is_unsigned_v<T>, "safe_sub is for unsigned types");
+		return (a >= b) ? (a - b) : T{0};
+	}
 }
 
 namespace Tools {

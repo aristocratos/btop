@@ -162,13 +162,17 @@ namespace Input {
 
 				//? Get column and line position of mouse and check for any actions mapped to current position
 				if (not key.empty()) {
-					try {
-						const auto delim = key_view.find(';');
-						mouse_pos[0] = stoi((string)key_view.substr(0, delim));
-						mouse_pos[1] = stoi((string)key_view.substr(delim + 1, key_view.find('M', delim)));
+					const auto delim = key_view.find(';');
+					if (delim != string_view::npos) {
+						mouse_pos[0] = stoi_safe(string(key_view.substr(0, delim)), -1);
+						auto m_pos = key_view.find('M', delim);
+						mouse_pos[1] = (m_pos != string_view::npos)
+							? stoi_safe(string(key_view.substr(delim + 1, m_pos - delim - 1)), -1)
+							: -1;
+						if (mouse_pos[0] < 0 or mouse_pos[1] < 0) mouse_event.clear();
+					} else {
+						mouse_event.clear();
 					}
-					catch (const std::invalid_argument&) { mouse_event.clear(); }
-					catch (const std::out_of_range&) { mouse_event.clear(); }
 
 					key = mouse_event;
 
@@ -237,7 +241,7 @@ namespace Input {
 					return;
 				}
 				else if (key.size() == 1 and isint(key)) {
-					auto intKey = std::atoi(key.data());
+					auto intKey = stoi_safe(key, -1);
 				#ifdef GPU_SUPPORT
 					//? Apple Silicon: Key "6" toggles ANE split view when ANE is available
 					if (intKey == 6 and Shared::aneCoreCount > 0 and Gpu::shown > 0) {

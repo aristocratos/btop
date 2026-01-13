@@ -455,7 +455,7 @@ build:nightly:
       allow_failure: true
 
 # =============================================================================
-# Code Quality (Optional)
+# Code Quality and Static Analysis
 # =============================================================================
 
 lint:cppcheck:
@@ -468,8 +468,179 @@ lint:cppcheck:
     - apt-get install -y -qq cppcheck
   script:
     - echo "Running cppcheck static analysis"
-    - cppcheck --enable=warning,performance --error-exitcode=0 --quiet src/ || true
-  allow_failure: true
+    - mkdir -p reports
+    - |
+      cppcheck \
+        --enable=warning,performance,portability \
+        --std=c++20 \
+        --error-exitcode=1 \
+        --suppress=missingIncludeSystem \
+        --suppress=unusedFunction \
+        --suppress=useStlAlgorithm \
+        --inline-suppr \
+        --xml \
+        --xml-version=2 \
+        -DGPU_SUPPORT \
+        -I src/ \
+        src/ 2> reports/cppcheck-report.xml || CPPCHECK_EXIT=$?
+    - |
+      # Convert XML to readable format
+      cppcheck \
+        --enable=warning,performance,portability \
+        --std=c++20 \
+        --suppress=missingIncludeSystem \
+        --suppress=unusedFunction \
+        --suppress=useStlAlgorithm \
+        --inline-suppr \
+        -DGPU_SUPPORT \
+        -I src/ \
+        src/ 2>&1 | tee reports/cppcheck-report.txt
+    - |
+      # Fail only on errors, not warnings
+      if grep -q "error" reports/cppcheck-report.txt; then
+        echo "Static analysis found errors"
+        exit 1
+      fi
+    - echo "Static analysis passed"
+  artifacts:
+    name: cppcheck-report-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - reports/
+    expire_in: 30 days
+    when: always
   rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
     - if: $CI_COMMIT_BRANCH
       when: manual
+      allow_failure: true
+
+lint:clang-tidy:
+  image: ubuntu:24.04
+  tags:
+    - docker
+  stage: test
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq software-properties-common
+    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - apt-get update -qq
+    - apt-get install -y -qq clang-tidy-18 g++-14 build-essential
+    - update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
+    - clang-tidy --version
+  script:
+    - echo "Running clang-tidy static analysis"
+    - mkdir -p reports
+    - |
+      # Create compile_commands.json compatible flags
+      COMPILE_FLAGS="-std=c++23 -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -DGPU_SUPPORT -I src/"
+
+      # Run clang-tidy on core source files
+      clang-tidy \
+        --checks='-*,bugprone-*,performance-*,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays' \
+        --header-filter='src/.*' \
+        -p . \
+        src/btop_tools.cpp \
+        src/btop_config.cpp \
+        src/btop_input.cpp \
+        -- ${COMPILE_FLAGS} 2>&1 | tee reports/clang-tidy-report.txt || true
+    - |
+      # Count issues
+      WARNING_COUNT=$(grep -c "warning:" reports/clang-tidy-report.txt || echo "0")
+      ERROR_COUNT=$(grep -c "error:" reports/clang-tidy-report.txt || echo "0")
+      echo "Warnings: ${WARNING_COUNT}, Errors: ${ERROR_COUNT}"
+
+      # Fail only on errors
+      if [ "${ERROR_COUNT}" -gt 0 ]; then
+        echo "clang-tidy found errors"
+        exit 1
+      fi
+    - echo "clang-tidy analysis passed"
+  artifacts:
+    name: clang-tidy-report-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - reports/
+    expire_in: 30 days
+    when: always
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+# =============================================================================
+# Unit Tests
+# =============================================================================
+
+test:unit-linux:
+  image: ubuntu:24.04
+  tags:
+    - docker
+  stage: test
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq software-properties-common
+    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential g++-14 cmake git
+    - update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+    - g++ --version
+    - cmake --version
+  script:
+    - echo "Building and running unit tests"
+    - mkdir -p build && cd build
+    - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
+    - make -j$(nproc) btop_test || make btop_test
+    - |
+      # Run tests with detailed output
+      ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
+      TEST_EXIT=$?
+      exit $TEST_EXIT
+  artifacts:
+    name: unit-test-results-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - reports/
+    expire_in: 30 days
+    when: always
+    reports:
+      junit: reports/test-results.xml
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+test:unit-macos:
+  <<: *macos_template
+  stage: test
+  script:
+    - echo "Building and running unit tests on macOS"
+    - mkdir -p build && cd build
+    - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
+    - make -j$(sysctl -n hw.ncpu) btop_test || make btop_test
+    - |
+      # Run tests
+      ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
+      TEST_EXIT=$?
+      exit $TEST_EXIT
+  artifacts:
+    name: unit-test-macos-results-${CI_COMMIT_SHORT_SHA}
+    paths:
+      - reports/
+    expire_in: 30 days
+    when: always
+    reports:
+      junit: reports/test-results.xml
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true

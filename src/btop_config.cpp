@@ -18,6 +18,7 @@ tab-size = 4
 
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -540,20 +541,19 @@ namespace Config {
 	string validError;
 
 	bool intValid(const std::string_view name, const string& value) {
-		int i_value;
-		try {
-			i_value = stoi(value);
-		}
-		catch (const std::invalid_argument&) {
+		//? Use from_chars for safe, exception-free conversion
+		int i_value{};
+		auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), i_value);
+		if (ec == std::errc::invalid_argument) {
 			validError = "Invalid numerical value!";
 			return false;
 		}
-		catch (const std::out_of_range&) {
+		if (ec == std::errc::result_out_of_range) {
 			validError = "Value out of range!";
 			return false;
 		}
-		catch (const std::exception& e) {
-			validError = string{e.what()};
+		if (ec != std::errc{}) {
+			validError = "Invalid numerical value!";
 			return false;
 		}
 
@@ -704,8 +704,8 @@ namespace Config {
 			if (not v_contains(valid_boxes, box)) return false;
 		#ifdef GPU_SUPPORT
 			if (box.starts_with("gpu")) {
-				int gpu_num = stoi(box.substr(3)) + 1;
-				if (gpu_num > Gpu::count) return false;
+				int gpu_num = (box.length() > 3) ? stoi_safe(box.substr(3), -1) + 1 : 0;
+				if (gpu_num < 1 or gpu_num > Gpu::count) return false;
 			}
 		#endif
 		}
@@ -788,7 +788,7 @@ namespace Config {
 						load_warnings.push_back(validError);
 					}
 					else
-						ints.at(name) = stoi(value);
+						ints.at(name) = stoi_safe(value);
 				}
 				else if (strings.contains(name)) {
 					if (cread.peek() == '"') {

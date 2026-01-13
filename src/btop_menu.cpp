@@ -1015,9 +1015,10 @@ namespace Menu {
 			return Closed;
 		}
 		else if (key.starts_with("button_")) {
-			if (int new_select = stoi(key.substr(7)); new_select == selected_signal)
+			int new_select = (key.length() > 7) ? stoi_safe(key.substr(7), -1) : -1;
+			if (new_select >= 0 and new_select == selected_signal)
 				goto ChooseEntering;
-			else
+			else if (new_select >= 0)
 				selected_signal = new_select;
 		}
 		else if (is_in(key, "enter", "space") and selected_signal >= 0) {
@@ -1034,7 +1035,8 @@ namespace Menu {
 			return Closed;
 		}
 		else if (key.size() == 1 and isdigit(key.at(0)) and selected_signal < 10) {
-			selected_signal = std::min(std::stoi((selected_signal < 1 ? key : to_string(selected_signal) + key)), 64);
+			string combined = (selected_signal < 1 ? key : to_string(selected_signal) + key);
+			selected_signal = std::min(stoi_safe(combined, selected_signal), 64);
 		}
 		else if (key == "backspace" and selected_signal != -1) {
 			selected_signal = (selected_signal < 10 ? -1 : selected_signal / 10);
@@ -1381,7 +1383,7 @@ static int optionsMenu(const string& key) {
 					}
 				}
 				else if (selPred.test(isInt) and Config::intValid(option, editor.text)) {
-					Config::set(option, stoi(editor.text));
+					Config::set(option, stoi_safe(editor.text));
 				}
 				else
 					warnings = Config::validError;
@@ -1744,10 +1746,7 @@ static int optionsMenu(const string& key) {
 		else if (is_in(key, "enter", "space")) {
 			if (s_pid > 0) {
 				if (not nice_edit.empty()) {
-					try {
-						selected_nice = stoi(nice_edit);
-					}
-					catch (...) { selected_nice = 0; }
+					selected_nice = stoi_safe(nice_edit, 0);
 				}
 				if (not Proc::set_priority(s_pid, selected_nice)) {
 					// TODO: show error message
@@ -1784,10 +1783,7 @@ static int optionsMenu(const string& key) {
 		if (retval == Changed) {
 			int cy = y+4;
 			if (not nice_edit.empty()) {
-				try {
-					selected_nice = stoi(nice_edit);
-				}
-				catch (...) { selected_nice = 0; }
+				selected_nice = stoi_safe(nice_edit, 0);
 			}
 			out = bg + Mv::to(cy++, x+3) + Theme::c("main_fg") + Fx::ub
 				+ rjust("Enter nice value: ", 30) + Theme::c("hi_fg") + (nice_edit.empty() ? to_string(selected_nice) : nice_edit) + Theme::c("main_fg") + Fx::bl + "█" + Fx::ubl;

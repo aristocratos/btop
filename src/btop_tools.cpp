@@ -18,6 +18,7 @@ tab-size = 4
 
 #include <chrono>
 #include <cmath>
+
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -250,6 +251,7 @@ namespace Tools {
 
 		for (auto c : w_str) {
 			chars += widechar_wcwidth(c);
+
 		}
 
 		return chars;
@@ -284,6 +286,7 @@ namespace Tools {
 			std::wcstombs(&n_str[0], &w_str[0], w_str.size());
 
 			return n_str;
+
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {
@@ -546,7 +549,8 @@ namespace Tools {
 		constexpr int SPIN_LIMIT = 1000;  // Spin briefly before yielding
 		constexpr int YIELD_LIMIT = 100;  // Yield briefly before sleeping
 
-		while (atom.load(std::memory_order_relaxed) == old) {
+		//? Use acquire semantics to ensure we see the latest value and any writes before it
+		while (atom.load(std::memory_order_acquire) == old) {
 			if (spin_count < SPIN_LIMIT) {
 				busy_wait();
 				++spin_count;
@@ -561,19 +565,37 @@ namespace Tools {
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
+		if (wait_ms == 0) return;
 		const uint64_t start_time = time_ms();
-		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
+		//? Use acquire semantics for proper visibility of state changes
+		while (atom.load(std::memory_order_acquire) == old) {
+			const uint64_t elapsed = time_ms() - start_time;
+			if (elapsed >= wait_ms) break;
+			//? Adaptive sleep: shorter sleeps near deadline
+			const uint64_t remaining = wait_ms - elapsed;
+			sleep_ms(remaining < 10 ? 1 : (remaining < 100 ? 5 : 10));
+		}
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
-		else this->atom.store(true);
-		this->atom.notify_all();
+		if (wait) {
+			//? Use proper memory ordering for lock acquisition
+			//? acquire ensures all subsequent reads/writes happen after lock is acquired
+			while (not this->atom.compare_exchange_weak(this->not_true, true,
+					std::memory_order_acquire, std::memory_order_relaxed)) {
+				this->not_true = false;  //? Reset expected value after failed exchange
+				busy_wait();  //? Brief pause to reduce contention
+			}
+		}
+		else {
+			//? Use release semantics to ensure prior writes are visible to other threads
+			this->atom.store(true, std::memory_order_release);
+		}
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
-		this->atom.store(false);
-		this->atom.notify_all();
+		//? Use release semantics to ensure all writes before unlock are visible
+		this->atom.store(false, std::memory_order_release);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
