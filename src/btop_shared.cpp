@@ -99,6 +99,9 @@ namespace Pwr {
 	int min_width = 60, min_height = 6;
 	bool shown = false, redraw = true;
 
+	//* Mutex for thread-safe access to power history deques and max values
+	std::mutex history_mutex;
+
 	//* Power history deques for braille graphs (in mW for precision)
 	deque<long long> cpu_pwr_history = {0};
 	deque<long long> gpu_pwr_history = {0};
@@ -106,6 +109,62 @@ namespace Pwr {
 
 	//* Max observed power for auto-scaling (in mW), start at 1W
 	long long cpu_pwr_max = 1000, gpu_pwr_max = 1000, ane_pwr_max = 1000;
+
+	//? Thread-safe getter for CPU power history
+	deque<long long> get_cpu_history() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return cpu_pwr_history;
+	}
+
+	//? Thread-safe getter for GPU power history
+	deque<long long> get_gpu_history() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return gpu_pwr_history;
+	}
+
+	//? Thread-safe getter for ANE power history
+	deque<long long> get_ane_history() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return ane_pwr_history;
+	}
+
+	//? Thread-safe getter for CPU power max
+	long long get_cpu_pwr_max() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return cpu_pwr_max;
+	}
+
+	//? Thread-safe getter for GPU power max
+	long long get_gpu_pwr_max() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return gpu_pwr_max;
+	}
+
+	//? Thread-safe getter for ANE power max
+	long long get_ane_pwr_max() {
+		std::lock_guard<std::mutex> lock(history_mutex);
+		return ane_pwr_max;
+	}
+
+	//? Thread-safe update of power history - called from collector thread
+	void update_history(long long cpu_mw, long long gpu_mw, long long ane_mw, size_t max_size) {
+		std::lock_guard<std::mutex> lock(history_mutex);
+
+		//? Push new values
+		cpu_pwr_history.push_back(cpu_mw);
+		gpu_pwr_history.push_back(gpu_mw);
+		ane_pwr_history.push_back(ane_mw);
+
+		//? Limit history size
+		while (cpu_pwr_history.size() > max_size) cpu_pwr_history.pop_front();
+		while (gpu_pwr_history.size() > max_size) gpu_pwr_history.pop_front();
+		while (ane_pwr_history.size() > max_size) ane_pwr_history.pop_front();
+
+		//? Update max values for auto-scaling
+		if (cpu_mw > cpu_pwr_max) cpu_pwr_max = cpu_mw;
+		if (gpu_mw > gpu_pwr_max) gpu_pwr_max = gpu_mw;
+		if (ane_mw > ane_pwr_max) ane_pwr_max = ane_mw;
+	}
 }
 
 namespace Proc {

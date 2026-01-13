@@ -399,7 +399,7 @@ namespace Tools {
 		uint64_t start_time{};
 		uint64_t elapsed_time{};
 		bool running{};
-		std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
+		static inline std::locale custom_locale = std::locale(std::locale::classic(), new Tools::MyNumPunct);
 		vector<string> report_buffer{};
 		string name{};
 		bool delayed_report{};

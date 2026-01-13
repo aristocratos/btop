@@ -23,11 +23,13 @@ tab-size = 4
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <unistd.h>
@@ -238,13 +240,38 @@ namespace Pwr {
 	extern int x, y, width, height, min_width, min_height;
 	extern bool shown, redraw;
 
+	//* Mutex for thread-safe access to power history deques
+	//* Must be locked when reading or writing cpu/gpu/ane_pwr_history or max values
+	extern std::mutex history_mutex;
+
 	//* Power history deques for braille graphs (in mW for precision)
+	//* IMPORTANT: Access these only while holding history_mutex lock
 	extern deque<long long> cpu_pwr_history;
 	extern deque<long long> gpu_pwr_history;
 	extern deque<long long> ane_pwr_history;
 
 	//* Max observed power for auto-scaling (in mW)
+	//* IMPORTANT: Access these only while holding history_mutex lock
 	extern long long cpu_pwr_max, gpu_pwr_max, ane_pwr_max;
+
+	//* Thread-safe functions to access power history
+	//* These acquire the mutex internally and return copies for safe use
+
+	//? Get a snapshot of CPU power history for graph rendering
+	deque<long long> get_cpu_history();
+	//? Get a snapshot of GPU power history for graph rendering
+	deque<long long> get_gpu_history();
+	//? Get a snapshot of ANE power history for graph rendering
+	deque<long long> get_ane_history();
+
+	//? Get current max values (thread-safe)
+	long long get_cpu_pwr_max();
+	long long get_gpu_pwr_max();
+	long long get_ane_pwr_max();
+
+	//? Update power history with new values (thread-safe)
+	//? Called from collector thread - acquires mutex internally
+	void update_history(long long cpu_mw, long long gpu_mw, long long ane_mw, size_t max_size = 100);
 
 	//* Draw contents of power panel
 	string draw(bool force_redraw, bool data_same);
@@ -380,18 +407,18 @@ namespace Net {
 	};
 
 	class IfAddrsPtr {
-		struct ifaddrs* ifaddr;
-		int status;
+		struct ifaddrs* ifaddr = nullptr;
+		int status = -1;
 	public:
 		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
-		~IfAddrsPtr() noexcept { freeifaddrs(ifaddr); }
-		IfAddrsPtr(const IfAddrsPtr &) = delete;
-		IfAddrsPtr& operator=(IfAddrsPtr& other) = delete;
-		IfAddrsPtr(IfAddrsPtr &&) = delete;
-		IfAddrsPtr& operator=(IfAddrsPtr&& other) = delete;
-		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
-		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
-		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; };
+		~IfAddrsPtr() noexcept { if (ifaddr != nullptr) freeifaddrs(ifaddr); }
+		IfAddrsPtr(const IfAddrsPtr&) = delete;
+		IfAddrsPtr& operator=(const IfAddrsPtr&) = delete;
+		IfAddrsPtr(IfAddrsPtr&&) = delete;
+		IfAddrsPtr& operator=(IfAddrsPtr&&) = delete;
+		[[nodiscard]] constexpr auto operator()() const noexcept -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get() const noexcept -> struct ifaddrs* { return ifaddr; }
+		[[nodiscard]] constexpr auto get_status() const noexcept -> int { return status; }
 	};
 
 	extern std::unordered_map<string, net_info> current_net;

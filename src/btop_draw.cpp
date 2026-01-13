@@ -1184,7 +1184,10 @@ namespace Gpu {
 					ane_meter = Draw::Meter{b_width - (show_temps ? 27 : 14), "cpu"};
 				}
 				//? ANE power braille graph (similar to GPU PWR graph)
-				ane_pwr_graph = Draw::Graph{b_width - 14, 1, "cached", Pwr::ane_pwr_history, graph_symbol, false, false, Pwr::ane_pwr_max, -23};
+				//? Use thread-safe getter for ANE power history
+				auto ane_hist = Pwr::get_ane_history();
+				auto ane_max = Pwr::get_ane_pwr_max();
+				ane_pwr_graph = Draw::Graph{b_width - 14, 1, "cached", ane_hist, graph_symbol, false, false, ane_max, -23};
 			}
 		}
 
@@ -1296,12 +1299,16 @@ namespace Gpu {
 			//? ANE power with braille graph (only when PWR panel is hidden)
 			if (not Pwr::shown) {
 				int ane_pwr_graph_width = b_width - 14;
-				long long ane_pwr_pct = Pwr::ane_pwr_max > 0 ? clamp(static_cast<long long>(Shared::anePower * 1000) * 100 / Pwr::ane_pwr_max, 0ll, 100ll) : 0;
+				//? Use thread-safe getters for ANE power history and max
+				auto ane_hist = Pwr::get_ane_history();
+				auto ane_max_val = Pwr::get_ane_pwr_max();
+				double ane_power = Shared::anePower.load(std::memory_order_acquire);
+				long long ane_pwr_pct = ane_max_val > 0 ? clamp(static_cast<long long>(ane_power * 1000) * 100 / ane_max_val, 0ll, 100ll) : 0;
 				out += Mv::to(b_y + rows_used + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "  PWR "
 					+ Theme::c("inactive_fg") + string(ane_pwr_graph_width, ' ') + Mv::l(ane_pwr_graph_width)
 					+ Theme::g("cached").at(clamp(ane_pwr_pct, 0ll, 100ll))
-					+ ane_pwr_graph(Pwr::ane_pwr_history, data_same or redraw[index])
-					+ fmt::format("{:>5.2f}", Shared::anePower) + Theme::c("main_fg") + 'W';
+					+ ane_pwr_graph(ane_hist, data_same or redraw[index])
+					+ fmt::format("{:>5.2f}", ane_power) + Theme::c("main_fg") + 'W';
 				rows_used++;
 			}
 			rows_used++;
@@ -1399,34 +1406,50 @@ namespace Pwr {
 		//? Layout: header(1) + label+temp(1) + graph(dynamic) + values(1) + border(1)
 		graph_height = max(1, height - 5);
 
+		//? Get thread-safe snapshots of power history data
+		//? These copies prevent race conditions with collector thread
+		auto cpu_history = get_cpu_history();
+		auto gpu_history = get_gpu_history();
+		auto ane_history = get_ane_history();
+		auto cpu_max = get_cpu_pwr_max();
+		auto gpu_max = get_gpu_pwr_max();
+		auto ane_max = get_ane_pwr_max();
+
 		//? Redraw structural elements on resize/force
 		if (redraw) {
 			out += box;
 
-			//? Create/update graphs with dynamic height
-			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_pwr_history, graph_symbol, false, false, cpu_pwr_max, -23};
-			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_pwr_history, graph_symbol, false, false, gpu_pwr_max, -23};
-			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_pwr_history, graph_symbol, false, false, ane_pwr_max, -23};
+			//? Create/update graphs with dynamic height using thread-safe copies
+			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_history, graph_symbol, false, false, cpu_max, -23};
+			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_history, graph_symbol, false, false, gpu_max, -23};
+			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_history, graph_symbol, false, false, ane_max, -23};
 		}
 
-		//? Get current power values
-		double cpu_pwr = Shared::cpuPower;
-		double gpu_pwr = Shared::gpuPower;
-		double ane_pwr = Shared::anePower;
+		//? Get current power values with acquire semantics for proper visibility
+		double cpu_pwr = Shared::cpuPower.load(std::memory_order_acquire);
+		double gpu_pwr = Shared::gpuPower.load(std::memory_order_acquire);
+		double ane_pwr = Shared::anePower.load(std::memory_order_acquire);
 		double total_pwr = cpu_pwr + gpu_pwr + ane_pwr;
 
-		//? Get temperatures from Shared namespace
-		long long cpu_temp = Shared::cpuTemp;
-		long long gpu_temp = Shared::gpuTemp;
+		//? Get temperatures from Shared namespace with acquire semantics
+		long long cpu_temp = Shared::cpuTemp.load(std::memory_order_acquire);
+		long long gpu_temp = Shared::gpuTemp.load(std::memory_order_acquire);
 
-		//? Header row: Total power with avg/max
+		//? Header row: Total power with avg/max (use acquire semantics for consistency)
+		double cpu_avg = Shared::cpuPowerAvg.load(std::memory_order_acquire);
+		double gpu_avg = Shared::gpuPowerAvg.load(std::memory_order_acquire);
+		double ane_avg = Shared::anePowerAvg.load(std::memory_order_acquire);
+		double cpu_peak = Shared::cpuPowerPeak.load(std::memory_order_acquire);
+		double gpu_peak = Shared::gpuPowerPeak.load(std::memory_order_acquire);
+		double ane_peak = Shared::anePowerPeak.load(std::memory_order_acquire);
+
 		out += Mv::to(y + 1, x + 2)
 			+ Theme::c("title") + Fx::b
 			+ fmt::format("Power: {:.2f}W", total_pwr)
 			+ Theme::c("main_fg") + Fx::ub
 			+ fmt::format(" (avg {:.2f}W, max {:.2f}W)",
-				Shared::cpuPowerAvg + Shared::gpuPowerAvg + Shared::anePowerAvg,
-				Shared::cpuPowerPeak + Shared::gpuPowerPeak + Shared::anePowerPeak);
+				cpu_avg + gpu_avg + ane_avg,
+				cpu_peak + gpu_peak + ane_peak);
 
 		//? Draw vertical dividers between subpanels
 		int div1_x = x + sub_width + 1;
@@ -1449,12 +1472,13 @@ namespace Pwr {
 
 		row++;
 		//? CPU power graph (multi-row) - Graph returns complete multi-line output
+		//? Uses thread-safe copy of history to prevent race conditions
 		out += Mv::to(y + row, col1_x)
-			+ cpu_pwr_graph(cpu_pwr_history, data_same or redraw);
+			+ cpu_pwr_graph(cpu_history, data_same or redraw);
 
 		row += graph_height;
 		out += Mv::to(y + row, col1_x) + Theme::c("main_fg")
-			+ fmt::format("{:.2f}W avg {:.2f}W", cpu_pwr, Shared::cpuPowerAvg);
+			+ fmt::format("{:.2f}W avg {:.2f}W", cpu_pwr, cpu_avg);
 
 		//? GPU Subpanel (middle)
 		int col2_x = div1_x + 2;
@@ -1469,12 +1493,13 @@ namespace Pwr {
 
 		row++;
 		//? GPU power graph (multi-row) - Graph returns complete multi-line output
+		//? Uses thread-safe copy of history to prevent race conditions
 		out += Mv::to(y + row, col2_x)
-			+ gpu_pwr_graph(gpu_pwr_history, data_same or redraw);
+			+ gpu_pwr_graph(gpu_history, data_same or redraw);
 
 		row += graph_height;
 		out += Mv::to(y + row, col2_x) + Theme::c("main_fg")
-			+ fmt::format("{:.2f}W avg {:.2f}W", gpu_pwr, Shared::gpuPowerAvg);
+			+ fmt::format("{:.2f}W avg {:.2f}W", gpu_pwr, gpu_avg);
 
 		//? ANE Subpanel (right)
 		int col3_x = div2_x + 2;
@@ -1483,12 +1508,13 @@ namespace Pwr {
 
 		row++;
 		//? ANE power graph (multi-row) - Graph returns complete multi-line output
+		//? Uses thread-safe copy of history to prevent race conditions
 		out += Mv::to(y + row, col3_x)
-			+ ane_pwr_graph(ane_pwr_history, data_same or redraw);
+			+ ane_pwr_graph(ane_history, data_same or redraw);
 
 		row += graph_height;
 		out += Mv::to(y + row, col3_x) + Theme::c("main_fg")
-			+ fmt::format("{:.2f}W avg {:.2f}W", ane_pwr, Shared::anePowerAvg);
+			+ fmt::format("{:.2f}W avg {:.2f}W", ane_pwr, ane_avg);
 
 		redraw = false;
 		return out + Fx::reset;

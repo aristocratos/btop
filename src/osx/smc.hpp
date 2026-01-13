@@ -108,10 +108,10 @@ namespace Cpu {
 		long long getSMCTemp(char *key);
 		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure);
 
-		io_connect_t conn;
-		kern_return_t result;
-		mach_port_t masterPort;
-		io_iterator_t iterator;
-		io_object_t device;
+		io_connect_t conn = IO_OBJECT_NULL;
+		kern_return_t result = KERN_FAILURE;
+		mach_port_t masterPort = MACH_PORT_NULL;
+		io_iterator_t iterator = IO_OBJECT_NULL;
+		io_object_t device = IO_OBJECT_NULL;
 	};
 }  // namespace Cpu

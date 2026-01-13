@@ -815,9 +815,13 @@ namespace Config {
 		Logger::debug("Writing new config file");
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
-		// TODO: Report error when stream is in a bad state.
-		if (cwrite.good()) {
-			cwrite << current_config();
+		if (not cwrite.good()) {
+			Logger::error("Failed to open config file for writing: {}", conf_file);
+			return;
+		}
+		cwrite << current_config();
+		if (not cwrite.good()) {
+			Logger::error("Failed to write config file: {}", conf_file);
 		}
 	}
 
