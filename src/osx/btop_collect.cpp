@@ -552,16 +552,16 @@ namespace Shared {
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count
 	long aneCoreCount = 0;  // Apple Silicon ANE core count
 
-	// Apple Silicon power metrics
-	double cpuPower = 0, gpuPower = 0, anePower = 0;
-	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
-	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
+	// Apple Silicon power metrics (atomic for thread-safety)
+	atomic<double> cpuPower{0}, gpuPower{0}, anePower{0};
+	atomic<double> cpuPowerAvg{0}, gpuPowerAvg{0}, anePowerAvg{0};
+	atomic<double> cpuPowerPeak{0}, gpuPowerPeak{0}, anePowerPeak{0};
 
-	// Apple Silicon ANE activity (commands per second)
-	double aneActivity = 0;
+	// Apple Silicon ANE activity (commands per second, atomic for thread-safety)
+	atomic<double> aneActivity{0};
 
-	// Shared temperature values for Pwr panel
-	long long cpuTemp = 0, gpuTemp = 0;
+	// Shared temperature values for Pwr panel (atomic for thread-safety)
+	atomic<long long> cpuTemp{0}, gpuTemp{0};
 
 	double machTck;
 	int totalMem_len;
@@ -1050,10 +1050,13 @@ namespace Mem {
 	}
 
 	bool isWhole(io_registry_entry_t volumeRef) {
-		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
-		Boolean val = CFBooleanGetValue(isWhole);
-		CFRelease(isWhole);
-		return bool(val);
+		CFBooleanRef isWholeRef = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
+		if (isWholeRef == nullptr) {
+			return false;  // Property doesn't exist, assume not whole disk
+		}
+		Boolean val = CFBooleanGetValue(isWholeRef);
+		CFRelease(isWholeRef);
+		return static_cast<bool>(val);
 	}
 
 	class IOObject {
@@ -1084,6 +1087,7 @@ namespace Mem {
 			io_registry_entry_t volumeRef;
 			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
 			if (volumeRef) {
+				auto vol = IOObject("volume", volumeRef);  //? RAII wrapper to prevent leak
 				if (!isWhole(volumeRef)) {
 					string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
 					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
@@ -1099,9 +1103,9 @@ namespace Mem {
 								if (disk.name.find("(DMG)") != string::npos or
 								    disk.name.find("(ISO)") != string::npos or
 								    disk.name.find("(IMG)") != string::npos) continue;
-								CFDictionaryRef properties;
-								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
-								if (properties) {
+								CFMutableDictionaryRef properties = nullptr;
+								kern_return_t kr = IORegistryEntryCreateCFProperties(volumeRef, &properties, kCFAllocatorDefault, 0);
+								if (kr == KERN_SUCCESS and properties != nullptr) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
 										disk_ios++;
@@ -1128,8 +1132,8 @@ namespace Mem {
 											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 									}
+									CFRelease(properties);
 								}
-								CFRelease(properties);
 							}
 						}
 					}

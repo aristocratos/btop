@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#include <chrono>
 #include <cmath>
 #include <ctime>
 #include <filesystem>
@@ -24,6 +25,7 @@ tab-size = 4
 #include <iostream>
 #include <sstream>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <cstdlib>
 
@@ -539,7 +541,23 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
+		//? Use exponential backoff with yield/sleep to prevent 100% CPU burn
+		int spin_count = 0;
+		constexpr int SPIN_LIMIT = 1000;  // Spin briefly before yielding
+		constexpr int YIELD_LIMIT = 100;  // Yield briefly before sleeping
+
+		while (atom.load(std::memory_order_relaxed) == old) {
+			if (spin_count < SPIN_LIMIT) {
+				busy_wait();
+				++spin_count;
+			} else if (spin_count < SPIN_LIMIT + YIELD_LIMIT) {
+				std::this_thread::yield();
+				++spin_count;
+			} else {
+				//? Sleep 1ms to prevent CPU burn during long waits
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		}
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {

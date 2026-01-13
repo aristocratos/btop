@@ -268,10 +268,13 @@ namespace Shared {
 	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on Linux)
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on Linux)
 	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on Linux)
-	double cpuPower = 0, gpuPower = 0, anePower = 0;  // Power metrics (0 on Linux)
-	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
-	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
-	double aneActivity = 0;  // ANE activity (0 on Linux)
+	// Power metrics (atomic for thread-safety, 0 on Linux)
+	atomic<double> cpuPower{0}, gpuPower{0}, anePower{0};
+	atomic<double> cpuPowerAvg{0}, gpuPowerAvg{0}, anePowerAvg{0};
+	atomic<double> cpuPowerPeak{0}, gpuPowerPeak{0}, anePowerPeak{0};
+	atomic<double> aneActivity{0};  // ANE activity (0 on Linux)
+	// Temperature values (atomic for thread-safety, 0 on Linux)
+	atomic<long long> cpuTemp{0}, gpuTemp{0};
 
 	void init() {
 
