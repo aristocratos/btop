@@ -209,16 +209,42 @@ void clean_quit(int sig) {
 	Global::quitting = true;
 	Runner::stop();
 	if (Global::_runner_started) {
-	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
-		if (pthread_join(Runner::runner_id, nullptr) != 0) {
-			Logger::warning("Failed to join _runner thread on exit!");
-			pthread_cancel(Runner::runner_id);
-		}
-	#else
+		//? Request cooperative termination
+		Runner::should_terminate = true;
+		Runner::thread_trigger();  //? Wake up thread if waiting on semaphore
+
+	#if defined(__linux__) && !defined(__ANDROID__)
+		//? Linux: use pthread_timedjoin_np for timed wait
 		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
 		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
-			Logger::warning("Failed to join _runner thread on exit!");
+			Logger::warning("Failed to join _runner thread on exit - using pthread_cancel");
 			pthread_cancel(Runner::runner_id);
+			pthread_join(Runner::runner_id, nullptr);
+		}
+	#else
+		//? macOS/BSD: Poll mutex to detect thread exit with timeout
+		constexpr int JOIN_TIMEOUT_MS = 5000;
+		int waited_ms = 0;
+		constexpr int POLL_INTERVAL_MS = 50;
+		bool thread_exited = false;
+
+		while (waited_ms < JOIN_TIMEOUT_MS) {
+			int trylock_result = pthread_mutex_trylock(&Runner::mtx);
+			if (trylock_result == 0) {
+				//? Got the mutex - thread has exited
+				pthread_mutex_unlock(&Runner::mtx);
+				pthread_join(Runner::runner_id, nullptr);
+				thread_exited = true;
+				break;
+			}
+			sleep_ms(POLL_INTERVAL_MS);
+			waited_ms += POLL_INTERVAL_MS;
+		}
+
+		if (not thread_exited) {
+			Logger::warning("Failed to join _runner thread on exit - using pthread_cancel");
+			pthread_cancel(Runner::runner_id);
+			//? Don't wait for join after cancel on exit - just proceed
 		}
 	#endif
 	}
@@ -355,7 +381,8 @@ namespace Runner {
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
-	
+atomic<bool> should_terminate (false);  //? Flag for cooperative thread termination
+
 	static inline auto set_active(bool value) noexcept {
 		active.store(value, std::memory_order_relaxed);
 		active.notify_all();
@@ -364,8 +391,13 @@ namespace Runner {
 	//* Setup semaphore for triggering thread to do work
 	// TODO: This can be made a local without too much effort.
 	std::binary_semaphore do_work { 0 };
-	inline void thread_wait() { do_work.acquire(); }
-	inline void thread_trigger() { do_work.release(); }
+
+	//? Timed wait on semaphore - returns true if work is available, false on timeout
+	//? This allows cooperative termination by checking should_terminate periodically
+	inline bool thread_wait_for(int timeout_ms = 1000) {
+		return do_work.try_acquire_for(std::chrono::milliseconds(timeout_ms));
+	}
+	void thread_trigger() { do_work.release(); }
 
 	//* RAII wrapper for pthread_mutex locking
 	class thread_lock {
@@ -447,6 +479,39 @@ namespace Runner {
 
 	struct runner_conf current_conf;
 
+	//? Stall tracking for graceful degradation
+	static atomic<int> consecutive_stalls{0};
+	static constexpr int MAX_STALLS_BEFORE_RESTART = 3;  // Restart thread after 3 consecutive stalls
+	static constexpr int BASE_TIMEOUT_MS = 5000;         // Base timeout 5 seconds
+	static constexpr int MAX_TIMEOUT_MS = 15000;         // Max timeout 15 seconds
+
+	//? Get adaptive timeout based on system load and stall history
+	static int get_adaptive_timeout() {
+		int timeout = BASE_TIMEOUT_MS;
+
+		//? Increase timeout if we've had recent stalls (system might be under load)
+		int stalls = consecutive_stalls.load();
+		if (stalls > 0) {
+			// Add 2 seconds per recent stall, up to max
+			timeout = std::min(BASE_TIMEOUT_MS + (stalls * 2000), MAX_TIMEOUT_MS);
+		}
+
+		#ifdef __APPLE__
+		//? On macOS, check load average for additional adjustment
+		double loadavg[1];
+		if (getloadavg(loadavg, 1) == 1) {
+			// High load (>4.0) - increase timeout
+			if (loadavg[0] > 8.0) {
+				timeout = MAX_TIMEOUT_MS;
+			} else if (loadavg[0] > 4.0) {
+				timeout = std::min(timeout + 5000, MAX_TIMEOUT_MS);
+			}
+		}
+		#endif
+
+		return timeout;
+	}
+
 	static void debug_timer(const char* name, const int action) {
 		switch (action) {
 			case collect_begin:
@@ -491,8 +556,17 @@ namespace Runner {
 		}
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
-		while (not Global::quitting) {
-			thread_wait();
+		while (not Global::quitting and not should_terminate) {
+			//? Use timed wait to allow periodic termination checks
+			if (not thread_wait_for(1000)) {
+				//? Timeout - check if we should terminate
+				if (should_terminate or Global::quitting) break;
+				continue;  //? No work available, wait again
+			}
+
+			//? Check termination flag after waking up
+			if (should_terminate or Global::quitting) break;
+
 			atomic_wait_for(active, true, 5000);
 			if (active) {
 				Global::exit_error_msg = "Runner thread failed to get active lock!";
@@ -764,30 +838,87 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
-		atomic_wait_for(active, true, 5000);
+		const int timeout = get_adaptive_timeout();
+		atomic_wait_for(active, true, timeout);
 		if (active) {
-			Logger::error("Stall in Runner thread, restarting!");
-			set_active(false);
-			// exit(1);
+//? Stall detected - use graceful degradation before restarting
+			int stalls = consecutive_stalls.fetch_add(1) + 1;
 
-			// Signal the semaphore to wake up the runner thread from thread_wait()
-			// This is necessary because std::binary_semaphore::acquire() is not a POSIX
-			// cancellation point, so pthread_cancel alone won't interrupt it
+			if (stalls < MAX_STALLS_BEFORE_RESTART) {
+				//? Graceful skip: log warning and skip this cycle, allow cached metrics to be used
+				Logger::warning("Runner thread stall detected ({}/{}) - skipping cycle (timeout was {}ms)",
+					stalls, MAX_STALLS_BEFORE_RESTART, timeout);
+				return;  //? Skip this cycle, let the next one try again
+			}
+
+			//? Too many consecutive stalls - restart the thread using cooperative termination
+			Logger::error("Runner thread stall ({}/{}) - requesting cooperative shutdown", stalls, MAX_STALLS_BEFORE_RESTART);
+			consecutive_stalls = 0;  //? Reset counter before restart
+			set_active(false);
+
+			//? Request cooperative termination (thread will exit on next loop iteration)
+			should_terminate = true;
+
+			//? Signal the semaphore to wake up the thread if it's waiting
 			thread_trigger();
 
-			pthread_cancel(Runner::runner_id);
-
-			// Wait for the thread to actually terminate before creating a new one
-			void* thread_result;
-			int join_result = pthread_join(Runner::runner_id, &thread_result);
-			if (join_result != 0) {
-				Logger::warning("Failed to join cancelled thread: {}", strerror(join_result));
+			//? Wait for the thread to exit gracefully with timeout
+			//? The thread checks should_terminate every ~1 second, so 3 seconds should be enough
+		#if defined(__linux__) && !defined(__ANDROID__)
+			//? Linux has pthread_timedjoin_np for timed join
+			constexpr struct timespec ts { .tv_sec = 3, .tv_nsec = 0 };
+			int join_result = pthread_timedjoin_np(Runner::runner_id, nullptr, &ts);
+			if (join_result == 0) {
+				Logger::debug("Runner thread terminated cooperatively");
 			}
+			else if (join_result == ETIMEDOUT) {
+				Logger::warning("Cooperative shutdown timeout - using pthread_cancel");
+				pthread_cancel(Runner::runner_id);
+				pthread_join(Runner::runner_id, nullptr);
+			}
+			else {
+				Logger::warning("pthread_timedjoin_np failed: {}", strerror(join_result));
+			}
+		#else
+			//? macOS/BSD: Poll the active flag as proxy for thread completion
+			//? When thread exits, it releases the mutex, which we can detect
+			constexpr int JOIN_TIMEOUT_MS = 3000;
+			int waited_ms = 0;
+			constexpr int POLL_INTERVAL_MS = 50;
+
+			//? Wait for thread to finish by polling mutex availability
+			while (waited_ms < JOIN_TIMEOUT_MS) {
+				int trylock_result = pthread_mutex_trylock(&mtx);
+				if (trylock_result == 0) {
+					//? Got the mutex - thread has exited
+					pthread_mutex_unlock(&mtx);
+					pthread_join(Runner::runner_id, nullptr);
+					Logger::debug("Runner thread terminated cooperatively");
+					break;
+				}
+				sleep_ms(POLL_INTERVAL_MS);
+				waited_ms += POLL_INTERVAL_MS;
+			}
+
+			if (waited_ms >= JOIN_TIMEOUT_MS) {
+				//? Thread didn't exit in time - use pthread_cancel as last resort
+				Logger::warning("Cooperative shutdown timeout - using pthread_cancel");
+				pthread_cancel(Runner::runner_id);
+				pthread_join(Runner::runner_id, nullptr);
+			}
+		#endif
+
+			//? Reset termination flag before creating new thread
+			should_terminate = false;
 
 			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
 				Global::exit_error_msg = "Failed to re-create _runner thread!";
 				clean_quit(1);
 			}
+		}
+		else {
+			//? Successful completion - reset stall counter
+			consecutive_stalls = 0;
 		}
 		if (stopping or Global::resized) return;
 

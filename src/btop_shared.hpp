@@ -76,12 +76,15 @@ namespace Runner {
 	extern atomic<bool> stopping;
 	extern atomic<bool> redraw;
 	extern atomic<bool> coreNum_reset;
+	extern atomic<bool> should_terminate;  //? Flag for cooperative thread termination
 	extern pthread_t runner_id;
+	extern pthread_mutex_t mtx;  //? Mutex for thread health monitoring
 	extern bool pause_output;
 	extern string debug_bg;
 
 	void run(const string& box="", bool no_update = false, bool force_redraw = false);
 	void stop();
+	void thread_trigger();  //? Signal semaphore to wake up runner thread
 
 }
 
