@@ -106,6 +106,46 @@ namespace Gpu {
 	static std::atomic<CFDictionaryRef> pending_async_result{nullptr};
 	static std::mutex async_cleanup_mutex;
 
+	//? RAII wrapper for dispatch_semaphore_t to prevent leaks
+	class DispatchSemaphore {
+		dispatch_semaphore_t sem;
+	public:
+		explicit DispatchSemaphore(long value = 0) : sem(dispatch_semaphore_create(value)) {}
+		~DispatchSemaphore() {
+			if (sem != nullptr) {
+				dispatch_release(sem);
+			}
+		}
+		DispatchSemaphore(const DispatchSemaphore&) = delete;
+		DispatchSemaphore& operator=(const DispatchSemaphore&) = delete;
+		DispatchSemaphore(DispatchSemaphore&& other) noexcept : sem(other.sem) { other.sem = nullptr; }
+		DispatchSemaphore& operator=(DispatchSemaphore&& other) noexcept {
+			if (this != &other) {
+				if (sem != nullptr) dispatch_release(sem);
+				sem = other.sem;
+				other.sem = nullptr;
+			}
+			return *this;
+		}
+		void signal() { dispatch_semaphore_signal(sem); }
+		long wait(dispatch_time_t timeout) { return dispatch_semaphore_wait(sem, timeout); }
+		dispatch_semaphore_t get() const { return sem; }
+	};
+
+	//? Atomic max update for floating point values
+	//? Uses compare-exchange loop to ensure thread-safe peak value updates
+	template<typename T>
+	void atomic_max(std::atomic<T>& target, T value) {
+		T current = target.load(std::memory_order_relaxed);
+		while (value > current) {
+			if (target.compare_exchange_weak(current, value,
+					std::memory_order_release, std::memory_order_relaxed)) {
+				break;
+			}
+			// current is updated by compare_exchange_weak on failure
+		}
+	}
+
 	//? Async IOReport sample with timeout
 	//? Returns nullptr if timeout occurs, caller should use cached values
 	//? Memory-safe: tracks pending async results and releases them on next call
@@ -127,15 +167,20 @@ namespace Gpu {
 		}
 
 		__block CFDictionaryRef result = nullptr;
-		__block bool timed_out = false;
 
-		dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+		//? Use RAII wrapper to ensure semaphore is always released
+		auto sem_ptr = std::make_shared<DispatchSemaphore>(0);
+		dispatch_semaphore_t sem = sem_ptr->get();
 
+		//? Use shared_ptr to atomic for thread-safe timeout flag (atomics aren't copyable for __block)
+		auto timed_out_ptr = std::make_shared<std::atomic<bool>>(false);
+
+		//? Prevent use-after-free by sharing sem_ptr and timed_out_ptr with block
 		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 			CFDictionaryRef sample = IOReportCreateSamples(subscription, channels, nullptr);
 
 			//? If we already timed out, store result for cleanup on next call
-			if (timed_out) {
+			if (timed_out_ptr->load(std::memory_order_acquire)) {
 				std::lock_guard<std::mutex> lock(async_cleanup_mutex);
 				CFDictionaryRef expected = nullptr;
 				if (not pending_async_result.compare_exchange_strong(expected, sample)) {
@@ -147,13 +192,16 @@ namespace Gpu {
 			}
 
 			dispatch_semaphore_signal(sem);
+			//? sem_ptr and timed_out_ptr captured by block, ensures they stay alive
+			(void)sem_ptr;
+			(void)timed_out_ptr;
 		});
 
 		long wait_result = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, timeout_ns));
 
 		if (wait_result != 0) {
 			//? Timeout occurred - mark so async block knows to store result for cleanup
-			timed_out = true;
+			timed_out_ptr->store(true, std::memory_order_release);
 			Logger::warning("IOReportCreateSamples timeout after {}ms, using cached values",
 			                timeout_ns / NSEC_PER_MSEC);
 			return nullptr;
@@ -991,10 +1039,10 @@ namespace Gpu {
 					Shared::gpuPowerAvg = gpu_avg;
 					Shared::anePowerAvg = ane_avg;
 
-					//? Update peak power
-					if (cpu_power_watts > Shared::cpuPowerPeak) Shared::cpuPowerPeak = cpu_power_watts;
-					if (gpu_power_watts > Shared::gpuPowerPeak) Shared::gpuPowerPeak = gpu_power_watts;
-					if (ane_power_watts > Shared::anePowerPeak) Shared::anePowerPeak = ane_power_watts;
+					//? Update peak power using atomic max for thread safety
+					atomic_max(Shared::cpuPowerPeak, cpu_power_watts);
+					atomic_max(Shared::gpuPowerPeak, gpu_power_watts);
+					atomic_max(Shared::anePowerPeak, ane_power_watts);
 
 					//? Update ANE activity
 					Shared::aneActivity = ane_activity_cmds;

@@ -353,7 +353,7 @@ struct engines *discover_engines(const char *device)
 
 	if (ret) {
 		errno = ret;
-		goto err;
+		goto err_close;
 	}
 
 	qsort(engine_ptr(engines, 0), engines->num_engines,
@@ -363,6 +363,8 @@ struct engines *discover_engines(const char *device)
 
 	return engines;
 
+err_close:
+	closedir(d);
 err:
 	free(engines);
 

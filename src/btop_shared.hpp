@@ -109,15 +109,17 @@ namespace Shared {
 	extern long aneCoreCount;
 
 	//* Apple Silicon power metrics (updated by apple_silicon_gpu.cpp)
-	extern double cpuPower, gpuPower, anePower;  // Current power in Watts
-	extern double cpuPowerAvg, gpuPowerAvg, anePowerAvg;  // Average power
-	extern double cpuPowerPeak, gpuPowerPeak, anePowerPeak;  // Peak power
+	//* These are atomic to ensure thread-safe access between collector and drawer threads
+	extern atomic<double> cpuPower, gpuPower, anePower;  // Current power in Watts
+	extern atomic<double> cpuPowerAvg, gpuPowerAvg, anePowerAvg;  // Average power
+	extern atomic<double> cpuPowerPeak, gpuPowerPeak, anePowerPeak;  // Peak power
 
 	//* Apple Silicon ANE activity (commands per second)
-	extern double aneActivity;
+	extern atomic<double> aneActivity;
 
 	//* Shared temperature values for Pwr panel (updated during collection)
-	extern long long cpuTemp, gpuTemp;  // Current temperatures in Celsius
+	//* Atomic for thread-safe access between collector and drawer threads
+	extern atomic<long long> cpuTemp, gpuTemp;  // Current temperatures in Celsius
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {

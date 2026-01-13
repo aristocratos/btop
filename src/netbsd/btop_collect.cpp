@@ -125,10 +125,13 @@ namespace Shared {
 	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on NetBSD)
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on NetBSD)
 	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on NetBSD)
-	double cpuPower = 0, gpuPower = 0, anePower = 0;  // Power metrics (0 on NetBSD)
-	double cpuPowerAvg = 0, gpuPowerAvg = 0, anePowerAvg = 0;
-	double cpuPowerPeak = 0, gpuPowerPeak = 0, anePowerPeak = 0;
-	double aneActivity = 0;  // ANE activity (0 on NetBSD)
+	// Power metrics (atomic for thread-safety, 0 on NetBSD)
+	atomic<double> cpuPower{0}, gpuPower{0}, anePower{0};
+	atomic<double> cpuPowerAvg{0}, gpuPowerAvg{0}, anePowerAvg{0};
+	atomic<double> cpuPowerPeak{0}, gpuPowerPeak{0}, anePowerPeak{0};
+	atomic<double> aneActivity{0};  // ANE activity (0 on NetBSD)
+	// Temperature values (atomic for thread-safety, 0 on NetBSD)
+	atomic<long long> cpuTemp{0}, gpuTemp{0};
 	int totalMem_len, kfscale;
 	long bootTime;
 	size_t size;
