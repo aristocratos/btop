@@ -486,7 +486,9 @@ namespace Cpu {
 					const string pname = readfile(path / "name", path.filename());
 					for (const auto & file : fs::directory_iterator(path)) {
 						const string file_suffix = "input";
-						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						const string filename = file.path().filename().string();
+						//? Extract numeric ID safely, skip "temp" prefix (4 chars)
+						const int file_id = (filename.length() > 4) ? stoi_safe(filename.substr(4)) : 0;
 						string file_path = file.path();
 
 						if (!file_path.contains(file_suffix) or file_path.contains("nvme")) {
@@ -756,21 +758,14 @@ namespace Cpu {
 		//? Apply user set custom mapping if any
 		const auto& custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
-			try {
-				for (const auto& split : ssplit(custom_map)) {
-					const auto vals = ssplit(split, ':');
-					if (vals.size() != 2) continue;
-					int change_id = std::stoi(vals.at(0));
-					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
-					core_map.at(change_id) = new_id;
-				}
-			}
-			catch (const std::exception& e) {
-				Logger::warning("Error parsing cpu_core_map config: {}", e.what());
-			}
-			catch (...) {
-				Logger::warning("Unknown error parsing cpu_core_map config");
+			for (const auto& split : ssplit(custom_map)) {
+				const auto vals = ssplit(split, ':');
+				if (vals.size() != 2) continue;
+				int change_id = stoi_safe(vals.at(0), -1);
+				int new_id = stoi_safe(vals.at(1), -1);
+				if (change_id < 0 or new_id < 0) continue;
+				if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+				core_map.at(change_id) = new_id;
 			}
 		}
 
@@ -803,7 +798,7 @@ namespace Cpu {
 							if (not d.is_directory()
 								or not fs::exists(d.path() / "type")
 								or not fs::exists(d.path() / "present")
-								or stoi(readfile(d.path() / "present")) != 1)
+								or stoi_safe(readfile(d.path() / "present")) != 1)
 								continue;
 							string dev_type = readfile(d.path() / "type");
 							if (is_in(dev_type, "Battery", "UPS")) {
@@ -1099,7 +1094,8 @@ namespace Cpu {
 					if (i == 0) cread.ignore(SSmax, ' ');
 					else {
 						cread >> cpu_name;
-						int cpuNum = std::stoi(cpu_name.substr(3));
+						//? Safely extract cpu number from "cpuN" format
+						int cpuNum = (cpu_name.length() > 3) ? stoi_safe(cpu_name.substr(3)) : 0;
 						if (cpuNum >= target - 1) target = cpuNum + (cread.peek() == 'c' ? 2 : 1);
 
 						//? Add zero value for core if core number is missing from /proc/stat

@@ -324,16 +324,14 @@ namespace Cpu {
 		//? Apply user set custom mapping if any
 		const auto &custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
-			try {
-				for (const auto &split : ssplit(custom_map)) {
-					const auto vals = ssplit(split, ':');
-					if (vals.size() != 2) continue;
-					int change_id = std::stoi(vals.at(0));
-					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
-					core_map.at(change_id) = new_id;
-				}
-			} catch (...) {
+			for (const auto &split : ssplit(custom_map)) {
+				const auto vals = ssplit(split, ':');
+				if (vals.size() != 2) continue;
+				int change_id = stoi_safe(vals.at(0), -1);
+				int new_id = stoi_safe(vals.at(1), -1);
+				if (change_id < 0 or new_id < 0) continue;
+				if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+				core_map.at(change_id) = new_id;
 			}
 		}
 
@@ -581,7 +579,10 @@ namespace Mem {
 					if (fgets(buf, len, f())) {
 						char *name = std::strtok(buf, ": \n");
 						char *value = std::strtok(nullptr, ": \n");
-						if (string(name).find("dataset_name") != string::npos) {
+						//? Safety: strtok can return nullptr if no token found
+						if (name == nullptr or value == nullptr) continue;
+						string name_str(name);
+						if (name_str.find("dataset_name") != string::npos) {
 							// create entry if datasetname matches with anything in mapping
 							// relies on the fact that the dataset name is last value in the list
 							// alternatively you could parse the objset-0x... when this changes, you have a new entry
@@ -593,10 +594,10 @@ namespace Mem {
 									assign_values(disk, nread, nwritten);
 								}
 							}
-						} else if (string(name).find("nread") != string::npos) {
-							nread = atoll(value);
-						} else if (string(name).find("nwritten") != string::npos) {
-							nwritten = atoll(value);
+						} else if (name_str.find("nread") != string::npos) {
+							nread = stoll_safe(value);
+						} else if (name_str.find("nwritten") != string::npos) {
+							nwritten = stoll_safe(value);
 						}
 					}
 				}

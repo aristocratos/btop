@@ -426,16 +426,14 @@ namespace Cpu {
 		//? Apply user set custom mapping if any
 		const auto &custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
-			try {
-				for (const auto &split : ssplit(custom_map)) {
-					const auto vals = ssplit(split, ':');
-					if (vals.size() != 2) continue;
-					int change_id = std::stoi(vals.at(0));
-					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
-					core_map.at(change_id) = new_id;
-				}
-			} catch (...) {
+			for (const auto &split : ssplit(custom_map)) {
+				const auto vals = ssplit(split, ':');
+				if (vals.size() != 2) continue;
+				int change_id = stoi_safe(vals.at(0), -1);
+				int new_id = stoi_safe(vals.at(1), -1);
+				if (change_id < 0 or new_id < 0) continue;
+				if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+				core_map.at(change_id) = new_id;
 			}
 		}
 

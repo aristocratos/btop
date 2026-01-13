@@ -1606,7 +1606,7 @@ namespace Mem {
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
-		auto totalMem = Mem::get_totalMem();
+		auto totalMem = std::max(uint64_t{1}, Mem::get_totalMem());  //? Guard against division by zero
 		string out;
 		out.reserve(height * width);
 
@@ -1656,11 +1656,10 @@ namespace Mem {
 							auto split = ssplit(Config::getS("io_graph_speeds"));
 							for (const auto& entry : split) {
 								auto vals = ssplit(entry, ':');
-								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1)))
-									try {
-										custom_speeds[vals.at(0)] = std::stoi(vals.at(1));
-									}
-									catch (const std::out_of_range&) { continue; }
+								if (vals.size() == 2 and mem.disks.contains(vals.at(0)) and isint(vals.at(1))) {
+									int speed = stoi_safe(vals.at(1), -1);
+									if (speed >= 0) custom_speeds[vals.at(0)] = speed;
+								}
 							}
 						}
 					}
@@ -2133,7 +2132,7 @@ namespace Proc {
 			if (selected > 0) selected = select_max;
 		}
 		else if (cmd_key.starts_with("mousey")) {
-			int mouse_y = std::atoi(cmd_key.substr(6).data());
+			int mouse_y = (cmd_key.length() > 6) ? stoi_safe(cmd_key.substr(6), 0) : 0;
 			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
 		}
 
@@ -2173,7 +2172,7 @@ namespace Proc {
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
 		const int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) : 
 												(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max);
-		auto totalMem = Mem::get_totalMem();
+		auto totalMem = std::max(uint64_t{1}, Mem::get_totalMem());  //? Guard against division by zero
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
 		string out;

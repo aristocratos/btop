@@ -179,7 +179,7 @@ void term_resize(bool force) {
 				if (key == "q")
 					clean_quit(0);
 				else if (key.size() == 1 and isint(key)) {
-					auto intKey = stoi(key);
+					auto intKey = stoi_safe(key, -1);
 				#ifdef GPU_SUPPORT
 					if ((intKey == 0 and Gpu::count >= 5) or (intKey >= 5 and intKey - 4 <= Gpu::count)) {
 				#else
@@ -252,6 +252,9 @@ void clean_quit(int sig) {
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
 	Gpu::Intel::shutdown();
+	#ifdef __APPLE__
+	Gpu::AppleSilicon::shutdown();
+	#endif
 #endif
 
 
@@ -319,6 +322,15 @@ static void _signal_handler(const int sig) {
 				clean_quit(0);
 			}
 			break;
+		case SIGTERM:
+			//? SIGTERM should always trigger graceful shutdown
+			//? Use atomic flag to signal main loop - this is async-signal-safe
+			Global::should_quit = true;
+			if (Runner::active) {
+				Runner::stopping = true;
+			}
+			Input::interrupt();
+			break;
 		case SIGTSTP:
 			if (Runner::active) {
 				Global::should_sleep = true;
@@ -333,7 +345,11 @@ static void _signal_handler(const int sig) {
 			_resume();
 			break;
 		case SIGWINCH:
-			term_resize();
+			//? IMPORTANT: Signal handlers must be async-signal-safe
+			//? term_resize() calls non-async-safe functions (malloc, printf, etc.)
+			//? Instead, just set a flag and interrupt polling - main loop will handle resize
+			Global::resized = true;
+			Input::interrupt();
 			break;
 		case SIGUSR1:
 			// Input::poll interrupt
@@ -341,6 +357,10 @@ static void _signal_handler(const int sig) {
 		case SIGUSR2:
 			Global::reload_conf = true;
 			Input::interrupt();
+			break;
+		case SIGPIPE:
+			//? Ignore SIGPIPE to prevent crash when piped to closed process
+			//? This is handled by writing to closed pipe returning EPIPE
 			break;
 	}
 }
@@ -1218,11 +1238,13 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
 	std::atexit(_exit_handler);
 	std::signal(SIGINT, _signal_handler);
+	std::signal(SIGTERM, _signal_handler);  //? Graceful shutdown on kill
 	std::signal(SIGTSTP, _signal_handler);
 	std::signal(SIGCONT, _signal_handler);
 	std::signal(SIGWINCH, _signal_handler);
 	std::signal(SIGUSR1, _signal_handler);
 	std::signal(SIGUSR2, _signal_handler);
+	std::signal(SIGPIPE, _signal_handler);  //? Ignore SIGPIPE (prevent crash on pipe close)
 	// Add crash handlers to restore terminal on crash
 	std::signal(SIGSEGV, _crash_handler);
 	std::signal(SIGABRT, _crash_handler);

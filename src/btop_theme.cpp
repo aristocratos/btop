@@ -270,9 +270,11 @@ namespace Theme {
 						if (t_rgb.size() != 3) {
 							Logger::error("Invalid RGB decimal value: \"{}\"", source.at(name));
 						} else {
-							colors[name] = dec_to_color(stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2]), t_to_256, depth);
-							rgbs[name] = array{stoi(t_rgb[0]), stoi(t_rgb[1]), stoi(t_rgb[2])};
-
+							int r = stoi_safe(t_rgb[0], 0);
+							int g = stoi_safe(t_rgb[1], 0);
+							int b = stoi_safe(t_rgb[2], 0);
+							colors[name] = dec_to_color(r, g, b, t_to_256, depth);
+							rgbs[name] = array{r, g, b};
 						}
 					}
 				}
