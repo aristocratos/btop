@@ -129,6 +129,7 @@ namespace Term {
         if (Gpu::count > 0)
         	for (char i = '0'; i <= '5'; i++)
         		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
+		bool pwr = boxes.find("pwr") != string::npos;
 	#endif
         int width = 0;
 		if (mem) width = Mem::min_width;
@@ -137,6 +138,7 @@ namespace Term {
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
 	#ifdef GPU_SUPPORT
 		if (gpu != 0 and width < Gpu::min_width) width = Gpu::min_width;
+		if (pwr and width < Pwr::min_width) width = Pwr::min_width;
 	#endif
 
 		int height = (cpu ? Cpu::min_height : 0);
@@ -145,6 +147,7 @@ namespace Term {
 	#ifdef GPU_SUPPORT
 		for (int i = 0; i < gpu; i++)
 			height += Gpu::gpu_b_height_offsets[i] + 4;
+		if (pwr) height += Pwr::min_height;
 	#endif
 
 		return { width, height };

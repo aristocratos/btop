@@ -99,8 +99,9 @@ namespace Config {
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
-		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\",\n"
-								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu direct\" updates top process directly."},
+		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\" \"gpu\",\n"
+								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu direct\" updates top process directly.\n"
+								"#* \"gpu\" sorts by GPU usage (Apple Silicon only)."},
 
 		{"proc_reversed",		"#* Reverse sorting order, True or False."},
 
@@ -111,6 +112,8 @@ namespace Config {
 		{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
 
 		{"proc_per_core", 		"#* If process cpu usage should be of the core it's running on or usage of the total available cpu power."},
+
+		{"proc_gpu", 			"#* Show GPU usage per process (Apple Silicon only)."},
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
@@ -303,6 +306,7 @@ namespace Config {
 		{"proc_colors", true},
 		{"proc_gradient", true},
 		{"proc_per_core", false},
+		{"proc_gpu", true},
 		{"proc_mem_bytes", true},
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},

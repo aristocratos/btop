@@ -567,6 +567,10 @@ namespace Shared {
 	// Shared temperature values for Pwr panel (atomic for thread-safety)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
 
+	// Shared fan RPM values for Pwr panel (atomic for thread-safety)
+	atomic<long long> fanRpm{0};
+	atomic<int> fanCount{0};
+
 	double machTck;
 	int totalMem_len;
 
@@ -788,6 +792,29 @@ namespace Cpu {
 		} catch (std::runtime_error &e) {
 			got_sensors = false;
 			Logger::error("failed getting CPU temp");
+		}
+
+		//? Get fan RPM via SMC for Pwr panel (works for both Intel and Apple Silicon)
+		try {
+			SMCConnection smcFan;
+			int fans = smcFan.getFanCount();
+			Shared::fanCount.store(fans, std::memory_order_release);
+			if (fans > 0) {
+				long long totalRpm = 0;
+				int validFans = 0;
+				for (int i = 0; i < fans; i++) {
+					long long rpm = smcFan.getFanRPM(i);
+					if (rpm > 0) {
+						totalRpm += rpm;
+						validFans++;
+					}
+				}
+				if (validFans > 0) {
+					Shared::fanRpm.store(totalRpm / validFans, std::memory_order_release);
+				}
+			}
+		} catch (std::runtime_error &e) {
+			// Fan reading not available - silently ignore
 		}
 	}
 
@@ -1619,6 +1646,170 @@ namespace Proc {
 	detail_container detailed;
 	static std::unordered_set<size_t> dead_procs;
 
+	//? GPU per-process monitoring for Apple Silicon
+	namespace GpuProc {
+		struct GpuClientInfo {
+			uint64_t accumulated_gpu_time = 0;  // nanoseconds
+		};
+
+		static std::unordered_map<size_t, GpuClientInfo> old_gpu_times;
+		static std::unordered_map<size_t, GpuClientInfo> current_gpu_times;
+		static std::chrono::steady_clock::time_point last_collection_time;
+		static std::chrono::steady_clock::time_point prev_collection_time;
+		static bool initialized = false;
+		static int64_t elapsed_ns = 1000000000;  // Default 1 second
+
+		// Helper to extract string from CFString
+		string cfstring_to_string(CFStringRef cf_str) {
+			if (!cf_str) return "";
+			CFIndex length = CFStringGetLength(cf_str);
+			CFIndex max_size = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+			string result(max_size, '\0');
+			if (CFStringGetCString(cf_str, &result[0], max_size, kCFStringEncodingUTF8)) {
+				result.resize(strlen(result.c_str()));
+				return result;
+			}
+			return "";
+		}
+
+		// Parse "pid XXX, processname" format
+		bool parse_creator_string(const string& creator, size_t& pid) {
+			size_t pid_pos = creator.find("pid ");
+			if (pid_pos == string::npos) return false;
+			size_t comma_pos = creator.find(',', pid_pos);
+			if (comma_pos == string::npos) return false;
+			try {
+				pid = static_cast<size_t>(std::stoul(creator.substr(pid_pos + 4, comma_pos - pid_pos - 4)));
+				return true;
+			} catch (...) {
+				return false;
+			}
+		}
+
+		// Extract accumulated GPU time from AppUsage array
+		uint64_t extract_gpu_time(CFArrayRef app_usage) {
+			if (!app_usage) return 0;
+			uint64_t total_time = 0;
+			CFIndex count = CFArrayGetCount(app_usage);
+			for (CFIndex i = 0; i < count; i++) {
+				CFDictionaryRef usage_dict = (CFDictionaryRef)CFArrayGetValueAtIndex(app_usage, i);
+				if (!usage_dict || CFGetTypeID(usage_dict) != CFDictionaryGetTypeID()) continue;
+				CFNumberRef gpu_time_ref = (CFNumberRef)CFDictionaryGetValue(usage_dict, CFSTR("accumulatedGPUTime"));
+				if (gpu_time_ref && CFGetTypeID(gpu_time_ref) == CFNumberGetTypeID()) {
+					int64_t gpu_time = 0;
+					CFNumberGetValue(gpu_time_ref, kCFNumberSInt64Type, &gpu_time);
+					total_time += static_cast<uint64_t>(gpu_time);
+				}
+			}
+			return total_time;
+		}
+
+		// Collect GPU client information from IORegistry
+		void collect_gpu_clients() {
+			// Swap old and current
+			old_gpu_times = std::move(current_gpu_times);
+			current_gpu_times.clear();
+
+			// Update timing
+			prev_collection_time = last_collection_time;
+			auto current_time = std::chrono::steady_clock::now();
+			if (initialized) {
+				elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - prev_collection_time).count();
+				if (elapsed_ns <= 0) elapsed_ns = 1000000000;  // Default to 1 second
+			}
+
+			// Find the AGXAccelerator (GPU device)
+			CFMutableDictionaryRef matching = IOServiceMatching("IOAccelerator");
+			if (!matching) return;
+
+			io_iterator_t accel_iterator;
+			kern_return_t kr = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &accel_iterator);
+			if (kr != KERN_SUCCESS) return;
+
+			io_service_t accelerator;
+			while ((accelerator = IOIteratorNext(accel_iterator)) != 0) {
+				// Get children (AGXDeviceUserClient instances)
+				io_iterator_t child_iterator;
+				kr = IORegistryEntryGetChildIterator(accelerator, kIOServicePlane, &child_iterator);
+				if (kr != KERN_SUCCESS) {
+					IOObjectRelease(accelerator);
+					continue;
+				}
+
+				io_service_t child;
+				while ((child = IOIteratorNext(child_iterator)) != 0) {
+					// Get the class name
+					io_name_t class_name;
+					IOObjectGetClass(child, class_name);
+
+					// Only process AGXDeviceUserClient
+					if (strcmp(class_name, "AGXDeviceUserClient") != 0) {
+						IOObjectRelease(child);
+						continue;
+					}
+
+					// Get properties of the user client
+					CFMutableDictionaryRef properties = nullptr;
+					kr = IORegistryEntryCreateCFProperties(child, &properties, kCFAllocatorDefault, 0);
+
+					if (kr == KERN_SUCCESS && properties) {
+						// Get IOUserClientCreator
+						CFStringRef creator_ref = (CFStringRef)CFDictionaryGetValue(properties, CFSTR("IOUserClientCreator"));
+						if (creator_ref && CFGetTypeID(creator_ref) == CFStringGetTypeID()) {
+							string creator = cfstring_to_string(creator_ref);
+							size_t pid;
+							if (parse_creator_string(creator, pid)) {
+								// Get AppUsage array
+								CFArrayRef app_usage = (CFArrayRef)CFDictionaryGetValue(properties, CFSTR("AppUsage"));
+								uint64_t gpu_time = 0;
+								if (app_usage && CFGetTypeID(app_usage) == CFArrayGetTypeID()) {
+									gpu_time = extract_gpu_time(app_usage);
+								}
+
+								// Aggregate by PID (a process may have multiple clients)
+								current_gpu_times[pid].accumulated_gpu_time += gpu_time;
+							}
+						}
+						CFRelease(properties);
+					}
+					IOObjectRelease(child);
+				}
+				IOObjectRelease(child_iterator);
+				IOObjectRelease(accelerator);
+			}
+			IOObjectRelease(accel_iterator);
+
+			if (!initialized) {
+				// First run - copy current to old for valid delta calculation next time
+				old_gpu_times = current_gpu_times;
+				initialized = true;
+			}
+
+			last_collection_time = current_time;
+		}
+
+		// Get GPU usage percentage for a given PID
+		double get_gpu_percent(size_t pid) {
+			if (!initialized) return 0.0;
+
+			auto it_new = current_gpu_times.find(pid);
+			if (it_new == current_gpu_times.end()) return 0.0;
+
+			auto it_old = old_gpu_times.find(pid);
+			if (it_old == old_gpu_times.end()) return 0.0;
+
+			// Calculate delta (handle potential wraparound by treating as unsigned)
+			uint64_t new_time = it_new->second.accumulated_gpu_time;
+			uint64_t old_time = it_old->second.accumulated_gpu_time;
+			if (new_time <= old_time) return 0.0;
+			uint64_t delta = new_time - old_time;
+
+			// GPU time / elapsed time * 100 = percentage
+			double percent = static_cast<double>(delta) / static_cast<double>(elapsed_ns) * 100.0;
+			return std::min(100.0, std::max(0.0, percent));  // Clamp to 0-100
+		}
+	}  // namespace GpuProc
+
 	string get_status(char s) {
 		if (s & SRUN) return "Running";
 		if (s & SSLEEP) return "Sleeping";
@@ -1644,6 +1835,10 @@ namespace Proc {
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
+
+		//? Update gpu percent deque for process gpu graph (Apple Silicon)
+		detailed.gpu_percent.push_back(clamp((long long)round(detailed.entry.gpu_p), 0ll, 100ll));
+		while (cmp_greater(detailed.gpu_percent.size(), width)) detailed.gpu_percent.pop_front();
 
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
@@ -1729,6 +1924,11 @@ namespace Proc {
 								+ cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
 				}
 			}
+
+			//* Collect GPU per-process usage data (Apple Silicon)
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+			GpuProc::collect_gpu_clients();
+#endif
 
 			should_filter = true;
 			int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
@@ -1838,6 +2038,11 @@ namespace Proc {
 
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
+
+					//? Process GPU usage (Apple Silicon only)
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+					new_proc.gpu_p = GpuProc::get_gpu_percent(pid);
+#endif
 
 					if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 						got_detailed = true;

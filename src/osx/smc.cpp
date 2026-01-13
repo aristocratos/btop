@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include "smc.hpp"
+#include <cstring>
 
 static constexpr size_t MaxIndexCount = sizeof("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") - 1;
 static constexpr const char *KeyIndexes = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -47,23 +48,37 @@ static void _ultostr(char *str, UInt32 val) {
 namespace Cpu {
 
 	SMCConnection::SMCConnection() {
-		CFMutableDictionaryRef matchingDictionary = IOServiceMatching("AppleSMC");
-		result = IOServiceGetMatchingServices(0, matchingDictionary, &iterator);
-		if (result != kIOReturnSuccess) {
-			throw std::runtime_error("failed to get AppleSMC");
+		// Try AppleSMCKeysEndpoint first (Apple Silicon), then AppleSMC (Intel)
+		const char* serviceNames[] = {
+			"AppleSMCKeysEndpoint",  // Apple Silicon
+			"AppleSMC"               // Intel
+		};
+
+		for (const char* serviceName : serviceNames) {
+			CFMutableDictionaryRef matchingDictionary = IOServiceMatching(serviceName);
+			if (matchingDictionary == NULL) {
+				continue;
+			}
+
+			result = IOServiceGetMatchingServices(kIOMainPortDefault, matchingDictionary, &iterator);
+			if (result != kIOReturnSuccess) {
+				continue;
+			}
+
+			device = IOIteratorNext(iterator);
+			IOObjectRelease(iterator);
+			if (device == 0) {
+				continue;
+			}
+
+			result = IOServiceOpen(device, mach_task_self(), 0, &conn);
+			IOObjectRelease(device);
+			if (result == kIOReturnSuccess) {
+				return;  // Success!
+			}
 		}
 
-		device = IOIteratorNext(iterator);
-		IOObjectRelease(iterator);
-		if (device == 0) {
-			throw std::runtime_error("failed to get SMC device");
-		}
-
-		result = IOServiceOpen(device, mach_task_self(), 0, &conn);
-		IOObjectRelease(device);
-		if (result != kIOReturnSuccess) {
-			throw std::runtime_error("failed to get SMC connection");
-		}
+		throw std::runtime_error("failed to get SMC connection");
 	}
 	SMCConnection::~SMCConnection() {
 		IOServiceClose(conn);
@@ -105,6 +120,35 @@ namespace Cpu {
 			result = getSMCTemp(key);
 		}
 		return result;
+	}
+
+	int SMCConnection::getFanCount() {
+		SMCVal_t val;
+		kern_return_t result = SMCReadKey((char*)SMC_KEY_FAN_NUM, &val);
+		if (result == kIOReturnSuccess && val.dataSize > 0) {
+			return (int)val.bytes[0];
+		}
+		return 0;
+	}
+
+	long long SMCConnection::getFanRPM(int fan) {
+		SMCVal_t val;
+		char key[5];
+		snprintf(key, 5, "F%dAc", fan);
+		kern_return_t result = SMCReadKey(key, &val);
+		if (result == kIOReturnSuccess && val.dataSize > 0) {
+			if (strcmp(val.dataType, DATATYPE_FPE2) == 0) {
+				// fpe2 format (Intel): value / 4
+				int intValue = (unsigned char)val.bytes[0] * 256 + (unsigned char)val.bytes[1];
+				return static_cast<long long>(intValue / 4.0);
+			} else if (strcmp(val.dataType, "flt ") == 0 && val.dataSize >= 4) {
+				// flt format (Apple Silicon): 4-byte float
+				float fval;
+				memcpy(&fval, val.bytes, sizeof(float));
+				return static_cast<long long>(fval);
+			}
+		}
+		return -1;
 	}
 
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
