@@ -1559,7 +1559,7 @@ namespace Gpu {
 				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			// In the release tarballs of rocm 6.0.0 and 6.0.2 the version queried with rsmi_version_get is 7.0.0.0
-			} else if (version.major == 6 || version.major == 7) {
+			} else if (version.major == 6 || version.major == 7 || version.major == 1) {
 				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			} else {
