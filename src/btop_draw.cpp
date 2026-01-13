@@ -24,6 +24,7 @@ tab-size = 4
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 #include <fmt/format.h>
@@ -997,7 +998,7 @@ namespace Cpu {
 						}
 
 						//? Temperature graph + temperature (right-aligned at edge)
-						if (show_temps and gpus[i].supported_functions.temp_info) {
+						if (show_temps and gpus[i].supported_functions.temp_info and not gpus[i].temp.empty()) {
 							const auto [temp, unit] = celsius_to(gpus[i].temp.back(), temp_scale);
 							out += ' ' + gpu_temp_graphs[i](gpus[i].temp, data_same)
 								+ Mv::to(b_y + cy, b_x + b_width - 6)
@@ -1222,7 +1223,8 @@ namespace Gpu {
 			out += Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
 			//? Temperature graph, I assume the device supports utilization if it supports temperature
-			if (show_temps and not Pwr::shown) {
+			//? Check gpu.temp is non-empty to prevent UB on .back() call
+			if (show_temps and not Pwr::shown and not gpu.temp.empty()) {
 				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
 				const auto temp_color = Theme::g("temp").at(clamp(gpu.temp.back(), 0ll, 100ll));  //? 100°C = max red
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + temp_color
@@ -1810,7 +1812,8 @@ namespace Mem {
 					disk_index++;
 					if (disk_index <= disk_start) continue;  //? Skip disks before scroll position
 					const auto disk = safeVal(disks, mount);
-					if (disk.io_read.empty()) continue;  //? Skip disks without IO data in io_mode
+					//? Skip disks without IO data in io_mode - check both read and write to prevent UB on .back()
+					if (disk.io_read.empty() or disk.io_write.empty()) continue;
 					//? Check if there's enough space for this complete io_mode disk entry
 					if (cy + io_mode_lines_per_disk > height - 2) break;
 					visible_index++;
@@ -1871,9 +1874,13 @@ namespace Mem {
 					if (cy + lines_needed > height - 2) break;
 					visible_index++;
 
-					auto comb_val = (not disk.io_read.empty() ? disk.io_read.back() + disk.io_write.back() : 0ll);
-					const string human_io = (comb_val > 0 ? (disk.io_write.back() > 0 and big_disk ? "▼"s : ""s) + (disk.io_read.back() > 0 and big_disk ? "▲"s : ""s)
-											+ floating_humanizer(comb_val, true) : "");
+					//? Check both io_read and io_write are non-empty before calling .back() to prevent UB
+					const bool has_io_data = not disk.io_read.empty() and not disk.io_write.empty();
+					auto comb_val = (has_io_data ? disk.io_read.back() + disk.io_write.back() : 0ll);
+					const string human_io = (has_io_data and comb_val > 0
+						? (disk.io_write.back() > 0 and big_disk ? "▼"s : ""s)
+						+ (disk.io_read.back() > 0 and big_disk ? "▲"s : ""s)
+						+ floating_humanizer(comb_val, true) : "");
 					const string human_total = floating_humanizer(disk.total, not big_disk);
 					const string human_used = floating_humanizer(disk.used, not big_disk);
 					const string human_free = floating_humanizer(disk.free, not big_disk);
@@ -2634,16 +2641,24 @@ namespace Proc {
 		if (not data_same and ++counter >= 100) {
 			counter = 0;
 
-			std::erase_if(p_graphs, [&](const auto& pair) {
-				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			//? Build PID set once for O(1) lookup instead of O(n) search per graph entry
+			//? This converts O(n*m) to O(n+m) where n=graphs, m=processes
+			std::unordered_set<size_t> live_pids;
+			live_pids.reserve(plist.size());
+			for (const auto& p : plist) {
+				live_pids.insert(p.pid);
+			}
+
+			std::erase_if(p_graphs, [&live_pids](const auto& pair) {
+				return not live_pids.contains(pair.first);
 			});
 
-			std::erase_if(p_counters, [&](const auto& pair) {
-				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			std::erase_if(p_counters, [&live_pids](const auto& pair) {
+				return not live_pids.contains(pair.first);
 			});
 
-			std::erase_if(p_wide_cmd, [&](const auto& pair) {
-				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			std::erase_if(p_wide_cmd, [&live_pids](const auto& pair) {
+				return not live_pids.contains(pair.first);
 			});
 		}
 

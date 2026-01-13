@@ -118,6 +118,7 @@ namespace Global {
 	atomic<bool> quitting (false);
 	atomic<bool> should_quit (false);
 	atomic<bool> should_sleep (false);
+	atomic<bool> should_resume (false);  //? Flag for async-signal-safe SIGCONT handling
 	atomic<bool> _runner_started (false);
 	atomic<bool> init_conf (false);
 	atomic<bool> reload_conf (false);
@@ -284,16 +285,18 @@ void clean_quit(int sig) {
 }
 
 //* Handler for SIGTSTP; stops threads, restores terminal and sends SIGSTOP
+//* After SIGCONT resumes the process, this function handles re-initialization
 static void _sleep() {
 	Runner::stop();
 	Term::restore();
 	std::raise(SIGSTOP);
-}
-
-//* Handler for SIGCONT; re-initialize terminal and force a resize event
-static void _resume() {
-	Term::init();
-	term_resize(true);
+	//? When execution resumes here after SIGCONT, handle re-initialization
+	//? This is called from normal context, not signal handler context
+	if (Global::should_resume) {
+		Global::should_resume = false;
+		Term::init();
+		term_resize(true);
+	}
 }
 
 static void _exit_handler() {
@@ -332,17 +335,19 @@ static void _signal_handler(const int sig) {
 			Input::interrupt();
 			break;
 		case SIGTSTP:
+			//? IMPORTANT: Signal handlers must be async-signal-safe
+			//? Only set atomic flags and interrupt - main loop handles actual sleep
+			Global::should_sleep = true;
 			if (Runner::active) {
-				Global::should_sleep = true;
 				Runner::stopping = true;
-				Input::interrupt();
 			}
-			else {
-				_sleep();
-			}
+			Input::interrupt();
 			break;
 		case SIGCONT:
-			_resume();
+			//? Set flag for _sleep() to handle re-initialization after SIGSTOP
+			//? This is async-signal-safe - only setting an atomic flag
+			Global::should_resume = true;
+			Input::interrupt();
 			break;
 		case SIGWINCH:
 			//? IMPORTANT: Signal handlers must be async-signal-safe

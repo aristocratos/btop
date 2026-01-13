@@ -548,6 +548,13 @@ namespace Mem {
 				reinterpret_cast<struct diskstats*>(malloc(size)),
 				free
 			};
+
+			//? Check malloc result to prevent null pointer dereference on memory exhaustion
+			if (p.get() == nullptr) {
+				Logger::error("Failed to allocate memory for disk stats");
+				return;
+			}
+
 			if (sysctl(mib, 2, p.get(), &size, NULL, 0) == -1) {
 				Logger::error("failed to get disk stats");
 				return;
@@ -555,6 +562,8 @@ namespace Mem {
 			for (int i = 0; i < num_drives; i++) {
 				for (auto& [ignored, disk] : disks) {
 					if (disk.dev.string().find(p[i].ds_name) != string::npos) {
+						//? Check mapping contains disk.dev before accessing with .at()
+						if (not mapping.contains(disk.dev)) continue;
 						string mountpoint = mapping.at(disk.dev);
 						total_bytes_read = p[i].ds_rbytes;
 						total_bytes_write = p[i].ds_wbytes;
