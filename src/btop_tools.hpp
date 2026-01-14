@@ -366,6 +366,9 @@ namespace Tools {
 	string hostname();
 	string username();
 
+	//* Copy text to system clipboard (macOS: pbcopy, Linux: xclip/xsel)
+	bool copy_to_clipboard(const string& text);
+
 	static inline void busy_wait (void) {
 	#if defined __i386__ || defined __x86_64__
 		__builtin_ia32_pause();

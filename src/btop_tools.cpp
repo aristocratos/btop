@@ -709,4 +709,30 @@ namespace Tools {
 	bool DebugTimer::is_running() {
 		return running;
 	}
+
+	//* Copy text to system clipboard
+	bool copy_to_clipboard(const string& text) {
+		if (text.empty()) return false;
+		#ifdef __APPLE__
+			// Use pbcopy on macOS
+			FILE* pipe = popen("pbcopy", "w");
+			if (pipe == nullptr) return false;
+			fwrite(text.c_str(), 1, text.size(), pipe);
+			int result = pclose(pipe);
+			return result == 0;
+		#elif defined(__linux__)
+			// Try xclip first, then xsel
+			FILE* pipe = popen("xclip -selection clipboard 2>/dev/null", "w");
+			if (pipe == nullptr) {
+				pipe = popen("xsel --clipboard --input 2>/dev/null", "w");
+				if (pipe == nullptr) return false;
+			}
+			fwrite(text.c_str(), 1, text.size(), pipe);
+			int result = pclose(pipe);
+			return result == 0;
+		#else
+			(void)text;  // Suppress unused warning
+			return false;
+		#endif
+	}
 }

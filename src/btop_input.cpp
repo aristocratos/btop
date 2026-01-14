@@ -457,6 +457,19 @@ namespace Input {
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
 
+				//? Copy PID to clipboard when clicking on it in process details
+				else if (key == "copy_pid" and Config::getB("show_detailed")) {
+					const string pid_str = to_string(Proc::detailed.entry.pid);
+					copy_to_clipboard(pid_str);
+					return;
+				}
+				//? Copy command to clipboard when clicking on CMD area in process details
+				else if (key == "copy_cmd" and Config::getB("show_detailed")) {
+					const string& cmd = Proc::detailed.entry.cmd;
+					if (not cmd.empty()) copy_to_clipboard(cmd);
+					return;
+				}
+
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
 					const auto& [col, line] = mouse_pos;
@@ -560,6 +573,11 @@ namespace Input {
 					if (key == "C")	Proc::toggle_children = pid;
 					no_update = false;
 				}
+				//? Toggle Command column with Shift+C (when not in tree mode with selection)
+				else if (key == "C") {
+					Config::flip("proc_show_cmd");
+					redraw = true;
+				}
 				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 					if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
@@ -660,8 +678,8 @@ namespace Input {
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
 				}
-				//? Toggle VRAM display mode: 0=vram only, 1=vram+free, 2=free only
-				else if (key == "v") {
+				//? Toggle VRAM display mode with Shift+V: 0=vram only, 1=vram+free, 2=free only
+				else if (key == "V") {
 					int vram_mode = Config::getI("mem_vram_mode");
 					vram_mode = (vram_mode + 1) % 3;
 					Config::set("mem_vram_mode", vram_mode);

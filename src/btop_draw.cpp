@@ -1854,7 +1854,10 @@ namespace Mem {
 				title = "Free";
 
 			if (title.empty()) title = capitalize(name);
-			const string humanized = floating_humanizer(safeVal(mem.stats, name));
+			//? For VRAM, show "used / total" format
+			const string humanized = (name == "vram" and safeVal(mem.stats, "vram_total"s) > 0)
+				? floating_humanizer(safeVal(mem.stats, name), true) + "/" + floating_humanizer(safeVal(mem.stats, "vram_total"s))
+				: floating_humanizer(safeVal(mem.stats, name));
 			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
 			const auto& percent_data = safeVal(mem.percent, name);
 			const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
@@ -1868,14 +1871,23 @@ namespace Mem {
 			//? Calculate up movement based on actual graph height for this item
 			const string up = (this_graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(this_graph_height - 1) : "");
 			item_index++;
+			//? For VRAM, highlight the 'V' to indicate Shift+V toggle and add mouse mapping
+			const string display_title = (name == "vram")
+				? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+				: title.substr(0, big_mem ? 10 : 5);
+			if (name == "vram")
+				Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
 			if (mem_size > 2) {
-				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
+				out += Mv::to(y+1+cy, x+1+cx) + divider + display_title + ":"
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
 					+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(percent_value) + "%", 4);
 				cy += (graph_height == 0 ? 2 : this_graph_height + 1);
 			}
 			else {
-				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (this_graph_height >= 2 ? "" : " ")
+				const string small_title = (name == "vram")
+					? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+					: ljust(title, (mem_size > 1 ? 5 : 1));
+				out += Mv::to(y+1+cy, x+1+cx) + small_title + (this_graph_height >= 2 ? "" : " ")
 					+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
 				cy += (graph_height == 0 ? 1 : this_graph_height);
 			}
@@ -2364,11 +2376,16 @@ namespace Proc {
 			thread_size = (width < 75 ? - 1 : 4);
 			gpu_size = show_gpu ? 10 : 0;  // GPU% column width (5 graph + 5 value)
 			int gpu_adjustment = show_gpu ? 11 : 0;  // Account for GPU column + space
+			bool show_cmd = Config::getB("proc_show_cmd");
 			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33 - gpu_adjustment));
-			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - 33 - gpu_adjustment : -1);
+			cmd_size = (show_cmd and width > 55 ? width - prog_size - user_size - thread_size - 33 - gpu_adjustment : -1);
+			//? If Command column hidden, give extra space to Program column
+			if (not show_cmd and width > 55) {
+				prog_size = width - user_size - thread_size - 33 - gpu_adjustment;
+			}
 			tree_size = width - user_size - thread_size - 23 - gpu_adjustment;
 			if (not show_graphs) {
-				cmd_size += 5;
+				cmd_size += (show_cmd ? 5 : 0);
 				tree_size += 5;
 			}
 
@@ -2395,6 +2412,9 @@ namespace Proc {
 					+ Fx::ub + title_right + Symbols::h_line * (width - 10) + Symbols::div_right
 					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c("title") + pid_str + Fx::ub + title_right
 					+ title_left + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
+
+				//? Mouse mapping for clicking PID to copy to clipboard
+				Input::mouse_mappings["copy_pid"] = {d_y, dgraph_x + 3, 1, (int)pid_str.size() + 2};
 
 				out += Mv::to(d_y, d_x - 1) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c("div_line");
 				for (const int& i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
@@ -2452,6 +2472,9 @@ namespace Proc {
 					out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
 						+ cjust(luresize(san_cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
 				}
+
+				//? Mouse mapping for clicking CMD area to copy command to clipboard
+				Input::mouse_mappings["copy_cmd"] = {d_y + 5, d_x + 1, 3, d_width - 3};
 
 			}
 
@@ -2537,11 +2560,16 @@ namespace Proc {
 			}
 
 			//? Labels for fields in list
-			if (not proc_tree)
+			if (not proc_tree) {
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
 					+ rjust("Pid:", 8) + ' '
-					+ ljust("Program:", prog_size) + ' '
-					+ (cmd_size > 0 ? ljust("Command:", cmd_size) : "") + ' ';
+					+ ljust("Program:", prog_size) + ' ';
+				//? Highlight 'C' in Command to indicate Shift+C toggle
+				if (cmd_size > 0) {
+					out += Theme::c("hi_fg") + "C" + Theme::c("title") + ljust("ommand:", cmd_size - 1) + ' ';
+					Input::mouse_mappings["C"] = {y+1, x+11+prog_size, 1, 1};
+				}
+			}
 			else
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
 					+ ljust("Tree:", tree_size) + ' ';
@@ -3307,15 +3335,9 @@ namespace Draw {
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
-			//? Add 'v' button for VRAM toggle (only if VRAM is available)
-			if (has_vram) {
-				box += Mv::to(y, (show_disks ? divider + 2 : x + width - 15)) + Theme::c("mem_box") + Symbols::title_left
-					+ (vram_mode == 1 ? Fx::b : "") + Theme::c("hi_fg") + 'v' + Theme::c("title") + "ram" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
-				Input::mouse_mappings["v"] = {y, (show_disks ? divider + 3 : x + width - 14), 1, 4};
-			}
-			box += Mv::to(y, (show_disks ? divider + (has_vram ? 8 : 2) : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
+			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
 				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
-			Input::mouse_mappings["d"] = {y, (show_disks ? divider + (has_vram ? 9 : 3) : x + width - 8), 1, 5};
+			Input::mouse_mappings["d"] = {y, (show_disks ? divider + 3 : x + width - 8), 1, 5};
 			if (show_disks) {
 				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c("div_line");
 				for (auto i : iota(1, height - 1))
