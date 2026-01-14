@@ -740,8 +740,9 @@ namespace Input {
 					no_update = false;
 					Draw::calcSizes();
 				}
-				//? Toggle bar/graph mode in compact view with Shift+B
-				else if (key == "B") {
+				//? Toggle meter/braille mode with Shift+M or Shift+B (when height <= 18)
+				//? M = switch to Meters, B = switch to Braille (Bar graphs)
+				else if (key == "M" or key == "B") {
 					Config::flip("mem_bar_mode");
 					no_update = false;
 					redraw = true;

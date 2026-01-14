@@ -182,7 +182,7 @@ namespace Config {
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
-		{"mem_bar_mode",		"#* Use meter bars instead of braille graphs in compact memory view (when net is below mem). Toggle with Shift+B key."},
+		{"mem_bar_mode",		"#* Use meter bars instead of braille graphs when mem panel height <= 18. Toggle with Shift+M (Meter) or Shift+B (Bar/Braille)."},
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
