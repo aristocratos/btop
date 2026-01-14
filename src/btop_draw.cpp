@@ -1026,12 +1026,15 @@ namespace Gpu {
 			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
 
 			if (gpu.supported_functions.gpu_utilization) {
-				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
+				const string graph_up_field = gpu.supported_functions.gt_utilization ? "gpu-rc-totals"s : "gpu-totals"s;
+				const string graph_lo_field = gpu.supported_functions.gt_utilization ? "gpu-mc-totals"s : "gpu-totals"s;
+
+				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, graph_up_field), graph_symbol, false, true}; // TODO cpu -> gpu
             	if (not single_graph) {
                 	graph_lower = Draw::Graph{
                     	x + width - b_width - 3,
                     	graph_low_height, "cpu",
-                    	safeVal(gpu.gpu_percent, "gpu-totals"s),
+                    	safeVal(gpu.gpu_percent, graph_lo_field),
                     	graph_symbol,
                     	Config::getB("cpu_invert_lower"), true
                 	};
@@ -1055,21 +1058,26 @@ namespace Gpu {
 		int rows_used = 1;
 		//? Gpu graph, meter & clock speed
 		if (gpu.supported_functions.gpu_utilization) {
-			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
+			const string graph_up_field = gpu.supported_functions.gt_utilization ? "gpu-rc-totals"s : "gpu-totals"s;
+			const string graph_lo_field = gpu.supported_functions.gt_utilization ? "gpu-mc-totals"s : "gpu-totals"s;
+
+			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, graph_up_field), (data_same or redraw[index]));
 			if (not single_graph)
-				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
+				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, graph_lo_field), (data_same or redraw[index]));
 
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
-				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
+			if (not gpu.supported_functions.gt_utilization) {
+				out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
+					+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
-			//? Temperature graph, I assume the device supports utilization if it supports temperature
-			if (show_temps) {
-				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
-					+ temp_graph(gpu.temp, data_same or redraw[index]);
-				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				//? Temperature graph, I assume the device supports utilization if it supports temperature
+				if (show_temps) {
+					const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
+					out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
+						+ temp_graph(gpu.temp, data_same or redraw[index]);
+					out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				}
+				out += Theme::c("div_line") + Symbols::v_line;
 			}
-			out += Theme::c("div_line") + Symbols::v_line;
 			rows_used++;
 		}
 
@@ -1092,9 +1100,9 @@ namespace Gpu {
 		//? Encode and Decode meters
 		bool drawnEncDec = gpu.supported_functions.encoder_utilization and gpu.supported_functions.decoder_utilization;
 		if (drawnEncDec) {
-			out += Mv::to(b_y + rows_used, b_x +1) + Theme::c("main_fg") + Fx::b + "ENC " + enc_meter(gpu.encoder_utilization)
+			out += Mv::to(b_y + rows_used, b_x +1) + Theme::c("main_fg") + Fx::b + (gpu.supported_functions.gt_utilization ? " RC " : "ENC ") + enc_meter(gpu.encoder_utilization)
 				+ Theme::g("cpu").at(clamp(gpu.encoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.encoder_utilization), 4) + Theme::c("main_fg") + '%'
-				+ Theme::c("div_line") + Symbols::v_line + Theme::c("main_fg") + Fx::b + "DEC " + enc_meter(gpu.decoder_utilization)
+				+ Theme::c("div_line") + Symbols::v_line + Theme::c("main_fg") + Fx::b + (gpu.supported_functions.gt_utilization ? " MC " : "DEC ") + enc_meter(gpu.decoder_utilization)
 				+ Theme::g("cpu").at(clamp(gpu.decoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.decoder_utilization), 4) + Theme::c("main_fg") + '%';
 			rows_used++;
 		}
