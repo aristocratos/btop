@@ -182,6 +182,8 @@ namespace Config {
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
+		{"mem_bar_mode",		"#* Use meter bars instead of braille graphs in compact memory view (when net is below mem). Toggle with Shift+B key."},
+
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
 		{"net_beside_mem",		"#* Show net box beside mem box instead of above/below. Pressing '3' cycles: hidden -> stacked -> beside."},
@@ -329,6 +331,7 @@ namespace Config {
 		{"show_cpu_freq", true},
 		{"background_update", true},
 		{"mem_graphs", true},
+		{"mem_bar_mode", true},
 		{"mem_below_net", false},
 		{"net_beside_mem", false},
 		{"proc_full_width", false},

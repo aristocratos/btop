@@ -1600,7 +1600,7 @@ namespace Pwr {
 
 namespace Mem {
 	int width_p = 45, height_p = 36;
-	int min_width = 36, min_height = 10;
+	int min_width = 36, min_height = 13;
 	int x = 1, y, width = 20, height;
 	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, graph_height_remainder, disk_meter;
 	int disks_io_h = 0;
@@ -1684,6 +1684,7 @@ namespace Mem {
 		auto io_mode = Config::getB("io_mode");
 		auto io_graph_combined = Config::getB("io_graph_combined");
 		auto use_graphs = Config::getB("mem_graphs");
+		auto mem_bar_mode = Config::getB("mem_bar_mode");
 		auto tty_mode = Config::getB("tty_mode");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
@@ -1784,15 +1785,16 @@ namespace Mem {
 						//? Last N items get +1 height (where N = remainder)
 						const int item_graph_height = graph_height + ((idx >= extra_threshold and graph_height_remainder > 0) ? 1 : 0);
 						idx++;
-						if (use_graphs) {
-							//? Map name to valid theme color: swap_* → strip prefix, vram → "used"
-							const string graph_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
-							mem_graphs[name] = Draw::Graph{mem_meter, item_graph_height, graph_name, safeVal(mem.percent, name), graph_symbol};
-						}
-						else {
-							//? Map name to valid theme color: swap_* → strip prefix, vram → "used"
-							const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
-							mem_meters[name] = Draw::Meter{mem_meter, meter_name};
+						//? Always create meters for vertical layout (used regardless of use_graphs setting)
+						const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
+						mem_meters[name] = Draw::Meter{mem_meter, meter_name};
+						if (use_graphs or not mem_bar_mode) {
+							//? Create graphs if use_graphs is enabled (for horizontal layout)
+							//? Or if mem_bar_mode is false (for compact braille view)
+							const string graph_name = meter_name;
+							//? For compact braille mode (not use_graphs but not mem_bar_mode), use height=1
+							const int effective_height = use_graphs ? item_graph_height : 1;
+							mem_graphs[name] = Draw::Graph{mem_meter, effective_height, graph_name, safeVal(mem.percent, name), graph_symbol};
 						}
 					}
 				}
@@ -1864,7 +1866,6 @@ namespace Mem {
 
 		//? Mem and swap
 		int cx = 1, cy = 1;
-		bool big_mem = mem_width > 21;
 
 		vector<string> comb_names (dynamic_mem_names.begin(), dynamic_mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
@@ -2001,31 +2002,55 @@ namespace Mem {
 				const string up = (this_graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(this_graph_height - 1) : "");
 				item_index++;
 				//? For VRAM, highlight the 'V' to indicate Shift+V toggle and add mouse mapping
-				const string display_title = (name == "vram")
-					? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-					: title.substr(0, big_mem ? 10 : 5);
 				if (name == "vram")
 					Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
 				if (mem_size > 2) {
-					//? Calculate actual title length (visible chars only, not color codes)
-					const int visible_title_len = (name == "vram") ? 4 : min((int)title.size(), big_mem ? 10 : 5);
+					//? Multi-line mode: Line 1 = title + value, Line 2 = bar + percent
+					//? Calculate title width based on available space
+					const int value_width = (int)humanized.size() + 1;  //? +1 for spacing
+					const int max_title_chars = max(5, mem_width - value_width - 4);  //? Reserve 4 for colon+margins
+					const string display_title = (name == "vram")
+						? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+						: title.substr(0, min((int)title.size(), max_title_chars));
+					const int visible_title_len = (name == "vram") ? 4 : min((int)title.size(), max_title_chars);
 					const int title_end_col = visible_title_len + 2;  //? +1 for colon, +1 for minimum space
 
 					//? Position value right-justified, but ensure it doesn't overlap with title
 					const int value_start = max(title_end_col, (int)(mem_width - 2 - (int)humanized.size()));
 
+					//? For multi-line graphs, percentage goes at bottom row; for meters, same row
+					const int pct_row = y + 1 + cy + (graph_height == 0 ? 1 : this_graph_height);
 					out += Mv::to(y+1+cy, x+1+cx) + h_divider + display_title + ":"
 						+ Mv::to(y+1+cy, x+cx + value_start) + (h_divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
-						+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(percent_value) + "%", 4);
+						+ Mv::to(y+2+cy, x+1+cx) + graphics
+						+ Mv::to(pct_row, x + mem_width - 4) + rjust(to_string(percent_value) + "%", 4);
 					cy += (graph_height == 0 ? 2 : this_graph_height + 1);
 				}
 				else {
-					const string small_title = (name == "vram")
+					//? COMPACT mode: 1 line per entry with METER bars (or braille if mem_bar_mode is false)
+					//? Format: [Title] [meter/graph] [pct%] [value]
+					const int title_len = (name == "vram") ? 4 : min((int)title.size(), 6);
+					const int pct_len = 4;  //? " XX%"
+					const int value_len = (int)humanized.size();
+
+					const string display_title = (name == "vram")
 						? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-						: ljust(title, (mem_size > 1 ? 5 : 1));
-					out += Mv::to(y+1+cy, x+1+cx) + small_title + (this_graph_height >= 2 ? "" : " ")
-						+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
-					cy += (graph_height == 0 ? 1 : this_graph_height);
+						: ljust(title.substr(0, title_len), title_len);
+
+					//? Use meter or graph based on mem_bar_mode setting
+					const string bar_graphics = mem_bar_mode
+						? mem_meters.at(name)(percent_value)
+						: (mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same) : mem_meters.at(name)(percent_value));
+
+					//? Calculate positions for right-aligned pct and value
+					const int meter_end = 1 + title_len + 1 + mem_meter;  //? After title + space + meter
+					const int total_right = pct_len + 1 + value_len;  //? pct + space + value
+					const int pct_col = max(meter_end + 1, mem_width - total_right);
+
+					out += Mv::to(y+1+cy, x+1+cx) + display_title + " " + bar_graphics
+						+ Mv::to(y+1+cy, x + pct_col) + rjust(to_string(percent_value) + "%", pct_len)
+						+ " " + humanized;
+					cy += 1;
 				}
 			}
 			//? Add final divider if there's remaining space (closes off the last section)
@@ -3454,7 +3479,7 @@ namespace Draw {
 					//? Cap at 20 lines so proc gets maximum space
 					int max_height = 20;
 					height = min(max_height, available - 6);  //? Ensure proc gets at least 6 lines
-					if (height < 10) height = 10;  //? Absolute minimum
+					if (height < min_height) height = min_height;  //? Absolute minimum
 				}
 				else {
 					//? No proc or proc under net only: mem takes full height
@@ -3483,7 +3508,7 @@ namespace Draw {
 				//? Fixed height for mem, proc gets the rest
 				int max_height = 20;
 				height = min(max_height, available - 6);  //? Ensure proc gets at least 6 lines
-				if (height < 10) height = 10;  //? Absolute minimum
+				if (height < min_height) height = min_height;  //? Absolute minimum
 
 				x = 1;
 			#ifdef GPU_SUPPORT
@@ -3500,6 +3525,7 @@ namespace Draw {
 			#else
 				height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
 			#endif
+				if (height < min_height) height = min_height;  //? Enforce minimum height for mem panel
 				x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 				if (mem_below_net and Net::shown)
 			#ifdef GPU_SUPPORT
@@ -3537,7 +3563,8 @@ namespace Draw {
 			else {
 				mem_width = width - 1;
 				//? Use horizontal layout when config option enabled (toggle with '2' key)
-				horizontal_mem_layout = Config::getB("mem_horizontal");
+				//? Only enable horizontal layout when height > min_height (not in compact mode)
+				horizontal_mem_layout = Config::getB("mem_horizontal") and (height > min_height);
 				if (horizontal_mem_layout) {
 					//? Calculate per-item width for horizontal layout
 					//? Content area = mem_width - 1 (left border at position 0, content from 1 to mem_width-1)
@@ -3598,6 +3625,13 @@ namespace Draw {
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
+			//? Add "Bar" toggle label only in compact view (height == min_height = 13)
+			auto mem_bar_mode = Config::getB("mem_bar_mode");
+			if (height <= min_height) {
+				box += Mv::to(y, x + 10) + Theme::c("mem_box") + Symbols::title_left + (mem_bar_mode ? Fx::b : "")
+					+ Theme::c("hi_fg") + 'B' + Theme::c("title") + "ar" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+				Input::mouse_mappings["B"] = {y, x + 11, 1, 3};
+			}
 			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
 				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
 			Input::mouse_mappings["d"] = {y, (show_disks ? divider + 3 : x + width - 8), 1, 5};

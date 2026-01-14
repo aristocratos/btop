@@ -730,6 +730,13 @@ namespace Input {
 					no_update = false;
 					Draw::calcSizes();
 				}
+				//? Toggle bar/graph mode in compact view with Shift+B
+				else if (key == "B") {
+					Config::flip("mem_bar_mode");
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
 				//? Tab toggles disk selection mode
 				else if (key == "tab" and Config::getB("show_disks")) {
 					auto current = Config::getI("disk_selected");
