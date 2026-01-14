@@ -532,7 +532,7 @@ namespace Draw {
 
 namespace Cpu {
 	int width_p = 100, height_p = 32;
-	int min_width = 60, min_height = 8;
+	int min_width = 60, min_height = 11;
 	int x = 1, y = 1, width = 20, height;
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
@@ -1114,7 +1114,7 @@ namespace Cpu {
 #ifdef GPU_SUPPORT
 namespace Gpu {
 	int width_p = 100, height_p = 32;
-	int min_width = 41, min_height = 12;  //? Increased for symmetry with CPU
+	int min_width = 41, min_height = 11;
 	int width = 41, total_height;
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;

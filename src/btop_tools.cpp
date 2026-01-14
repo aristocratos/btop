@@ -143,7 +143,13 @@ namespace Term {
 
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
-		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
+		else {
+			//? mem and net can be side-by-side, so use max() not sum
+			int mem_net_height = 0;
+			if (mem) mem_net_height = Mem::min_height;
+			if (net) mem_net_height = std::max(mem_net_height, Net::min_height);
+			height += mem_net_height;
+		}
 	#ifdef GPU_SUPPORT
 		for (int i = 0; i < gpu; i++)
 			height += Gpu::gpu_b_height_offsets[i] + 4;
