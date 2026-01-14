@@ -76,7 +76,7 @@ namespace Menu {
         int getY() const { return y; }
 	};
 
-	extern bitset<8> menuMask;
+	extern bitset<16> menuMask;
 
 	//* Enum for functions in vector menuFuncs
 	enum Menus {
@@ -87,6 +87,7 @@ namespace Menu {
 		Options,
 		Help,
 	    Renice,
+		VramAlloc,
 		Main
 	};
 

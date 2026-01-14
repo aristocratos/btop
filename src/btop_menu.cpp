@@ -37,6 +37,11 @@ tab-size = 4
 
 #include <fmt/format.h>
 
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#include "osx/apple_silicon_gpu.hpp"
+#endif
+
 using std::array;
 using std::ceil;
 using std::max;
@@ -179,6 +184,9 @@ namespace Menu {
 		{"3", "Toggle NET box."},
 		{"4", "Toggle PROC box."},
 		{"5", "Toggle GPU box."},
+		{"6", "Toggle ANE split view (Apple Silicon)."},
+		{"7", "Toggle Power panel (Apple Silicon)."},
+		{"A", "GPU memory allocation menu (Apple Silicon)."},
 		{"d", "Toggle disks view in MEM box."},
 		{"F2, o", "Shows options."},
 		{"F1, ?, h", "Shows this window."},
@@ -1801,6 +1809,137 @@ static int optionsMenu(const string& key) {
 		return (redraw ? Changed : retval);
 	}
 
+#if defined(__APPLE__) && __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+	static int vramAllocMenu(const string& key) {
+		static int x{};
+		static int y{};
+		static int selected_option = 0;
+		static string custom_value;
+		static vector<std::pair<string, long long>> options;  // {label, value_mb}
+
+		if (bg.empty()) {
+			selected_option = 0;
+			custom_value.clear();
+
+			//? Calculate options based on total RAM
+			long long total_ram = Gpu::get_total_ram();
+			long long total_ram_mb = total_ram / (1024LL * 1024);
+
+			options.clear();
+			options.push_back({"Default (system managed)", 0});
+
+			//? Generate options at 66%, 75%, 83%, 92% of RAM
+			vector<int> percentages = {66, 75, 83, 92};
+			for (int pct : percentages) {
+				long long value_mb = (total_ram_mb * pct) / 100;
+				long long value_gb = value_mb / 1024;
+				string label = fmt::format("{} GiB ({}%)", value_gb, pct);
+				options.push_back({label, value_mb});
+			}
+			options.push_back({"Custom...", -1});
+		}
+
+		auto& out = Global::overlay;
+		int retval = Changed;
+
+		if (redraw) {
+			int box_width = 40;
+			int box_height = static_cast<int>(options.size()) + 8;
+			x = Term::width/2 - box_width/2;
+			y = Term::height/2 - box_height/2;
+			bg = Draw::createBox(x, y, box_width, box_height, Theme::c("hi_fg"), true, "GPU Memory Allocation");
+
+			//? Show current limit
+			int64_t current_limit_mb = 0;
+			size_t size = sizeof(current_limit_mb);
+			sysctlbyname("iogpu.wired_limit_mb", &current_limit_mb, &size, nullptr, 0);
+			string current_str = (current_limit_mb > 0)
+				? fmt::format("{:.1f} GiB", static_cast<double>(current_limit_mb) / 1024.0)
+				: "System default";
+			bg += Mv::to(y+2, x+2) + Theme::c("title") + Fx::b + cjust("Current: " + current_str, box_width - 4) + Fx::ub;
+		}
+		else if (is_in(key, "escape", "q")) {
+			return Closed;
+		}
+		else if (is_in(key, "enter", "space")) {
+			if (selected_option >= 0 and selected_option < static_cast<int>(options.size())) {
+				long long value_mb = options[selected_option].second;
+
+				if (value_mb == -1) {
+					//? Custom option - parse input
+					if (not custom_value.empty()) {
+						value_mb = stoi_safe(custom_value, 0) * 1024;  // Convert GB to MB
+					} else {
+						return (redraw ? Changed : NoChange);  // Stay in menu if no value entered
+					}
+				}
+
+				//? Execute the allocation change
+				Logger::debug("Calling set_gpu_memory_limit({})", value_mb);
+				bool result = Gpu::set_gpu_memory_limit(value_mb);
+				Logger::debug("set_gpu_memory_limit returned: {}", result);
+				//? Note: Don't force GPU refresh - let it happen naturally to avoid race conditions
+			}
+			Logger::debug("Returning Closed from vramAllocMenu");
+			return Closed;
+		}
+		else if (key.size() == 1 and isdigit(key.at(0))) {
+			//? Allow number input for custom value
+			if (options[selected_option].second == -1) {
+				if (custom_value.size() < 3) custom_value += key;  // Max 3 digits (999 GB)
+			}
+		}
+		else if (key == "backspace") {
+			if (not custom_value.empty()) custom_value.pop_back();
+		}
+		else if (is_in(key, "up", "k")) {
+			if (--selected_option < 0) selected_option = static_cast<int>(options.size()) - 1;
+			custom_value.clear();
+		}
+		else if (is_in(key, "down", "j")) {
+			if (++selected_option >= static_cast<int>(options.size())) selected_option = 0;
+			custom_value.clear();
+		}
+		else {
+			retval = NoChange;
+		}
+
+		if (retval == Changed) {
+			int cy = y + 4;
+			out = bg;
+
+			//? Draw options
+			for (size_t i = 0; i < options.size(); ++i) {
+				bool is_selected = (static_cast<int>(i) == selected_option);
+				string prefix = is_selected ? Theme::c("hi_fg") + Fx::b + "> " : "  ";
+				string suffix = is_selected ? Fx::ub + Theme::c("main_fg") : "";
+
+				if (options[i].second == -1 and is_selected) {
+					//? Custom option with input field
+					string input_display = custom_value.empty() ? "_" : custom_value + " GiB" + Fx::bl + "█" + Fx::ubl;
+					out += Mv::to(cy++, x+2) + prefix + "Custom: " + input_display + suffix;
+				} else {
+					out += Mv::to(cy++, x+2) + prefix + options[i].first + suffix;
+				}
+			}
+
+			cy++;
+			out += Mv::to(++cy, x+2) + Theme::c("hi_fg") + Fx::b + "↑↓" + Fx::ub + Theme::c("main_fg") + " Navigate  "
+				+ Theme::c("hi_fg") + Fx::b + "Enter" + Fx::ub + Theme::c("main_fg") + " Apply  "
+				+ Theme::c("hi_fg") + Fx::b + "Esc" + Fx::ub + Theme::c("main_fg") + " Cancel";
+
+			out += Fx::reset;
+		}
+
+		return (redraw ? Changed : retval);
+	}
+#else
+	//? Stub for non-Apple platforms
+	static int vramAllocMenu(const string&) {
+		return Closed;
+	}
+#endif
+
 	//* Add menus here and update enum Menus in header
 	const auto menuFunc = vector{
 		ref(sizeError),
@@ -1810,9 +1949,10 @@ static int optionsMenu(const string& key) {
 		ref(optionsMenu),
 		ref(helpMenu),
 		ref(reniceMenu),
+		ref(vramAllocMenu),
 		ref(mainMenu),
 	};
-	bitset<8> menuMask;
+	bitset<16> menuMask;
 
 	void process(const std::string_view key) {
 		if (menuMask.none()) {

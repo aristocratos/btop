@@ -143,6 +143,15 @@ namespace Gpu {
 	//? Global Apple Silicon GPU instance
 	extern AppleSiliconGpu apple_silicon_gpu;
 
+	//? Set GPU memory limit via sysctl (requires admin privileges)
+	//? Uses osascript to display native macOS password dialog
+	//? Returns true if successful, false if cancelled or failed
+	//? Pass 0 to reset to system default
+	bool set_gpu_memory_limit(long long limit_mb);
+
+	//? Get total system RAM in bytes
+	long long get_total_ram();
+
 }  // namespace Gpu
 
 #endif  // __MAC_OS_X_VERSION_MIN_REQUIRED > 101504

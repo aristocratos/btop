@@ -34,6 +34,10 @@ tab-size = 4
 #include "btop_menu.hpp"
 #include "btop_draw.hpp"
 
+#if defined(__APPLE__) && defined(GPU_SUPPORT)
+#include "osx/apple_silicon_gpu.hpp"
+#endif
+
 using namespace Tools;
 using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
@@ -721,6 +725,14 @@ namespace Input {
 					return;
 				}
 			}
+
+		#if defined(__APPLE__) && defined(GPU_SUPPORT)
+			//? Input actions for GPU box (Apple Silicon VRAM allocation)
+			if (Gpu::shown > 0 and Gpu::apple_silicon_gpu.is_available() and key == "A") {
+				Menu::show(Menu::Menus::VramAlloc);
+				return;
+			}
+		#endif
 
 			//? Input actions for mem box
 			if (Mem::shown) {
