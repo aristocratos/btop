@@ -688,6 +688,145 @@ namespace Gpu {
 		return 0.0;
 	}
 
+	std::pair<long long, long long> AppleSiliconGpu::get_gpu_memory() {
+		//? Query GPU memory stats via IORegistry
+		//? Supports both Apple Silicon (AGXAccelerator) and Intel Macs with AMD GPUs
+
+		long long in_use_bytes = 0;
+		long long total_bytes = 0;
+		bool found_gpu = false;
+
+		//? === Try Apple Silicon GPU first (AGXAccelerator) ===
+		io_iterator_t iterator;
+		kern_return_t result = IOServiceGetMatchingServices(
+			kIOMainPortDefault,
+			IOServiceMatching("AGXAccelerator"),
+			&iterator
+		);
+
+		if (result == KERN_SUCCESS) {
+			io_service_t service;
+			while ((service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
+				CFMutableDictionaryRef properties = nullptr;
+				if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS) {
+					CFDictionaryRef perf_stats = (CFDictionaryRef)CFDictionaryGetValue(
+						properties, CFSTR("PerformanceStatistics")
+					);
+
+					if (perf_stats != nullptr && CFGetTypeID(perf_stats) == CFDictionaryGetTypeID()) {
+						CFNumberRef in_use_ref = (CFNumberRef)CFDictionaryGetValue(
+							perf_stats, CFSTR("In use system memory")
+						);
+
+						if (in_use_ref != nullptr && CFGetTypeID(in_use_ref) == CFNumberGetTypeID()) {
+							int64_t value = 0;
+							if (CFNumberGetValue(in_use_ref, kCFNumberSInt64Type, &value)) {
+								in_use_bytes = static_cast<long long>(value);
+								found_gpu = true;
+							}
+						}
+					}
+					CFRelease(properties);
+				}
+				IOObjectRelease(service);
+				break;
+			}
+			IOObjectRelease(iterator);
+		}
+
+		//? For Apple Silicon: total = 2/3 of system RAM (recommended max)
+		if (found_gpu) {
+			int64_t total_ram = 0;
+			size_t size = sizeof(total_ram);
+			if (sysctlbyname("hw.memsize", &total_ram, &size, nullptr, 0) == 0) {
+				total_bytes = static_cast<long long>(total_ram * 2 / 3);
+			}
+			return {in_use_bytes, total_bytes};
+		}
+
+		//? === Try AMD GPU (Intel Macs with discrete graphics) ===
+		//? AMD GPUs on Intel Macs expose VRAM info via IORegistry
+		const char* amd_classes[] = {"AMDRadeonX6000", "AMDRadeonX5000", "AMDRadeonX4000",
+		                              "ATIRadeonX4000", "ATIRadeonX3000", nullptr};
+
+		for (int i = 0; amd_classes[i] != nullptr && !found_gpu; i++) {
+			result = IOServiceGetMatchingServices(
+				kIOMainPortDefault,
+				IOServiceMatching(amd_classes[i]),
+				&iterator
+			);
+
+			if (result != KERN_SUCCESS) continue;
+
+			io_service_t service;
+			while ((service = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
+				CFMutableDictionaryRef properties = nullptr;
+				if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS) {
+					//? Try to get VRAM size from various AMD property names
+					CFNumberRef vram_ref = nullptr;
+
+					//? Try "VRAM,totalMB" (common on newer AMD drivers)
+					vram_ref = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("VRAM,totalMB"));
+					if (vram_ref != nullptr && CFGetTypeID(vram_ref) == CFNumberGetTypeID()) {
+						int64_t vram_mb = 0;
+						if (CFNumberGetValue(vram_ref, kCFNumberSInt64Type, &vram_mb)) {
+							total_bytes = vram_mb * 1024 * 1024;
+							found_gpu = true;
+						}
+					}
+
+					//? Try "VRAM,totalSize" (bytes)
+					if (!found_gpu) {
+						vram_ref = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("VRAM,totalSize"));
+						if (vram_ref != nullptr && CFGetTypeID(vram_ref) == CFNumberGetTypeID()) {
+							int64_t vram_bytes = 0;
+							if (CFNumberGetValue(vram_ref, kCFNumberSInt64Type, &vram_bytes)) {
+								total_bytes = static_cast<long long>(vram_bytes);
+								found_gpu = true;
+							}
+						}
+					}
+
+					//? Try PerformanceStatistics for usage (similar to Apple Silicon)
+					if (found_gpu) {
+						CFDictionaryRef perf_stats = (CFDictionaryRef)CFDictionaryGetValue(
+							properties, CFSTR("PerformanceStatistics")
+						);
+						if (perf_stats != nullptr && CFGetTypeID(perf_stats) == CFDictionaryGetTypeID()) {
+							CFNumberRef used_ref = (CFNumberRef)CFDictionaryGetValue(
+								perf_stats, CFSTR("In use system memory")
+							);
+							if (used_ref == nullptr) {
+								used_ref = (CFNumberRef)CFDictionaryGetValue(
+									perf_stats, CFSTR("vramUsedBytes")
+								);
+							}
+							if (used_ref != nullptr && CFGetTypeID(used_ref) == CFNumberGetTypeID()) {
+								int64_t value = 0;
+								if (CFNumberGetValue(used_ref, kCFNumberSInt64Type, &value)) {
+									in_use_bytes = static_cast<long long>(value);
+								}
+							}
+						}
+					}
+
+					CFRelease(properties);
+				}
+				IOObjectRelease(service);
+				if (found_gpu) break;
+			}
+			IOObjectRelease(iterator);
+		}
+
+		//? If AMD GPU found but no usage stats, estimate as 50% of total (conservative)
+		if (found_gpu && in_use_bytes == 0 && total_bytes > 0) {
+			//? No real-time usage available, leave as 0 (will show 0% usage)
+			//? This is better than guessing
+		}
+
+		return {in_use_bytes, total_bytes};
+	}
+
 	void AppleSiliconGpu::parse_channels(CFDictionaryRef delta, double elapsed_seconds,
 	                                     double& out_freq_mhz, double& out_usage_percent,
 	                                     double& out_gpu_power_watts, double& out_temp_celsius,
@@ -1106,6 +1245,15 @@ namespace Gpu {
 		Shared::cpuTemp = static_cast<long long>(cpu_temp);
 		if (do_debug) {
 			Logger::debug("AppleSiliconGpu: CPU temperature: {}C", cpu_temp);
+		}
+
+		//? Get GPU memory usage from IORegistry AGXAccelerator
+		auto [gpu_mem_used, gpu_mem_total] = get_gpu_memory();
+		Shared::gpuMemUsed.store(gpu_mem_used, std::memory_order_release);
+		Shared::gpuMemTotal.store(gpu_mem_total, std::memory_order_release);
+		if (do_debug) {
+			Logger::debug("AppleSiliconGpu: GPU memory: {} MB used / {} MB max",
+			              gpu_mem_used / 1024 / 1024, gpu_mem_total / 1024 / 1024);
 		}
 
 		//? Update cache with successful metrics

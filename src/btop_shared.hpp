@@ -127,6 +127,12 @@ namespace Shared {
 	extern atomic<long long> fanRpm;  // Fan speed in RPM (average of all fans)
 	extern atomic<int> fanCount;  // Number of fans detected
 
+	//* GPU VRAM/Unified Memory usage (updated by gpu collector)
+	//* For Apple Silicon: GPU's share of unified memory from IORegistry AGXAccelerator
+	//* For Intel/discrete GPUs: actual VRAM usage
+	extern atomic<long long> gpuMemUsed;   // Currently in-use GPU memory (bytes)
+	extern atomic<long long> gpuMemTotal;  // Maximum/recommended GPU memory (bytes)
+
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
 		void operator()(kvm_t* handle) {
