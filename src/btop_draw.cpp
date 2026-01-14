@@ -1606,6 +1606,9 @@ namespace Mem {
 	int disks_io_h = 0;
 	int disks_io_half = 0;
 	bool shown = true, redraw = true;
+	bool horizontal_mem_layout = false;  //? Horizontal graph layout when disks hidden
+	int mem_item_width = 0;  //? Per-item width in horizontal layout
+	int mem_item_width_remainder = 0;  //? Remainder for width distribution
 	int disk_start = 0, disk_selected = 0, disk_select_max = 0, num_disks = 0;
 	string box;
 	std::unordered_map<string, Draw::Meter> mem_meters;
@@ -1724,7 +1727,7 @@ namespace Mem {
 			disk_meters_used.clear();
 			io_graphs.clear();
 
-			//? Mem graphs and meters - create with per-item heights for remainder distribution
+			//? Mem graphs and meters - create with per-item heights/widths for layout
 			{
 				vector<string> all_mem_names(dynamic_mem_names.begin(), dynamic_mem_names.end());
 				if (show_swap and has_swap) {
@@ -1732,29 +1735,65 @@ namespace Mem {
 				}
 				const int num_items = (int)all_mem_names.size();
 
-				//? Recalculate graph_height based on actual item count for proper fill
-				if (use_graphs) {
-					int swap_overhead = (has_swap and not swap_disk) ? 2 : 0;
-					int available_graph_lines = (height - 2) - 1 - num_items - swap_overhead;
-					graph_height = max(1, available_graph_lines / num_items);
-					graph_height_remainder = available_graph_lines > 0 ? available_graph_lines % num_items : 0;
-				}
+				if (horizontal_mem_layout) {
+					//? Recalculate item widths based on ACTUAL item count (may differ from calcSizes if mode changed)
+					const int available_width = mem_width - 1;
+					mem_item_width = available_width / num_items;
+					mem_item_width_remainder = available_width % num_items;
 
-				const int extra_threshold = num_items - graph_height_remainder;
-				int idx = 0;
-				for (const auto& name : all_mem_names) {
-					//? Last N items get +1 height (where N = remainder)
-					const int item_graph_height = graph_height + ((idx >= extra_threshold and graph_height_remainder > 0) ? 1 : 0);
-					idx++;
-					if (use_graphs) {
-						//? Map name to valid theme color: swap_* → strip prefix, vram → "cached"
-						const string graph_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "cached" : name));
-						mem_graphs[name] = Draw::Graph{mem_meter, item_graph_height, graph_name, safeVal(mem.percent, name), graph_symbol};
+					//? Horizontal mode: graphs use per-item width and full height
+					int current_x = 0;
+					int idx = 0;
+					for (const auto& name : all_mem_names) {
+						int item_width;
+						if (idx == num_items - 1) {
+							//? Last item fills remaining space to right edge (no divider after it)
+							item_width = available_width - current_x;
+						} else {
+							//? Distribute remainder: last N-1 items before the final one get +1 width
+							const int width_extra_threshold = (num_items - 1) - mem_item_width_remainder;
+							item_width = mem_item_width + ((idx >= width_extra_threshold and mem_item_width_remainder > 0) ? 1 : 0);
+						}
+						//? Graph fills entire item width (last item has no divider, others: graph fills to divider)
+						const int item_graph_width = max(1, (idx == num_items - 1) ? item_width : item_width - 1);
+						current_x += item_width;
+						idx++;
+						if (use_graphs) {
+							const string graph_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
+							mem_graphs[name] = Draw::Graph{item_graph_width, graph_height, graph_name, safeVal(mem.percent, name), graph_symbol};
+						}
+						else {
+							const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
+							mem_meters[name] = Draw::Meter{max(1, item_graph_width), meter_name};
+						}
 					}
-					else {
-						//? Map name to valid theme color: swap_* → strip prefix, vram → "cached"
-						const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "cached" : name));
-						mem_meters[name] = Draw::Meter{mem_meter, meter_name};
+				}
+				else {
+					//? Vertical mode: graphs use full width and per-item height
+					//? Recalculate graph_height based on actual item count for proper fill
+					if (use_graphs) {
+						int swap_overhead = (has_swap and not swap_disk) ? 2 : 0;
+						int available_graph_lines = (height - 2) - 1 - num_items - swap_overhead;
+						graph_height = max(1, available_graph_lines / num_items);
+						graph_height_remainder = available_graph_lines > 0 ? available_graph_lines % num_items : 0;
+					}
+
+					const int extra_threshold = num_items - graph_height_remainder;
+					int idx = 0;
+					for (const auto& name : all_mem_names) {
+						//? Last N items get +1 height (where N = remainder)
+						const int item_graph_height = graph_height + ((idx >= extra_threshold and graph_height_remainder > 0) ? 1 : 0);
+						idx++;
+						if (use_graphs) {
+							//? Map name to valid theme color: swap_* → strip prefix, vram → "used"
+							const string graph_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
+							mem_graphs[name] = Draw::Graph{mem_meter, item_graph_height, graph_name, safeVal(mem.percent, name), graph_symbol};
+						}
+						else {
+							//? Map name to valid theme color: swap_* → strip prefix, vram → "used"
+							const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
+							mem_meters[name] = Draw::Meter{mem_meter, meter_name};
+						}
 					}
 				}
 			}
@@ -1825,83 +1864,181 @@ namespace Mem {
 
 		//? Mem and swap
 		int cx = 1, cy = 1;
-		string divider = (graph_height > 0 ? Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
-						+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg") : "");
 		bool big_mem = mem_width > 21;
 
-		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (dynamic_mem_names.begin(), dynamic_mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
-		//? Distribute remainder lines to LAST items to fill bottom properly
 		const int num_mem_items = (int)comb_names.size();
-		const int extra_threshold = num_mem_items - graph_height_remainder;  //? Items at or after this index get +1
-		int item_index = 0;
-		for (const auto& name : comb_names) {
-			if (cy > height - 2) break;  //? Use full height (height - 2 accounts for border)
-			string title;
-			if (name == "swap_used") {
-				if (cy > height - 3) break;
-				if (height - cy > 4) {
-					if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + divider;
-					cy += 1;
-				}
-				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
-					+ Theme::c("main_fg") + Fx::ub;
-				cy += 1;
-				title = "Used";
-			}
-			else if (name == "swap_free")
-				title = "Free";
 
-			if (title.empty()) title = capitalize(name);
-			//? For VRAM, show "used / total" format
-			const string humanized = (name == "vram" and safeVal(mem.stats, "vram_total"s) > 0)
-				? floating_humanizer(safeVal(mem.stats, name), true) + "/" + floating_humanizer(safeVal(mem.stats, "vram_total"s))
-				: floating_humanizer(safeVal(mem.stats, name));
-			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
-			const auto& percent_data = safeVal(mem.percent, name);
-			const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
-			const string graphics = (
-				use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
-				: mem_meters.contains(name) ? mem_meters.at(name)(percent_value)
-				: "");
-			//? Calculate per-item graph height (last N items get +1 where N = remainder)
-			const int this_graph_extra = (item_index >= extra_threshold and graph_height_remainder > 0) ? 1 : 0;
-			const int this_graph_height = graph_height + this_graph_extra;
-			//? Calculate up movement based on actual graph height for this item
-			const string up = (this_graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(this_graph_height - 1) : "");
-			item_index++;
-			//? For VRAM, highlight the 'V' to indicate Shift+V toggle and add mouse mapping
-			const string display_title = (name == "vram")
-				? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-				: title.substr(0, big_mem ? 10 : 5);
-			if (name == "vram")
-				Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
-			if (mem_size > 2) {
-				out += Mv::to(y+1+cy, x+1+cx) + divider + display_title + ":"
-					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
-					+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(percent_value) + "%", 4);
-				cy += (graph_height == 0 ? 2 : this_graph_height + 1);
-			}
-			else {
-				const string small_title = (name == "vram")
-					? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-					: ljust(title, (mem_size > 1 ? 5 : 1));
-				out += Mv::to(y+1+cy, x+1+cx) + small_title + (this_graph_height >= 2 ? "" : " ")
-					+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
-				cy += (graph_height == 0 ? 1 : this_graph_height);
+		if (horizontal_mem_layout) {
+			//? Horizontal layout: Total on first row, then graphs side by side below
+			out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
+			cy = 2;  //? Start content on line 2 (after Total:)
+
+			//? Recalculate widths to match graph creation (ensures consistency if item count changed)
+			const int available_width = mem_width - 1;
+			const int base_item_width = available_width / num_mem_items;
+			const int width_remainder = available_width % num_mem_items;
+
+			int item_index = 0;
+			int current_x = 0;
+			cx = 1;
+
+			for (const auto& name : comb_names) {
+				//? Calculate item width - last item fills to right edge
+				int this_item_width;
+				if (item_index == num_mem_items - 1) {
+					//? Last item fills remaining space (no divider after it)
+					this_item_width = available_width - current_x;
+				} else {
+					//? Distribute remainder among middle items
+					const int width_extra_threshold = (num_mem_items - 1) - width_remainder;
+					this_item_width = base_item_width + ((item_index >= width_extra_threshold and width_remainder > 0) ? 1 : 0);
+				}
+
+				//? Full titles for horizontal layout (truncate to fit column if needed)
+				string title;
+				if (name == "swap_used") title = "Swap Used";
+				else if (name == "swap_free") title = "Swap Free";
+				else if (name == "vram") title = "VRAM";
+				else if (name == "used") title = "Used";
+				else if (name == "available") title = "Available";
+				else if (name == "cached") title = "Cached";
+				else if (name == "free") title = "Free";
+				else title = capitalize(name);
+				//? Truncate title if wider than column
+				if ((int)title.size() > this_item_width)
+					title = title.substr(0, this_item_width);
+
+				//? Get memory value - for VRAM show "used/total" format
+				const string humanized = (name == "vram" and safeVal(mem.stats, "vram_total"s) > 0)
+					? floating_humanizer(safeVal(mem.stats, name), true) + "/" + floating_humanizer(safeVal(mem.stats, "vram_total"s), true)
+					: floating_humanizer(safeVal(mem.stats, name), true);
+				const auto& percent_data = safeVal(mem.percent, name);
+				const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
+				const string pct_str = to_string(percent_value) + "%";
+				const string graphics = (
+					use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
+					: mem_meters.contains(name) ? mem_meters.at(name)(percent_value)
+					: "");
+
+				//? For VRAM, highlight the 'V' to indicate Shift+V toggle
+				const string display_title = (name == "vram")
+					? Theme::c("hi_fg") + "V" + Theme::c("title") + "RAM"
+					: Theme::c("title") + title;
+				if (name == "vram")
+					Input::mouse_mappings["V"] = {y+cy, x+cx, 1, 1};
+
+				//? Line 1: Title (full name)
+				out += Mv::to(y+cy, x+cx) + display_title + Theme::c("main_fg");
+
+				//? Line 2: Value and percentage (with hot theme gradient coloring)
+				out += Mv::to(y+cy+1, x+cx) + humanized + " " + Theme::g("cpu").at(clamp(percent_value, 0ll, 100ll)) + pct_str + Theme::c("main_fg");
+
+				//? Line 3+: Graph/meter - graph handles multi-line rendering internally
+				if (graph_height > 0 and not graphics.empty()) {
+					out += Mv::to(y+cy+2, x+cx) + graphics;
+				}
+
+				//? Draw vertical divider between items (except after last)
+				//? Divider spans: title row + value row + graph rows
+				if (item_index < num_mem_items - 1) {
+					out += Theme::c("div_line");
+					for (int row = 0; row < graph_height + 2; row++) {
+						out += Mv::to(y+cy+row, x+cx+this_item_width-1) + Symbols::v_line;
+					}
+					out += Theme::c("main_fg");
+				}
+
+				current_x += this_item_width;
+				cx += this_item_width;
+				item_index++;
 			}
 		}
-		//? Add final divider if there's remaining space (closes off the last section)
-		if (graph_height > 0 and cy < height - 2)
-			out += Mv::to(y+1+cy, x+1+cx) + divider;
+		else {
+			//? Vertical layout (original): stacked graphs
+			string h_divider = (graph_height > 0 ? Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
+							+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg") : "");
+
+			out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
+
+			//? Distribute remainder lines to LAST items to fill bottom properly
+			const int extra_threshold = num_mem_items - graph_height_remainder;  //? Items at or after this index get +1
+			int item_index = 0;
+			for (const auto& name : comb_names) {
+				if (cy > height - 2) break;  //? Use full height (height - 2 accounts for border)
+				string title;
+				if (name == "swap_used") {
+					if (cy > height - 3) break;
+					if (height - cy > 4) {
+						if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + h_divider;
+						cy += 1;
+					}
+					out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
+						+ Theme::c("main_fg") + Fx::ub;
+					cy += 1;
+					title = "Used";
+				}
+				else if (name == "swap_free")
+					title = "Free";
+
+				if (title.empty()) title = capitalize(name);
+				//? For VRAM, show "used/total" format
+				const string humanized = (name == "vram" and safeVal(mem.stats, "vram_total"s) > 0)
+					? floating_humanizer(safeVal(mem.stats, name), true) + "/" + floating_humanizer(safeVal(mem.stats, "vram_total"s))
+					: floating_humanizer(safeVal(mem.stats, name));
+				const int offset = max(0, h_divider.empty() ? 9 - (int)humanized.size() : 0);
+				const auto& percent_data = safeVal(mem.percent, name);
+				const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
+				const string graphics = (
+					use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
+					: mem_meters.contains(name) ? mem_meters.at(name)(percent_value)
+					: "");
+				//? Calculate per-item graph height (last N items get +1 where N = remainder)
+				const int this_graph_extra = (item_index >= extra_threshold and graph_height_remainder > 0) ? 1 : 0;
+				const int this_graph_height = graph_height + this_graph_extra;
+				//? Calculate up movement based on actual graph height for this item
+				const string up = (this_graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(this_graph_height - 1) : "");
+				item_index++;
+				//? For VRAM, highlight the 'V' to indicate Shift+V toggle and add mouse mapping
+				const string display_title = (name == "vram")
+					? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+					: title.substr(0, big_mem ? 10 : 5);
+				if (name == "vram")
+					Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
+				if (mem_size > 2) {
+					//? Calculate actual title length (visible chars only, not color codes)
+					const int visible_title_len = (name == "vram") ? 4 : min((int)title.size(), big_mem ? 10 : 5);
+					const int title_end_col = visible_title_len + 2;  //? +1 for colon, +1 for minimum space
+
+					//? Position value right-justified, but ensure it doesn't overlap with title
+					const int value_start = max(title_end_col, (int)(mem_width - 2 - (int)humanized.size()));
+
+					out += Mv::to(y+1+cy, x+1+cx) + h_divider + display_title + ":"
+						+ Mv::to(y+1+cy, x+cx + value_start) + (h_divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
+						+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(percent_value) + "%", 4);
+					cy += (graph_height == 0 ? 2 : this_graph_height + 1);
+				}
+				else {
+					const string small_title = (name == "vram")
+						? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+						: ljust(title, (mem_size > 1 ? 5 : 1));
+					out += Mv::to(y+1+cy, x+1+cx) + small_title + (this_graph_height >= 2 ? "" : " ")
+						+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
+					cy += (graph_height == 0 ? 1 : this_graph_height);
+				}
+			}
+			//? Add final divider if there's remaining space (closes off the last section)
+			if (graph_height > 0 and cy < height - 2)
+				out += Mv::to(y+1+cy, x+1+cx) + h_divider;
+		}
 
 		//? Disks
 		if (show_disks) {
 			const auto& disks = mem.disks;
 			cx = mem_width; cy = 0;
 			bool big_disk = disks_width >= 25;
-			divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
+			string disk_divider = Mv::l(1) + Theme::c("div_line") + Symbols::div_left + Symbols::h_line * disks_width + Theme::c("mem_box") + Fx::ub + Symbols::div_right + Mv::l(disks_width);
 			const string hu_div = Theme::c("div_line") + Symbols::h_line + Theme::c("main_fg");
 
 			//? Calculate how many disks can fit and set up scrolling
@@ -1949,7 +2086,7 @@ namespace Mem {
 					//? Highlight selected disk
 					const bool is_selected = (disk_selected > 0 and visible_index == disk_selected);
 					const string title_color = is_selected ? Theme::c("hi_fg") : Theme::c("title");
-					out += Mv::to(y+1+cy, x+1+cx) + divider + title_color + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - total.size())
+					out += Mv::to(y+1+cy, x+1+cx) + disk_divider + title_color + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - total.size())
 						+ trans(total) + Fx::ub;
 					if (big_disk) {
 						const string used_percent = to_string(disk.used_percent);
@@ -2016,7 +2153,7 @@ namespace Mem {
 					//? Highlight selected disk
 					const bool is_selected = (disk_selected > 0 and visible_index == disk_selected);
 					const string title_color = is_selected ? Theme::c("hi_fg") : Theme::c("title");
-					out += Mv::to(y+1+cy, x+1+cx) + divider + title_color + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
+					out += Mv::to(y+1+cy, x+1+cx) + disk_divider + title_color + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
 						+ trans(human_total) + Fx::ub + Theme::c("main_fg");
 					if (big_disk and not human_io.empty())
 						out += Mv::to(y+1+cy, x+1+cx + round((double)disks_width * 2 / 3) - round((double)human_io.size() / 2) - 1) + hu_div + human_io + hu_div;
@@ -2282,7 +2419,8 @@ namespace Proc {
 		}
 		else if (cmd_key.starts_with("mousey")) {
 			int mouse_y = (cmd_key.length() > 6) ? stoi_safe(cmd_key.substr(6), 0) : 0;
-			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
+			const int safe_divisor = max(1, select_max - 2);  //? Guard against division by zero
+			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / safe_divisor), 0, max(0, numpids - select_max));
 		}
 
 		if (start != Config::getI("proc_start")) {
@@ -2416,6 +2554,11 @@ namespace Proc {
 				tree_size += 5;
 			}
 
+			//? Defensive bounds checking for size calculations - prevent crashes during layout transitions
+			prog_size = max(1, prog_size);
+			tree_size = max(1, tree_size);
+			if (cmd_size > 0) cmd_size = max(1, cmd_size);
+
 			//? Detailed box
 			if (show_detailed) {
 				bool alive = detailed.status != "Dead";
@@ -2425,10 +2568,47 @@ namespace Proc {
 				d_x = x + dgraph_width + 1;
 				d_y = Proc::y;
 
+				//? Defensive bounds checking for detailed box dimensions - skip if invalid
+				dgraph_width = max(10, dgraph_width);
+				d_width = max(10, d_width);
+				if (d_x < 0 or d_y < 0 or dgraph_x < 0 or dgraph_width > width or d_width > width) {
+					//? Dimensions invalid during layout transition, skip detailed rendering
+					goto skip_detailed_redraw;
+				}
+
 				//? Create cpu, gpu and mem graphs if process is alive
 				if (alive or pause_proc_list) {
-					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 3, "cpu", detailed.cpu_percent, graph_symbol, false, true};
-					detailed_gpu_graph = Draw::Graph{dgraph_width - 1, 3, "cpu", detailed.gpu_percent, graph_symbol, false, true};
+					//? Non-linear scaling for better visibility of low values
+					//? Height=3 (12 dots): ~8.33% per dot
+					auto scale_to_12 = [](double pct) -> long long {
+						if (pct < 0.1) return 0;
+						if (pct <= 8.33) return 8;
+						if (pct <= 16.67) return 16;
+						if (pct <= 25) return 25;
+						if (pct <= 33.33) return 33;
+						if (pct <= 41.67) return 41;
+						if (pct <= 50) return 50;
+						if (pct <= 58.33) return 58;
+						if (pct <= 66.67) return 66;
+						if (pct <= 75) return 75;
+						if (pct <= 83.33) return 83;
+						if (pct <= 91.67) return 91;
+						return 100;
+					};
+
+					//? Scale CPU percent for graph
+					deque<long long> scaled_cpu;
+					for (const auto& val : detailed.cpu_percent)
+						scaled_cpu.push_back(scale_to_12(static_cast<double>(val)));
+					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 3, "cpu", scaled_cpu, graph_symbol, false, true, 100};
+
+					//? Scale GPU percent for graph
+					deque<long long> scaled_gpu;
+					for (const auto& val : detailed.gpu_percent)
+						scaled_gpu.push_back(scale_to_12(static_cast<double>(val)));
+					detailed_gpu_graph = Draw::Graph{dgraph_width - 1, 3, "cpu", scaled_gpu, graph_symbol, false, true, 100};
+
+					//? Memory graph (original linear scaling)
 					detailed_mem_graph = Draw::Graph{d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
 
@@ -2437,7 +2617,7 @@ namespace Proc {
 				out += Mv::to(y, x) + Theme::c("proc_box") + Symbols::div_left + Symbols::h_line + title_left + Theme::c("hi_fg") + Fx::b
 				+ (tty_mode ? "4" : Symbols::superscript.at(4)) + Theme::c("title") + "proc"
 					+ Fx::ub + title_right + Symbols::h_line * (width - 10) + Symbols::div_right
-					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c("title") + pid_str + Fx::ub + title_right
+					+ Mv::to(d_y, dgraph_x + 2) + title_left + Fx::b + Theme::c("hi_fg") + pid_str + Fx::ub + title_right
 					+ title_left + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
 
 				//? Mouse mapping for clicking PID to copy to clipboard
@@ -2488,11 +2668,11 @@ namespace Proc {
 				if (item_fit >= 8) out += cjust("Nice:", item_width);
 
 
-				//? Command line
+				//? Command line (highlighted to indicate clickable)
 				for (int i = 0; const auto& l : {'C', 'M', 'D'})
 				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
 
-				out += Theme::c("main_fg") + Fx::ub;
+				out += Theme::c("hi_fg") + Fx::ub;
 				const auto san_cmd = replace_ascii_control(detailed.entry.cmd);
 				const int cmd_size = ulen(san_cmd, true);
 				for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
@@ -2504,6 +2684,7 @@ namespace Proc {
 				Input::mouse_mappings["copy_cmd"] = {d_y + 5, d_x + 1, 3, d_width - 3};
 
 			}
+			skip_detailed_redraw:  //? Label for skipping detailed view when dimensions are invalid
 
 			//? Filter
 			auto filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
@@ -2613,9 +2794,29 @@ namespace Proc {
 
 		//? Draw details box if shown
 		if (show_detailed) {
+			//? Skip if dimensions are invalid (can happen during layout transitions)
+			if (d_width < 10 or dgraph_width < 10 or d_x < 0 or d_y < 0) goto skip_detailed_draw;
+
 			bool alive = detailed.status != "Dead";
-			const int item_fit = floor((double)(d_width - 2) / 10);
-			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
+			const int item_fit = max(1, (int)floor((double)(d_width - 2) / 10));
+			const int item_width = max(1, (int)floor((double)(d_width - 2) / min(item_fit, 8)));
+
+			//? Non-linear scaling for graph updates (height=3, 12 dots)
+			auto scale_to_12_update = [](double pct) -> long long {
+				if (pct < 0.1) return 0;
+				if (pct <= 8.33) return 8;
+				if (pct <= 16.67) return 16;
+				if (pct <= 25) return 25;
+				if (pct <= 33.33) return 33;
+				if (pct <= 41.67) return 41;
+				if (pct <= 50) return 50;
+				if (pct <= 58.33) return 58;
+				if (pct <= 66.67) return 66;
+				if (pct <= 75) return 75;
+				if (pct <= 83.33) return 83;
+				if (pct <= 91.67) return 91;
+				return 100;
+			};
 
 			//? CPU Graph part of box (rows 1-3)
 			string cpu_str = (alive or pause_proc_list ? fmt::format("{:.2f}", detailed.entry.cpu_p) : "");
@@ -2623,7 +2824,10 @@ namespace Proc {
 				cpu_str.resize(4);
 				if (cpu_str.ends_with('.')) { cpu_str.pop_back(); cpu_str.pop_back(); }
 			}
-			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
+			deque<long long> scaled_cpu_update;
+			for (const auto& val : detailed.cpu_percent)
+				scaled_cpu_update.push_back(scale_to_12_update(static_cast<double>(val)));
+			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(scaled_cpu_update, (redraw or data_same or not alive))
 				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + "CPU " + rjust(cpu_str, 4) + "%";
 
 			//? GPU Graph part of box (rows 5-7)
@@ -2632,7 +2836,10 @@ namespace Proc {
 				if (gpu_str.size() > 4) gpu_str.resize(4);
 				if (gpu_str.ends_with('.')) gpu_str.pop_back();
 			}
-			out += Mv::to(d_y + 5, dgraph_x + 1) + Fx::ub + detailed_gpu_graph(detailed.gpu_percent, (redraw or data_same or not alive))
+			deque<long long> scaled_gpu_update;
+			for (const auto& val : detailed.gpu_percent)
+				scaled_gpu_update.push_back(scale_to_12_update(static_cast<double>(val)));
+			out += Mv::to(d_y + 5, dgraph_x + 1) + Fx::ub + detailed_gpu_graph(scaled_gpu_update, (redraw or data_same or not alive))
 				+ Mv::to(d_y + 5, dgraph_x + 1) + Theme::c("title") + Fx::b + "GPU " + rjust(gpu_str, 4) + "%";
 
 			//? Info part of box
@@ -2652,11 +2859,12 @@ namespace Proc {
 			string mem_str = fmt::format("{:.2f}", mem_p);
 			mem_str.resize(4);
 			if (mem_str.ends_with('.')) mem_str.pop_back();
-			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + rjust(mem_str, 4) + "% ", (d_width / 3) - 2)
-				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
+			out += Mv::to(d_y + 4, d_x + 1) + Theme::c("title") + Fx::b + rjust((item_fit > 4 ? "Memory: " : "M:") + rjust(mem_str, 4) + "% ", max(1, (d_width / 3) - 2))
+				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * max(1, d_width / 3) + Mv::l(max(1, d_width / 3))
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
 		}
+		skip_detailed_draw:  //? Label for skipping detailed draw when dimensions are invalid
 
 		//? Check bounds of current selection and view
 		if (start > 0 and numpids <= select_max)
@@ -2722,12 +2930,13 @@ namespace Proc {
 			}
 			else {
 				int calc = (selected > lc) ? selected - lc : lc - selected;
+				const int safe_select_max = max(1, select_max);  //? Guard against division by zero
 				if (proc_colors) {
 					end = Theme::c("main_fg") + Fx::ub;
 					array<string, 3> colors;
 					for (int i = 0; int v : {(int)round(p.cpu_p), (int)round(p.mem * 100 / totalMem), (int)p.threads / 3}) {
 						if (proc_gradient) {
-							int val = (min(v, 100) + 100) - calc * 100 / select_max;
+							int val = (min(v, 100) + 100) - calc * 100 / safe_select_max;
 							if (val < 100) colors[i++] = Theme::g("proc_color").at(max(0, val));
 							else colors[i++] = Theme::g("process").at(clamp(val - 100, 0, 100));
 						}
@@ -2739,7 +2948,7 @@ namespace Proc {
 					if (show_gpu) {
 						int gpu_v = (int)round(p.gpu_p);
 						if (proc_gradient) {
-							int val = (min(gpu_v, 100) + 100) - calc * 100 / select_max;
+							int val = (min(gpu_v, 100) + 100) - calc * 100 / safe_select_max;
 							if (val < 100) gp_color = Theme::g("proc_color").at(max(0, val));
 							else gp_color = Theme::g("process").at(clamp(val - 100, 0, 100));
 						}
@@ -2752,7 +2961,7 @@ namespace Proc {
 					end = Fx::ub;
 				}
 				if (proc_gradient) {
-					g_color = Theme::g("proc").at(clamp(calc * 100 / select_max, 0, 100));
+					g_color = Theme::g("proc").at(clamp(calc * 100 / safe_select_max, 0, 100));
 				}
 			}
 
@@ -3292,6 +3501,26 @@ namespace Draw {
 				y = cpu_bottom ? 1 : Cpu::height + 1;
 			#endif
 			}
+			else if (proc_full_width and Proc::shown and not Net::shown) {
+				//? Mem+Proc stacking: mem full width on top, proc full width below
+				width = Term::width;
+			#ifdef GPU_SUPPORT
+				int available = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
+			#else
+				int available = Term::height - Cpu::height;
+			#endif
+				//? Fixed height for mem, proc gets the rest
+				int max_height = 20;
+				height = min(max_height, available - 6);  //? Ensure proc gets at least 6 lines
+				if (height < 10) height = 10;  //? Absolute minimum
+
+				x = 1;
+			#ifdef GPU_SUPPORT
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + pwr_offset;
+			#else
+				y = cpu_bottom ? 1 : Cpu::height + 1;
+			#endif
+			}
 			else {
 				//? Original stacked layout
 				width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
@@ -3313,16 +3542,7 @@ namespace Draw {
 			#endif
 			}
 
-			if (show_disks) {
-				mem_width = ceil((double)(width - 3) / 2);
-				mem_width += mem_width % 2;
-				disks_width = width - mem_width - 2;
-				divider = x + mem_width;
-			}
-			else
-				mem_width = width - 1;
-
-			//? Calculate item count based on VRAM mode
+			//? Calculate item count based on VRAM mode (needed before layout decisions)
 			int vram_mode = Config::getI("mem_vram_mode");
 			bool has_vram = Shared::gpuMemTotal.load(std::memory_order_acquire) > 0;
 			int mem_item_count = 3;  //? Base: used, available, cached
@@ -3333,6 +3553,33 @@ namespace Draw {
 			if (has_swap and not swap_disk)
 				mem_item_count += 2;  //? swap_used, swap_free
 			item_height = mem_item_count;
+
+			if (show_disks) {
+				mem_width = ceil((double)(width - 3) / 2);
+				mem_width += mem_width % 2;
+				disks_width = width - mem_width - 2;
+				divider = x + mem_width;
+				horizontal_mem_layout = false;
+				mem_item_width = 0;
+				mem_item_width_remainder = 0;
+			}
+			else {
+				mem_width = width - 1;
+				//? Use horizontal layout when config option enabled (toggle with '2' key)
+				horizontal_mem_layout = Config::getB("mem_horizontal");
+				if (horizontal_mem_layout) {
+					//? Calculate per-item width for horizontal layout
+					//? Content area = mem_width - 1 (left border at position 0, content from 1 to mem_width-1)
+					int available_width = mem_width - 1;
+					mem_item_width = available_width / mem_item_count;
+					mem_item_width_remainder = available_width % mem_item_count;
+				}
+				else {
+					mem_item_width = 0;
+					mem_item_width_remainder = 0;
+				}
+			}
+
 			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)
@@ -3340,18 +3587,34 @@ namespace Draw {
 			else
 				mem_size = 1;
 
-			mem_meter = max(0, mem_width - (mem_size > 2 ? 7 : 17));
-			if (mem_size == 1) mem_meter += 6;
+			if (horizontal_mem_layout) {
+				//? In horizontal mode, use per-item width for meter/graph width
+				mem_meter = max(0, mem_item_width - 8);  //? Leave space for label
+			}
+			else {
+				mem_meter = max(0, mem_width - (mem_size > 2 ? 7 : 17));
+				if (mem_size == 1) mem_meter += 6;
+			}
 
 			if (mem_graphs) {
-				//? Calculate graph height with remainder distribution for perfect fit
-				//? Available = content area (height-2) - Total row (1) - one label line per item
-				//? With swap: also subtract swap header row
-				int swap_overhead = (has_swap and not swap_disk) ? 2 : 0;  //? Swap header + divider
-				int available_graph_lines = (height - 2) - 1 - item_height - swap_overhead;
-				graph_height = max(1, available_graph_lines / item_height);
-				graph_height_remainder = available_graph_lines > 0 ? available_graph_lines % item_height : 0;
-				if (graph_height > 1) mem_meter += 6;
+				if (horizontal_mem_layout) {
+					//? In horizontal mode, graphs use full available height
+					//? Available = content area (height-2) - Total row (1) - title row (1) - value row (1)
+					//? No swap_overhead: swap items are displayed in columns, not extra rows
+					int available_graph_lines = (height - 2) - 1 - 2;
+					graph_height = max(1, available_graph_lines);
+					graph_height_remainder = 0;  //? No remainder needed - all same height
+				}
+				else {
+					//? Calculate graph height with remainder distribution for perfect fit
+					//? Available = content area (height-2) - Total row (1) - one label line per item
+					//? With swap: also subtract swap header row
+					int swap_overhead = (has_swap and not swap_disk) ? 2 : 0;  //? Swap header + divider
+					int available_graph_lines = (height - 2) - 1 - item_height - swap_overhead;
+					graph_height = max(1, available_graph_lines / item_height);
+					graph_height_remainder = available_graph_lines > 0 ? available_graph_lines % item_height : 0;
+					if (graph_height > 1) mem_meter += 6;
+				}
 			}
 			else {
 				graph_height = 0;
@@ -3471,6 +3734,17 @@ namespace Draw {
 				#endif
 					y = Net::y + Net::height;
 				}
+			}
+			else if (proc_full_width and Mem::shown and not Net::shown) {
+				//? Mem+Proc stacking: proc full width below mem
+				width = Term::width;
+				x = 1;
+			#ifdef GPU_SUPPORT
+				height = Term::height - Cpu::height - Gpu::total_height - pwr_offset - Mem::height;
+			#else
+				height = Term::height - Cpu::height - Mem::height;
+			#endif
+				y = Mem::y + Mem::height;
 			}
 			else {
 				//? Original stacked layout

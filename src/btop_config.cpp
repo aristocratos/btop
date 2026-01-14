@@ -198,6 +198,8 @@ namespace Config {
 
 		{"show_disks", 			"#* If mem box should be split to also show disks info."},
 
+		{"mem_horizontal", 		"#* Show memory graphs horizontally (side by side) when disks are hidden. Toggle with '2' key."},
+
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
 
 		{"show_network_drives",	"#* Show network drives (NFS, SMB, AFP) in the disks list. The protocol type will be shown in parentheses."},
@@ -334,6 +336,7 @@ namespace Config {
 		{"show_swap", true},
 		{"swap_disk", true},
 		{"show_disks", true},
+		{"mem_horizontal", false},
 		{"only_physical", true},
 		{"show_network_drives", false},
 		{"use_fstab", true},
