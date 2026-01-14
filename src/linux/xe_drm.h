@@ -52,6 +52,26 @@ struct drm_xe_query_engines {
 	struct drm_xe_engine engines[];
 };
 
+#define DRM_XE_MEM_REGION_CLASS_SYSMEM 0
+#define DRM_XE_MEM_REGION_CLASS_VRAM 1
+
+struct drm_xe_mem_region {
+	uint16_t mem_class;
+	uint16_t instance;
+	uint32_t min_page_size;
+	uint64_t total_size;
+	uint64_t used;
+	uint64_t cpu_visible_size;
+	uint64_t cpu_visible_used;
+	uint64_t reserved[6];
+};
+
+struct drm_xe_query_mem_regions {
+	uint32_t num_mem_regions;
+	uint32_t pad;
+	struct drm_xe_mem_region mem_regions[];
+};
+
 struct drm_xe_device_query {
 	uint64_t extensions;
 #define DRM_XE_DEVICE_QUERY_ENGINES       0
