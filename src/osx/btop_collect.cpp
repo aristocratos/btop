@@ -571,6 +571,11 @@ namespace Shared {
 	atomic<long long> fanRpm{0};
 	atomic<int> fanCount{0};
 
+	// GPU VRAM/Unified Memory usage (atomic for thread-safety)
+	// For Apple Silicon: GPU's share of unified memory from IORegistry AGXAccelerator
+	atomic<long long> gpuMemUsed{0};   // Currently in-use GPU memory (bytes)
+	atomic<long long> gpuMemTotal{0};  // Maximum/recommended GPU memory (bytes)
+
 	double machTck;
 	int totalMem_len;
 

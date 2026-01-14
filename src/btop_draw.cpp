@@ -544,6 +544,7 @@ namespace Cpu {
 	Draw::Meter cpu_meter;
 	vector<Draw::Meter> gpu_meters;
 	Draw::Meter ane_meter;
+	Draw::Meter vram_meter;
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
 	vector<Draw::Graph> gpu_temp_graphs;
@@ -730,6 +731,12 @@ namespace Cpu {
 			if (Shared::aneCoreCount > 0 and b_columns > 1) {
 				ane_meter = Draw::Meter{brief_meter_width, "cpu"};
 			}
+
+			//? VRAM meter for GPU memory usage (Apple Silicon unified memory or discrete VRAM)
+			//? Make bar 2 chars shorter than others to leave room for "XX.X GB Max" text
+			if (Shared::gpuMemTotal.load(std::memory_order_acquire) > 0 and b_columns > 1) {
+				vram_meter = Draw::Meter{brief_meter_width - 2, "used"};  //? "used" gradient: red-based for memory
+			}
 			#endif
 
 			int cpu_meter_width = brief_meter_width;
@@ -905,8 +912,9 @@ namespace Cpu {
 		int n_gpus_to_show = 0;
 	#ifdef GPU_SUPPORT
 		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
-		//? Include ANE row in count when GPU panel is hidden
+		//? Include ANE and VRAM rows in count when GPU panel is hidden
 		if (show_gpu and Shared::aneCoreCount > 0) n_gpus_to_show++;
+		if (show_gpu and Shared::gpuMemTotal.load(std::memory_order_acquire) > 0) n_gpus_to_show++;
 	#endif
 		max_row -= n_gpus_to_show;
 
@@ -962,6 +970,7 @@ namespace Cpu {
 
 		//? Load average
 		if (cy < b_height - 1 and cc <= b_columns) {
+			//? n_gpus_to_show already includes GPU + ANE + VRAM rows
 			cy = b_height - 2 - n_gpus_to_show;
 
 			string load_avg_pre = "Load avg:";
@@ -1056,6 +1065,40 @@ namespace Cpu {
 					+ fmt::format("{:>4.1f}", Shared::anePower) + Theme::c("main_fg") + 'W';
 			}
 		}
+
+		//? VRAM (GPU Memory) line - shown when GPU panel is not visible
+		long long gpu_mem_total = Shared::gpuMemTotal.load(std::memory_order_acquire);
+		long long gpu_mem_used = Shared::gpuMemUsed.load(std::memory_order_acquire);
+		if (show_gpu and gpu_mem_total > 0 and cy < b_height - 1) {
+			out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "VRAM";
+
+			//? Calculate percentage
+			long long vram_percent = (gpu_mem_total > 0) ? (gpu_mem_used * 100 / gpu_mem_total) : 0;
+			vram_percent = clamp(vram_percent, 0ll, 100ll);
+
+			out += ' ';
+			if (b_columns > 1) {
+				out += vram_meter(static_cast<int>(vram_percent));
+			}
+
+			//? Percentage with 4-step color: green (0-25), yellow (25-50), orange (50-75), red (75-100)
+			string vram_color;
+			if (vram_percent <= 25) {
+				vram_color = "\033[38;2;100;200;100m";  //? Green
+			} else if (vram_percent <= 50) {
+				vram_color = "\033[38;2;200;200;80m";   //? Yellow
+			} else if (vram_percent <= 75) {
+				vram_color = "\033[38;2;230;140;60m";   //? Orange
+			} else {
+				vram_color = "\033[38;2;220;80;80m";    //? Red
+			}
+
+			//? Format: "XX% YY.Y GB Max" - offset 17 to avoid overlap with bar
+			double total_gb = static_cast<double>(gpu_mem_total) / 1024.0 / 1024.0 / 1024.0;
+			out += Mv::to(b_y + cy, b_x + b_width - 17)
+				+ vram_color + rjust(to_string(vram_percent), 3) + Theme::c("main_fg") + "% "
+				+ fmt::format("{:.1f}", total_gb) + " GB Max";
+		}
 	#endif
 
 		redraw = false;
@@ -1067,7 +1110,7 @@ namespace Cpu {
 #ifdef GPU_SUPPORT
 namespace Gpu {
 	int width_p = 100, height_p = 32;
-	int min_width = 41, min_height = 8;
+	int min_width = 41, min_height = 12;  //? Increased for symmetry with CPU
 	int width = 41, total_height;
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;
@@ -2939,16 +2982,15 @@ namespace Draw {
 				//? When only top panels shown, CPU gets remaining space after GPU and Pwr
 				height = Term::height - Gpu::total_height - Pwr::height - gpus_extra_height - ane_extra_height;
 			} else {
-				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
-				//? Always add extra height for GPU/ANE info when GPU panel is hidden
+				height = max(min_height, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
+				//? Always add extra height for GPU info when GPU panel is hidden
 				height += gpus_extra_height;
-				if (Shared::aneCoreCount > 0 and Gpu::shown == 0) height += 1;
 			}
 		#else
-			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+			height = max(min_height, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 		#endif
-			//? Limit cpu height to 13 when bottom panels (mem/net/proc) are shown
-			if (not only_top_panels and height > 13) height = 13;
+			//? Limit cpu height when bottom panels (mem/net/proc) are shown
+			if (not only_top_panels) height = max(min_height, min(height, 14));
 
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
@@ -2956,7 +2998,9 @@ namespace Draw {
 		#ifdef GPU_SUPPORT
 			//? Use height - 6 because drawing loop's cy == max_row condition means effective rows = max_row - 1
 			//? Minimum 3 columns to keep CPU info box compact and preserve main graph area
-			b_columns = max(3, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - ane_extra_height - 6)));
+			//? Subtract space for GPU, ANE, and VRAM lines
+			int vram_extra_height = (Shared::gpuMemTotal.load(std::memory_order_acquire) > 0 and Gpu::shown == 0) ? 1 : 0;
+			b_columns = max(3, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - ane_extra_height - vram_extra_height - 6)));
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 6)));
 		#endif
@@ -3001,9 +3045,9 @@ namespace Draw {
 				b_column_size = 0;
 			}
 		#ifdef GPU_SUPPORT
-			//gpus_extra_height = max(0, gpus_extra_height - 1);
 			int ane_row = (Shared::aneCoreCount > 0 and Gpu::shown == 0) ? 1 : 0;
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height + ane_row);
+			int vram_row = (Shared::gpuMemTotal.load(std::memory_order_acquire) > 0 and Gpu::shown == 0) ? 1 : 0;
+			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height + ane_row + vram_row);
 		#else
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
 		#endif

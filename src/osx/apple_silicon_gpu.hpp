@@ -128,6 +128,10 @@ namespace Gpu {
 		//? Get CPU temperature via IOHIDSensors
 		double get_cpu_temperature();
 
+		//? Get GPU memory usage from IORegistry AGXAccelerator PerformanceStatistics
+		//? Returns {in_use_bytes, total_bytes} where total is recommended max for GPU
+		std::pair<long long, long long> get_gpu_memory();
+
 		//? Parse channel data from IOReport delta sample
 		void parse_channels(CFDictionaryRef delta, double elapsed_seconds,
 		                    double& out_freq_mhz, double& out_usage_percent,
