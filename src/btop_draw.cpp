@@ -1785,15 +1785,17 @@ namespace Mem {
 						//? Last N items get +1 height (where N = remainder)
 						const int item_graph_height = graph_height + ((idx >= extra_threshold and graph_height_remainder > 0) ? 1 : 0);
 						idx++;
-						//? Always create meters for vertical layout (used regardless of use_graphs setting)
+						//? Always create meters for vertical layout
 						const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "used" : name));
 						mem_meters[name] = Draw::Meter{mem_meter, meter_name};
-						if (use_graphs or not mem_bar_mode) {
-							//? Create graphs if use_graphs is enabled (for horizontal layout)
-							//? Or if mem_bar_mode is false (for compact braille view)
+						//? Create graphs when:
+						//? - use_graphs config is enabled
+						//? - mem_bar_mode is false (braille mode at height = min_height)
+						//? - height > min_height (always braille, ignore mem_bar_mode)
+						if (use_graphs or not mem_bar_mode or height > min_height) {
 							const string graph_name = meter_name;
-							//? For compact braille mode (not use_graphs but not mem_bar_mode), use height=1
-							const int effective_height = use_graphs ? item_graph_height : 1;
+							//? Use multi-line height for use_graphs or height > min_height, else single-line (height=1)
+							const int effective_height = (use_graphs or height > min_height) ? item_graph_height : 1;
 							mem_graphs[name] = Draw::Graph{mem_meter, effective_height, graph_name, safeVal(mem.percent, name), graph_symbol};
 						}
 					}
@@ -1991,8 +1993,11 @@ namespace Mem {
 				const int offset = max(0, h_divider.empty() ? 9 - (int)humanized.size() : 0);
 				const auto& percent_data = safeVal(mem.percent, name);
 				const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
+				//? Height = min_height (13): user can toggle between meters and braille
+				//? Height > min_height: always use braille graphs (fills extra space)
+				const bool show_graph = (height > min_height) or (not mem_bar_mode);
 				const string graphics = (
-					use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
+					show_graph and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
 					: mem_meters.contains(name) ? mem_meters.at(name)(percent_value)
 					: "");
 				//? Calculate per-item graph height (last N items get +1 where N = remainder)
@@ -2004,53 +2009,36 @@ namespace Mem {
 				//? For VRAM, highlight the 'V' to indicate Shift+V toggle and add mouse mapping
 				if (name == "vram")
 					Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
-				if (mem_size > 2) {
-					//? Multi-line mode: Line 1 = title + value, Line 2 = bar + percent
-					//? Calculate title width based on available space
-					const int value_width = (int)humanized.size() + 1;  //? +1 for spacing
-					const int max_title_chars = max(5, mem_width - value_width - 4);  //? Reserve 4 for colon+margins
-					const string display_title = (name == "vram")
-						? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-						: title.substr(0, min((int)title.size(), max_title_chars));
-					const int visible_title_len = (name == "vram") ? 4 : min((int)title.size(), max_title_chars);
-					const int title_end_col = visible_title_len + 2;  //? +1 for colon, +1 for minimum space
+				//? Standard mode: Line 1 = title + value, Line 2 = bar/graph + percent
+				//? Calculate title width based on available space
+				const int value_width = (int)humanized.size() + 1;  //? +1 for spacing
+				const int max_title_chars = max(5, mem_width - value_width - 4);  //? Reserve 4 for colon+margins
+				const string display_title = (name == "vram")
+					? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
+					: title.substr(0, min((int)title.size(), max_title_chars));
+				const int visible_title_len = (name == "vram") ? 4 : min((int)title.size(), max_title_chars);
+				const int title_end_col = visible_title_len + 2;  //? +1 for colon, +1 for minimum space
 
-					//? Position value right-justified, but ensure it doesn't overlap with title
-					const int value_start = max(title_end_col, (int)(mem_width - 2 - (int)humanized.size()));
+				//? Position value right-justified, but ensure it doesn't overlap with title
+				const int value_start = max(title_end_col, (int)(mem_width - 2 - (int)humanized.size()));
 
-					//? For multi-line graphs, percentage goes at bottom row; for meters, same row
-					const int pct_row = y + 1 + cy + (graph_height == 0 ? 1 : this_graph_height);
-					out += Mv::to(y+1+cy, x+1+cx) + h_divider + display_title + ":"
-						+ Mv::to(y+1+cy, x+cx + value_start) + (h_divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
-						+ Mv::to(y+2+cy, x+1+cx) + graphics
-						+ Mv::to(pct_row, x + mem_width - 4) + rjust(to_string(percent_value) + "%", 4);
-					cy += (graph_height == 0 ? 2 : this_graph_height + 1);
-				}
-				else {
-					//? COMPACT mode: 1 line per entry with METER bars (or braille if mem_bar_mode is false)
-					//? Format: [Title] [meter/graph] [pct%] [value]
-					const int title_len = (name == "vram") ? 4 : min((int)title.size(), 6);
-					const int pct_len = 4;  //? " XX%"
-					const int value_len = (int)humanized.size();
+				//? Line 1: title + value
+				out += Mv::to(y+1+cy, x+1+cx) + h_divider + display_title + ":"
+					+ Mv::to(y+1+cy, x+cx + value_start) + (h_divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized));
 
-					const string display_title = (name == "vram")
-						? Theme::c("hi_fg") + "V" + Theme::c("title") + "ram"
-						: ljust(title.substr(0, title_len), title_len);
-
-					//? Use meter or graph based on mem_bar_mode setting
-					const string bar_graphics = mem_bar_mode
-						? mem_meters.at(name)(percent_value)
-						: (mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same) : mem_meters.at(name)(percent_value));
-
-					//? Calculate positions for right-aligned pct and value
-					const int meter_end = 1 + title_len + 1 + mem_meter;  //? After title + space + meter
-					const int total_right = pct_len + 1 + value_len;  //? pct + space + value
-					const int pct_col = max(meter_end + 1, mem_width - total_right);
-
-					out += Mv::to(y+1+cy, x+1+cx) + display_title + " " + bar_graphics
-						+ Mv::to(y+1+cy, x + pct_col) + rjust(to_string(percent_value) + "%", pct_len)
-						+ " " + humanized;
-					cy += 1;
+				//? Line 2+: graphics (meter or graph) + percentage
+				//? Height > min_height (13): multi-line braille with percentage at bottom row
+				//? Height = min_height: single-line (meter or braille) with percentage on same line
+				const string pct_str = to_string(percent_value) + "%";
+				if (height > min_height and this_graph_height > 1) {
+					//? Multi-line graph mode: graph spans multiple rows, percentage at bottom
+					out += Mv::to(y+2+cy, x+1+cx) + graphics
+						+ Mv::to(y+1+cy+this_graph_height, x + mem_width - 5) + rjust(pct_str, 4);
+					cy += this_graph_height + 1;
+				} else {
+					//? Single-line mode: meter/braille + 2 spaces + percentage on same line
+					out += Mv::to(y+2+cy, x+1+cx) + graphics + "  " + rjust(pct_str, 4);
+					cy += 2;
 				}
 			}
 			//? Add final divider if there's remaining space (closes off the last section)
@@ -3590,11 +3578,20 @@ namespace Draw {
 				mem_meter = max(0, mem_item_width - 8);  //? Leave space for label
 			}
 			else {
-				mem_meter = max(0, mem_width - (mem_size > 2 ? 7 : 17));
+				//? mem_width - 8 leaves room for: 2 spaces + 4 chars percentage ("XX%")
+				mem_meter = max(0, mem_width - (mem_size > 2 ? 8 : 17));
 				if (mem_size == 1) mem_meter += 6;
 			}
 
-			if (mem_graphs) {
+			//? Determine if we need graph height calculations
+			//? - mem_graphs config enables graphs everywhere
+			//? - When height > min_height (13), always show multi-line braille graphs
+			//? - When height = min_height and mem_bar_mode is false, show single-line braille
+			auto mem_bar_mode_val = Config::getB("mem_bar_mode");
+			bool need_multiline_graphs = mem_graphs or (height > min_height);
+			bool need_singleline_graphs = (height <= min_height) and not mem_bar_mode_val;
+
+			if (need_multiline_graphs) {
 				if (horizontal_mem_layout) {
 					//? In horizontal mode, graphs use full available height
 					//? Available = content area (height-2) - Total row (1) - title row (1) - value row (1)
@@ -3614,7 +3611,13 @@ namespace Draw {
 					if (graph_height > 1) mem_meter += 6;
 				}
 			}
+			else if (need_singleline_graphs) {
+				//? Single-line braille mode (height = min_height, mem_bar_mode = false)
+				graph_height = 1;
+				graph_height_remainder = 0;
+			}
 			else {
+				//? Meters mode (height = min_height, mem_bar_mode = true)
 				graph_height = 0;
 				graph_height_remainder = 0;
 			}
@@ -3625,12 +3628,21 @@ namespace Draw {
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
-			//? Add "Bar" toggle label only in compact view (height == min_height = 13)
+			//? Add meter/bar toggle label only at height = min_height (13) where toggle is available
+			//? Shows "Bar" (B hotkey) when meters active, "Meter" (M hotkey) when braille active
 			auto mem_bar_mode = Config::getB("mem_bar_mode");
 			if (height <= min_height) {
-				box += Mv::to(y, x + 10) + Theme::c("mem_box") + Symbols::title_left + (mem_bar_mode ? Fx::b : "")
-					+ Theme::c("hi_fg") + 'B' + Theme::c("title") + "ar" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
-				Input::mouse_mappings["B"] = {y, x + 11, 1, 3};
+				if (mem_bar_mode) {
+					//? Meters active - show "Bar" label (press B to switch to braille bars)
+					box += Mv::to(y, x + 10) + Theme::c("mem_box") + Symbols::title_left + Fx::b
+						+ Theme::c("hi_fg") + 'B' + Theme::c("title") + "ar" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+					Input::mouse_mappings["B"] = {y, x + 11, 1, 3};
+				} else {
+					//? Braille active - show "Meter" label (press M to switch to meters)
+					box += Mv::to(y, x + 10) + Theme::c("mem_box") + Symbols::title_left + Fx::b
+						+ Theme::c("hi_fg") + 'M' + Theme::c("title") + "eter" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+					Input::mouse_mappings["M"] = {y, x + 11, 1, 5};
+				}
 			}
 			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
 				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
