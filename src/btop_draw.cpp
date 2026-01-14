@@ -2038,9 +2038,10 @@ namespace Mem {
 						: ljust(title.substr(0, title_len), title_len);
 
 					//? Use meter or graph based on mem_bar_mode setting
-					const string bar_graphics = mem_bar_mode
+					//? mem_bar_mode true = meters (solid blocks), false = braille graphs
+					const string bar_graphics = (mem_bar_mode or not mem_graphs.contains(name))
 						? mem_meters.at(name)(percent_value)
-						: (mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same) : mem_meters.at(name)(percent_value));
+						: mem_graphs.at(name)(percent_data, redraw or data_same);
 
 					//? Calculate positions for right-aligned pct and value
 					const int meter_end = 1 + title_len + 1 + mem_meter;  //? After title + space + meter
@@ -3578,7 +3579,10 @@ namespace Draw {
 				}
 			}
 
-			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
+			//? Force compact mode when height <= min_height (triggers compact rendering branch)
+			if (height <= min_height)
+				mem_size = 2;
+			else if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)
 				mem_size = 2;
