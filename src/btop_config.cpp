@@ -192,6 +192,8 @@ namespace Config {
 
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
 
+		{"mem_vram_mode",		"#* VRAM display mode in memory box: 0 = Vram only, 1 = Vram + Free, 2 = Free only. Toggle with 'v' key."},
+
 		{"show_disks", 			"#* If mem box should be split to also show disks info."},
 
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
@@ -380,7 +382,8 @@ namespace Config {
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
 		{"disk_selected", 0},
-		{"disk_start", 0}
+		{"disk_start", 0},
+		{"mem_vram_mode", 0}
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 

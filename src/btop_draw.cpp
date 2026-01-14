@@ -1685,6 +1685,33 @@ namespace Mem {
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto totalMem = std::max(uint64_t{1}, Mem::get_totalMem());  //? Guard against division by zero
+
+		//? Build dynamic mem_names based on vram mode:
+		//? Mode 0: vram only (used, available, cached, vram)
+		//? Mode 1: vram + free (used, available, cached, vram, free)
+		//? Mode 2: free only (used, available, cached, free) - original
+		int vram_mode = Config::getI("mem_vram_mode");
+		bool has_vram = Shared::gpuMemTotal.load(std::memory_order_acquire) > 0;
+
+		//? Track previous state to trigger redraw when VRAM availability or mode changes
+		static bool prev_has_vram = false;
+		static int prev_vram_mode = -1;
+		if (has_vram != prev_has_vram or vram_mode != prev_vram_mode) {
+			prev_has_vram = has_vram;
+			prev_vram_mode = vram_mode;
+			redraw = true;
+		}
+
+		vector<string> dynamic_mem_names = {"used", "available", "cached"};
+		if (vram_mode == 0 and has_vram) {
+			dynamic_mem_names.push_back("vram");
+		} else if (vram_mode == 1 and has_vram) {
+			dynamic_mem_names.push_back("vram");
+			dynamic_mem_names.push_back("free");
+		} else {
+			dynamic_mem_names.push_back("free");
+		}
+
 		string out;
 		out.reserve(height * width);
 
@@ -1699,11 +1726,20 @@ namespace Mem {
 
 			//? Mem graphs and meters - create with per-item heights for remainder distribution
 			{
-				vector<string> all_mem_names(mem_names.begin(), mem_names.end());
+				vector<string> all_mem_names(dynamic_mem_names.begin(), dynamic_mem_names.end());
 				if (show_swap and has_swap) {
 					all_mem_names.insert(all_mem_names.end(), swap_names.begin(), swap_names.end());
 				}
 				const int num_items = (int)all_mem_names.size();
+
+				//? Recalculate graph_height based on actual item count for proper fill
+				if (use_graphs) {
+					int swap_overhead = (has_swap and not swap_disk) ? 2 : 0;
+					int available_graph_lines = (height - 2) - 1 - num_items - swap_overhead;
+					graph_height = max(1, available_graph_lines / num_items);
+					graph_height_remainder = available_graph_lines > 0 ? available_graph_lines % num_items : 0;
+				}
+
 				const int extra_threshold = num_items - graph_height_remainder;
 				int idx = 0;
 				for (const auto& name : all_mem_names) {
@@ -1711,11 +1747,13 @@ namespace Mem {
 					const int item_graph_height = graph_height + ((idx >= extra_threshold and graph_height_remainder > 0) ? 1 : 0);
 					idx++;
 					if (use_graphs) {
-						const string graph_name = (name.starts_with("swap_") ? name.substr(5) : name);
+						//? Map name to valid theme color: swap_* → strip prefix, vram → "cached"
+						const string graph_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "cached" : name));
 						mem_graphs[name] = Draw::Graph{mem_meter, item_graph_height, graph_name, safeVal(mem.percent, name), graph_symbol};
 					}
 					else {
-						const string meter_name = (name.starts_with("swap_") ? name.substr(5) : name);
+						//? Map name to valid theme color: swap_* → strip prefix, vram → "cached"
+						const string meter_name = (name.starts_with("swap_") ? name.substr(5) : (name == "vram" ? "cached" : name));
 						mem_meters[name] = Draw::Meter{mem_meter, meter_name};
 					}
 				}
@@ -1792,7 +1830,7 @@ namespace Mem {
 		bool big_mem = mem_width > 21;
 
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
-		vector<string> comb_names (mem_names.begin(), mem_names.end());
+		vector<string> comb_names (dynamic_mem_names.begin(), dynamic_mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
 		//? Distribute remainder lines to LAST items to fill bottom properly
 		const int num_mem_items = (int)comb_names.size();
@@ -1818,9 +1856,11 @@ namespace Mem {
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(safeVal(mem.stats, name));
 			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
+			const auto& percent_data = safeVal(mem.percent, name);
+			const long long percent_value = percent_data.empty() ? 0 : percent_data.back();
 			const string graphics = (
-				use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same)
-				: mem_meters.contains(name) ? mem_meters.at(name)(safeVal(mem.percent, name).back())
+				use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(percent_data, redraw or data_same)
+				: mem_meters.contains(name) ? mem_meters.at(name)(percent_value)
 				: "");
 			//? Calculate per-item graph height (last N items get +1 where N = remainder)
 			const int this_graph_extra = (item_index >= extra_threshold and graph_height_remainder > 0) ? 1 : 0;
@@ -1831,7 +1871,7 @@ namespace Mem {
 			if (mem_size > 2) {
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
-					+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(safeVal(mem.percent, name).back()) + "%", 4);
+					+ Mv::to(y+2+cy, x+cx + (this_graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(percent_value) + "%", 4);
 				cy += (graph_height == 0 ? 2 : this_graph_height + 1);
 			}
 			else {
@@ -3225,7 +3265,17 @@ namespace Draw {
 			else
 				mem_width = width - 1;
 
-			item_height = has_swap and not swap_disk ? 6 : 4;
+			//? Calculate item count based on VRAM mode
+			int vram_mode = Config::getI("mem_vram_mode");
+			bool has_vram = Shared::gpuMemTotal.load(std::memory_order_acquire) > 0;
+			int mem_item_count = 3;  //? Base: used, available, cached
+			if (vram_mode == 1 and has_vram)
+				mem_item_count = 5;  //? vram + free
+			else
+				mem_item_count = 4;  //? Either vram only, free only, or no vram
+			if (has_swap and not swap_disk)
+				mem_item_count += 2;  //? swap_used, swap_free
+			item_height = mem_item_count;
 			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)
@@ -3257,9 +3307,15 @@ namespace Draw {
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
-			box += Mv::to(y, (show_disks ? divider + 2 : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
+			//? Add 'v' button for VRAM toggle (only if VRAM is available)
+			if (has_vram) {
+				box += Mv::to(y, (show_disks ? divider + 2 : x + width - 15)) + Theme::c("mem_box") + Symbols::title_left
+					+ (vram_mode == 1 ? Fx::b : "") + Theme::c("hi_fg") + 'v' + Theme::c("title") + "ram" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
+				Input::mouse_mappings["v"] = {y, (show_disks ? divider + 3 : x + width - 14), 1, 4};
+			}
+			box += Mv::to(y, (show_disks ? divider + (has_vram ? 8 : 2) : x + width - 9)) + Theme::c("mem_box") + Symbols::title_left + (show_disks ? Fx::b : "")
 				+ Theme::c("hi_fg") + 'd' + Theme::c("title") + "isks" + Fx::ub + Theme::c("mem_box") + Symbols::title_right;
-			Input::mouse_mappings["d"] = {y, (show_disks ? divider + 3 : x + width - 8), 1, 5};
+			Input::mouse_mappings["d"] = {y, (show_disks ? divider + (has_vram ? 9 : 3) : x + width - 8), 1, 5};
 			if (show_disks) {
 				box += Mv::to(y, divider) + Symbols::div_up + Mv::to(y + height - 1, divider) + Symbols::div_down + Theme::c("div_line");
 				for (auto i : iota(1, height - 1))
