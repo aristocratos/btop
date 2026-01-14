@@ -303,6 +303,72 @@ namespace Input {
 						return;
 					}
 
+					//? Special handling for key "2" (mem): cycle vertical -> horizontal when disks hidden
+					if (intKey == 2) {
+						bool mem_shown = Mem::shown;
+						bool show_disks = Config::getB("show_disks");
+						bool mem_horizontal = Config::getB("mem_horizontal");
+
+						if (not mem_shown) {
+							//? Mem hidden -> show mem (vertical layout)
+							Config::set("mem_horizontal", false);
+							if (not Config::toggle_box("mem")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						else if (not show_disks and not mem_horizontal) {
+							//? Mem shown, disks off, vertical -> switch to horizontal
+							Config::set("mem_horizontal", true);
+						}
+						else if (not show_disks and mem_horizontal) {
+							//? Mem shown, disks off, horizontal -> back to vertical
+							Config::set("mem_horizontal", false);
+						}
+						else {
+							//? Mem shown, disks on -> hide mem
+							if (not Config::toggle_box("mem")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						Config::current_preset = -1;
+						Draw::calcSizes();
+						Runner::run("all", false, true);
+						return;
+					}
+
+					//? Special handling for key "4" (proc) when Net is hidden but Mem is shown: toggle proc position
+					if (intKey == 4 and not Net::shown and Mem::shown) {
+						bool proc_shown = Proc::shown;
+						bool proc_full = Config::getB("proc_full_width");
+
+						if (not proc_shown) {
+							//? Proc hidden -> show proc beside mem (not full width)
+							Config::set("proc_full_width", false);
+							if (not Config::toggle_box("proc")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						else if (not proc_full) {
+							//? Proc beside mem -> switch to full width below mem
+							Config::set("proc_full_width", true);
+						}
+						else {
+							//? Proc below mem (full width) -> hide proc
+							Config::set("proc_full_width", false);
+							if (not Config::toggle_box("proc")) {
+								Menu::show(Menu::Menus::SizeError);
+								return;
+							}
+						}
+						Config::current_preset = -1;
+						Draw::calcSizes();
+						Runner::run("all", false, true);
+						return;
+					}
+
 					//? Special handling for key "4" (proc) in side-by-side mode: cycle through positions
 					if (intKey == 4 and Config::getB("net_beside_mem") and Net::shown and Mem::shown) {
 						bool proc_shown = Proc::shown;
@@ -657,6 +723,10 @@ namespace Input {
 				}
 				else if (key == "d") {
 					Config::flip("show_disks");
+					//? Reset horizontal layout when enabling disks
+					if (Config::getB("show_disks")) {
+						Config::set("mem_horizontal", false);
+					}
 					no_update = false;
 					Draw::calcSizes();
 				}
