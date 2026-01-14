@@ -23,10 +23,19 @@ tab-size = 4
 #include "apple_silicon_gpu.hpp"
 
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <libgen.h>
 #include <mach/mach_time.h>
+#include <mach-o/dyld.h>
+#include <crt_externs.h>
+#include <signal.h>
+#include <spawn.h>
 #include <sys/sysctl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
+#include <Security/Authorization.h>
 #include <dispatch/dispatch.h>
 #include <chrono>
 
@@ -734,12 +743,23 @@ namespace Gpu {
 			IOObjectRelease(iterator);
 		}
 
-		//? For Apple Silicon: total = 2/3 of system RAM (recommended max)
+		//? For Apple Silicon: get actual GPU memory limit from sysctl
 		if (found_gpu) {
-			int64_t total_ram = 0;
-			size_t size = sizeof(total_ram);
-			if (sysctlbyname("hw.memsize", &total_ram, &size, nullptr, 0) == 0) {
-				total_bytes = static_cast<long long>(total_ram * 2 / 3);
+			//? First try to get the actual wired limit set by user/system
+			int64_t wired_limit_mb = 0;
+			size_t size = sizeof(wired_limit_mb);
+			if (sysctlbyname("iogpu.wired_limit_mb", &wired_limit_mb, &size, nullptr, 0) == 0 && wired_limit_mb > 0) {
+				//? User has set a custom limit via sysctl iogpu.wired_limit_mb
+				total_bytes = static_cast<long long>(wired_limit_mb) * 1024 * 1024;
+			} else {
+				//? Fallback: use default ~66% of system RAM (macOS default for <=32GB)
+				int64_t total_ram = 0;
+				size = sizeof(total_ram);
+				if (sysctlbyname("hw.memsize", &total_ram, &size, nullptr, 0) == 0) {
+					//? Default limits: ~66% for <=32GB, ~75% for >=64GB
+					double ratio = (total_ram >= 64LL * 1024 * 1024 * 1024) ? 0.75 : 0.66;
+					total_bytes = static_cast<long long>(total_ram * ratio);
+				}
 			}
 			return {in_use_bytes, total_bytes};
 		}
@@ -1195,7 +1215,9 @@ namespace Gpu {
 					//? Uses thread-safe update function to prevent race conditions with drawer thread
 					long long cpu_pwr_mw = static_cast<long long>(cpu_power_watts * 1000);
 					long long gpu_pwr_mw = static_cast<long long>(gpu_power_watts * 1000);
-					long long ane_pwr_mw = static_cast<long long>(ane_power_watts * 1000);
+					//? Threshold ANE power: values below 0.01W display as "0.00W", so treat as 0 for graph
+					//? This prevents misleading braille dots when ANE is essentially idle
+					long long ane_pwr_mw = (ane_power_watts >= 0.01) ? static_cast<long long>(ane_power_watts * 1000) : 0;
 
 					//? Thread-safe update of power history deques and max values
 					Pwr::update_history(cpu_pwr_mw, gpu_pwr_mw, ane_pwr_mw, 100);
@@ -1260,6 +1282,82 @@ namespace Gpu {
 		cached_metrics.update(metrics);
 
 		return metrics;
+	}
+
+	long long get_total_ram() {
+		int64_t total_ram = 0;
+		size_t size = sizeof(total_ram);
+		if (sysctlbyname("hw.memsize", &total_ram, &size, nullptr, 0) == 0) {
+			return static_cast<long long>(total_ram);
+		}
+		return 0;
+	}
+
+	bool set_gpu_memory_limit(long long limit_mb) {
+		Logger::debug("Executing GPU memory limit change to {} MB", limit_mb);
+
+		//? Shutdown GPU monitoring before changing limit to avoid crashes
+		//? The sysctl change can invalidate IOReport subscriptions
+		Logger::debug("Shutting down GPU monitoring before limit change");
+		apple_silicon_gpu.shutdown();
+
+		//? Create authorization reference - shows "btop" in password dialog
+		AuthorizationRef authRef = nullptr;
+		OSStatus status = AuthorizationCreate(nullptr, kAuthorizationEmptyEnvironment,
+		                                      kAuthorizationFlagDefaults, &authRef);
+
+		if (status != errAuthorizationSuccess) {
+			Logger::error("Failed to create authorization: {}", static_cast<int>(status));
+			apple_silicon_gpu.init();
+			return false;
+		}
+
+		//? Build the sysctl command argument
+		string value_str = to_string(limit_mb <= 0 ? 0 : limit_mb);
+		string sysctl_arg = fmt::format("iogpu.wired_limit_mb={}", value_str);
+
+		//? Execute sysctl with admin privileges - this shows the native macOS password dialog
+		const char* tool = "/usr/sbin/sysctl";
+		char* args[] = {const_cast<char*>("-w"), const_cast<char*>(sysctl_arg.c_str()), nullptr};
+
+		FILE* pipe = nullptr;
+
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		status = AuthorizationExecuteWithPrivileges(authRef, tool,
+		                                            kAuthorizationFlagDefaults,
+		                                            args, &pipe);
+		#pragma clang diagnostic pop
+
+		//? Read and discard output from sysctl
+		if (pipe) {
+			char buffer[256];
+			while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+				// Consume output
+			}
+			fclose(pipe);
+		}
+
+		AuthorizationFree(authRef, kAuthorizationFlagDestroyRights);
+
+		//? Wait for the system to settle after sysctl change
+		Logger::debug("Command executed, waiting 1s before reinit");
+		usleep(1000000);  // 1 second
+
+		//? Reinitialize GPU monitoring after change
+		Logger::debug("Reinitializing GPU monitoring after limit change");
+		apple_silicon_gpu.init();
+
+		if (status == errAuthorizationSuccess) {
+			Logger::debug("GPU memory limit set successfully");
+			return true;
+		} else if (status == errAuthorizationCanceled) {
+			Logger::debug("User cancelled authorization");
+			return false;
+		} else {
+			Logger::error("Authorization failed with status: {}", static_cast<int>(status));
+			return false;
+		}
 	}
 
 }  // namespace Gpu

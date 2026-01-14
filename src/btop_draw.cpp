@@ -38,6 +38,10 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_tools.hpp"
 
+#if defined(__APPLE__) && defined(GPU_SUPPORT)
+#include "osx/apple_silicon_gpu.hpp"
+#endif
+
 using std::array;
 using std::clamp;
 using std::cmp_equal;
@@ -1386,6 +1390,13 @@ namespace Gpu {
 					+  Mv::d(1) + Mv::l(b_width/2-1) + mem_used_graph(safeVal(gpu.gpu_percent, "gpu-vram-totals"s), (data_same or redraw[index]))
 					+  Mv::l(b_width-3) + Mv::u(1+2*gpu.supported_functions.mem_utilization) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.mem_total), b_width/2-9) + Fx::ub
 					+  Mv::r(3) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-vram-totals"s).back()), 3) + '%';
+
+			#if defined(__APPLE__) && defined(GPU_SUPPORT)
+				//? Apple Silicon: Show VRAM allocation option with clickable 'A' key
+				if (Gpu::apple_silicon_gpu.is_available()) {
+					out += Mv::d(1) + Mv::l(b_width/2-1) + Theme::c("main_fg") + "Allocate: " + Theme::c("hi_fg") + Fx::b + "[A]" + Fx::ub;
+				}
+			#endif
 
 				//? Memory utilization
 				if (gpu.supported_functions.mem_utilization)
@@ -3436,6 +3447,7 @@ namespace Draw {
 			y = (Config::getB("cpu_bottom") ? 1 : Cpu::height + 1) + Gpu::total_height;
 
 			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "pwr", "", 7);
+			Logger::debug("PWR panel: x={}, y={}, width={}, height={}, ends_at_y={}", x, y, width, height, y + height - 1);
 		}
 
 		//? Calculate Pwr offset for panels below it
@@ -3628,6 +3640,7 @@ namespace Draw {
 			}
 
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
+			Logger::debug("MEM panel: x={}, y={}, width={}, height={}", x, y, width, height);
 			//? Add meter/bar toggle label only at height = min_height (13) where toggle is available
 			//? Shows "Bar" (B hotkey) when meters active, "Meter" (M hotkey) when braille active
 			auto mem_bar_mode = Config::getB("mem_bar_mode");
@@ -3716,6 +3729,7 @@ namespace Draw {
 			u_graph_height = height - 2 - d_graph_height;
 
 			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);
+			Logger::debug("NET panel: x={}, y={}, width={}, height={}, pwr_offset={}", x, y, width, height, pwr_offset);
 			auto swap_up_down = Config::getB("swap_upload_download");
 			if (swap_up_down)
 				box += createBox(b_x, b_y, b_width, b_height, "", false, "upload", "download");

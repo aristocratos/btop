@@ -122,7 +122,7 @@ else ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd midnightbsd))
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -framework IOKit -framework CoreFoundation -Wno-format-truncation
+	override ADDFLAGS += -framework IOKit -framework CoreFoundation -framework Security -Wno-format-truncation
 	SU_GROUP := wheel
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
