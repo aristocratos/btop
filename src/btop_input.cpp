@@ -670,6 +670,13 @@ namespace Input {
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
 				}
+				//? Toggle VRAM display mode: 0=vram only, 1=vram+free, 2=free only
+				else if (key == "v") {
+					int vram_mode = Config::getI("mem_vram_mode");
+					vram_mode = (vram_mode + 1) % 3;
+					Config::set("mem_vram_mode", vram_mode);
+					redraw = true;
+				}
 				else keep_going = true;
 
 				if (not keep_going) {

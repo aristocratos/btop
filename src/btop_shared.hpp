@@ -365,10 +365,12 @@ namespace Mem {
 	struct mem_info {
 		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
-			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
+			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0},
+			{"vram", 0}, {"vram_total", 0}};
 		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
-			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
+			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}},
+			{"vram", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};

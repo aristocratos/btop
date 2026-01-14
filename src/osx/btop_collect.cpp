@@ -406,8 +406,8 @@ namespace Gpu {
 				.pwr_usage = true,
 				.pwr_state = false,
 				.temp_info = true,
-				.mem_total = false,  // Unified memory
-				.mem_used = false,   // Unified memory
+				.mem_total = true,   // Unified memory (recommendedMaxWorkingSetSize)
+				.mem_used = true,    // Unified memory (from IORegistry AGXAccelerator)
 				.pcie_txrx = false,  // No PCIe on Apple Silicon
 				.encoder_utilization = false,
 				.decoder_utilization = false
@@ -466,6 +466,18 @@ namespace Gpu {
 			if (gpu.supported_functions.temp_info and Config::getB("check_temp")) {
 				if (metrics.gpu_temp_celsius > 0) {
 					gpu.temp.push_back(static_cast<long long>(round(metrics.gpu_temp_celsius)));
+				}
+			}
+
+			//? Unified Memory (VRAM equivalent for Apple Silicon)
+			if (gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) {
+				long long mem_used = Shared::gpuMemUsed.load(std::memory_order_acquire);
+				long long mem_total = Shared::gpuMemTotal.load(std::memory_order_acquire);
+				if (mem_total > 0) {
+					gpu.mem_total = mem_total;
+					gpu.mem_used = mem_used;
+					long long mem_percent = (mem_used * 100) / mem_total;
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(clamp(mem_percent, 0ll, 100ll));
 				}
 			}
 
@@ -1219,6 +1231,17 @@ namespace Mem {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2))
 				mem.percent.at(name).pop_front();
+		}
+
+		//? VRAM (GPU unified memory) - only if available
+		long long vram_total = Shared::gpuMemTotal.load(std::memory_order_acquire);
+		long long vram_used = Shared::gpuMemUsed.load(std::memory_order_acquire);
+		if (vram_total > 0) {
+			mem.stats["vram"] = vram_used;
+			mem.stats["vram_total"] = vram_total;
+			mem.percent["vram"].push_back(round((double)vram_used * 100 / vram_total));
+			while (cmp_greater(mem.percent["vram"].size(), width * 2))
+				mem.percent["vram"].pop_front();
 		}
 
 		if (show_disks) {
