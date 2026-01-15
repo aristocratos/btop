@@ -409,26 +409,40 @@ namespace Tools {
 
 	//* Safe string to int conversion, returns fallback on failure
 	//* Uses std::from_chars for efficiency and safety
+	//* Note: std::from_chars doesn't handle leading '+', so we skip it manually
 	inline int stoi_safe(const std::string_view str, int fallback = 0) noexcept {
 		if (str.empty()) return fallback;
+		const char* start = str.data();
+		const char* end = str.data() + str.size();
+		// Skip leading '+' (from_chars handles '-' but not '+')
+		if (start < end and *start == '+') ++start;
+		if (start >= end) return fallback;
 		int result{};
-		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		auto [ptr, ec] = std::from_chars(start, end, result);
 		return (ec == std::errc{}) ? result : fallback;
 	}
 
 	//* Safe string to long conversion, returns fallback on failure
 	inline long stol_safe(const std::string_view str, long fallback = 0) noexcept {
 		if (str.empty()) return fallback;
+		const char* start = str.data();
+		const char* end = str.data() + str.size();
+		if (start < end and *start == '+') ++start;
+		if (start >= end) return fallback;
 		long result{};
-		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		auto [ptr, ec] = std::from_chars(start, end, result);
 		return (ec == std::errc{}) ? result : fallback;
 	}
 
 	//* Safe string to long long conversion, returns fallback on failure
 	inline long long stoll_safe(const std::string_view str, long long fallback = 0) noexcept {
 		if (str.empty()) return fallback;
+		const char* start = str.data();
+		const char* end = str.data() + str.size();
+		if (start < end and *start == '+') ++start;
+		if (start >= end) return fallback;
 		long long result{};
-		auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+		auto [ptr, ec] = std::from_chars(start, end, result);
 		return (ec == std::errc{}) ? result : fallback;
 	}
 
