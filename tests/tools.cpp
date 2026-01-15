@@ -217,8 +217,8 @@ TEST(edge_cases, special_strings) {
 
 TEST(edge_cases, real_world_parsing) {
 	// Simulate parsing from /proc files
-	EXPECT_EQ(Tools::stoi_safe("cpu3".substr(3)), 3);
-	EXPECT_EQ(Tools::stoll_safe("123456 kB".substr(0, 6)), 123456LL);
+	EXPECT_EQ(Tools::stoi_safe(std::string("cpu3").substr(3)), 3);
+	EXPECT_EQ(Tools::stoll_safe(std::string("123456 kB").substr(0, 6)), 123456LL);
 
 	// GPU P-state parsing simulation
 	std::string pstate = "P1";
