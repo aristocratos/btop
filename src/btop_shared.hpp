@@ -101,6 +101,11 @@ namespace Shared {
 
 	extern long coreCount, page_size, clk_tck;
 
+#ifdef __APPLE__
+	//* Mach time to nanoseconds conversion factor (macOS only)
+	extern double machTck;
+#endif
+
 	//* Apple Silicon E-core/P-core counts (0 on non-Apple Silicon systems)
 	extern long eCoreCount, pCoreCount;
 
@@ -466,6 +471,17 @@ namespace Proc {
 		"cpu direct",
 		"cpu lazy",
 		"gpu",
+		"io",
+		"state",
+		"priority",
+		"nice",
+		"io read",
+		"io write",
+		"virt mem",
+		"ports",
+		"runtime",
+		"cpu time",
+		"gpu time",
 	};
 
 	//? Translation from process state char to explanative string
@@ -498,15 +514,27 @@ namespace Proc {
 		double gpu_p{};         // GPU usage percentage (Apple Silicon only)
 		char state = '0';
 		int64_t p_nice{};
+		int p_priority{};       // Process priority (macOS: 0-127, lower = higher priority)
 		uint64_t ppid{};
-		uint64_t cpu_s{};
-		uint64_t cpu_t{};
+		uint64_t cpu_s{};       // Process start time (microseconds since epoch)
+		uint64_t cpu_t{};       // Total CPU time (user + system)
 		uint64_t death_time{};
+		uint64_t io_read{};     // Accumulated disk I/O read operations (estimated from bytes/4KB)
+		uint64_t io_write{};    // Accumulated disk I/O write operations (estimated from bytes/4KB)
 		string prefix{};        // defaults to ""
 		size_t depth{};
 		size_t tree_index{};
 		bool collapsed{};
 		bool filtered{};
+		//? Extended fields for bottom layout (macOS)
+		uint32_t ports{};       // Mach port count
+		uint64_t virt_mem{};    // Virtual memory size
+		uint64_t res_mem{};     // Resident (physical) memory size (same as mem)
+		uint64_t shared_mem{};  // Shared memory size
+		uint64_t send_bytes{};  // Network bytes sent (cumulative)
+		uint64_t recv_bytes{};  // Network bytes received (cumulative)
+		uint64_t gpu_time{};    // GPU time in nanoseconds (Apple Silicon)
+		uint64_t runtime{};     // Process runtime in seconds
 	};
 
 	//* Container for process info box

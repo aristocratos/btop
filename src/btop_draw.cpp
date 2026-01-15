@@ -2374,7 +2374,10 @@ namespace Proc {
 	Draw::Graph detailed_cpu_graph;
 	Draw::Graph detailed_gpu_graph;
 	Draw::Graph detailed_mem_graph;
-	int user_size, thread_size, prog_size, cmd_size, tree_size, gpu_size;
+	int user_size, thread_size, prog_size, cmd_size, tree_size, gpu_size, io_size;
+	int state_size, nice_size, priority_size, io_read_size, io_write_size;  //? Additional columns for bottom layout
+	int ports_size, virt_size, runtime_size, cpu_time_size, gpu_time_size;  //? Extra columns for bottom layout
+	bool bottom_layout = false;  //? True when proc panel is full width (bottom position)
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 
 	string box;
@@ -2474,6 +2477,7 @@ namespace Proc {
 		int followed = Config::getI("proc_followed");
 		auto proc_banner_shown = pause_proc_list or follow_process;
 		Config::set("proc_banner_shown", proc_banner_shown);
+		bottom_layout = Config::getB("proc_full_width");  //? Detect if proc panel is at bottom (full width)
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
@@ -2536,21 +2540,83 @@ namespace Proc {
 			for (const auto& key : {"t", "K", "k", "s", "N", "F", "enter", "info_enter"})
 				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
 
-			//? Adapt sizes of text fields
-			user_size = (width < 75 ? 5 : 10);
-			thread_size = (width < 75 ? - 1 : 4);
-			gpu_size = show_gpu ? 10 : 0;  // GPU% column width (5 graph + 5 value)
-			int gpu_adjustment = show_gpu ? 11 : 0;  // Account for GPU column + space
+			//? Adapt sizes of text fields based on layout
 			bool show_cmd = Config::getB("proc_show_cmd");
-			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33 - gpu_adjustment));
-			cmd_size = (show_cmd and width > 55 ? width - prog_size - user_size - thread_size - 33 - gpu_adjustment : -1);
-			//? If Command column hidden, give extra space to Program column
-			if (not show_cmd and width > 55) {
-				prog_size = width - user_size - thread_size - 33 - gpu_adjustment;
+			gpu_size = show_gpu ? 10 : 0;  // GPU% column width for side layout (5 graph + 5 value)
+			int gpu_adjustment = show_gpu ? 11 : 0;  // Account for GPU column + space (side layout)
+
+			if (bottom_layout and not proc_tree) {
+				//? Bottom layout: htop-like expanded view with Command at the end
+				//? No braille graphs - just text values with heat colors
+				//? Columns: Pid | Program | User | Sta | Pri | Ni | Thr | Ports | IO/R | IO/W | Mem | Virt | CpuT | GpuT | Time | Cpu% | Gpu% | Command
+				gpu_adjustment = show_gpu ? 6 : 0;  // Bottom layout: just 5 chars + space (no graph)
+				user_size = (width < 140 ? 8 : 10);
+				state_size = 3;      // "Sta" column: R/S/I/Z/T
+				priority_size = 3;   // Priority value (0-127)
+				nice_size = 3;       // Nice value: -20 to 19
+				thread_size = 4;     // Thread count
+				ports_size = (width > 120 ? 5 : 0);     // Mach port count ("Ports")
+				io_read_size = (width > 100 ? 5 : 0);   // IO read operations
+				io_write_size = (width > 100 ? 5 : 0);  // IO write operations
+				virt_size = (width > 130 ? 6 : 0);      // Virtual memory
+				cpu_time_size = (width > 140 ? 8 : 0);  // CPU time (HH:MM:SS)
+				gpu_time_size = (show_gpu and width > 150 ? 8 : 0);  // GPU time (HH:MM:SS)
+				runtime_size = (width > 110 ? 8 : 0);   // Process runtime (HH:MM:SS)
+				io_size = 0;  // Disable combined IO
+
+				//? Calculate fixed column space (excluding prog_size and cmd_size)
+				int fixed_cols = 8 + 1 + user_size + 1 + state_size + 1 + priority_size + 1 + nice_size + 1 + thread_size + 1;
+				if (ports_size > 0) fixed_cols += ports_size + 1;
+				if (io_read_size > 0) fixed_cols += io_read_size + 1 + io_write_size + 1;
+				fixed_cols += 5 + 1;  // Mem
+				if (virt_size > 0) fixed_cols += virt_size + 1;
+				if (cpu_time_size > 0) fixed_cols += cpu_time_size + 1;
+				if (gpu_time_size > 0) fixed_cols += gpu_time_size + 1;
+				if (runtime_size > 0) fixed_cols += runtime_size + 1;
+				fixed_cols += 5 + 1;  // Cpu% (no graph in bottom layout)
+				fixed_cols += gpu_adjustment;  // Gpu% (6 chars if shown, 0 if not)
+				fixed_cols += 3;  // Box borders and padding
+
+				int remaining = width - fixed_cols;
+				//? Split remaining space between Program and Command
+				//? Give Program ~25% minimum, rest to Command
+				prog_size = max(10, min(18, remaining / 4));
+				cmd_size = show_cmd ? max(1, remaining - prog_size - 1) : -1;
+				if (not show_cmd) prog_size = max(10, remaining);
 			}
-			tree_size = width - user_size - thread_size - 23 - gpu_adjustment;
+			else {
+				//? Side layout or tree view: original compact columns
+				//? Columns: Pid | Program | Command | Threads | User | MemB | IO | Cpu% | Gpu%
+				user_size = (width < 75 ? 5 : 10);
+				thread_size = (width < 75 ? -1 : 4);
+				state_size = 0;     // Hidden in side layout
+				priority_size = 0;  // Hidden in side layout
+				nice_size = 0;      // Hidden in side layout
+				ports_size = 0;     // Hidden in side layout
+				virt_size = 0;      // Hidden in side layout
+				cpu_time_size = 0;  // Hidden in side layout
+				gpu_time_size = 0;  // Hidden in side layout
+				runtime_size = 0;   // Hidden in side layout
+				io_read_size = 0;
+				io_write_size = 0;
+				io_size = (width > 75 ? 5 : 0);  // Single combined I/O column (5 chars)
+				int io_adjustment = (io_size > 0 ? 6 : 0);  // Account for I/O column + space
+
+				prog_size = (width > 70 ? 16 : (width > 55 ? 8 : width - user_size - thread_size - 33 - gpu_adjustment - io_adjustment));
+				cmd_size = (show_cmd and width > 55 ? width - prog_size - user_size - thread_size - 33 - gpu_adjustment - io_adjustment : -1);
+				//? If Command column hidden, give extra space to Program column
+				if (not show_cmd and width > 55) {
+					prog_size = width - user_size - thread_size - 33 - gpu_adjustment - io_adjustment;
+				}
+				if (not show_graphs) {
+					cmd_size += (show_cmd ? 5 : 0);
+				}
+			}
+
+			//? Tree size calculation (common for both layouts)
+			int tree_io_adj = (io_size > 0 ? 6 : 0) + (io_read_size > 0 ? 12 : 0);
+			tree_size = width - user_size - thread_size - 23 - gpu_adjustment - tree_io_adj;
 			if (not show_graphs) {
-				cmd_size += (show_cmd ? 5 : 0);
 				tree_size += 5;
 			}
 
@@ -2769,24 +2835,104 @@ namespace Proc {
 
 			//? Labels for fields in list
 			if (not proc_tree) {
-				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
-					+ rjust("Pid:", 8) + ' '
-					+ ljust("Program:", prog_size) + ' ';
-				//? Highlight 'C' in Command to indicate Shift+C toggle
-				if (cmd_size > 0) {
-					out += Theme::c("hi_fg") + "C" + Theme::c("title") + ljust("ommand:", cmd_size - 1) + ' ';
-					Input::mouse_mappings["C"] = {y+1, x+11+prog_size, 1, 1};
+				if (bottom_layout) {
+					//? Bottom layout: htop-like column order with Command at the end
+					//? Clickable headers for sorting with ▲/▼ indicators
+					const bool reversed = Config::getB("proc_reversed");
+					const string sort_indicator = reversed ? "▼" : "▲";
+					const string hi = Theme::c("hi_fg");
+					const string title = Theme::c("title");
+					int col_x = x + 1;  //? Track column position for mouse mappings
+
+					out += Mv::to(y+1, x+1) + title + Fx::b;
+
+					//? Helper to add sortable column header with indicator
+					//? Always use fixed column width to prevent alignment shift
+					auto add_header = [&](const string& label, int size, const string& sort_key, bool right_just = true) {
+						string header = right_just ? rjust(label, size) : ljust(label, size);
+						bool is_sorted = (sorting == sort_key);
+						if (is_sorted) {
+							out += hi + header + sort_indicator + title + " ";  //? indicator immediately after header, then trailing space
+						} else {
+							out += header + "  ";  //? two spaces to match (indicator + trailing space)
+						}
+						Input::mouse_mappings["sort_" + sort_key] = {y+1, col_x, 1, size + 2};
+						col_x += size + 2;  //? Fixed width: header + indicator/space + trailing space
+					};
+
+					//? Pid column (sortable)
+					add_header("Pid:", 8, "pid");
+					//? Program column (sortable by name)
+					add_header("Program:", prog_size, "name", false);
+					//? User column (sortable)
+					add_header("User:", user_size, "user", false);
+					//? State column (sortable)
+					add_header("Sta", state_size, "state");
+					//? Priority column (sortable)
+					add_header("Pri", priority_size, "priority");
+					//? Nice column (sortable)
+					add_header("Ni", nice_size, "nice");
+					//? Threads column (sortable)
+					add_header("Thr", thread_size, "threads");
+					//? Ports column (sortable, conditional)
+					if (ports_size > 0) add_header("Ports", ports_size, "ports");
+					//? IO Read column (sortable, conditional)
+					if (io_read_size > 0) {
+						add_header("IO/R", io_read_size, "io read");
+						add_header("IO/W", io_write_size, "io write");
+					}
+					//? Memory column (sortable)
+					add_header((mem_bytes ? "MemB" : "Mem%"), 5, "memory");
+					//? Virtual memory column (sortable, conditional)
+					if (virt_size > 0) add_header("Virt", virt_size, "virt mem");
+					//? CpuT column (sortable, conditional)
+					if (cpu_time_size > 0) add_header("CpuT", cpu_time_size, "cpu time");
+					//? GpuT column (sortable, conditional)
+					if (gpu_time_size > 0) add_header("GpuT", gpu_time_size, "gpu time");
+					//? Runtime column (sortable, conditional)
+					if (runtime_size > 0) add_header("Time", runtime_size, "runtime");
+					//? CPU% column (sortable) - use "cpu direct" since we display instant cpu_p value
+					add_header("Cpu%", 5, "cpu direct");
+					//? GPU% column (sortable, conditional)
+					if (show_gpu) {
+						add_header("Gpu%", 5, "gpu");
+					}
+					//? Command column (not sortable per user request)
+					if (cmd_size > 0) {
+						out += hi + "C" + title + "ommand";
+					}
+					out += Fx::ub;
+				}
+				else {
+					//? Side layout: original column order
+					out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
+						+ rjust("Pid:", 8) + ' '
+						+ ljust("Program:", prog_size) + ' ';
+					//? Highlight 'C' in Command to indicate Shift+C toggle
+					if (cmd_size > 0) {
+						out += Theme::c("hi_fg") + "C" + Theme::c("title") + ljust("ommand:", cmd_size - 1) + ' ';
+						Input::mouse_mappings["C"] = {y+1, x+11+prog_size, 1, 1};
+					}
+					out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
+						+ ljust("User:", user_size) + ' '
+						+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
+						+ (io_size > 0 ? rjust("IO", io_size) + ' ' : "")
+						+ rjust("Cpu%", (show_graphs ? 10 : 5))
+						+ (show_gpu ? " " + rjust("Gpu%", gpu_size) : "") + Fx::ub;
 				}
 			}
-			else
+			else {
+				//? Tree view: same for both layouts
 				out += Mv::to(y+1, x+1) + Theme::c("title") + Fx::b
 					+ ljust("Tree:", tree_size) + ' ';
-
-			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
+				out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
+					+ (io_size > 0 ? rjust("IO", io_size) + ' ' : "")
+					+ (io_read_size > 0 ? rjust("IO/R", io_read_size) + ' ' + rjust("IO/W", io_write_size) + ' ' : "")
 					+ rjust("Cpu%", (show_graphs ? 10 : 5))
 					+ (show_gpu ? " " + rjust("Gpu%", gpu_size) : "") + Fx::ub;
+			}
 		}
 		//* End of redraw block
 
@@ -2969,10 +3115,20 @@ namespace Proc {
 
 			//? Normal view line
 			if (not proc_tree) {
-				out += Mv::to(y+2+lc, x+1)
-					+ g_color + rjust(to_string(p.pid), 8) + ' '
-					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
-					+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
+				if (bottom_layout) {
+					//? Bottom layout: Pid | Program | User | S | Ni | Thr | ...data... | Command
+					out += Mv::to(y+2+lc, x+1)
+						+ g_color + rjust(to_string(p.pid), 8) + "  "
+						+ c_color + ljust(p.name, prog_size, true, true) + "  " + end;  //? wide=true for proper Unicode display width
+					//? Rest of bottom layout columns handled in common section below
+				}
+				else {
+					//? Side layout: original Pid | Program | Command order
+					out += Mv::to(y+2+lc, x+1)
+						+ g_color + rjust(to_string(p.pid), 8) + ' '
+						+ c_color + ljust(p.name, prog_size, true, true) + ' ' + end  //? wide=true for proper Unicode display width
+						+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
+				}
 			}
 			//? Tree view line
 			else {
@@ -2994,13 +3150,16 @@ namespace Proc {
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
 			}
 			//? Common end of line
+			//? Format CPU% to fit in 4 chars: "X.YZ" (0-9.99), "XX.Y" (10-99.9), " XXX" (100-999), "X.Yk" (1000+)
 			string cpu_str = fmt::format("{:.2f}", p.cpu_p);
-			if (p.cpu_p < 10 or (p.cpu_p >= 100 and p.cpu_p < 1000)) cpu_str.resize(3);
-			else if (p.cpu_p >= 10'000) {
-				cpu_str = fmt::format("{:.2f}", p.cpu_p / 1000);
-				cpu_str.resize(3);
+			if (p.cpu_p < 10) cpu_str.resize(3);           // "5.25" -> "5.2"
+			else if (p.cpu_p < 100) cpu_str.resize(4);     // "15.75" -> "15.7"
+			else if (p.cpu_p < 1000) cpu_str.resize(3);    // "105.25" -> "105"
+			else if (p.cpu_p < 10'000) cpu_str.resize(4);  // "1050.25" -> "1050"
+			else {
+				cpu_str = fmt::format("{:.1f}k", p.cpu_p / 1000);
+				if (cpu_str.size() > 4) cpu_str.resize(4);
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
-				cpu_str += "k";
 			}
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
@@ -3019,6 +3178,53 @@ namespace Proc {
 				if (gpu_str.ends_with('.')) gpu_str.pop_back();
 			}
 
+			// Format combined I/O operation count string (with K/M/G suffix for large values)
+			string io_str;
+			if (io_size > 0) {
+				const uint64_t io_total = p.io_read + p.io_write;
+				if (io_total >= 1'000'000'000) {
+					io_str = fmt::format("{:.0f}G", io_total / 1'000'000'000.0);
+				} else if (io_total >= 1'000'000) {
+					io_str = fmt::format("{:.0f}M", io_total / 1'000'000.0);
+				} else if (io_total >= 1'000) {
+					io_str = fmt::format("{:.0f}K", io_total / 1'000.0);
+				} else {
+					io_str = to_string(io_total);
+				}
+			}
+
+			//? Format separate IO read/write strings for bottom layout
+			auto format_io_value = [](uint64_t io_val) -> string {
+				if (io_val >= 1'000'000'000) {
+					return fmt::format("{:.0f}G", io_val / 1'000'000'000.0);
+				} else if (io_val >= 1'000'000) {
+					return fmt::format("{:.0f}M", io_val / 1'000'000.0);
+				} else if (io_val >= 1'000) {
+					return fmt::format("{:.0f}K", io_val / 1'000.0);
+				} else {
+					return to_string(io_val);
+				}
+			};
+			string io_read_str = (io_read_size > 0 ? format_io_value(p.io_read) : "");
+			string io_write_str = (io_write_size > 0 ? format_io_value(p.io_write) : "");
+
+			//? Format state character (R=Running, S=Sleeping, I=Idle, Z=Zombie, T=Stopped)
+			//? macOS p_stat values: SIDL=1, SRUN=2, SSLEEP=3, SSTOP=4, SZOMB=5
+			string state_str;
+			if (state_size > 0) {
+				switch (static_cast<int>(p.state)) {
+					case 1: state_str = "I"; break;   // SIDL - Idle (being created)
+					case 2: state_str = "R"; break;   // SRUN - Running
+					case 3: state_str = "S"; break;   // SSLEEP - Sleeping
+					case 4: state_str = "T"; break;   // SSTOP - Stopped
+					case 5: state_str = "Z"; break;   // SZOMB - Zombie
+					default: state_str = "?"; break;
+				}
+			}
+
+			//? Format nice value
+			string nice_str = (nice_size > 0 ? to_string(p.p_nice) : "");
+
 			// Shorten process thread representation when larger than 5 digits: 10000 -> 10K ...
 			const std::string proc_threads_string = [&] {
 				if (p.threads > 9999) {
@@ -3027,6 +3233,81 @@ namespace Proc {
 					return std::to_string(p.threads);
 				}
 			}();
+
+			//? Format ports count (show just the number, compact)
+			string ports_str = (ports_size > 0 ? to_string(p.ports) : "");
+
+			//? Format virtual memory size (same format as mem_str)
+			string virt_str;
+			if (virt_size > 0) {
+				if (p.virt_mem >= 1'000'000'000) {
+					virt_str = fmt::format("{:.1f}G", p.virt_mem / 1'000'000'000.0);
+				} else if (p.virt_mem >= 1'000'000) {
+					virt_str = fmt::format("{:.0f}M", p.virt_mem / 1'000'000.0);
+				} else if (p.virt_mem >= 1'000) {
+					virt_str = fmt::format("{:.0f}K", p.virt_mem / 1'000.0);
+				} else {
+					virt_str = to_string(p.virt_mem);
+				}
+			}
+
+			//? Format runtime as HH:MM:SS or Xd HH:MM for long-running processes
+			string runtime_str;
+			if (runtime_size > 0) {
+				uint64_t secs = p.runtime;
+				uint64_t mins = secs / 60;
+				uint64_t hours = mins / 60;
+				uint64_t days = hours / 24;
+				secs %= 60;
+				mins %= 60;
+				hours %= 24;
+				if (days > 0) {
+					runtime_str = fmt::format("{}d {:02d}:{:02d}", days, hours, mins);
+				} else {
+					runtime_str = fmt::format("{:02d}:{:02d}:{:02d}", hours, mins, secs);
+				}
+			}
+
+			//? Format CPU time (platform-specific units, convert to Xd HH:MM or HH:MM:SS)
+			string cpu_time_str;
+			if (cpu_time_size > 0) {
+#ifdef __APPLE__
+				//? macOS: cpu_t is in Mach time units - multiply by machTck to get nanoseconds
+				uint64_t cpu_ns = (uint64_t)(p.cpu_t * Shared::machTck);
+				uint64_t cpu_secs = cpu_ns / 1'000'000'000;
+#else
+				//? Linux/FreeBSD: cpu_t is in clock ticks
+				uint64_t cpu_secs = p.cpu_t / Shared::clk_tck;
+#endif
+				uint64_t cpu_mins = cpu_secs / 60;
+				uint64_t cpu_hours = cpu_mins / 60;
+				uint64_t cpu_days = cpu_hours / 24;
+				cpu_secs %= 60;
+				cpu_mins %= 60;
+				cpu_hours %= 24;
+				if (cpu_days > 0) {
+					cpu_time_str = fmt::format("{}d {:02d}:{:02d}", cpu_days, cpu_hours, cpu_mins);
+				} else {
+					cpu_time_str = fmt::format("{:02d}:{:02d}:{:02d}", cpu_hours, cpu_mins, cpu_secs);
+				}
+			}
+
+			//? Format GPU time (p.gpu_time is in nanoseconds, convert to Xd HH:MM or HH:MM:SS)
+			string gpu_time_str;
+			if (gpu_time_size > 0) {
+				uint64_t gpu_secs = p.gpu_time / 1'000'000'000;  // Convert ns to seconds
+				uint64_t gpu_mins = gpu_secs / 60;
+				uint64_t gpu_hours = gpu_mins / 60;
+				uint64_t gpu_days = gpu_hours / 24;
+				gpu_secs %= 60;
+				gpu_mins %= 60;
+				gpu_hours %= 24;
+				if (gpu_days > 0) {
+					gpu_time_str = fmt::format("{}d {:02d}:{:02d}", gpu_days, gpu_hours, gpu_mins);
+				} else {
+					gpu_time_str = fmt::format("{:02d}:{:02d}:{:02d}", gpu_hours, gpu_mins, gpu_secs);
+				}
+			}
 
 			//? Scale percentage to quartiles for better visibility in braille graphs
 			//? 0% = 0 pixels, 1-25% = 1 pixel, 26-50% = 2 pixels, 51-75% = 3 pixels, 76-100% = 4 pixels
@@ -3038,16 +3319,44 @@ namespace Proc {
 				return 100;
 			};
 
-			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
-				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
-				+ m_color + rjust(mem_str, 5) + end + ' '
-				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
-				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({scale_to_graph(p.cpu_p)}, data_same) : "") + end + ' '
-				+ c_color + rjust(cpu_str, 4)
-				+ (show_gpu ? " " + (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + graph_bg * 5
-					+ (p_gpu_graphs.contains(p.pid) ? Mv::l(5) + gp_color + p_gpu_graphs.at(p.pid)({scale_to_graph(p.gpu_p)}, data_same) : "") + end + ' '
-					+ gp_color + rjust(gpu_str, 4) : "")
-				+ "  " + end;
+			if (bottom_layout and not proc_tree) {
+				//? Bottom layout: no braille graphs, use heat colors for CPU%/GPU%
+				//? Use Theme gradient (green at 0% -> red at 100%) like other CPU displays
+				//? Column order: User | Sta | Pri | Ni | Thr | Ports | IO/R | IO/W | Mem | Virt | CpuT | GpuT | Time | Cpu% | Gpu% | Command
+				//? All columns use size + 2 spacing to match headers (size + space + indicator/space)
+				string cpu_heat = Theme::g("cpu").at(clamp((long long)p.cpu_p, 0ll, 100ll));
+				string gpu_heat = Theme::g("cpu").at(clamp((long long)p.gpu_p, 0ll, 100ll));
+				out += g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + "  "
+					+ rjust(state_str, state_size) + "  "
+					+ rjust(to_string(p.p_priority), priority_size) + "  "
+					+ rjust(nice_str, nice_size) + "  "
+					+ t_color + rjust(proc_threads_string, thread_size) + "  " + end
+					+ (ports_size > 0 ? g_color + rjust(ports_str, ports_size) + "  " + end : "")
+					+ (io_read_size > 0 ? g_color + rjust(io_read_str, io_read_size) + "  " + rjust(io_write_str, io_write_size) + "  " + end : "")
+					+ m_color + rjust(mem_str, 5) + "  " + end
+					+ (virt_size > 0 ? g_color + rjust(virt_str, virt_size) + "  " + end : "")
+					+ (cpu_time_size > 0 ? g_color + rjust(cpu_time_str, cpu_time_size) + "  " + end : "")
+					+ (gpu_time_size > 0 ? gp_color + rjust(gpu_time_str, gpu_time_size) + "  " + end : "")
+					+ (runtime_size > 0 ? g_color + rjust(runtime_str, runtime_size) + "  " + end : "")
+					+ cpu_heat + rjust(cpu_str, 5) + "  " + end
+					+ (show_gpu ? gpu_heat + rjust(gpu_str, 5) + "  " + end : "")
+					+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) : "")
+					+ end;
+			}
+			else {
+				//? Side layout or tree view: original column order
+				out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
+					+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
+					+ m_color + rjust(mem_str, 5) + end + ' '
+					+ (io_size > 0 ? g_color + rjust(io_str, io_size) + ' ' + end : "")
+					+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
+					+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({scale_to_graph(p.cpu_p)}, data_same) : "") + end + ' '
+					+ c_color + rjust(cpu_str, 4)
+					+ (show_gpu ? " " + (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + graph_bg * 5
+						+ (p_gpu_graphs.contains(p.pid) ? Mv::l(5) + gp_color + p_gpu_graphs.at(p.pid)({scale_to_graph(p.gpu_p)}, data_same) : "") + end + ' '
+						+ gp_color + rjust(gpu_str, 4) : "")
+					+ "  " + end;
+			}
 			if (lc++ > height - 5) break;
 			else if (lc > height - 5 and proc_banner_shown) break;
 		}
