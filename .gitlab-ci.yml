@@ -536,9 +536,7 @@ lint:clang-tidy:
   stage: test
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq software-properties-common
-    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    - apt-get update -qq
+    # Ubuntu 24.04 has clang-tidy-18 and g++-14 in default repos - no PPA needed
     - apt-get install -y -qq clang-tidy-18 g++-14 build-essential libfmt-dev
     - update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
     - clang-tidy --version
