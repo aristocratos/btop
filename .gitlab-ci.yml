@@ -126,6 +126,7 @@ build:linux-x86_64:
       - artifacts/
       - bin/btop
     expire_in: 30 days
+  allow_failure: true  # No docker runner available - don't block macOS pipeline
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
