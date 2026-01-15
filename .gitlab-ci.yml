@@ -99,10 +99,7 @@ build:macos-arm64-debug:
     - docker
   before_script:
     - apt-get update -qq
-    # Install GCC 14 for full C++23 support (std::ranges::to)
-    - apt-get install -y -qq software-properties-common
-    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    - apt-get update -qq
+    # Ubuntu 24.04 includes GCC 14 in default repos - no PPA needed
     - apt-get install -y -qq build-essential g++-14 git lowdown file
     - update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
     - g++ --version
@@ -597,9 +594,7 @@ test:unit-linux:
   stage: test
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq software-properties-common
-    - add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    - apt-get update -qq
+    # Ubuntu 24.04 includes GCC 14 in default repos - no PPA needed
     - apt-get install -y -qq build-essential g++-14 cmake git
     - update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
     - g++ --version
