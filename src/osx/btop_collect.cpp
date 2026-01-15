@@ -1290,6 +1290,7 @@ namespace Proc {
 				}
 				//? Set correct state of dead processes if paused
 				else {
+					const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 					for (auto& r : current_procs) {
 						if (rng::find(found, r.pid) == found.end()) {
 							if (r.state != 'X') {
@@ -1300,7 +1301,7 @@ namespace Proc {
 							r.state = 'X';
 							dead_procs.emplace(r.pid);
 							//? Reset cpu usage for dead processes if paused and option is set
-							if (!Config::getB("keep_dead_proc_usage")) {
+							if (!keep_dead_proc_usage) {
 								r.cpu_p = 0.0;
 								r.mem = 0;
 							}
