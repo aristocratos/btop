@@ -123,6 +123,8 @@ namespace Config {
 
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
 
+		{"proc_box_width_percent", "#* Percentage value for proc box width when mem or net is shown."},
+
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
@@ -373,6 +375,7 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
+		{"proc_box_width_percent", Proc::width_p},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 

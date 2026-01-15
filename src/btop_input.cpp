@@ -52,10 +52,17 @@ namespace Input {
 		{"OA",		"up"},
 		{"[B", 		"down"},
 		{"OB",		"down"},
+		{"[1;6B",	"ctrl_shift_down"},
 		{"[D", 		"left"},
 		{"OD",		"left"},
+		{"[1;2D",	"shift_left"},
+		{"[1;4D",	"alt_shift_left"},
+		{"[1;6D",	"ctrl_shift_left"},
 		{"[C", 		"right"},
 		{"OC",		"right"},
+		{"[1;2C",	"shift_right"},
+		{"[1;4C",	"alt_shift_right"},
+		{"[1;6C",	"ctrl_shift_right"},
 		{"[2~",		"insert"},
 		{"[4h",		"insert"},
 		{"[3~",		"delete"},
@@ -282,6 +289,37 @@ namespace Input {
 					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
+				}
+				else if (is_in(key, "shift_left", "shift_right", "alt_shift_left", "alt_shift_right", "ctrl_shift_left", "ctrl_shift_right", "ctrl_shift_down")) {
+					if (Proc::shown and (Mem::shown or Net::shown)) {
+						const int proc_box_width_percent = Config::getI("proc_box_width_percent");
+						int new_proc_box_width_percent = proc_box_width_percent;
+						const int min_p = std::round((static_cast<double>(Proc::min_width) / Term::width) * 100);
+						const int max_p = std::round(100 - ((static_cast<double>(Mem::shown ? Mem::min_width : Net::min_width) / Term::width) * 100));
+						const int offset = key.at(0) == 'a' ? (min_p + 10 <= max_p ? 10 : max_p - min_p) : 1;
+						if (is_in(key, "shift_left", "alt_shift_left"))
+							new_proc_box_width_percent = Config::getB("proc_left") // make proc width smaller if proc_left (default: larger)
+								? std::clamp(proc_box_width_percent - offset, min_p, max_p - offset)
+								: std::clamp(proc_box_width_percent + offset, min_p + offset, max_p);
+						else if (is_in(key, "shift_right", "alt_shift_right"))
+							new_proc_box_width_percent = Config::getB("proc_left") // make proc width larger if proc_left (default: smaller)
+								? std::clamp(proc_box_width_percent + offset, min_p + offset, max_p)
+								: std::clamp(proc_box_width_percent - offset, min_p, max_p - offset);
+						else if (key == "ctrl_shift_left") // set proc width to minimum if proc_left (default: maximum)
+							new_proc_box_width_percent = Config::getB("proc_left") ? 0 : 100;
+						else if (key == "ctrl_shift_right") // set proc width to maximum if proc_left (default: minimum)
+							new_proc_box_width_percent = Config::getB("proc_left") ? 100 : 0;
+						else
+							new_proc_box_width_percent = Proc::width_p; // set to default width
+
+						if (proc_box_width_percent != new_proc_box_width_percent) {
+							Config::current_preset = -1;
+							Config::set("proc_box_width_percent", new_proc_box_width_percent);
+							Draw::calcSizes(!Proc::shown);
+							Draw::update_clock(true);
+							Runner::run("all", true, true);
+						}
+					}
 				} else if (is_in(key, "ctrl_r")) {
 					kill(getpid(), SIGUSR2);
 					return;

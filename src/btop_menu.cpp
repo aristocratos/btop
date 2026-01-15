@@ -211,6 +211,13 @@ namespace Menu {
 		{"Selected k", "Kill selected process with SIGKILL - 9."},
 		{"Selected s", "Select or enter signal to send to process."},
 		{"Selected N", "Select new nice value for selected process."},
+		{"Shift + Left", "Adjust the proc box width by 1% when mem or net shown."},
+		{"Shift + Right", "Adjust the proc box width by 1% when mem or net shown."},
+		{"Alt+Shift+Left", "Adjust the proc box width by 10% when mem or net shown."},
+		{"Alt+Shift+Right", "Adjust the proc box width by 10% when mem or net shown."},
+		{"Ctrl+Shift+Left", "Set the proc box to max width or min for proc left."},
+		{"Ctrl+Shift+Right", "Set the proc box to min width or max for proc left."},
+		{"Ctrl+Shift+Down", fmt::format("Reset the proc box width percentage to {}% (default).", Proc::width_p)},
 		{"", " "},
 		{"", "For bug reporting and project updates, visit:"},
 		{"", "https://github.com/aristocratos/btop"},
@@ -800,6 +807,17 @@ namespace Menu {
 			    "True, False, or Auto",},
 		},
 		{
+			{"proc_box_width_percent",
+				"Proc box width percentage",
+				"",
+				"Set the width of the proc box as a",
+				"percentage when the mem or net boxes",
+				"are shown.",
+				"",
+				"A value larger or smaller then the",
+				"maximum or minimum width for the the",
+				"window size will set the width to the",
+				"widest or narrowest that it can."},
 			{"proc_left",
 				"Proc box location.",
 				"",
@@ -1367,6 +1385,10 @@ static int optionsMenu(const string& key) {
 					}
 				}
 				else if (selPred.test(isInt) and Config::intValid(option, editor.text)) {
+					if (option == "proc_box_width_percent") {
+						editor.text = fmt::format("{}", std::clamp(stoi(editor.text), 0, 100));
+						screen_redraw = true;
+					}
 					Config::set(option, stoi(editor.text));
 				}
 				else
@@ -1451,8 +1473,13 @@ static int optionsMenu(const string& key) {
 				if (key == "right" or (vim_keys and key == "l")) value += mod;
 				else value -= mod;
 
-				if (Config::intValid(option, to_string(value)))
+				if (Config::intValid(option, to_string(value))) {
+					if (option == "proc_box_width_percent") {
+						value = std::clamp(static_cast<int>(value), 0, 100);
+						screen_redraw = true;
+					}
 					Config::set(option, static_cast<int>(value));
+				}
 				else {
 					warnings = Config::validError;
 				}
