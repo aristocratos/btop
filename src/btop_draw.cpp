@@ -2550,39 +2550,61 @@ namespace Proc {
 				//? No braille graphs - just text values with heat colors
 				//? Columns: Pid | Program | User | Sta | Pri | Ni | Thr | Ports | IO/R | IO/W | Mem | Virt | CpuT | GpuT | Time | Cpu% | Gpu% | Command
 				gpu_adjustment = show_gpu ? 6 : 0;  // Bottom layout: just 5 chars + space (no graph)
-				user_size = (width < 140 ? 8 : 10);
+
+				//? When Command is hidden, use lower thresholds and more generous column sizes
+				//? Priority: Data columns get comfortable space first, Program gets the rest
+				if (show_cmd) {
+					user_size = (width < 140 ? 8 : 10);
+					ports_size = (width > 120 ? 5 : 0);
+					io_read_size = (width > 100 ? 5 : 0);
+					io_write_size = (width > 100 ? 5 : 0);
+					virt_size = (width > 130 ? 6 : 0);
+					cpu_time_size = (width > 140 ? 8 : 0);
+					gpu_time_size = (show_gpu and width > 150 ? 8 : 0);
+					runtime_size = (width > 110 ? 8 : 0);
+				} else {
+					//? No Command: lower thresholds, more generous sizing for data columns
+					user_size = (width < 100 ? 10 : 12);
+					ports_size = (width > 80 ? 6 : 0);      // Lower threshold, slightly wider
+					io_read_size = (width > 80 ? 6 : 0);    // Lower threshold, slightly wider
+					io_write_size = (width > 80 ? 6 : 0);   // Lower threshold, slightly wider
+					virt_size = (width > 90 ? 7 : 0);       // Lower threshold, slightly wider
+					cpu_time_size = (width > 100 ? 9 : 0);  // Lower threshold, wider for "Xd HH:MM"
+					gpu_time_size = (show_gpu and width > 110 ? 9 : 0);  // Lower threshold, wider
+					runtime_size = (width > 90 ? 9 : 0);    // Lower threshold, wider for "Xd HH:MM"
+				}
+
 				state_size = 3;      // "Sta" column: R/S/I/Z/T
 				priority_size = 3;   // Priority value (0-127)
 				nice_size = 3;       // Nice value: -20 to 19
 				thread_size = 4;     // Thread count
-				ports_size = (width > 120 ? 5 : 0);     // Mach port count ("Ports")
-				io_read_size = (width > 100 ? 5 : 0);   // IO read operations
-				io_write_size = (width > 100 ? 5 : 0);  // IO write operations
-				virt_size = (width > 130 ? 6 : 0);      // Virtual memory
-				cpu_time_size = (width > 140 ? 8 : 0);  // CPU time (HH:MM:SS)
-				gpu_time_size = (show_gpu and width > 150 ? 8 : 0);  // GPU time (HH:MM:SS)
-				runtime_size = (width > 110 ? 8 : 0);   // Process runtime (HH:MM:SS)
 				io_size = 0;  // Disable combined IO
 
 				//? Calculate fixed column space (excluding prog_size and cmd_size)
-				int fixed_cols = 8 + 1 + user_size + 1 + state_size + 1 + priority_size + 1 + nice_size + 1 + thread_size + 1;
-				if (ports_size > 0) fixed_cols += ports_size + 1;
-				if (io_read_size > 0) fixed_cols += io_read_size + 1 + io_write_size + 1;
-				fixed_cols += 5 + 1;  // Mem
-				if (virt_size > 0) fixed_cols += virt_size + 1;
-				if (cpu_time_size > 0) fixed_cols += cpu_time_size + 1;
-				if (gpu_time_size > 0) fixed_cols += gpu_time_size + 1;
-				if (runtime_size > 0) fixed_cols += runtime_size + 1;
-				fixed_cols += 5 + 1;  // Cpu% (no graph in bottom layout)
-				fixed_cols += gpu_adjustment;  // Gpu% (6 chars if shown, 0 if not)
-				fixed_cols += 3;  // Box borders and padding
+				//? Each column uses size + 2 spacing (two spaces "  " between columns)
+				int fixed_cols = 8 + 2 + user_size + 2 + state_size + 2 + priority_size + 2 + nice_size + 2 + thread_size + 2;
+				if (ports_size > 0) fixed_cols += ports_size + 2;
+				if (io_read_size > 0) fixed_cols += io_read_size + 2 + io_write_size + 2;
+				fixed_cols += 5 + 2;  // Mem
+				if (virt_size > 0) fixed_cols += virt_size + 2;
+				if (cpu_time_size > 0) fixed_cols += cpu_time_size + 2;
+				if (gpu_time_size > 0) fixed_cols += gpu_time_size + 2;
+				if (runtime_size > 0) fixed_cols += runtime_size + 2;
+				fixed_cols += 5 + 2;  // Cpu% (no graph in bottom layout)
+				fixed_cols += (show_gpu ? 5 + 2 : 0);  // Gpu% (7 chars if shown, 0 if not)
+				fixed_cols += 4;  // Box borders + scrollbar area
 
 				int remaining = width - fixed_cols;
-				//? Split remaining space between Program and Command
-				//? Give Program ~25% minimum, rest to Command
-				prog_size = max(10, min(18, remaining / 4));
-				cmd_size = show_cmd ? max(1, remaining - prog_size - 1) : -1;
-				if (not show_cmd) prog_size = max(10, remaining);
+				if (show_cmd) {
+					//? Split remaining space between Program and Command
+					//? Give Program ~25% minimum, rest to Command
+					prog_size = max(10, min(18, remaining / 4));
+					cmd_size = max(1, remaining - prog_size - 1);
+				} else {
+					//? Command hidden: data columns already sized comfortably, rest to Program
+					cmd_size = -1;
+					prog_size = max(10, remaining);
+				}
 			}
 			else {
 				//? Side layout or tree view: original compact columns
@@ -3574,7 +3596,13 @@ namespace Draw {
 			height = max(min_height, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
 		#endif
 			//? Limit cpu height when bottom panels (mem/net/proc) are shown
-			if (not only_top_panels) height = max(min_height, min(height, 14));
+			//? Proc-priority: When Proc is shown, CPU uses bare minimum height
+			if (not only_top_panels) {
+				if (Proc::shown)
+					height = min_height;  //? Proc gets priority - CPU at minimum (11)
+				else
+					height = max(min_height, min(height, 14));
+			}
 
 			x = 1;
 			y = cpu_bottom ? Term::height - height + 1 : 1;
@@ -3708,8 +3736,17 @@ namespace Draw {
 					b_height_vec[i] += 1;
 				height += (height+Cpu::height == Term::height-1);
 				height = max(height, b_height_vec[i] + 1);  //? Reduced padding for tighter GPU panel fit
-				//? Limit gpu height to 13 when bottom panels (mem/net/proc) are shown
-				if (not only_top_panels and height > 13) height = 13;
+				//? Limit gpu height when bottom panels (mem/net/proc) are shown
+				//? Proc-priority: When Proc is shown, GPU uses bare minimum height
+				if (not only_top_panels) {
+					if (Proc::shown) {
+						height = max(height, b_height_vec[i] + 1);  //? Absolute minimum for content
+						if (height > min_height) height = min_height;  //? Cap at minimum (11)
+					}
+					else {
+						if (height > 13) height = 13;
+					}
+				}
 				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
 				//? For Apple Silicon with single GPU, display "gpu" instead of "gpu0"
 				string box_name = (Shared::gpuCoreCount > 0 and Gpu::count == 1)
@@ -3774,27 +3811,21 @@ namespace Draw {
 			auto swap_disk = Config::getB("swap_disk");
 			auto mem_graphs = Config::getB("mem_graphs");
 
+			//? Horizontal layout (no disks) can use smaller min (10), vertical (disks) needs 13
+			int compact_min_height = show_disks ? min_height : 10;
+
 			//? Side-by-side mode: mem and net share the horizontal space
 			if (net_beside_mem and Net::shown) {
 				//? Width: always half the terminal (proc goes below, not beside)
 				width = Term::width / 2;
 
 				//? Height depends on proc position
-				if (Proc::shown and proc_full_width) {
-					//? Proc full width mode: mem+net get fixed height, proc gets the rest
-				#ifdef GPU_SUPPORT
-					int available = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
-				#else
-					int available = Term::height - Cpu::height;
-				#endif
-					//? Fixed height for mem (enough for memory stats + ~6 disks)
-					//? Cap at 20 lines so proc gets maximum space
-					int max_height = 20;
-					height = min(max_height, available - 6);  //? Ensure proc gets at least 6 lines
-					if (height < min_height) height = min_height;  //? Absolute minimum
+				//? Proc-priority: Mem uses minimum height when Proc is shown
+				if (Proc::shown) {
+					height = compact_min_height;  //? Proc-priority: Mem at minimum
 				}
 				else {
-					//? No proc or proc under net only: mem takes full height
+					//? No proc: mem takes full height
 				#ifdef GPU_SUPPORT
 					height = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
 				#else
@@ -3811,17 +3842,9 @@ namespace Draw {
 			}
 			else if (proc_full_width and Proc::shown and not Net::shown) {
 				//? Mem+Proc stacking: mem full width on top, proc full width below
+				//? Proc-priority: Mem uses minimum height
 				width = Term::width;
-			#ifdef GPU_SUPPORT
-				int available = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
-			#else
-				int available = Term::height - Cpu::height;
-			#endif
-				//? Fixed height for mem, proc gets the rest
-				int max_height = 20;
-				height = min(max_height, available - 6);  //? Ensure proc gets at least 6 lines
-				if (height < min_height) height = min_height;  //? Absolute minimum
-
+				height = compact_min_height;  //? Proc-priority: Mem at minimum
 				x = 1;
 			#ifdef GPU_SUPPORT
 				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + pwr_offset;
@@ -3830,13 +3853,20 @@ namespace Draw {
 			#endif
 			}
 			else {
-				//? Original stacked layout
+				//? Original stacked layout - Proc-priority sizing
+				//? Proc gets maximum space, Mem/Net use minimums first
 				width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			#ifdef GPU_SUPPORT
-				height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - pwr_offset;
-			#else
-				height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
-			#endif
+				if (Proc::shown) {
+					//? Proc-priority: Mem uses bare minimum height
+					height = compact_min_height;
+				} else {
+					//? No Proc - Mem can expand
+				#ifdef GPU_SUPPORT
+					height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - pwr_offset;
+				#else
+					height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+				#endif
+				}
 				if (height < min_height) height = min_height;  //? Enforce minimum height for mem panel
 				x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 				if (mem_below_net and Net::shown)
@@ -3875,8 +3905,8 @@ namespace Draw {
 			else {
 				mem_width = width - 1;
 				//? Use horizontal layout when config option enabled (toggle with '2' key)
-				//? Only enable horizontal layout when height > min_height (not in compact mode)
-				horizontal_mem_layout = Config::getB("mem_horizontal") and (height > min_height);
+				//? Allow horizontal layout at compact_min_height (no disks = can use 10 lines)
+				horizontal_mem_layout = Config::getB("mem_horizontal") and (height >= compact_min_height);
 				if (horizontal_mem_layout) {
 					//? Calculate per-item width for horizontal layout
 					//? Content area = mem_width - 1 (left border at position 0, content from 1 to mem_width-1)
@@ -3954,9 +3984,10 @@ namespace Draw {
 			box = createBox(x, y, width, height, Theme::c("mem_box"), true, "mem", "", 2);
 			Logger::debug("MEM panel: x={}, y={}, width={}, height={}", x, y, width, height);
 			//? Add meter/bar toggle label only at height = min_height (13) where toggle is available
+			//? Skip in horizontal layout mode (always uses bars, toggle not needed)
 			//? Shows "Bar" (B hotkey) when meters active, "Meter" (M hotkey) when braille active
 			auto mem_bar_mode = Config::getB("mem_bar_mode");
-			if (height <= min_height) {
+			if (height <= min_height and not horizontal_mem_layout) {
 				if (mem_bar_mode) {
 					//? Meters active - show "Bar" label (press B to switch to braille bars)
 					box += Mv::to(y, x + 10) + Theme::c("mem_box") + Symbols::title_left + Fx::b
@@ -3989,12 +4020,13 @@ namespace Draw {
 				width = Term::width - Mem::width;
 
 				//? Height depends on proc position
+				//? Proc-priority: Net uses minimum height when Proc is shown
 				if (Proc::shown and not proc_full_width) {
-					//? Proc under net only: net is fixed at 12 lines, proc gets the rest
-					height = 12;
+					//? Proc under net only: net at minimum, proc gets the rest
+					height = min_height;  //? min_height = 6
 				}
 				else if (Proc::shown and proc_full_width) {
-					//? Proc full width: net matches mem height (both are capped)
+					//? Proc full width: net matches mem height (both at minimum)
 					height = Mem::height;
 				}
 				else {
@@ -4017,11 +4049,16 @@ namespace Draw {
 			else {
 				//? Original stacked layout
 				width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-			#ifdef GPU_SUPPORT
-				height = Term::height - Cpu::height - Gpu::total_height - Mem::height - pwr_offset;
-			#else
-				height = Term::height - Cpu::height - Mem::height;
-			#endif
+				if (Proc::shown) {
+					//? Proc-priority: Net uses bare minimum height (6)
+					height = min_height;
+				} else {
+				#ifdef GPU_SUPPORT
+					height = Term::height - Cpu::height - Gpu::total_height - Mem::height - pwr_offset;
+				#else
+					height = Term::height - Cpu::height - Mem::height;
+				#endif
+				}
 				x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 				if (mem_below_net and Mem::shown)
 				#ifdef GPU_SUPPORT
