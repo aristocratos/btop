@@ -1548,6 +1548,7 @@ namespace Proc {
 	int x, y, width = 20, height;
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
+	bool is_last_process_in_list = false;
 	int selected_pid = 0, selected_depth = 0;
 	int scroll_pos;
 	string selected_name;
@@ -1560,20 +1561,36 @@ namespace Proc {
 	Draw::Graph detailed_mem_graph;
 	int user_size, thread_size, prog_size, cmd_size, tree_size;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
+	bool previous_proc_banner_state = false;
 
 	string box;
 
 	int selection(const std::string_view cmd_key) {
-		if ((Config::getB("follow_process") and not Config::getB("pause_proc_list"))) {
-			Config::flip("follow_process");
-			Config::set("followed_pid", 0);
-			redraw = true;
-		}
 		auto start = Config::getI("proc_start");
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
-		const int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
+		bool changed = false;
+		int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
 																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
+
+		// Return the selection from the detailed view to the followed process before moving the selection
+		// Disengage following mode when moving the selection unless paused
+		if (Config::getB("follow_process")) {
+			if (Config::getB("show_detailed") and selected == 0 and Config::getB("should_selection_return_to_followed")
+			and Config::getI("detailed_pid") == Config::getI("followed_pid")) {
+				selected = Config::getI("proc_followed");
+				Config::set("should_selection_return_to_followed", false);
+				changed = true;
+			}
+			if (not Config::getB("pause_proc_list")) {
+				Config::flip("follow_process");
+				Config::set("followed_pid", 0);
+				Config::set("proc_followed", 0);
+				select_max++;
+			}
+			redraw = true;
+		}
+
 		auto vim_keys = Config::getB("vim_keys");
 
 		int numpids = Proc::numpids;
@@ -1617,7 +1634,6 @@ namespace Proc {
 			start = clamp((int)round((double)mouse_y * (numpids - select_max - 2) / (select_max - 2)), 0, max(0, numpids - select_max));
 		}
 
-		bool changed = false;
 		if (start != Config::getI("proc_start")) {
 			Config::set("proc_start", start);
 			changed = true;
@@ -1644,13 +1660,15 @@ namespace Proc {
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
+		int followed = Config::getI("proc_followed");
+		bool should_selection_return_to_followed = Config::getB("should_selection_return_to_followed");
 		auto proc_banner_shown = pause_proc_list or follow_process;
 		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
 		const int y = show_detailed ? Proc::y + 8 : Proc::y;
 		const int height = show_detailed ? Proc::height - 8 : Proc::height;
-		const int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) : 
+		int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) : 
 												(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max);
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
@@ -1659,13 +1677,15 @@ namespace Proc {
 		out.reserve(width * height);
 
 		//? Move current selection/view to the selected process when a process should be followed
-		if (follow_process and (not pause_proc_list or Config::getB("update_following"))) {
+		//? Restore view and selection to the detailed view process when detailed view is closed
+		const int restore_detailed_pid = Config::getI("restore_detailed_pid");
+		if ((follow_process and (not pause_proc_list or Config::getB("update_following"))) or restore_detailed_pid > 0) {
 			Config::set("update_following", false);
 			int loc = 1;
 			bool can_follow = false;
 			for (auto& p : plist) {
 				if (p.filtered or (proc_tree and p.tree_index == plist.size())) continue;
-				if (p.pid == (size_t)followed_pid) {
+				if (p.pid == (size_t)(restore_detailed_pid > 0 ? restore_detailed_pid : followed_pid)) {
 					can_follow = true;
 					break;
 				}
@@ -1673,13 +1693,44 @@ namespace Proc {
 			}
 
 			if (can_follow) {
-				start = max(0, loc - (select_max / 2));
-				selected = loc < (select_max / 2) ? loc : start > numpids - select_max ? select_max - numpids + loc : select_max / 2;
+				const int list_middle = select_max % 2 == 0 ? select_max / 2 : select_max / 2 + 1;
+				start = max(0, loc - list_middle);
+				followed = loc < list_middle ? loc : start > numpids - select_max ? select_max - numpids + loc : list_middle;
+				if (restore_detailed_pid == 0) {
+					Config::set("proc_followed", followed);
+					Config::set("should_selection_return_to_followed", should_selection_return_to_followed = true);
+				}
+				selected = (followed_pid != Config::getI("detailed_pid") or restore_detailed_pid > 0) ? followed : 0;
 			}
-			else {
+			else if (restore_detailed_pid == 0) {
 				Config::set("followed_pid", followed_pid = 0);
 				Config::set("follow_process", follow_process = false);
 				Config::set("proc_banner_shown", proc_banner_shown = pause_proc_list);
+				Config::set("proc_followed", 0);
+				if (not proc_banner_shown) select_max++;
+			}
+			if (restore_detailed_pid > 0) Config::set("restore_detailed_pid", 0);
+		}
+
+		//? Handle selection edge cases when list view is showing bottom of list
+		//? for Pause and Following modes
+		const bool proc_banner_changed = proc_banner_shown != previous_proc_banner_state;
+		previous_proc_banner_state = proc_banner_shown;
+		if (proc_banner_changed and not proc_banner_shown
+		and start + select_max - 1 == numpids)
+			selected++;
+		else if (pause_proc_list and selected > select_max)
+			start++;
+
+		//? redraw if selection reaches or leaves the end of the list
+		if (selected != Config::getI("proc_last_selected")) {
+			if (selected >= select_max and start >= numpids - select_max) {
+				redraw = true;
+				is_last_process_in_list = true;
+			}
+			else if (is_last_process_in_list) {
+				redraw = true;
+				is_last_process_in_list = false;
 			}
 		}
 
@@ -1690,7 +1741,7 @@ namespace Proc {
 			const string title_right = Theme::c("proc_box") + Symbols::title_right;
 			const string title_left_down = Theme::c("proc_box") + Symbols::title_left_down;
 			const string title_right_down = Theme::c("proc_box") + Symbols::title_right_down;
-			for (const auto& key : {"T", "K", "S", "enter"})
+			for (const auto& key : {"t", "K", "k", "s", "N", "F", "enter", "info_enter"})
 				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
 
 			//? Adapt sizes of text fields
@@ -1743,11 +1794,19 @@ namespace Proc {
 					+ title_left + hi_color + Fx::b + 's' + t_color + "ignals" + Fx::ub + title_right
 					+ title_left + hi_color + Fx::b + 'N' + t_color + "ice" + Fx::ub + title_right;
 				if (alive and selected == 0) {
-					Input::mouse_mappings["k"] = {d_y, mouse_x, 1, 4};
+					Input::mouse_mappings[vim_keys ? "K" : "k"] = {d_y, mouse_x, 1, 4};
 					mouse_x += 6;
 					Input::mouse_mappings["s"] = {d_y, mouse_x, 1, 7};
 				    mouse_x += 9;
 					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
+				    mouse_x += 7;
+				}
+				if (width > 77) {
+				    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}",
+				    	title_left, follow_process ? Fx::b : "",
+				    	hi_color, 'F', t_color, "ollow",
+				    	Fx::ub, title_right);
+				    if (selected == 0) Input::mouse_mappings["F"] = {d_y, mouse_x, 1, 6};
 				}
 
 				//? Labels
@@ -1827,14 +1886,15 @@ namespace Proc {
 				Input::mouse_mappings["right"] = {y, sort_pos + sort_len + 3, 1, 2};
 
 			//? select, info, signal, and follow buttons
-			const string down_button = (selected == select_max and start == numpids - select_max ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
+			const string down_button = (is_last_process_in_list ? Theme::c("inactive_fg") : Theme::c("hi_fg")) + Symbols::down;
+			const bool is_up_button_highlighted = selected != 0 or (follow_process and followed_pid == Config::getI("detailed_pid") and should_selection_return_to_followed);
+			const string up_button = (is_up_button_highlighted ? Theme::c("hi_fg") : Theme::c("inactive_fg")) + Symbols::up;
 			const string t_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 			const string hi_color = (selected == 0 ? Theme::c("inactive_fg") : Theme::c("hi_fg"));
 			int mouse_x = x + 14;
-			out += Mv::to(y + height - 1, x + 1) + title_left_down + Fx::b + hi_color + Symbols::up + Theme::c("title") + " select " + down_button + Fx::ub + title_right_down
-				+ title_left_down + Fx::b + t_color + "info " + hi_color + Symbols::enter + Fx::ub + title_right_down;
+			out += Mv::to(y + height - 1, x + 1) + title_left_down + Fx::b + hi_color + up_button + Theme::c("title") + " select " + down_button + Fx::ub + title_right_down
+				+ title_left_down + Fx::b + t_color + "info " + hi_color + Symbols::enter + Fx::ub + title_right_down;	
 				if (selected > 0) Input::mouse_mappings["info_enter"] = {y + height - 1, mouse_x, 1, 6};
-				else Input::mouse_mappings.erase("info_enter");
 				mouse_x += 8;
 			if (width > 60) {
 				out += title_left_down + Fx::b + hi_color + 't' + t_color + "erminate" + Fx::ub + title_right_down;
@@ -1843,7 +1903,7 @@ namespace Proc {
 			}
 			if (width > 55) {
 				out += title_left_down + Fx::b + hi_color + (vim_keys ? 'K' : 'k') + t_color + "ill" + Fx::ub + title_right_down;
-				if (selected > 0) Input::mouse_mappings["k"] = {y + height - 1, mouse_x, 1, 4};
+				if (selected > 0) Input::mouse_mappings[vim_keys ? "K" : "k"] = {y + height - 1, mouse_x, 1, 4};
 				mouse_x += 6;
 			}
 			out += title_left_down + Fx::b + hi_color + 's' + t_color + "ignals" + Fx::ub + title_right_down;
@@ -2083,7 +2143,7 @@ namespace Proc {
 		}
 
 		//? Current selection and number of processes
-		string location = to_string(start + selected) + '/' + to_string(numpids);
+		string location = to_string(start + (follow_process ? followed : selected)) + '/' + to_string(numpids);
 		string loc_clear = Symbols::h_line * max((size_t)0, 9 - location.size());
 		out += Mv::to(y + height - 1, x+width - 3 - max(9, (int)location.size())) + Fx::ub + Theme::c("proc_box") + loc_clear
 			+ Symbols::title_left_down + Theme::c("title") + Fx::b + location + Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;

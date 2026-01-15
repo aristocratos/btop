@@ -340,6 +340,7 @@ namespace Config {
 		{"proc_follow_detailed", true},
 		{"follow_process", false},
 		{"update_following", false},
+		{"should_selection_return_to_followed", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
@@ -356,12 +357,14 @@ namespace Config {
 		{"net_download", 100},
 		{"net_upload", 100},
 		{"detailed_pid", 0},
+		{"restore_detailed_pid", 0},
 		{"selected_pid", 0},
 		{"followed_pid", 0},
 		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
-		{"proc_last_selected", 0}
+		{"proc_last_selected", 0},
+		{"proc_followed", 0},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
