@@ -511,12 +511,16 @@ namespace Gpu {
 				}
 			}
 
-			shared_gpu_percent.at("gpu-average").push_back(avg / static_cast<long long>(gpus.size()));
+			shared_gpu_percent.at("gpu-average").push_back(gpus.empty() ? 0 : avg / static_cast<long long>(gpus.size()));
 
 			if (width != 0) {
-				while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
-				while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) shared_gpu_percent.at("gpu-pwr-total").pop_front();
-				while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) shared_gpu_percent.at("gpu-vram-total").pop_front();
+				//? Cache map references to avoid repeated lookups in while loops
+				auto& gpu_avg = shared_gpu_percent.at("gpu-average");
+				auto& gpu_pwr = shared_gpu_percent.at("gpu-pwr-total");
+				auto& gpu_vram = shared_gpu_percent.at("gpu-vram-total");
+				while (cmp_greater(gpu_avg.size(), width * 2)) gpu_avg.pop_front();
+				while (cmp_greater(gpu_pwr.size(), width * 2)) gpu_pwr.pop_front();
+				while (cmp_greater(gpu_vram.size(), width * 2)) gpu_vram.pop_front();
 			}
 
 			//? Update ANE activity history for Apple Silicon split graph (key "6")
@@ -524,9 +528,10 @@ namespace Gpu {
 				// Convert ANE activity (C/s) to percentage (0-100), dynamic max
 				double ane_max = std::max(1.0, Shared::aneActivityPeak.load(std::memory_order_acquire));
 				long long ane_percent = static_cast<long long>(std::min(100.0, (Shared::aneActivity / ane_max) * 100.0));
-				shared_gpu_percent.at("ane-activity").push_back(ane_percent);
+				auto& ane_activity = shared_gpu_percent.at("ane-activity");
+				ane_activity.push_back(ane_percent);
 				if (width != 0) {
-					while (cmp_greater(shared_gpu_percent.at("ane-activity").size(), width * 2)) shared_gpu_percent.at("ane-activity").pop_front();
+					while (cmp_greater(ane_activity.size(), width * 2)) ane_activity.pop_front();
 				}
 			}
 		}
@@ -977,7 +982,8 @@ namespace Cpu {
 		MachProcessorInfo info{};
 		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
 		if (error != KERN_SUCCESS) {
-			Logger::error("Failed getting CPU load info");
+			Logger::error("Failed getting CPU load info, using cached values");
+			return cpu;  //? Return cached cpu data instead of using invalid pointer
 		}
 		cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
 		long long global_totals = 0;
@@ -1986,15 +1992,26 @@ namespace Proc {
 			std::unique_ptr<kinfo_proc[]> processes(new kinfo_proc[size / sizeof(kinfo_proc)]);
 			if (sysctl(mib, 4, processes.get(), &size, nullptr, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
+
+				//? Build hash map for O(1) process lookup instead of O(n) linear search
+				std::unordered_map<size_t, size_t> pid_to_index;
+				pid_to_index.reserve(current_procs.size());
+				for (size_t idx = 0; idx < current_procs.size(); ++idx) {
+					pid_to_index[current_procs[idx].pid] = idx;
+				}
+
 				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
 					struct kinfo_proc& kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
 					found.insert(pid);
 
-					//? Check if pid already exists in current_procs
+					//? Check if pid already exists in current_procs using O(1) hash lookup
 					bool no_cache = false;
-					auto find_old = rng::find(current_procs, pid, &proc_info::pid);
+					auto pid_it = pid_to_index.find(pid);
+					auto find_old = (pid_it != pid_to_index.end())
+						? current_procs.begin() + static_cast<ptrdiff_t>(pid_it->second)
+						: current_procs.end();
 					//? Only add new processes if not paused
 					if (find_old == current_procs.end()) {
 						if (not pause_proc_list) {

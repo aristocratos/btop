@@ -401,6 +401,8 @@ namespace Gpu {
 			name = reinterpret_cast<decltype(name)>(dlsym(ioreport_lib_handle, #name)); \
 			if (name == nullptr) { \
 				Logger::debug("AppleSiliconGpu: Failed to load {}", #name); \
+				dlclose(ioreport_lib_handle); \
+				ioreport_lib_handle = nullptr; \
 				return false; \
 			}
 
