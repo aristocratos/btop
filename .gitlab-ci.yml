@@ -67,6 +67,7 @@ build:macos-arm64:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -203,6 +204,7 @@ test:macos-smoke:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -258,6 +260,7 @@ package:tarball:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
 
 # =============================================================================
 # Publish Stage - Push binaries to GitLab Package Registry
@@ -331,6 +334,7 @@ publish:binaries:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
 
 publish:tarball:
   image: curlimages/curl:latest
@@ -379,6 +383,7 @@ publish:tarball:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
 
 # =============================================================================
 # Release Stage
@@ -512,6 +517,7 @@ lint:cppcheck:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -568,6 +574,7 @@ lint:clang-tidy:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -612,6 +619,7 @@ test:unit-linux:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
@@ -641,6 +649,7 @@ test:unit-macos:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH == "gpu-apple-silicon-nosudo"
+    - if: $CI_COMMIT_BRANCH == "apple-silicon-comprehensive-monitoring"
     - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
