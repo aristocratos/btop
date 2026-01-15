@@ -539,7 +539,7 @@ lint:clang-tidy:
     - apt-get install -y -qq software-properties-common
     - add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - apt-get update -qq
-    - apt-get install -y -qq clang-tidy-18 g++-14 build-essential
+    - apt-get install -y -qq clang-tidy-18 g++-14 build-essential libfmt-dev
     - update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
     - clang-tidy --version
   script:
@@ -547,7 +547,7 @@ lint:clang-tidy:
     - mkdir -p reports
     - |
       # Create compile_commands.json compatible flags
-      COMPILE_FLAGS="-std=c++23 -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -DGPU_SUPPORT -I src/"
+      COMPILE_FLAGS="-std=c++23 -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -DGPU_SUPPORT -I src/ -I include/"
 
       # Run clang-tidy on core source files
       clang-tidy \
