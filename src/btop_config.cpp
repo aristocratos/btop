@@ -863,7 +863,7 @@ namespace Config {
 		}
 	}
 
-	static constexpr auto get_xdg_state_dir() -> std::optional<fs::path> {
+	static auto get_xdg_state_dir() -> std::optional<fs::path> {
 		std::optional<fs::path> xdg_state_home;
 
 		{
