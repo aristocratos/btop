@@ -121,7 +121,7 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
+	long page_size, clk_tck, coreCount, physicalCoreCount, arg_max;
 	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on NetBSD)
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on NetBSD)
 	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on NetBSD)
@@ -133,6 +133,12 @@ namespace Shared {
 	atomic<double> aneActivityPeak{1};  // ANE activity peak (1 on NetBSD, unused)
 	// Temperature values (atomic for thread-safety, 0 on NetBSD)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
+	// Fan metrics (0 on NetBSD, used on macOS)
+	atomic<long long> fanRpm{0};
+	atomic<int> fanCount{0};
+	// GPU memory metrics (0 on NetBSD without discrete GPU support)
+	atomic<long long> gpuMemUsed{0};
+	atomic<long long> gpuMemTotal{0};
 	int totalMem_len, kfscale;
 	long bootTime;
 	size_t size;
@@ -150,15 +156,15 @@ namespace Shared {
 			coreCount = ncpu;
 		}
 
-		size = sizeof(pageSize);
-		if (sysctlbyname("hw.pagesize", &pageSize, &size, nullptr, 0) < 0) {
-			pageSize = 4096;
+		size = sizeof(page_size);
+		if (sysctlbyname("hw.pagesize", &page_size, &size, nullptr, 0) < 0) {
+			page_size = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
 		}
 
-		clkTck = sysconf(_SC_CLK_TCK);
-		if (clkTck <= 0) {
-			clkTck = 100;
+		clk_tck = sysconf(_SC_CLK_TCK);
+		if (clk_tck <= 0) {
+			clk_tck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 
@@ -757,19 +763,19 @@ namespace Mem {
 			bzero(&uvmexp, sizeof(uvmexp));
 		}
 
-		memActive = uvmexp.active * Shared::pageSize;
-		memWired = uvmexp.wired * Shared::pageSize;
-		memFree = uvmexp.free * Shared::pageSize;
-		memCached = (uvmexp.filepages + uvmexp.execpages + uvmexp.anonpages) * Shared::pageSize;
+		memActive = uvmexp.active * Shared::page_size;
+		memWired = uvmexp.wired * Shared::page_size;
+		memFree = uvmexp.free * Shared::page_size;
+		memCached = (uvmexp.filepages + uvmexp.execpages + uvmexp.anonpages) * Shared::page_size;
 		mem.stats.at("used") = memActive + memWired;
 		mem.stats.at("available") = Shared::totalMem - (memActive + memWired);
 		mem.stats.at("cached") = memCached;
 		mem.stats.at("free") = memFree;
 
 		if (show_swap) {
-			mem.stats.at("swap_total") = uvmexp.swpages * Shared::pageSize;
-			mem.stats.at("swap_used") = uvmexp.swpginuse * Shared::pageSize;
-			mem.stats.at("swap_free") = (uvmexp.swpages - uvmexp.swpginuse) * Shared::pageSize;
+			mem.stats.at("swap_total") = uvmexp.swpages * Shared::page_size;
+			mem.stats.at("swap_used") = uvmexp.swpginuse * Shared::page_size;
+			mem.stats.at("swap_free") = (uvmexp.swpages - uvmexp.swpginuse) * Shared::page_size;
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
@@ -1295,14 +1301,14 @@ namespace Proc {
 				int cpu_t = 0;
 				cpu_t 	= kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
 
-				new_proc.mem = kproc->p_vm_rssize * Shared::pageSize;
+				new_proc.mem = kproc->p_vm_rssize * Shared::page_size;
 				new_proc.threads = 1; // can't seem to find this in kinfo_proc
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
+				new_proc.cpu_c = (double)(cpu_t * Shared::clk_tck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
 
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;

@@ -117,7 +117,7 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, clkTck, coreCount, physicalCoreCount, arg_max;
+	long page_size, clk_tck, coreCount, physicalCoreCount, arg_max;
 	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on FreeBSD)
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on FreeBSD)
 	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on FreeBSD)
@@ -129,6 +129,12 @@ namespace Shared {
 	atomic<double> aneActivityPeak{1};  // ANE activity peak (1 on FreeBSD, unused)
 	// Temperature values (atomic for thread-safety, 0 on FreeBSD)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
+	// Fan metrics (0 on FreeBSD, used on macOS)
+	atomic<long long> fanRpm{0};
+	atomic<int> fanCount{0};
+	// GPU memory metrics (0 on FreeBSD without discrete GPU support)
+	atomic<long long> gpuMemUsed{0};
+	atomic<long long> gpuMemTotal{0};
 	int totalMem_len, kfscale;
 	long bootTime;
 
@@ -145,15 +151,15 @@ namespace Shared {
 			coreCount = ncpu;
 		}
 
-		pageSize = sysconf(_SC_PAGE_SIZE);
-		if (pageSize <= 0) {
-			pageSize = 4096;
+		page_size = sysconf(_SC_PAGE_SIZE);
+		if (page_size <= 0) {
+			page_size = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
 		}
 
-		clkTck = sysconf(_SC_CLK_TCK);
-		if (clkTck <= 0) {
-			clkTck = 100;
+		clk_tck = sysconf(_SC_CLK_TCK);
+		if (clk_tck <= 0) {
+			clk_tck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 
@@ -624,12 +630,12 @@ namespace Mem {
    		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
 		len = sizeof(memActive);
 		sysctl(mib, 4, &(memActive), &len, nullptr, 0);
-		memActive *= Shared::pageSize;
+		memActive *= Shared::page_size;
 
 		len = 4; sysctlnametomib("vm.stats.vm.v_wire_count", mib, &len);
 		len = sizeof(memWire);
 		sysctl(mib, 4, &(memWire), &len, nullptr, 0);
-		memWire *= Shared::pageSize;
+		memWire *= Shared::page_size;
 
 		mem.stats.at("used") = memWire + memActive;
 		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
@@ -637,13 +643,13 @@ namespace Mem {
 		len = sizeof(cachedMem);
    		len = 4; sysctlnametomib("vm.stats.vm.v_cache_count", mib, &len);
    		sysctl(mib, 4, &(cachedMem), &len, nullptr, 0);
-   		cachedMem *= Shared::pageSize;
+   		cachedMem *= Shared::page_size;
    		mem.stats.at("cached") = cachedMem;
 
 		len = sizeof(freeMem);
    		len = 4; sysctlnametomib("vm.stats.vm.v_free_count", mib, &len);
    		sysctl(mib, 4, &(freeMem), &len, nullptr, 0);
-   		freeMem *= Shared::pageSize;
+   		freeMem *= Shared::page_size;
    		mem.stats.at("free") = freeMem;
 
 		if (show_swap) {
@@ -656,8 +662,8 @@ namespace Mem {
 				totalSwap += swap[i].ksw_total;
 				usedSwap += swap[i].ksw_used;
 			}
-			mem.stats.at("swap_total") = totalSwap * Shared::pageSize;
-			mem.stats.at("swap_used") = usedSwap * Shared::pageSize;
+			mem.stats.at("swap_total") = totalSwap * Shared::page_size;
+			mem.stats.at("swap_used") = usedSwap * Shared::page_size;
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
@@ -1203,14 +1209,14 @@ namespace Proc {
 				cpu_t 	= kproc->ki_rusage.ru_utime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_utime.tv_usec
 						+ kproc->ki_rusage.ru_stime.tv_sec * 1'000'000 + kproc->ki_rusage.ru_stime.tv_usec;
 
-				new_proc.mem = kproc->ki_rssize * Shared::pageSize;
+				new_proc.mem = kproc->ki_rssize * Shared::page_size;
 				new_proc.threads = kproc->ki_numthreads;
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp((100.0 * kproc->ki_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
+				new_proc.cpu_c = (double)(cpu_t * Shared::clk_tck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
 
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;

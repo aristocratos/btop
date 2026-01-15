@@ -264,7 +264,7 @@ namespace Mem {
 namespace Shared {
 
 	fs::path procPath, passwd_path;
-	long pageSize, clkTck, coreCount;
+	long page_size, clk_tck, coreCount;
 	long eCoreCount = 0, pCoreCount = 0;  // Apple Silicon E-core/P-core counts (0 on Linux)
 	long gpuCoreCount = 0;  // Apple Silicon GPU core count (0 on Linux)
 	long aneCoreCount = 0;  // Apple Silicon ANE core count (0 on Linux)
@@ -276,6 +276,12 @@ namespace Shared {
 	atomic<double> aneActivityPeak{1};  // ANE activity peak (1 on Linux, unused)
 	// Temperature values (atomic for thread-safety, 0 on Linux)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
+	// Fan metrics (0 on Linux, used on macOS)
+	atomic<long long> fanRpm{0};
+	atomic<int> fanCount{0};
+	// GPU memory metrics (0 on Linux without discrete GPU support)
+	atomic<long long> gpuMemUsed{0};
+	atomic<long long> gpuMemTotal{0};
 
 	void init() {
 
@@ -297,15 +303,15 @@ namespace Shared {
 			}
 		}
 
-		pageSize = sysconf(_SC_PAGE_SIZE);
-		if (pageSize <= 0) {
-			pageSize = 4096;
+		page_size = sysconf(_SC_PAGE_SIZE);
+		if (page_size <= 0) {
+			page_size = 4096;
 			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
 		}
 
-		clkTck = sysconf(_SC_CLK_TCK);
-		if (clkTck <= 0) {
-			clkTck = 100;
+		clk_tck = sysconf(_SC_CLK_TCK);
+		if (clk_tck <= 0) {
+			clk_tck = 100;
 			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
 		}
 
@@ -2829,7 +2835,7 @@ namespace Proc {
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
 		//? Process runtime
-		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clkTck));
+		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(uptime - (detailed.entry.cpu_s / Shared::clk_tck));
 		else detailed.elapsed = sec_to_dhms(detailed.entry.death_time);
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
@@ -3154,7 +3160,7 @@ namespace Proc {
 								if (cmp_greater(short_str.size(), totalMem_len))
 									new_proc.mem = totalMem;
 								else
-									new_proc.mem = stoull(short_str) * Shared::pageSize;
+									new_proc.mem = stoull(short_str) * Shared::page_size;
 						}
 						break;
 					}
@@ -3178,7 +3184,7 @@ namespace Proc {
 					if (not pread.good()) continue;
 					pread.ignore(SSmax, ' ');
 					pread >> new_proc.mem;
-					new_proc.mem *= Shared::pageSize;
+					new_proc.mem *= Shared::page_size;
 					pread.close();
 				}
 
@@ -3186,7 +3192,7 @@ namespace Proc {
 				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
-				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clkTck) - new_proc.cpu_s);
+				new_proc.cpu_c = (double)cpu_t / max(1.0, (uptime * Shared::clk_tck) - new_proc.cpu_s);
 
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
@@ -3209,7 +3215,7 @@ namespace Proc {
 				for (auto& r : current_procs) {
 					//? Use O(1) set lookup instead of O(n) linear search
 					if (not found.contains(r.pid)) {
-						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clkTck);
+						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clk_tck);
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
 						//? Reset cpu usage for dead processes if paused and option is set
