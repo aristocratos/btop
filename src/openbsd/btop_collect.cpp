@@ -128,6 +128,7 @@ namespace Shared {
 	atomic<double> cpuPowerAvg{0}, gpuPowerAvg{0}, anePowerAvg{0};
 	atomic<double> cpuPowerPeak{0}, gpuPowerPeak{0}, anePowerPeak{0};
 	atomic<double> aneActivity{0};  // ANE activity (0 on OpenBSD)
+	atomic<double> aneActivityPeak{1};  // ANE activity peak (1 on OpenBSD, unused)
 	// Temperature values (atomic for thread-safety, 0 on OpenBSD)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
 	int totalMem_len, kfscale;

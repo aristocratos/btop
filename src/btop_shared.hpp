@@ -118,6 +118,7 @@ namespace Shared {
 
 	//* Apple Silicon ANE activity (commands per second)
 	extern atomic<double> aneActivity;
+	extern atomic<double> aneActivityPeak;  // Max observed ANE activity for scaling
 
 	//* Shared temperature values for Pwr panel (updated during collection)
 	//* Atomic for thread-safe access between collector and drawer threads

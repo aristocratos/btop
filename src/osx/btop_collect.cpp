@@ -521,8 +521,9 @@ namespace Gpu {
 
 			//? Update ANE activity history for Apple Silicon split graph (key "6")
 			if (Shared::aneCoreCount > 0) {
-				// Convert ANE activity (C/s) to percentage (0-100), max 650 C/s = 100%
-				long long ane_percent = static_cast<long long>(std::min(100.0, (Shared::aneActivity / 650.0) * 100.0));
+				// Convert ANE activity (C/s) to percentage (0-100), dynamic max
+				double ane_max = std::max(1.0, Shared::aneActivityPeak.load(std::memory_order_acquire));
+				long long ane_percent = static_cast<long long>(std::min(100.0, (Shared::aneActivity / ane_max) * 100.0));
 				shared_gpu_percent.at("ane-activity").push_back(ane_percent);
 				if (width != 0) {
 					while (cmp_greater(shared_gpu_percent.at("ane-activity").size(), width * 2)) shared_gpu_percent.at("ane-activity").pop_front();
@@ -575,6 +576,7 @@ namespace Shared {
 
 	// Apple Silicon ANE activity (commands per second, atomic for thread-safety)
 	atomic<double> aneActivity{0};
+	atomic<double> aneActivityPeak{1};  // Start at 1 to avoid division by zero
 
 	// Shared temperature values for Pwr panel (atomic for thread-safety)
 	atomic<long long> cpuTemp{0}, gpuTemp{0};
