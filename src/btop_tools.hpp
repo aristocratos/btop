@@ -415,7 +415,7 @@ namespace Tools {
 		const char* start = str.data();
 		const char* end = str.data() + str.size();
 		// Skip leading '+' (from_chars handles '-' but not '+')
-		if (start < end and *start == '+') ++start;
+		if ((start < end) && (*start == '+')) ++start;
 		if (start >= end) return fallback;
 		int result{};
 		auto [ptr, ec] = std::from_chars(start, end, result);
@@ -427,7 +427,7 @@ namespace Tools {
 		if (str.empty()) return fallback;
 		const char* start = str.data();
 		const char* end = str.data() + str.size();
-		if (start < end and *start == '+') ++start;
+		if ((start < end) && (*start == '+')) ++start;
 		if (start >= end) return fallback;
 		long result{};
 		auto [ptr, ec] = std::from_chars(start, end, result);
@@ -439,7 +439,7 @@ namespace Tools {
 		if (str.empty()) return fallback;
 		const char* start = str.data();
 		const char* end = str.data() + str.size();
-		if (start < end and *start == '+') ++start;
+		if ((start < end) && (*start == '+')) ++start;
 		if (start >= end) return fallback;
 		long long result{};
 		auto [ptr, ec] = std::from_chars(start, end, result);

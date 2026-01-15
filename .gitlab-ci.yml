@@ -476,6 +476,8 @@ lint:cppcheck:
     - echo "Running cppcheck static analysis"
     - mkdir -p reports
     - |
+      # Note: cppcheck doesn't fully support C++20/23 syntax like operator""s
+      # Suppressing syntaxError for user-defined literals and memleakOnRealloc for external Intel GPU code
       cppcheck \
         --enable=warning,performance,portability \
         --std=c++20 \
@@ -483,6 +485,8 @@ lint:cppcheck:
         --suppress=missingIncludeSystem \
         --suppress=unusedFunction \
         --suppress=useStlAlgorithm \
+        --suppress=syntaxError \
+        --suppress=memleakOnRealloc:src/linux/intel_gpu_top/intel_gpu_top.c \
         --inline-suppr \
         --xml \
         --xml-version=2 \
@@ -497,6 +501,8 @@ lint:cppcheck:
         --suppress=missingIncludeSystem \
         --suppress=unusedFunction \
         --suppress=useStlAlgorithm \
+        --suppress=syntaxError \
+        --suppress=memleakOnRealloc:src/linux/intel_gpu_top/intel_gpu_top.c \
         --inline-suppr \
         -DGPU_SUPPORT \
         -I src/ \
