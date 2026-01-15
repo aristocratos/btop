@@ -292,6 +292,7 @@ namespace Gpu {
 				vector<XeGtIdle> gt_idle;
 				uint64_t mem_total = 0;
 				uint64_t prev_time_ns = 0;
+				bool first_sample = true;
 			};
 
 		XeState state;
@@ -2119,6 +2120,7 @@ namespace Gpu {
 			state.gt_idle.clear();
 			state.mem_total = 0;
 			state.freq_sysfs_path.clear();
+			state.first_sample = true;
 			initialized = false;
 			return true;
 		}
@@ -2161,6 +2163,31 @@ namespace Gpu {
 				return false;
 			}
 			uint64_t now_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+
+			if (state.first_sample) {
+				state.prev_time_ns = now_ns;
+				for (auto& gt : state.gt_idle) {
+					uint64_t idle_ms = 0;
+					ifstream idle_file(gt.idle_path);
+					if (idle_file >> idle_ms) {
+						gt.prev_idle_ms = idle_ms;
+					}
+				}
+				for (auto& eng : state.engines) {
+					if (eng.active_fd >= 0) (void)read(eng.active_fd, &eng.prev_active, sizeof(eng.prev_active));
+					if (eng.total_fd >= 0) (void)read(eng.total_fd, &eng.prev_total, sizeof(eng.prev_total));
+				}
+				state.first_sample = false;
+				gpus_slice->gpu_percent.at("gpu-totals").push_back(0);
+				if (gpus_slice->supported_functions.gt_utilization) {
+					gpus_slice->gpu_percent.at("gpu-rc-totals").push_back(0);
+					gpus_slice->gpu_percent.at("gpu-mc-totals").push_back(0);
+					gpus_slice->encoder_utilization = 0;
+					gpus_slice->decoder_utilization = 0;
+				}
+				return true;
+			}
+
 			double dt = (double)(now_ns - state.prev_time_ns) / 1e9;
 			if (dt < MIN_DT_SECONDS) dt = MIN_DT_SECONDS;
 			state.prev_time_ns = now_ns;
@@ -2289,6 +2316,54 @@ namespace Gpu {
 			return "";
 		}
 
+		static string lookup_pci_device_name(const string& vendor_id, const string& device_id) {
+			static const vector<string> pci_ids_paths = {
+				"/usr/share/hwdata/pci.ids",
+				"/usr/share/misc/pci.ids",
+				"/var/lib/pciutils/pci.ids"
+			};
+
+			for (const auto& path : pci_ids_paths) {
+				ifstream file(path);
+				if (!file) continue;
+
+				string line;
+				bool in_vendor = false;
+				while (getline(file, line)) {
+					if (line.empty() || line[0] == '#') continue;
+
+					if (!in_vendor) {
+						if (line[0] != '\t' && line.rfind(vendor_id, 0) == 0) {
+							in_vendor = true;
+						}
+					} else {
+						if (line[0] != '\t') break;
+						if (line[0] == '\t' && line[1] != '\t') {
+							if (line.find(device_id) == 1) {
+								size_t name_start = line.find_first_not_of(" \t", 1 + device_id.size());
+								if (name_start != string::npos) {
+									return "Intel " + line.substr(name_start);
+								}
+							}
+						}
+					}
+				}
+			}
+			return "";
+		}
+
+		static string get_device_id_from_sysfs(const string& gpu_path) {
+			fs::path device_path = fs::path(gpu_path) / "device" / "device";
+			ifstream file(device_path);
+			if (!file) return "";
+			string device_id;
+			file >> device_id;
+			if (device_id.rfind("0x", 0) == 0) {
+				device_id = device_id.substr(2);
+			}
+			return device_id;
+		}
+
 		bool init() {
 			if (initialized) return false;
 
@@ -2301,16 +2376,21 @@ namespace Gpu {
 			card_path = string(gpu_path);
 			driver_name = detect_driver(card_path);
 
-			char *gpu_device_id = get_intel_device_id(gpu_path);
-			if (!gpu_device_id) {
-				Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
-				return false;
-			}
+			string sysfs_device_id = get_device_id_from_sysfs(card_path);
+			string device_name = lookup_pci_device_name("8086", sysfs_device_id);
 
-			char *gpu_device_name = get_intel_device_name(gpu_device_id);
-			string device_name = gpu_device_name ? string(gpu_device_name) : "Intel GPU";
-			free(gpu_device_id);
-			free(gpu_device_name);
+			if (device_name.empty()) {
+				char *gpu_device_id = get_intel_device_id(gpu_path);
+				if (!gpu_device_id) {
+					Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
+					return false;
+				}
+
+				char *gpu_device_name = get_intel_device_name(gpu_device_id);
+				device_name = gpu_device_name ? string(gpu_device_name) : "Intel GPU";
+				free(gpu_device_id);
+				free(gpu_device_name);
+			}
 
 			string pci_slot = get_pci_slot(card_path);
 			pmu_device = find_pmu_device(driver_name, pci_slot);
