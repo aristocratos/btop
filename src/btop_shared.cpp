@@ -17,6 +17,7 @@ tab-size = 4
 */
 
 #include <sys/resource.h>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -160,10 +161,17 @@ namespace Pwr {
 		while (gpu_pwr_history.size() > max_size) gpu_pwr_history.pop_front();
 		while (ane_pwr_history.size() > max_size) ane_pwr_history.pop_front();
 
-		//? Update max values for auto-scaling
-		if (cpu_mw > cpu_pwr_max) cpu_pwr_max = cpu_mw;
-		if (gpu_mw > gpu_pwr_max) gpu_pwr_max = gpu_mw;
-		if (ane_mw > ane_pwr_max) ane_pwr_max = ane_mw;
+		//? Calculate dynamic max from current history for proper auto-scaling
+		//? This allows the graph to adapt when power decreases, not just increases
+		//? Use minimum of 100mW (0.1W) to ensure small values are visible
+		auto calc_max = [](const deque<long long>& history) -> long long {
+			if (history.empty()) return 1000;  //? Default 1W
+			long long max_val = *std::max_element(history.begin(), history.end());
+			return std::max(max_val, 100ll);  //? At least 0.1W for visibility
+		};
+		cpu_pwr_max = calc_max(cpu_pwr_history);
+		gpu_pwr_max = calc_max(gpu_pwr_history);
+		ane_pwr_max = calc_max(ane_pwr_history);
 	}
 }
 

@@ -829,45 +829,30 @@ namespace Input {
 						redraw = true;
 				}
 				//? Toggle memory item visibility mode with Shift+T
-				//? Mode 0=normal, 1=showing [x] to hide, 2=showing letters to restore
+				//? Mode 0=normal, 1=toggle mode showing [x] to hide AND letters to restore hidden items
 				else if (key == "T") {
 					int mode = Config::getI("mem_toggle_mode");
-					bool any_hidden = not Config::getB("mem_show_used") or
-									  not Config::getB("mem_show_available") or
-									  not Config::getB("mem_show_cached") or
-									  not Config::getB("mem_show_free");
-
-					if (any_hidden and mode == 0) mode = 2;  //? Show restore letters
-					else if (mode == 0) mode = 1;             //? Show [x] markers
-					else mode = 0;                            //? Return to normal
+					mode = (mode == 0) ? 1 : 0;  //? Simple toggle between normal and toggle mode
 
 					Config::set("mem_toggle_mode", mode);
 					Mem::mem_toggle_mode = mode;
 					redraw = true;
 				}
 				//? Toggle swap item visibility mode with Shift+S
+				//? Mode 0=normal, 1=toggle mode showing [x] to hide AND letters to restore hidden items
 				else if (key == "S") {
 					int mode = Config::getI("swap_toggle_mode");
-					bool any_hidden = not Config::getB("swap_show_used") or
-									  not Config::getB("swap_show_free");
-
-					if (any_hidden and mode == 0) mode = 2;
-					else if (mode == 0) mode = 1;
-					else mode = 0;
+					mode = (mode == 0) ? 1 : 0;  //? Simple toggle between normal and toggle mode
 
 					Config::set("swap_toggle_mode", mode);
 					Mem::swap_toggle_mode = mode;
 					redraw = true;
 				}
 				//? Toggle VRAM item visibility mode with Shift+V
+				//? Mode 0=normal, 1=toggle mode showing [x] to hide AND letters to restore hidden items
 				else if (key == "V") {
 					int mode = Config::getI("vram_toggle_mode");
-					bool any_hidden = not Config::getB("vram_show_used") or
-									  not Config::getB("vram_show_free");
-
-					if (any_hidden and mode == 0) mode = 2;
-					else if (mode == 0) mode = 1;
-					else mode = 0;
+					mode = (mode == 0) ? 1 : 0;  //? Simple toggle between normal and toggle mode
 
 					Config::set("vram_toggle_mode", mode);
 					Mem::vram_toggle_mode = mode;

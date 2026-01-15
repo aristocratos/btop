@@ -1472,12 +1472,17 @@ namespace Pwr {
 
 		//? Calculate subpanel width (3 equal columns)
 		sub_width = (width - 4) / 3;
-		int graph_width = sub_width - 4;
-		if (graph_width < 6) graph_width = 6;
 
-		//? Calculate graph height based on panel height
-		//? Layout: header(1) + label+temp(1) + graph(dynamic) + values(1) + border(1)
-		graph_height = max(1, height - 5);
+		//? Fixed 2-line graph height for compact layout
+		//? Layout: header(1) + graph_with_labels(2) + values(1) + border(1) = 5 lines minimum
+		graph_height = 2;
+
+		//? Graph width: sub_width minus label(4) minus temp(5) minus padding(2)
+		//? Layout per column: "CPU " + [graph] + " 45°C"
+		const int label_width = 4;  //? "CPU ", "GPU ", "ANE "
+		const int temp_width = 5;   //? " 99°C" or empty for ANE
+		int graph_width = sub_width - label_width - temp_width - 1;
+		if (graph_width < 6) graph_width = 6;
 
 		//? Get thread-safe snapshots of power history data
 		//? These copies prevent race conditions with collector thread
@@ -1492,7 +1497,7 @@ namespace Pwr {
 		if (redraw) {
 			out += box;
 
-			//? Create/update graphs with dynamic height using thread-safe copies
+			//? Create/update graphs with fixed 2-line height using thread-safe copies
 			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_history, graph_symbol, false, false, cpu_max, -23};
 			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_history, graph_symbol, false, false, gpu_max, -23};
 			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_history, graph_symbol, false, false, ane_max, -23};
@@ -1544,22 +1549,20 @@ namespace Pwr {
 			out += Mv::to(y + r, div2_x) + Theme::c("div_line") + Symbols::v_line;
 		}
 
-		//? CPU Subpanel (left)
+		//? CPU Subpanel (left) - Compact layout: label + graph + temp on same lines
 		int col1_x = x + 2;
 		int row = 2;
-		out += Mv::to(y + row, col1_x) + Theme::c("main_fg") + Fx::b + "CPU" + Fx::ub;
-		//? CPU temperature with color gradient (100°C = max red)
+		int graph_x = col1_x + label_width;
+		int temp_x = graph_x + graph_width + 1;
+
+		//? Row 2: "CPU " + graph_line_1 + " 45°C"
+		out += Mv::to(y + row, col1_x) + Theme::c("main_fg") + Fx::b + "CPU " + Fx::ub;
+		out += Mv::to(y + row, graph_x) + cpu_pwr_graph(cpu_history, data_same or redraw);
+		//? CPU temperature with color gradient (100°C = max red) - on first graph line
 		{
 			long long temp_pct = cpu_temp > 0 ? clamp(cpu_temp, 0ll, 100ll) : 0;
-			out += Mv::to(y + row, col1_x + sub_width - 7)
-				+ Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", cpu_temp);
+			out += Mv::to(y + row, temp_x) + Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", cpu_temp);
 		}
-
-		row++;
-		//? CPU power graph (multi-row) - Graph returns complete multi-line output
-		//? Uses thread-safe copy of history to prevent race conditions
-		out += Mv::to(y + row, col1_x)
-			+ cpu_pwr_graph(cpu_history, data_same or redraw);
 
 		row += graph_height;
 		//? Clear value line before drawing (prevents leftover characters)
@@ -1567,22 +1570,20 @@ namespace Pwr {
 		out += Mv::to(y + row, col1_x) + Theme::c("main_fg")
 			+ fmt::format("{:.2f}W avg {:.2f}W", cpu_pwr, cpu_avg);
 
-		//? GPU Subpanel (middle)
+		//? GPU Subpanel (middle) - Compact layout: label + graph + temp on same lines
 		int col2_x = div1_x + 2;
 		row = 2;
-		out += Mv::to(y + row, col2_x) + Theme::c("main_fg") + Fx::b + "GPU" + Fx::ub;
-		//? GPU temperature with color gradient (100°C = max red)
+		graph_x = col2_x + label_width;
+		temp_x = graph_x + graph_width + 1;
+
+		//? Row 2: "GPU " + graph_line_1 + " 45°C"
+		out += Mv::to(y + row, col2_x) + Theme::c("main_fg") + Fx::b + "GPU " + Fx::ub;
+		out += Mv::to(y + row, graph_x) + gpu_pwr_graph(gpu_history, data_same or redraw);
+		//? GPU temperature with color gradient (100°C = max red) - on first graph line
 		if (gpu_temp > 0) {
 			long long temp_pct = clamp(gpu_temp, 0ll, 100ll);
-			out += Mv::to(y + row, col2_x + sub_width - 7)
-				+ Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", gpu_temp);
+			out += Mv::to(y + row, temp_x) + Theme::g("temp").at(temp_pct) + fmt::format("{:>3}°C", gpu_temp);
 		}
-
-		row++;
-		//? GPU power graph (multi-row) - Graph returns complete multi-line output
-		//? Uses thread-safe copy of history to prevent race conditions
-		out += Mv::to(y + row, col2_x)
-			+ gpu_pwr_graph(gpu_history, data_same or redraw);
 
 		row += graph_height;
 		//? Clear value line before drawing (prevents leftover characters)
@@ -1590,16 +1591,14 @@ namespace Pwr {
 		out += Mv::to(y + row, col2_x) + Theme::c("main_fg")
 			+ fmt::format("{:.2f}W avg {:.2f}W", gpu_pwr, gpu_avg);
 
-		//? ANE Subpanel (right)
+		//? ANE Subpanel (right) - Compact layout: label + graph (no temp for ANE)
 		int col3_x = div2_x + 2;
 		row = 2;
-		out += Mv::to(y + row, col3_x) + Theme::c("main_fg") + Fx::b + "ANE" + Fx::ub;
+		graph_x = col3_x + label_width;
 
-		row++;
-		//? ANE power graph (multi-row) - Graph returns complete multi-line output
-		//? Uses thread-safe copy of history to prevent race conditions
-		out += Mv::to(y + row, col3_x)
-			+ ane_pwr_graph(ane_history, data_same or redraw);
+		//? Row 2: "ANE " + graph_line_1 (ANE has no temperature sensor)
+		out += Mv::to(y + row, col3_x) + Theme::c("main_fg") + Fx::b + "ANE " + Fx::ub;
+		out += Mv::to(y + row, graph_x) + ane_pwr_graph(ane_history, data_same or redraw);
 
 		row += graph_height;
 		//? Clear value line before drawing (prevents leftover characters)
@@ -2119,7 +2118,7 @@ namespace Mem {
 			//? Memory section header with highlighted 'T' for Shift+T toggle
 			string mem_restore_letters = "";
 			vector<std::pair<string, int>> mem_restore_mappings;  //? key, offset within brackets
-			if (mem_toggle_mode == 2) {
+			if (mem_toggle_mode == 1) {
 				//? Show restore letters for hidden items and track their positions
 				int pos = 0;
 				if (not show_mem_used) { mem_restore_letters += "U"; mem_restore_mappings.emplace_back("mem_restore_used", pos++); }
@@ -2192,7 +2191,7 @@ namespace Mem {
 					Input::mouse_mappings["T"] = {y+1+cy, x+1+cx, 1, 1};
 					//? Add mouse mappings for restore letters
 					if (not mem_restore_mappings.empty()) {
-						int base_col = x + mem_width - (int)mem_restore_letters.size() + 2;
+						int base_col = x + mem_width - (int)mem_restore_letters.size() + 1;
 						for (const auto& [key, offset] : mem_restore_mappings) {
 							Input::mouse_mappings[key] = {y+1+cy, base_col + offset, 1, 1};
 						}
@@ -2210,7 +2209,7 @@ namespace Mem {
 					}
 					string swap_restore_letters = "";
 					vector<std::pair<string, int>> swap_restore_mappings;
-					if (swap_toggle_mode == 2) {
+					if (swap_toggle_mode == 1) {
 						int pos = 0;
 						if (not show_swap_used) { swap_restore_letters += "U"; swap_restore_mappings.emplace_back("swap_restore_used", pos++); }
 						if (not show_swap_free) { swap_restore_letters += "F"; swap_restore_mappings.emplace_back("swap_restore_free", pos++); }
@@ -2222,7 +2221,7 @@ namespace Mem {
 					Input::mouse_mappings["S"] = {y+1+cy, x+1+cx, 1, 1};
 					//? Add mouse mappings for restore letters
 					if (not swap_restore_mappings.empty()) {
-						int base_col = x + mem_width - (int)swap_restore_letters.size() + 2;
+						int base_col = x + mem_width - (int)swap_restore_letters.size() + 1;
 						for (const auto& [key, offset] : swap_restore_mappings) {
 							Input::mouse_mappings[key] = {y+1+cy, base_col + offset, 1, 1};
 						}
@@ -2244,7 +2243,7 @@ namespace Mem {
 					}
 					string vram_restore_letters = "";
 					vector<std::pair<string, int>> vram_restore_mappings;
-					if (vram_toggle_mode == 2) {
+					if (vram_toggle_mode == 1) {
 						int pos = 0;
 						if (not show_vram_used) { vram_restore_letters += "U"; vram_restore_mappings.emplace_back("vram_restore_used", pos++); }
 						if (not show_vram_free) { vram_restore_letters += "F"; vram_restore_mappings.emplace_back("vram_restore_free", pos++); }
@@ -2256,7 +2255,7 @@ namespace Mem {
 					Input::mouse_mappings["V"] = {y+1+cy, x+1+cx, 1, 1};
 					//? Add mouse mappings for restore letters
 					if (not vram_restore_mappings.empty()) {
-						int base_col = x + mem_width - (int)vram_restore_letters.size() + 2;
+						int base_col = x + mem_width - (int)vram_restore_letters.size() + 1;
 						for (const auto& [key, offset] : vram_restore_mappings) {
 							Input::mouse_mappings[key] = {y+1+cy, base_col + offset, 1, 1};
 						}
