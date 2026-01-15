@@ -600,13 +600,9 @@ test:unit-linux:
     - cmake --version
   script:
     - echo "Building and running unit tests"
-    - mkdir -p build && cd build
-    - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
-    - make -j$(nproc) btop_test || make btop_test
-    - |
-      # Run tests (use pipefail to capture test exit code through pipe)
-      set -o pipefail
-      ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
+    - mkdir -p build && mkdir -p reports
+    - cd build && cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 .. && make -j$(nproc) btop_test || make btop_test
+    - cd build && ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt ; test ${PIPESTATUS[0]} -eq 0
   artifacts:
     name: unit-test-results-${CI_COMMIT_SHORT_SHA}
     paths:
@@ -630,13 +626,9 @@ test:unit-macos:
   script:
     - echo "Building and running unit tests on macOS"
     - which cmake || brew install cmake
-    - mkdir -p build && cd build
-    - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
-    - make -j$(sysctl -n hw.ncpu) btop_test || make btop_test
-    - |
-      # Run tests (use pipefail to capture test exit code through pipe)
-      set -o pipefail
-      ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
+    - mkdir -p build && mkdir -p reports
+    - cd build && cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 .. && make -j$(sysctl -n hw.ncpu) btop_test || make btop_test
+    - cd build && ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt ; test ${PIPESTATUS[0]} -eq 0
   artifacts:
     name: unit-test-macos-results-${CI_COMMIT_SHORT_SHA}
     paths:
