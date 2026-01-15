@@ -1548,6 +1548,7 @@ namespace Proc {
 	int x, y, width = 20, height;
 	int start, selected, select_max;
 	bool shown = true, redraw = true;
+	atomic<bool> resized (false);
 	bool is_last_process_in_list = false;
 	int selected_pid = 0, selected_depth = 0;
 	int scroll_pos;
@@ -2206,8 +2207,10 @@ namespace Draw {
 		Global::overlay.clear();
 		Runner::pause_output = false;
 		Runner::redraw = true;
-		Proc::p_counters.clear();
-		Proc::p_graphs.clear();
+		if (not Proc::resized and not Global::resized) {
+			Proc::p_counters.clear();
+			Proc::p_graphs.clear();
+		}
 		if (Menu::active) Menu::redraw = true;
 
 		Input::mouse_mappings.clear();
@@ -2376,7 +2379,8 @@ namespace Draw {
 			auto swap_disk = Config::getB("swap_disk");
 			auto mem_graphs = Config::getB("mem_graphs");
 
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			const int new_width = std::round(static_cast<double>(Term::width) * (100 - Config::getI("proc_box_width_percent")) / 100);
+			width = Proc::shown ? std::clamp(new_width, min_width, Term::width - Proc::min_width) : static_cast<int>(Term::width);
 		#ifdef GPU_SUPPORT
 			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
 		#else
@@ -2440,7 +2444,8 @@ namespace Draw {
 		//* Calculate and draw net box outlines
 		if (Net::shown) {
 			using namespace Net;
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			const int new_width = std::round(static_cast<double>(Term::width) * (100 - Config::getI("proc_box_width_percent")) / 100);
+			width = Proc::shown ? std::clamp(new_width, min_width, Term::width - Proc::min_width) : static_cast<int>(Term::width);
 		#ifdef GPU_SUPPORT
 			height = Term::height - Cpu::height - Gpu::total_height - Mem::height;
 		#else
