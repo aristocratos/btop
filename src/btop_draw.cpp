@@ -1049,7 +1049,9 @@ namespace Cpu {
 				ane_activity_str = fmt::format("{:.0f}", ane_activity);
 			}
 
-			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / 650.0) * 100.0));
+			//? Dynamic scaling based on max observed ANE activity
+			double ane_max = std::max(1.0, Shared::aneActivityPeak.load(std::memory_order_acquire));
+			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / ane_max) * 100.0));
 
 			out += ' ';
 			if (b_columns > 1) {
@@ -1337,8 +1339,9 @@ namespace Gpu {
 				ane_activity_str = fmt::format("{:>6.0f}", ane_activity);
 			}
 
-			//? Calculate ANE activity as percentage (0-100) for meter display (max 650 C/s)
-			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / 650.0) * 100.0));
+			//? Calculate ANE activity as percentage (0-100) for meter display (dynamic max)
+			double ane_max = std::max(1.0, Shared::aneActivityPeak.load(std::memory_order_acquire));
+			long long ane_percent = static_cast<long long>(std::min(100.0, (ane_activity / ane_max) * 100.0));
 
 			//? Add tiny "6" hint when ane_split is available (Apple Silicon with single GPU)
 			//? Use "  ANE " format to align with "  GPU " (same 6-char width)

@@ -1210,6 +1210,7 @@ namespace Gpu {
 
 					//? Update ANE activity with release semantics
 					Shared::aneActivity.store(ane_activity_cmds, std::memory_order_release);
+					atomic_max(Shared::aneActivityPeak, ane_activity_cmds);
 
 					//? Update power history for Pwr panel graphs (in mW for precision)
 					//? Uses thread-safe update function to prevent race conditions with drawer thread
