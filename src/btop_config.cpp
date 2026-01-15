@@ -196,11 +196,20 @@ namespace Config {
 
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
 
-		{"mem_vram_mode",		"#* VRAM display mode in memory box: 0 = Vram only, 1 = Vram + Free, 2 = Free only. Toggle with 'v' key."},
+		{"mem_vram_mode",		"#* DEPRECATED: Use vram_show_used/vram_show_free instead. Kept for backward compatibility."},
 
 		{"show_disks", 			"#* If mem box should be split to also show disks info."},
 
 		{"mem_horizontal", 		"#* Show memory graphs horizontally (side by side) when disks are hidden. Toggle with '2' key."},
+
+		{"mem_show_used",		"#* Show 'Used' memory item in memory box. Toggle visibility with Shift+T."},
+		{"mem_show_available",	"#* Show 'Available' memory item in memory box. Toggle visibility with Shift+T."},
+		{"mem_show_cached",		"#* Show 'Cached' memory item in memory box. Toggle visibility with Shift+T."},
+		{"mem_show_free",		"#* Show 'Free' memory item in memory box. Toggle visibility with Shift+T."},
+		{"swap_show_used",		"#* Show 'Swap Used' item in memory box. Toggle visibility with Shift+S."},
+		{"swap_show_free",		"#* Show 'Swap Free' item in memory box. Toggle visibility with Shift+S."},
+		{"vram_show_used",		"#* Show 'VRAM Used' item in memory box. Toggle visibility with Shift+V."},
+		{"vram_show_free",		"#* Show 'VRAM Free' item in memory box. Toggle visibility with Shift+V."},
 
 		{"only_physical", 		"#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar."},
 
@@ -340,6 +349,14 @@ namespace Config {
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"mem_horizontal", false},
+		{"mem_show_used", true},
+		{"mem_show_available", true},
+		{"mem_show_cached", true},
+		{"mem_show_free", true},
+		{"swap_show_used", true},
+		{"swap_show_free", true},
+		{"vram_show_used", true},
+		{"vram_show_free", true},
 		{"only_physical", true},
 		{"show_network_drives", false},
 		{"use_fstab", true},
@@ -394,7 +411,12 @@ namespace Config {
 		{"proc_followed", 0},
 		{"disk_selected", 0},
 		{"disk_start", 0},
-		{"mem_vram_mode", 0}
+		{"mem_vram_mode", 0},
+		{"mem_toggle_mode", 0},
+		{"swap_toggle_mode", 0},
+		{"vram_toggle_mode", 0},
+		{"mem_start", 0},
+		{"mem_selected", 0}
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 

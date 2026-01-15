@@ -1245,11 +1245,25 @@ namespace Mem {
 		long long vram_total = Shared::gpuMemTotal.load(std::memory_order_acquire);
 		long long vram_used = Shared::gpuMemUsed.load(std::memory_order_acquire);
 		if (vram_total > 0) {
+			long long vram_free = vram_total - vram_used;
 			mem.stats["vram"] = vram_used;
 			mem.stats["vram_total"] = vram_total;
+			mem.stats["vram_used"] = vram_used;
+			mem.stats["vram_free"] = vram_free;
+
+			//? Legacy vram percent (for backwards compatibility)
 			mem.percent["vram"].push_back(round((double)vram_used * 100 / vram_total));
 			while (cmp_greater(mem.percent["vram"].size(), width * 2))
 				mem.percent["vram"].pop_front();
+
+			//? VRAM used/free percent deques for separate VRAM section
+			mem.percent["vram_used"].push_back(round((double)vram_used * 100 / vram_total));
+			while (cmp_greater(mem.percent["vram_used"].size(), width * 2))
+				mem.percent["vram_used"].pop_front();
+
+			mem.percent["vram_free"].push_back(round((double)vram_free * 100 / vram_total));
+			while (cmp_greater(mem.percent["vram_free"].size(), width * 2))
+				mem.percent["vram_free"].pop_front();
 		}
 
 		if (show_disks) {

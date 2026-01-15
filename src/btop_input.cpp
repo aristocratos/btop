@@ -689,7 +689,8 @@ namespace Input {
 				    return;
 			    }
 				else if ((is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G")))
-					 and not (Config::getI("disk_selected") > 0 and Config::getB("show_disks"))) {
+					 and not (Config::getI("disk_selected") > 0 and Config::getB("show_disks"))
+					 and not (Config::getI("mem_selected") > 0)) {
 					proc_mouse_scroll:
 					redraw = false;
 					auto old_selected = Config::getI("proc_selected");
@@ -772,11 +773,48 @@ namespace Input {
 					redraw = true;
 					Draw::calcSizes();
 				}
-				//? Tab toggles disk selection mode
-				else if (key == "tab" and Config::getB("show_disks")) {
-					auto current = Config::getI("disk_selected");
-					Config::set("disk_selected", current > 0 ? 0 : 1);
-					Mem::disk_selected = Config::getI("disk_selected");
+				//? Tab cycles through: mem selection → disk selection → off
+				else if (key == "tab") {
+					auto mem_sel = Config::getI("mem_selected");
+					auto disk_sel = Config::getI("disk_selected");
+					bool show_disks = Config::getB("show_disks");
+
+					if (mem_sel > 0) {
+						//? Move from mem to disk (if disks shown) or turn off
+						Config::set("mem_selected", 0);
+						Mem::mem_selected = 0;
+						if (show_disks) {
+							Config::set("disk_selected", 1);
+							Mem::disk_selected = 1;
+						}
+					} else if (disk_sel > 0 and show_disks) {
+						//? Turn off disk selection
+						Config::set("disk_selected", 0);
+						Mem::disk_selected = 0;
+					} else {
+						//? Start with mem selection
+						Config::set("mem_selected", 1);
+						Mem::mem_selected = 1;
+					}
+					//? Trigger full update to ensure num_mem_items is calculated
+					no_update = false;
+				}
+				//? Handle memory scrolling when mem is selected
+				else if (Config::getI("mem_selected") > 0 and
+						 (is_in(key, "up", "down", "page_up", "page_down", "home", "end", "mouse_scroll_up", "mouse_scroll_down") or
+						  (vim_keys and is_in(key, "j", "k", "g", "G")))) {
+					//? Skip if num_mem_items not yet calculated (wait for first draw)
+					if (Mem::num_mem_items <= 0) {
+						no_update = false;
+						redraw = true;
+					} else {
+						auto new_selected = Mem::mem_selection(key, Mem::num_mem_items);
+						if (new_selected == -1)
+							return;
+						//? Trigger redraw to show scrolling changes
+						no_update = false;
+						redraw = true;
+					}
 				}
 				//? Handle disk scrolling when disk is selected
 				else if (Config::getI("disk_selected") > 0 and Config::getB("show_disks") and
@@ -790,12 +828,152 @@ namespace Input {
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
 				}
-				//? Toggle VRAM display mode with Shift+V: 0=vram only, 1=vram+free, 2=free only
-				else if (key == "V") {
-					int vram_mode = Config::getI("mem_vram_mode");
-					vram_mode = (vram_mode + 1) % 3;
-					Config::set("mem_vram_mode", vram_mode);
+				//? Toggle memory item visibility mode with Shift+T
+				//? Mode 0=normal, 1=showing [x] to hide, 2=showing letters to restore
+				else if (key == "T") {
+					int mode = Config::getI("mem_toggle_mode");
+					bool any_hidden = not Config::getB("mem_show_used") or
+									  not Config::getB("mem_show_available") or
+									  not Config::getB("mem_show_cached") or
+									  not Config::getB("mem_show_free");
+
+					if (any_hidden and mode == 0) mode = 2;  //? Show restore letters
+					else if (mode == 0) mode = 1;             //? Show [x] markers
+					else mode = 0;                            //? Return to normal
+
+					Config::set("mem_toggle_mode", mode);
+					Mem::mem_toggle_mode = mode;
 					redraw = true;
+				}
+				//? Toggle swap item visibility mode with Shift+S
+				else if (key == "S") {
+					int mode = Config::getI("swap_toggle_mode");
+					bool any_hidden = not Config::getB("swap_show_used") or
+									  not Config::getB("swap_show_free");
+
+					if (any_hidden and mode == 0) mode = 2;
+					else if (mode == 0) mode = 1;
+					else mode = 0;
+
+					Config::set("swap_toggle_mode", mode);
+					Mem::swap_toggle_mode = mode;
+					redraw = true;
+				}
+				//? Toggle VRAM item visibility mode with Shift+V
+				else if (key == "V") {
+					int mode = Config::getI("vram_toggle_mode");
+					bool any_hidden = not Config::getB("vram_show_used") or
+									  not Config::getB("vram_show_free");
+
+					if (any_hidden and mode == 0) mode = 2;
+					else if (mode == 0) mode = 1;
+					else mode = 0;
+
+					Config::set("vram_toggle_mode", mode);
+					Mem::vram_toggle_mode = mode;
+					redraw = true;
+				}
+				//? Handle mouse clicks to hide memory items (when toggle mode 1 is active)
+				else if (key == "mem_hide_used") {
+					Config::set("mem_show_used", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_hide_available") {
+					Config::set("mem_show_available", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_hide_cached") {
+					Config::set("mem_show_cached", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_hide_free") {
+					Config::set("mem_show_free", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				//? Handle mouse clicks to hide swap items
+				else if (key == "swap_hide_used") {
+					Config::set("swap_show_used", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "swap_hide_free") {
+					Config::set("swap_show_free", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				//? Handle mouse clicks to hide VRAM items
+				else if (key == "vram_hide_used") {
+					Config::set("vram_show_used", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "vram_hide_free") {
+					Config::set("vram_show_free", false);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				//? Handle mouse clicks to restore memory items (when toggle mode 2 is active)
+				else if (key == "mem_restore_used") {
+					Config::set("mem_show_used", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_restore_available") {
+					Config::set("mem_show_available", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_restore_cached") {
+					Config::set("mem_show_cached", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "mem_restore_free") {
+					Config::set("mem_show_free", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				//? Handle mouse clicks to restore swap items
+				else if (key == "swap_restore_used") {
+					Config::set("swap_show_used", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "swap_restore_free") {
+					Config::set("swap_show_free", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				//? Handle mouse clicks to restore VRAM items
+				else if (key == "vram_restore_used") {
+					Config::set("vram_show_used", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
+				}
+				else if (key == "vram_restore_free") {
+					Config::set("vram_show_free", true);
+					no_update = false;
+					redraw = true;
+					Draw::calcSizes();
 				}
 				else keep_going = true;
 

@@ -349,6 +349,7 @@ namespace Mem {
 	extern bool has_swap, shown, redraw;
 	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
 	const array swap_names { "swap_used"s, "swap_free"s };
+	const array vram_names { "vram_used"s, "vram_free"s };
 	extern int disk_ios;
 
 	struct disk_info {
@@ -372,11 +373,11 @@ namespace Mem {
 		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0},
-			{"vram", 0}, {"vram_total", 0}};
+			{"vram", 0}, {"vram_total", 0}, {"vram_used", 0}, {"vram_free", 0}};
 		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}},
-			{"vram", {}}};
+			{"vram", {}}, {"vram_used", {}}, {"vram_free", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
@@ -395,6 +396,15 @@ namespace Mem {
 
 	//* Disk selection/scrolling function - returns new selection or -1 if unchanged
 	int disk_selection(const std::string_view cmd_key, int num_disks);
+
+	//* Memory item scroll state
+	extern int mem_start, mem_selected, mem_select_max, num_mem_items;
+
+	//* Memory item selection/scrolling function - returns new selection or -1 if unchanged
+	int mem_selection(const std::string_view cmd_key, int num_items);
+
+	//* Memory visibility toggle modes (0=normal, 1=showing [x], 2=showing restore letters)
+	extern int mem_toggle_mode, swap_toggle_mode, vram_toggle_mode;
 
 }
 
