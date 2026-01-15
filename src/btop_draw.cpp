@@ -509,15 +509,16 @@ namespace Draw {
 		//? Safety check: return empty if Graph wasn't properly initialized
 		if (graphs.empty() or height == 0 or width == 0) return out;
 
-		//? Make room for new characters on graph
+		//? Make room for new characters on graph (use substr instead of erase for better performance)
 		if (not tty_mode) current = not current;
 		for (const int& i : iota(0, height)) {
-			if (height == 1 and graphs.at(current).at(i).at(1) == '[') {
-				if (graphs.at(current).at(i).at(3) == 'C') graphs.at(current).at(i).erase(0, 4);
-				else graphs.at(current).at(i).erase(0, graphs.at(current).at(i).find_first_of('m') + 4);
+			auto& graph_line = graphs.at(current).at(i);
+			if (height == 1 and graph_line.at(1) == '[') {
+				if (graph_line.at(3) == 'C') graph_line = graph_line.substr(4);
+				else graph_line = graph_line.substr(graph_line.find_first_of('m') + 4);
 			}
-			else if (graphs.at(current).at(i).at(0) == ' ') graphs.at(current).at(i).erase(0, 1);
-			else graphs.at(current).at(i).erase(0, 3);
+			else if (graph_line.at(0) == ' ') graph_line = graph_line.substr(1);
+			else graph_line = graph_line.substr(3);
 		}
 		this->_create(data, (int)data.size() - 1);
 		return out;

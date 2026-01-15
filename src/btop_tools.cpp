@@ -226,6 +226,18 @@ namespace Tools {
 	string replace_ascii_control(string str, const char replacement) {
 		if (str.empty())
 			return str;
+
+		//? Fast path: check if string contains any control characters first
+		bool has_control = false;
+		for (const char c : str) {
+			if (static_cast<unsigned char>(c) < 0x20) {
+				has_control = true;
+				break;
+			}
+		}
+		if (not has_control)
+			return str;  //? No control characters, return unchanged
+
 		const char* str_data = &str.data()[0];
 		size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
 		if (w_len <= 1)	{
@@ -506,12 +518,12 @@ namespace Tools {
 		if (shorten) {
 			auto has_sep = out.find(".") != string::npos;
 			if (has_sep) {
-				out = fmt::format("{:.1f}", stod(out));
+				out = fmt::format("{:.1f}", stod_safe(out));
 			}
 			if (out.size() > 3) {
 				// if out is of the form xy.z
 				if (has_sep) {
-					out = fmt::format("{:.0f}", stod(out));
+					out = fmt::format("{:.0f}", stod_safe(out));
 				}
 				// if out is of the form xyzw (only when not using base 10)
 				else {

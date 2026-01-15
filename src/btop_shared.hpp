@@ -66,10 +66,10 @@ namespace Global {
 	extern atomic<bool> thread_exception;
 	extern string banner;
 	extern atomic<bool> resized;
-	extern string overlay;
-	extern string clock;
 	extern uid_t real_uid, set_uid;
 	extern atomic<bool> init_conf;
+	extern string overlay;
+	extern string clock;
 }
 
 namespace Runner {
