@@ -547,7 +547,8 @@ lint:clang-tidy:
     - mkdir -p reports
     - |
       # Create compile_commands.json compatible flags
-      COMPILE_FLAGS="-std=c++23 -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -DGPU_SUPPORT -I src/ -I include/"
+      # Use -isystem for include/ to treat fmt headers as system headers (suppresses errors from them)
+      COMPILE_FLAGS="-std=c++23 -DFMT_HEADER_ONLY -D_GLIBCXX_ASSERTIONS -DGPU_SUPPORT -I src/ -isystem include/"
 
       # Run clang-tidy on core source files
       clang-tidy \
@@ -559,14 +560,15 @@ lint:clang-tidy:
         src/btop_input.cpp \
         -- ${COMPILE_FLAGS} 2>&1 | tee reports/clang-tidy-report.txt || true
     - |
-      # Count issues
+      # Count issues (only in our source files, not in external headers like fmt)
       WARNING_COUNT=$(grep -c "warning:" reports/clang-tidy-report.txt || echo "0")
-      ERROR_COUNT=$(grep -c "error:" reports/clang-tidy-report.txt || echo "0")
-      echo "Warnings: ${WARNING_COUNT}, Errors: ${ERROR_COUNT}"
+      # Count errors only from our source files (src/), not from include/fmt/
+      ERROR_COUNT=$(grep "error:" reports/clang-tidy-report.txt | grep -c "src/" || echo "0")
+      echo "Warnings: ${WARNING_COUNT}, Errors in src/: ${ERROR_COUNT}"
 
-      # Fail only on errors
+      # Fail only on errors in our source files
       if [ "${ERROR_COUNT}" -gt 0 ]; then
-        echo "clang-tidy found errors"
+        echo "clang-tidy found errors in source files"
         exit 1
       fi
     - echo "clang-tidy analysis passed"
