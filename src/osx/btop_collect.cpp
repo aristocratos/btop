@@ -1838,15 +1838,27 @@ namespace Proc {
 			double percent = static_cast<double>(delta) / static_cast<double>(elapsed_ns) * 100.0;
 			return std::min(100.0, std::max(0.0, percent));  // Clamp to 0-100
 		}
+
+		// Get accumulated GPU time in nanoseconds for a given PID
+		uint64_t get_gpu_time(size_t pid) {
+			auto it = current_gpu_times.find(pid);
+			if (it == current_gpu_times.end()) return 0;
+			return it->second.accumulated_gpu_time;
+		}
 	}  // namespace GpuProc
 
 	string get_status(char s) {
-		if (s & SRUN) return "Running";
-		if (s & SSLEEP) return "Sleeping";
-		if (s & SIDL) return "Idle";
-		if (s & SSTOP) return "Stopped";
-		if (s & SZOMB) return "Zombie";
-		return "Unknown";
+		//? Use equality comparison, not bitwise AND
+		//? State values: SIDL=1, SRUN=2, SSLEEP=3, SSTOP=4, SZOMB=5
+		switch (s) {
+			case SRUN: return "Running";
+			case SSLEEP: return "Sleeping";
+			case SIDL: return "Idle";
+			case SSTOP: return "Stopped";
+			case SZOMB: return "Zombie";
+			case 'X': return "Dead";
+			default: return "Unknown";
+		}
 	}
 
 	//* Get detailed info for selected process
@@ -2043,21 +2055,48 @@ namespace Proc {
                         }
 					}
 					new_proc.p_nice = kproc.kp_proc.p_nice;
-					new_proc.state = kproc.kp_proc.p_stat;
+					new_proc.p_priority = kproc.kp_proc.p_priority;
 
 					//? Get threads, mem and cpu usage
 					struct proc_taskinfo pti{};
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
+						new_proc.res_mem = pti.pti_resident_size;
+						new_proc.virt_mem = pti.pti_virtual_size;
 						cpu_t = pti.pti_total_user + pti.pti_total_system;
 
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
+
+						//? Determine process state using pti_numrunning for accuracy
+						//? macOS p_stat is unreliable - use actual running thread count instead
+						char p_stat = kproc.kp_proc.p_stat;
+						if (p_stat == SZOMB) {
+							new_proc.state = SZOMB;       // Zombie
+						} else if (p_stat == SSTOP) {
+							new_proc.state = SSTOP;       // Stopped (debugger/signal)
+						} else if (pti.pti_numrunning > 0) {
+							new_proc.state = SRUN;        // Actually running
+						} else {
+							new_proc.state = SSLEEP;      // Sleeping/waiting
+						}
 					} else {
 						// Reset memory value if process info cannot be accessed (bad permissions or zombie processes)
 						new_proc.threads = 0;
 						new_proc.mem = 0;
+						new_proc.res_mem = 0;
+						new_proc.virt_mem = 0;
 						cpu_t = new_proc.cpu_t;
+						//? Can't get task info - use p_stat as fallback
+						new_proc.state = kproc.kp_proc.p_stat;
+					}
+
+					//? Calculate process runtime in seconds
+					struct timeval now;
+					gettimeofday(&now, nullptr);
+					uint64_t now_us = now.tv_sec * 1'000'000ULL + now.tv_usec;
+					if (new_proc.cpu_s > 0 and now_us > new_proc.cpu_s) {
+						new_proc.runtime = (now_us - new_proc.cpu_s) / 1'000'000ULL;
 					}
 
 					//? Process cpu usage since last update
@@ -2072,7 +2111,33 @@ namespace Proc {
 					//? Process GPU usage (Apple Silicon only)
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 					new_proc.gpu_p = GpuProc::get_gpu_percent(pid);
+					new_proc.gpu_time = GpuProc::get_gpu_time(pid);
 #endif
+
+					//? Process disk I/O and memory details from rusage
+					rusage_info_current rusage{};
+					if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
+						// Convert bytes to estimated I/O operation counts (divide by 4KB block size)
+						new_proc.io_read = rusage.ri_diskio_bytesread / 4096;
+						new_proc.io_write = rusage.ri_diskio_byteswritten / 4096;
+						// Physical footprint gives actual private memory usage
+						// Shared = resident - private (physical footprint)
+						if (rusage.ri_phys_footprint > 0) {
+							new_proc.shared_mem = (new_proc.res_mem > rusage.ri_phys_footprint)
+								? (new_proc.res_mem - rusage.ri_phys_footprint) : 0;
+						}
+						// Wired size is memory that can't be paged out
+						new_proc.send_bytes = rusage.ri_diskio_bytesread;   // Raw disk read bytes
+						new_proc.recv_bytes = rusage.ri_diskio_byteswritten; // Raw disk write bytes
+					} else {
+						// Keep previous values if rusage fails (may fail for processes we don't own)
+					}
+
+					//? Get Mach port count for process
+					int portCount = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+					if (portCount > 0) {
+						new_proc.ports = portCount / sizeof(struct proc_fdinfo);
+					}
 
 					if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 						got_detailed = true;

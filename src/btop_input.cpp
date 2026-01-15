@@ -522,6 +522,18 @@ namespace Input {
 					Config::flip("proc_reversed");
 					Config::set("update_following", true);
 				}
+				//? Handle clickable column header sorting
+				else if (key.starts_with("sort_")) {
+					string sort_field = string(key.substr(5));  //? Remove "sort_" prefix
+					if (Config::getS("proc_sorting") == sort_field) {
+						//? Clicking already sorted column toggles direction
+						Config::flip("proc_reversed");
+					} else {
+						//? Clicking new column switches to that sort field
+						Config::set("proc_sorting", sort_field);
+					}
+					Config::set("update_following", true);
+				}
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
