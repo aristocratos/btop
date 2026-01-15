@@ -630,6 +630,7 @@ test:unit-macos:
   stage: test
   script:
     - echo "Building and running unit tests on macOS"
+    - which cmake || brew install cmake
     - mkdir -p build && cd build
     - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
     - make -j$(sysctl -n hw.ncpu) btop_test || make btop_test

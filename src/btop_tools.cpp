@@ -128,7 +128,7 @@ namespace Term {
 		int gpu = 0;
         if (Gpu::count > 0)
         	for (char i = '0'; i <= '5'; i++)
-        		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
+        		gpu += (boxes.contains(string("gpu") + i) ? 1 : 0);
 		bool pwr = boxes.find("pwr") != string::npos;
 	#endif
         int width = 0;
