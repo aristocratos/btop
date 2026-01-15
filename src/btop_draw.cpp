@@ -1746,7 +1746,7 @@ namespace Mem {
 			//? Mem graphs and meters - create with per-item heights/widths for layout
 			{
 				vector<string> all_mem_names(dynamic_mem_names.begin(), dynamic_mem_names.end());
-				if (show_swap and has_swap) {
+				if (show_swap and has_swap and not swap_disk) {
 					all_mem_names.insert(all_mem_names.end(), swap_names.begin(), swap_names.end());
 				}
 				const int num_items = (int)all_mem_names.size();
@@ -3850,12 +3850,12 @@ namespace Draw {
 				width = Term::width / 2;
 
 				//? Height depends on proc position
-				//? Proc-priority: Mem uses minimum height when Proc is shown
-				if (Proc::shown) {
-					height = compact_min_height;  //? Proc-priority: Mem at minimum
+				//? Proc-priority: Mem uses minimum height ONLY when Proc is below (full width)
+				if (Proc::shown and proc_full_width) {
+					height = compact_min_height;  //? Proc below: Mem at minimum
 				}
 				else {
-					//? No proc: mem takes full height
+					//? No proc OR proc beside: mem takes full height
 				#ifdef GPU_SUPPORT
 					height = Term::height - Cpu::height - Gpu::total_height - pwr_offset;
 				#else
@@ -3883,20 +3883,15 @@ namespace Draw {
 			#endif
 			}
 			else {
-				//? Original stacked layout - Proc-priority sizing
-				//? Proc gets maximum space, Mem/Net use minimums first
+				//? Original side-by-side layout - Proc on side, Mem/Net stacked vertically
+				//? Mem can use full vertical space since Proc takes horizontal space
 				width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
-				if (Proc::shown) {
-					//? Proc-priority: Mem uses bare minimum height
-					height = compact_min_height;
-				} else {
-					//? No Proc - Mem can expand
-				#ifdef GPU_SUPPORT
-					height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - pwr_offset;
-				#else
-					height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
-				#endif
-				}
+				//? Calculate full available height (proc is beside, not below)
+			#ifdef GPU_SUPPORT
+				height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - pwr_offset;
+			#else
+				height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+			#endif
 				if (height < min_height) height = min_height;  //? Enforce minimum height for mem panel
 				x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 				if (mem_below_net and Net::shown)
