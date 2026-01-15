@@ -604,10 +604,9 @@ test:unit-linux:
     - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
     - make -j$(nproc) btop_test || make btop_test
     - |
-      # Run tests with detailed output
+      # Run tests (use pipefail to capture test exit code through pipe)
+      set -o pipefail
       ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
-      TEST_EXIT=$?
-      exit $TEST_EXIT
   artifacts:
     name: unit-test-results-${CI_COMMIT_SHORT_SHA}
     paths:
@@ -635,10 +634,9 @@ test:unit-macos:
     - cmake -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=23 ..
     - make -j$(sysctl -n hw.ncpu) btop_test || make btop_test
     - |
-      # Run tests
+      # Run tests (use pipefail to capture test exit code through pipe)
+      set -o pipefail
       ./tests/btop_test --gtest_output=xml:../reports/test-results.xml 2>&1 | tee ../reports/test-output.txt
-      TEST_EXIT=$?
-      exit $TEST_EXIT
   artifacts:
     name: unit-test-macos-results-${CI_COMMIT_SHORT_SHA}
     paths:
