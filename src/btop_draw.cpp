@@ -4108,7 +4108,7 @@ namespace Draw {
 			u_graph_height = height - 2 - d_graph_height;
 
 			box = createBox(x, y, width, height, Theme::c("net_box"), true, "net", "", 3);
-			Logger::debug("NET panel: x={}, y={}, width={}, height={}, pwr_offset={}", x, y, width, height, pwr_offset);
+			Logger::debug("NET panel: x={}, y={}, width={}, height={}", x, y, width, height);
 			auto swap_up_down = Config::getB("swap_upload_download");
 			if (swap_up_down)
 				box += createBox(b_x, b_y, b_width, b_height, "", false, "upload", "download");
