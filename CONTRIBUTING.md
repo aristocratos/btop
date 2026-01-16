@@ -38,6 +38,9 @@
 
 * Use the included `fmt` library for string formatting, see issue [#535](https://github.com/aristocratos/btop/issues/535) for more info and examples.
 
+  * All new code should prefer `fmt::format` or `fmt::format_to` instead of
+    manually concatenating strings for better performance.
+
 * Do not add includes if the same functionality can be achieved using the already included libraries.
 
 * Use descriptive names for variables.
