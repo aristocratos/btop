@@ -445,8 +445,10 @@ namespace Draw {
 				}
 				//? Generate graph symbol from 5x5 2D vector
 				if (height == 1) {
-					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(horizon) += Mv::r(1);
+					if (result.at(0) + result.at(1) == 0 and not no_zero) graphs.at(current).at(horizon) += Mv::r(1);
 					else {
+						//? When no_zero and both results are 0, force at least one dot
+						if (no_zero and result.at(0) + result.at(1) == 0) result[1] = 1;
 						if (not color_gradient.empty()) graphs.at(current).at(horizon) += Theme::g(color_gradient).at(clamp(max(last, data_value), 0ll, 100ll));
 						graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 					}
@@ -1229,7 +1231,7 @@ namespace Gpu {
 			if (gpu.supported_functions.temp_info)
 				temp_graph = Draw::Graph{6, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
 			if (gpu.supported_functions.pwr_usage)
-				pwr_graph = Draw::Graph{b_width - 14, 1, "cached", gpu.pwr, graph_symbol, false, false, gpu.pwr_max_usage, -23};
+				pwr_graph = Draw::Graph{b_width - 14, 1, "cached", gpu.pwr, graph_symbol, false, true, gpu.pwr_max_usage, -23};
 			if (gpu.supported_functions.mem_utilization)
 				mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% utilization
 			if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total)
@@ -1249,7 +1251,7 @@ namespace Gpu {
 				//? Use thread-safe getter for ANE power history
 				auto ane_hist = Pwr::get_ane_history();
 				auto ane_max = Pwr::get_ane_pwr_max();
-				ane_pwr_graph = Draw::Graph{b_width - 14, 1, "cached", ane_hist, graph_symbol, false, false, ane_max, -23};
+				ane_pwr_graph = Draw::Graph{b_width - 14, 1, "cached", ane_hist, graph_symbol, false, true, ane_max, -23};
 			}
 		}
 
@@ -1516,9 +1518,9 @@ namespace Pwr {
 
 		//? Create/update graphs when structure changes or max values change significantly
 		if (recreate_graphs) {
-			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_history, graph_symbol, false, false, cpu_max, -23};
-			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_history, graph_symbol, false, false, gpu_max, -23};
-			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_history, graph_symbol, false, false, ane_max, -23};
+			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_history, graph_symbol, false, true, cpu_max, -23};
+			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_history, graph_symbol, false, true, gpu_max, -23};
+			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_history, graph_symbol, false, true, ane_max, -23};
 			//? Update last max trackers
 			last_cpu_max = cpu_max;
 			last_gpu_max = gpu_max;
