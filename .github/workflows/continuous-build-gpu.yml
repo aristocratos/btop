@@ -36,12 +36,16 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Setup Cache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
       - name: Install build tools
         run: apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Compile
-        run: make CXX=g++ GPU_SUPPORT=true
+        run: make CXX="sccache g++" GPU_SUPPORT=true
 

@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
       - name: Compile
         uses: vmactions/openbsd-vm@v1
         with:
@@ -45,7 +45,7 @@ jobs:
             pkg_add gmake coreutils git lowdown
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake STATIC=true STRIP=true
+            gmake STATIC=true STRIP=true VERBOSE=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-"$GIT_HASH"
 

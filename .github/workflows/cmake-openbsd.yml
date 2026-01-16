@@ -33,8 +33,15 @@ jobs:
       matrix:
         arch: ['aarch64', 'x86_64']
         version: ['7.8']
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Setup Cache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
 
       - name: Compile
         uses: vmactions/openbsd-vm@v1
@@ -42,6 +49,7 @@ jobs:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
           usesh: true
+          envs: "CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER"
           prepare: pkg_add cmake git ninja
           run: |
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug

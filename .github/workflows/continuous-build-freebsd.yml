@@ -37,8 +37,8 @@ jobs:
       matrix:
         compiler: ["clang++", "g++"]
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
       - name: Compile
         uses: vmactions/freebsd-vm@v1
         with:
@@ -49,13 +49,13 @@ jobs:
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
             if [ "${{ matrix.compiler }}" == "g++" ]; then
-              CXX=g++15
+              export CXX=g++15
               COMPILER=gcc
             else
-              CXX=clang++
+              export CXX=clang++
               COMPILER=llvm
             fi
-            gmake STATIC=true STRIP=true
+            gmake STATIC=true STRIP=true VERBOSE=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin

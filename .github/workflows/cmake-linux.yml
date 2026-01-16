@@ -40,8 +40,15 @@ jobs:
             version: 21
           - compiler: gcc
             version: 14
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Setup Cache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
 
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}

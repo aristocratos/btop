@@ -34,11 +34,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
       - name: Compile
         uses: vmactions/netbsd-vm@v1
-
         with:
           release: '10.1'
           usesh: true

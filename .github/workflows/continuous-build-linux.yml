@@ -58,10 +58,9 @@ jobs:
           - riscv64-unknown-linux-musl
           - s390x-ibm-linux-musl
           - x86_64-unknown-linux-musl
-
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
       - name: Install cross toolchain
         run: |
           wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz

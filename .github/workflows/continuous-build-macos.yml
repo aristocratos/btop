@@ -38,13 +38,16 @@ jobs:
           - {runner: 'macos-14', version: 'Sonoma'}
           - {runner: 'macos-15', version: 'Sequoia'}
     runs-on: ${{ matrix.os.runner }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
-
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Setup Cache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
       - name: Install build tools
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
@@ -53,7 +56,7 @@ jobs:
 
       - name: Compile
         run: |
-          make CXX=$(brew --prefix)/bin/g++-15
+          make CXX="sccache $(brew --prefix)/bin/g++-15"
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           mv bin/btop bin/btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin

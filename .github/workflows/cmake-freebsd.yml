@@ -4,23 +4,23 @@ on:
   workflow_dispatch:
   push:
     branches: main
-    tags-ignore: '*.*'
+    tags-ignore: "*.*"
     paths:
-      - '.github/workflows/cmake-freebsd.yml'
-      - 'CMakeLists.txt'
-      - 'cmake/**'
-      - 'include/**'
-      - 'src/*pp'
-      - 'src/freebsd/*pp'
+      - ".github/workflows/cmake-freebsd.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/*pp"
+      - "src/freebsd/*pp"
   pull_request:
     branches: main
     paths:
-      - '.github/workflows/cmake-freebsd.yml'
-      - 'CMakeLists.txt'
-      - 'cmake/**'
-      - 'include/**'
-      - 'src/*pp'
-      - 'src/freebsd/*pp'
+      - ".github/workflows/cmake-freebsd.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/*pp"
+      - "src/freebsd/*pp"
 
 jobs:
   build:
@@ -31,19 +31,40 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        arch: ['aarch64', 'x86_64']
-        version: ['14.3', '15.0']
+        arch: ["aarch64", "x86_64"]
+        version: ["14.3", "15.0"]
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v6
-
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Install sccache
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sccache
+        env:
+          HOME: ${{ github.workspace }}
+      - name: Setup Cache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
       - name: Compile
         uses: vmactions/freebsd-vm@v1
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
           usesh: true
-          prepare: pkg install -y cmake git ninja
+          envs: "CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER"
+          prepare: |
+            export PATH="${GITHUB_WORKSPACE}/.install-action/bin:$PATH"
+            pkg install -y cmake git ninja
           run: |
+            echo $GITHUB_WORKSPACE
+            echo $PATH
+            export PATH="${GITHUB_WORKSPACE}/.install-action/bin:$PATH"
+            echo $PATH
+            ls ${GITHUB_WORKSPACE}/.install-action/bin
+            type sccache
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
             ctest --test-dir build
