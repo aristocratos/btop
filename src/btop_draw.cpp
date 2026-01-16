@@ -2782,6 +2782,7 @@ namespace Proc {
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
 		auto show_gpu = Config::getB("proc_gpu");
+		auto show_gpu_graphs = Config::getB("proc_gpu_graphs");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
@@ -2872,8 +2873,8 @@ namespace Proc {
 
 			//? Adapt sizes of text fields based on layout
 			bool show_cmd = Config::getB("proc_show_cmd");
-			gpu_size = show_gpu ? 10 : 0;  // GPU% column width for side layout (5 graph + 5 value)
-			int gpu_adjustment = show_gpu ? 11 : 0;  // Account for GPU column + space (side layout)
+			gpu_size = show_gpu ? (show_gpu_graphs ? 10 : 5) : 0;  // GPU% column width for side layout (5 graph + 5 value, or just 5 value)
+			int gpu_adjustment = show_gpu ? (show_gpu_graphs ? 11 : 6) : 0;  // Account for GPU column + space (side layout)
 
 			if (bottom_layout and not proc_tree) {
 				//? Bottom layout: htop-like expanded view with Command at the end
@@ -3402,8 +3403,8 @@ namespace Proc {
 			}
 
 			//? Update GPU graphs for processes with above 0.0% gpu usage, delete if below 0.1% 10x times
-			bool has_gpu_graph = show_gpu ? p_gpu_counters.contains(p.pid) : false;
-			if (show_gpu and ((p.gpu_p > 0 and not has_gpu_graph) or (not data_same and has_gpu_graph))) {
+			bool has_gpu_graph = (show_gpu and show_gpu_graphs) ? p_gpu_counters.contains(p.pid) : false;
+			if (show_gpu and show_gpu_graphs and ((p.gpu_p > 0 and not has_gpu_graph) or (not data_same and has_gpu_graph))) {
 				if (not has_gpu_graph) {
 					p_gpu_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
 					p_gpu_counters[p.pid] = 0;
@@ -3706,8 +3707,8 @@ namespace Proc {
 					+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 					+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({scale_to_graph(p.cpu_p)}, data_same) : "") + end + ' '
 					+ c_color + rjust(cpu_str, 4)
-					+ (show_gpu ? " " + (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + graph_bg * 5
-						+ (p_gpu_graphs.contains(p.pid) ? Mv::l(5) + gp_color + p_gpu_graphs.at(p.pid)({scale_to_graph(p.gpu_p)}, data_same) : "") + end + ' '
+					+ (show_gpu ? " " + (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_gpu_graphs ? graph_bg * 5 : "")
+						+ (show_gpu_graphs and p_gpu_graphs.contains(p.pid) ? Mv::l(5) + gp_color + p_gpu_graphs.at(p.pid)({scale_to_graph(p.gpu_p)}, data_same) : "") + end + ' '
 						+ gp_color + rjust(gpu_str, 4) : "")
 					+ "  " + end;
 			}

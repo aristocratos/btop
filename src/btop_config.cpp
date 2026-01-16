@@ -119,6 +119,8 @@ namespace Config {
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
+		{"proc_gpu_graphs",     "#* Show gpu graph for each process (when GPU column is enabled)."},
+
 		{"proc_show_cmd",       "#* Show Command column in process list. Toggle with Shift+C."},
 
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
@@ -326,6 +328,7 @@ namespace Config {
 		{"proc_gpu", true},
 		{"proc_mem_bytes", true},
 		{"proc_cpu_graphs", true},
+		{"proc_gpu_graphs", true},
 		{"proc_show_cmd", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
