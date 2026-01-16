@@ -274,12 +274,14 @@ namespace Gpu {
 				uint64_t prev_total = 0;
 			};
 
-			struct XeGtIdle {
-				string name;
-				string idle_path;
-				bool is_media = false;
-				uint64_t prev_idle_ms = 0;
-			};
+		struct XeGtIdle {
+			string name;
+			string idle_path;
+			string status_path;
+			bool is_media = false;
+			uint64_t prev_idle_ms = 0;
+			double smoothed_util = 0.0;
+		};
 
 			struct XeState {
 				string pmu_device;
@@ -1926,6 +1928,7 @@ namespace Gpu {
 			static bool add_gt_idle_entry(const fs::path& gtidle_dir, vector<XeGtIdle>& gt_idle) {
 				fs::path idle_path = gtidle_dir / "idle_residency_ms";
 				if (!fs::exists(idle_path)) return false;
+				fs::path status_path = gtidle_dir / "idle_status";
 				fs::path name_path = gtidle_dir / "name";
 				string name;
 				{
@@ -1941,6 +1944,7 @@ namespace Gpu {
 				XeGtIdle entry;
 				entry.name = name;
 				entry.idle_path = idle_path.string();
+				entry.status_path = fs::exists(status_path) ? status_path.string() : "";
 				entry.is_media = name.find("-mc") != string::npos;
 				entry.prev_idle_ms = idle_ms;
 				gt_idle.push_back(entry);
@@ -2200,16 +2204,39 @@ namespace Gpu {
 			if (!state.gt_idle.empty()) {
 				double dt_ms = dt * 1000.0;
 				if (dt_ms <= 0.0) dt_ms = 1.0;
+				constexpr double EMA_ALPHA = 0.3;
 				for (auto& gt : state.gt_idle) {
 					uint64_t idle_ms = 0;
 					ifstream idle_file(gt.idle_path);
 					if (!(idle_file >> idle_ms)) continue;
-					uint64_t delta_idle = 0;
-					if (idle_ms >= gt.prev_idle_ms) delta_idle = idle_ms - gt.prev_idle_ms;
-					gt.prev_idle_ms = idle_ms;
-					double idle_ratio = (double)delta_idle / dt_ms;
-					if (idle_ratio > 1.0) idle_ratio = 1.0;
-					double util = 100.0 * (1.0 - idle_ratio);
+					
+					bool is_power_gated = false;
+					if (!gt.status_path.empty()) {
+						string status;
+						ifstream status_file(gt.status_path);
+						if (status_file >> status) {
+							is_power_gated = (status == "gt-c6");
+						}
+					}
+					
+					if (idle_ms < gt.prev_idle_ms) {
+						gt.prev_idle_ms = idle_ms;
+					} else {
+						uint64_t delta_idle = idle_ms - gt.prev_idle_ms;
+						gt.prev_idle_ms = idle_ms;
+						
+						double raw_util;
+						if (delta_idle == 0 && is_power_gated) {
+							raw_util = 0.0;
+						} else {
+							double idle_ratio = (double)delta_idle / dt_ms;
+							if (idle_ratio > 1.0) idle_ratio = 1.0;
+							raw_util = 100.0 * (1.0 - idle_ratio);
+						}
+						gt.smoothed_util = EMA_ALPHA * raw_util + (1.0 - EMA_ALPHA) * gt.smoothed_util;
+					}
+					
+					double util = gt.smoothed_util;
 					if (util > max_util) max_util = util;
 					if (gt.is_media) {
 						has_media = true;
