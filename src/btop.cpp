@@ -663,7 +663,7 @@ namespace Runner {
 
 			}
 			catch (const std::exception& e) {
-				Global::exit_error_msg = "Exception in runner thread -> " + string{e.what()};
+				Global::exit_error_msg = fmt::format("Exception in runner thread -> {}", e.what());
 				Global::thread_exception = true;
 				Input::interrupt();
 				stopping = true;
@@ -1056,7 +1056,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Shared::init();
 	}
 	catch (const std::exception& e) {
-		Global::exit_error_msg = "Exception in Shared::init() -> " + string{e.what()};
+		Global::exit_error_msg = fmt::format("Exception in Shared::init() -> {}", e.what());
 		clean_quit(1);
 	}
 
@@ -1207,7 +1207,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		}
 	}
 	catch (const std::exception& e) {
-		Global::exit_error_msg = "Exception in main loop -> " + string{e.what()};
+		Global::exit_error_msg = fmt::format("Exception in main loop -> ", e.what());
 		clean_quit(1);
 	}
 	return 0;
