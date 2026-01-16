@@ -274,14 +274,14 @@ namespace Gpu {
 				uint64_t prev_total = 0;
 			};
 
-		struct XeGtIdle {
-			string name;
-			string idle_path;
-			string status_path;
-			bool is_media = false;
-			uint64_t prev_idle_ms = 0;
-			double smoothed_util = 0.0;
-		};
+			struct XeGtIdle {
+				string name;
+				string idle_path;
+				string status_path;
+				bool is_media = false;
+				uint64_t prev_idle_ms = 0;
+				double smoothed_util = 0.0;
+			};
 
 			struct XeState {
 				string pmu_device;
@@ -297,13 +297,13 @@ namespace Gpu {
 				bool first_sample = true;
 			};
 
-		XeState state;
-		bool initialized = false;
+			XeState state;
+			bool initialized = false;
 
-		bool init(const string& card_path, const string& pmu_device);
-		bool shutdown();
-		template <bool is_init> bool collect(gpu_info* gpus_slice);
-	}
+			bool init(const string& card_path, const string& pmu_device);
+			bool shutdown();
+			template <bool is_init> bool collect(gpu_info* gpus_slice);
+		}
 #endif
 }
 
@@ -1892,199 +1892,212 @@ namespace Gpu {
 			return fd;
 		}
 
-			static bool enumerate_engines(int drm_fd, vector<XeEngine>& engines) {
-				struct drm_xe_device_query query = {};
-				query.query = DRM_XE_DEVICE_QUERY_ENGINES;
-				query.size = 0;
-				query.data = 0;
+		// Query DRM for available Xe engines using ioctl
+		static bool enumerate_engines(int drm_fd, vector<XeEngine>& engines) {
+			struct drm_xe_device_query query = {};
+			query.query = DRM_XE_DEVICE_QUERY_ENGINES;
+			query.size = 0;
+			query.data = 0;
 
-				if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
-					return false;
-				}
-
-				if (query.size == 0 || query.size > MAX_QUERY_SIZE) return false;
-
-				vector<uint8_t> buffer(query.size);
-				query.data = reinterpret_cast<uint64_t>(buffer.data());
-
-				if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
-					return false;
-				}
-
-				auto* result = reinterpret_cast<struct drm_xe_query_engines*>(buffer.data());
-
-				constexpr size_t header_size = offsetof(struct drm_xe_query_engines, engines);
-				size_t max_engines = (query.size > header_size) ? (query.size - header_size) / sizeof(struct drm_xe_engine) : 0;
-				uint32_t num_engines = (result->num_engines <= max_engines) ? result->num_engines : static_cast<uint32_t>(max_engines);
-
-				for (uint32_t i = 0; i < num_engines; ++i) {
-					auto& inst = result->engines[i].instance;
-					if (inst.engine_class == DRM_XE_ENGINE_CLASS_VM_BIND) continue;
-					engines.push_back({inst.gt_id, inst.engine_class, inst.engine_instance, -1, -1, 0, 0});
-				}
-				return !engines.empty();
+			// First call to get required buffer size
+			if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+				return false;
 			}
 
-			static bool add_gt_idle_entry(const fs::path& gtidle_dir, vector<XeGtIdle>& gt_idle) {
-				fs::path idle_path = gtidle_dir / "idle_residency_ms";
-				if (!fs::exists(idle_path)) return false;
-				fs::path status_path = gtidle_dir / "idle_status";
-				fs::path name_path = gtidle_dir / "name";
-				string name;
-				{
-					ifstream name_file(name_path);
-					if (name_file) getline(name_file, name);
-				}
-				if (name.empty()) name = gtidle_dir.parent_path().filename().string();
-				uint64_t idle_ms = 0;
-				{
-					ifstream idle_file(idle_path);
-					if (!(idle_file >> idle_ms)) return false;
-				}
-				XeGtIdle entry;
-				entry.name = name;
-				entry.idle_path = idle_path.string();
-				entry.status_path = fs::exists(status_path) ? status_path.string() : "";
-				entry.is_media = name.find("-mc") != string::npos;
-				entry.prev_idle_ms = idle_ms;
-				gt_idle.push_back(entry);
-				return true;
+			if (query.size == 0 or query.size > MAX_QUERY_SIZE) return false;
+
+			// Allocate buffer and query again to get actual data
+			vector<uint8_t> buffer(query.size);
+			query.data = reinterpret_cast<uint64_t>(buffer.data());
+
+			if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+				return false;
 			}
 
-			static void discover_gt_idle(const fs::path& device_path, vector<XeGtIdle>& gt_idle) {
-				if (!fs::exists(device_path)) return;
-				for (const auto& tile_entry : fs::directory_iterator(device_path)) {
-					if (!tile_entry.is_directory()) continue;
-					string tile_name = tile_entry.path().filename().string();
-					if (tile_name.rfind("tile", 0) != 0) continue;
-					for (const auto& gt_entry : fs::directory_iterator(tile_entry.path())) {
-						if (!gt_entry.is_directory()) continue;
-						string gt_name = gt_entry.path().filename().string();
-						if (gt_name.rfind("gt", 0) != 0) continue;
-						fs::path gtidle_dir = gt_entry.path() / "gtidle";
-						if (!fs::exists(gtidle_dir)) continue;
-						add_gt_idle_entry(gtidle_dir, gt_idle);
-					}
+			// Cast buffer to query result structure
+			auto* result = reinterpret_cast<struct drm_xe_query_engines*>(buffer.data());
+
+			// Calculate safe bounds for engine iteration
+			constexpr size_t header_size = offsetof(struct drm_xe_query_engines, engines);
+			size_t max_engines = (query.size > header_size)
+				? (query.size - header_size) / sizeof(struct drm_xe_engine) : 0;
+			uint32_t num_engines = (result->num_engines <= max_engines)
+				? result->num_engines : static_cast<uint32_t>(max_engines);
+
+			for (uint32_t i = 0; i < num_engines; ++i) {
+				auto& inst = result->engines[i].instance;
+				if (inst.engine_class == DRM_XE_ENGINE_CLASS_VM_BIND) continue;
+				engines.push_back({inst.gt_id, inst.engine_class, inst.engine_instance, -1, -1, 0, 0});
+			}
+			return not engines.empty();
+		}
+
+		// Add a GT idle entry from sysfs gtidle directory
+		static bool add_gt_idle_entry(const fs::path& gtidle_dir, vector<XeGtIdle>& gt_idle) {
+			fs::path idle_path = gtidle_dir / "idle_residency_ms";
+			if (not fs::exists(idle_path)) return false;
+			fs::path status_path = gtidle_dir / "idle_status";
+			fs::path name_path = gtidle_dir / "name";
+			string name;
+			{
+				ifstream name_file(name_path);
+				if (name_file) getline(name_file, name);
+			}
+			if (name.empty()) name = gtidle_dir.parent_path().filename().string();
+			uint64_t idle_ms = 0;
+			{
+				ifstream idle_file(idle_path);
+				if (not (idle_file >> idle_ms)) return false;
+			}
+			XeGtIdle entry;
+			entry.name = name;
+			entry.idle_path = idle_path.string();
+			entry.status_path = fs::exists(status_path) ? status_path.string() : "";
+			// GT names containing "-mc" indicate Media/Codec GT (vs Render/Compute)
+			entry.is_media = name.find("-mc") != string::npos;
+			entry.prev_idle_ms = idle_ms;
+			gt_idle.push_back(entry);
+			return true;
+		}
+
+		// Discover all GT idle sysfs entries under device_path/tile*/gt*/gtidle
+		static void discover_gt_idle(const fs::path& device_path, vector<XeGtIdle>& gt_idle) {
+			if (not fs::exists(device_path)) return;
+			for (const auto& tile_entry : fs::directory_iterator(device_path)) {
+				if (not tile_entry.is_directory()) continue;
+				string tile_name = tile_entry.path().filename().string();
+				if (tile_name.rfind("tile", 0) != 0) continue;
+				for (const auto& gt_entry : fs::directory_iterator(tile_entry.path())) {
+					if (not gt_entry.is_directory()) continue;
+					string gt_name = gt_entry.path().filename().string();
+					if (gt_name.rfind("gt", 0) != 0) continue;
+					fs::path gtidle_dir = gt_entry.path() / "gtidle";
+					if (not fs::exists(gtidle_dir)) continue;
+					add_gt_idle_entry(gtidle_dir, gt_idle);
 				}
 			}
+		}
 
-			static bool query_mem_info(int drm_fd, uint64_t& total, uint64_t& used) {
-				struct drm_xe_device_query query = {};
-				query.query = DRM_XE_DEVICE_QUERY_MEM_REGIONS;
-				query.size = 0;
-				query.data = 0;
+		// Query VRAM/memory region info via DRM ioctl
+		static bool query_mem_info(int drm_fd, uint64_t& total, uint64_t& used) {
+			struct drm_xe_device_query query = {};
+			query.query = DRM_XE_DEVICE_QUERY_MEM_REGIONS;
+			query.size = 0;
+			query.data = 0;
 
-				if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+			if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+				return false;
+			}
+
+			if (query.size == 0 or query.size > MAX_QUERY_SIZE) return false;
+
+			vector<uint8_t> buffer(query.size);
+			query.data = reinterpret_cast<uint64_t>(buffer.data());
+
+			if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+				return false;
+			}
+
+			auto* regions = reinterpret_cast<struct drm_xe_query_mem_regions*>(buffer.data());
+			if (regions->num_mem_regions == 0) return false;
+
+			bool found_vram = false;
+			struct drm_xe_mem_region selected = {};
+			for (uint32_t i = 0; i < regions->num_mem_regions; ++i) {
+				struct drm_xe_mem_region region = regions->mem_regions[i];
+				if (region.mem_class == DRM_XE_MEM_REGION_CLASS_VRAM) {
+					selected = region;
+					found_vram = true;
+					break;
+				}
+				// Fallback: use single region if no VRAM found
+				if (not found_vram and regions->num_mem_regions == 1) {
+					selected = region;
+				}
+			}
+			if (selected.total_size == 0) return false;
+			total = selected.total_size;
+			used = selected.used;
+			return true;
+		}
+
+
+		bool init(const string& card_path, const string& pmu_dev) {
+			if (initialized) return false;
+
+			state.pmu_device = pmu_dev;
+			state.pmu_type = get_pmu_type(pmu_dev);
+
+			string drm_path = "/dev/dri/" + fs::path(card_path).filename().string();
+			state.drm_fd = open(drm_path.c_str(), O_RDONLY);
+			if (state.drm_fd < 0) {
+				Logger::debug("Xe: Failed to open {}", drm_path);
+				return false;
+			}
+
+			if (not enumerate_engines(state.drm_fd, state.engines)) {
+				Logger::warning("Xe: Engine enumeration failed, utilization disabled");
+			}
+
+			discover_gt_idle(fs::path(card_path) / "device", state.gt_idle);
+
+			uint64_t mem_total = 0;
+			uint64_t mem_used = 0;
+			if (query_mem_info(state.drm_fd, mem_total, mem_used)) {
+				state.mem_total = mem_total;
+			}
+
+			// PMU fallback when gtidle sysfs is unavailable
+			if (state.gt_idle.empty()) {
+				if (state.pmu_type < 0) {
+					Logger::debug("Xe: Failed to get PMU type for {}", pmu_dev);
+					close(state.drm_fd);
+					state.drm_fd = -1;
 					return false;
 				}
 
-				if (query.size == 0 || query.size > MAX_QUERY_SIZE) return false;
+				uint64_t active_event = read_event_config(pmu_dev, "engine-active-ticks");
+				uint64_t total_event = read_event_config(pmu_dev, "engine-total-ticks");
 
-				vector<uint8_t> buffer(query.size);
-				query.data = reinterpret_cast<uint64_t>(buffer.data());
-
-				if (ioctl(drm_fd, DRM_IOCTL_XE_DEVICE_QUERY, &query) < 0) {
+				if (active_event == 0 or total_event == 0) {
+					Logger::debug("Xe: Required PMU events not found");
+					close(state.drm_fd);
+					state.drm_fd = -1;
 					return false;
 				}
 
-				auto* regions = reinterpret_cast<struct drm_xe_query_mem_regions*>(buffer.data());
-				if (regions->num_mem_regions == 0) return false;
+				for (auto& eng : state.engines) {
+					// Pack event ID, engine class/instance/gt into perf config field
+					uint64_t active_cfg = build_config(active_event, eng.gt_id, eng.engine_class, eng.engine_instance);
+					uint64_t total_cfg = build_config(total_event, eng.gt_id, eng.engine_class, eng.engine_instance);
 
-				bool found_vram = false;
-				struct drm_xe_mem_region selected = {};
-				for (uint32_t i = 0; i < regions->num_mem_regions; ++i) {
-					struct drm_xe_mem_region region = regions->mem_regions[i];
-					if (region.mem_class == DRM_XE_MEM_REGION_CLASS_VRAM) {
-						selected = region;
-						found_vram = true;
-						break;
-					}
-					if (!found_vram && regions->num_mem_regions == 1) {
-						selected = region;
-					}
-				}
-				if (selected.total_size == 0) return false;
-				total = selected.total_size;
-				used = selected.used;
-				return true;
-			}
-
-
-			bool init(const string& card_path, const string& pmu_dev) {
-				if (initialized) return false;
-
-				state.pmu_device = pmu_dev;
-				state.pmu_type = get_pmu_type(pmu_dev);
-
-				string drm_path = "/dev/dri/" + fs::path(card_path).filename().string();
-				state.drm_fd = open(drm_path.c_str(), O_RDONLY);
-				if (state.drm_fd < 0) {
-					Logger::debug("Xe: Failed to open {}", drm_path);
-					return false;
-				}
-
-				if (!enumerate_engines(state.drm_fd, state.engines)) {
-					Logger::warning("Xe: Engine enumeration failed, utilization disabled");
-				}
-
-				discover_gt_idle(fs::path(card_path) / "device", state.gt_idle);
-
-				uint64_t mem_total = 0;
-				uint64_t mem_used = 0;
-				if (query_mem_info(state.drm_fd, mem_total, mem_used)) {
-					state.mem_total = mem_total;
-				}
-
-				if (state.gt_idle.empty()) {
-					if (state.pmu_type < 0) {
-						Logger::debug("Xe: Failed to get PMU type for {}", pmu_dev);
-						close(state.drm_fd);
-						state.drm_fd = -1;
-						return false;
-					}
-
-					uint64_t active_event = read_event_config(pmu_dev, "engine-active-ticks");
-					uint64_t total_event = read_event_config(pmu_dev, "engine-total-ticks");
-
-					if (active_event == 0 || total_event == 0) {
-						Logger::debug("Xe: Required PMU events not found");
-						close(state.drm_fd);
-						state.drm_fd = -1;
-						return false;
-					}
-
-					for (auto& eng : state.engines) {
-						uint64_t active_cfg = build_config(active_event, eng.gt_id, eng.engine_class, eng.engine_instance);
-						uint64_t total_cfg = build_config(total_event, eng.gt_id, eng.engine_class, eng.engine_instance);
-
-						if (state.group_fd == -1) {
-							eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, -1);
-							if (eng.active_fd >= 0) {
-								state.group_fd = eng.active_fd;
-							}
-						} else {
-							eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, state.group_fd);
+					if (state.group_fd == -1) {
+						eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, -1);
+						if (eng.active_fd >= 0) {
+							state.group_fd = eng.active_fd;
 						}
-						eng.total_fd = open_perf_counter(state.pmu_type, total_cfg, state.group_fd);
-
-						if (eng.active_fd >= 0) state.member_fds.push_back(eng.active_fd);
-						if (eng.total_fd >= 0) state.member_fds.push_back(eng.total_fd);
+					} else {
+						eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, state.group_fd);
 					}
-				}
+					eng.total_fd = open_perf_counter(state.pmu_type, total_cfg, state.group_fd);
 
-				fs::path freq_device_path = fs::path(card_path) / "device" / "tile0";
-				if (fs::exists(freq_device_path)) {
-					for (const auto& gt_entry : fs::directory_iterator(freq_device_path)) {
-						if (gt_entry.path().filename().string().rfind("gt", 0) == 0) {
-							fs::path freq_path = gt_entry.path() / "freq0" / "cur_freq";
-							if (fs::exists(freq_path)) {
-								state.freq_sysfs_path = freq_path.string();
-								break;
-							}
+					if (eng.active_fd >= 0) state.member_fds.push_back(eng.active_fd);
+					if (eng.total_fd >= 0) state.member_fds.push_back(eng.total_fd);
+				}
+			}
+
+			fs::path freq_device_path = fs::path(card_path) / "device" / "tile0";
+			if (fs::exists(freq_device_path)) {
+				for (const auto& gt_entry : fs::directory_iterator(freq_device_path)) {
+					if (gt_entry.path().filename().string().rfind("gt", 0) == 0) {
+						fs::path freq_path = gt_entry.path() / "freq0" / "cur_freq";
+						if (fs::exists(freq_path)) {
+							state.freq_sysfs_path = freq_path.string();
+							break;
 						}
 					}
 				}
-
+			}
 
 			if (state.group_fd >= 0) {
 				if (ioctl(state.group_fd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
@@ -2110,7 +2123,7 @@ namespace Gpu {
 		}
 
 		bool shutdown() {
-			if (!initialized) return false;
+			if (not initialized) return false;
 			for (int fd : state.member_fds) {
 				if (fd >= 0) close(fd);
 			}
@@ -2130,7 +2143,7 @@ namespace Gpu {
 		}
 
 		template <bool is_init> bool collect(gpu_info* gpus_slice) {
-			if (!initialized) return false;
+			if (not initialized) return false;
 
 			if constexpr(is_init) {
 				bool has_mem_info = state.mem_total > 0;
@@ -2143,22 +2156,22 @@ namespace Gpu {
 						has_main_gt = true;
 					}
 				}
-			bool split_gt = has_main_gt && has_media_gt;
-			gpus_slice->supported_functions = {
-				.gpu_utilization = (!state.gt_idle.empty() || !state.engines.empty()),
-				.mem_utilization = false,
-				.gpu_clock = !state.freq_sysfs_path.empty(),
-				.mem_clock = false,
-				.pwr_usage = false,
-				.pwr_state = false,
-				.temp_info = false,
-				.mem_total = has_mem_info,
-				.mem_used = has_mem_info,
-				.pcie_txrx = false,
-				.encoder_utilization = split_gt,
-				.decoder_utilization = split_gt,
-				.gt_utilization = split_gt
-			};
+				bool split_gt = has_main_gt and has_media_gt;
+				gpus_slice->supported_functions = {
+					.gpu_utilization = (not state.gt_idle.empty() or not state.engines.empty()),
+					.mem_utilization = false,
+					.gpu_clock = not state.freq_sysfs_path.empty(),
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = has_mem_info,
+					.mem_used = has_mem_info,
+					.pcie_txrx = false,
+					.encoder_utilization = split_gt,
+					.decoder_utilization = split_gt,
+					.gt_utilization = split_gt
+				};
 				gpus_slice->pwr_max_usage = 10'000;
 			}
 
@@ -2201,17 +2214,19 @@ namespace Gpu {
 			double media_util = 0;
 			bool has_main = false;
 			bool has_media = false;
-			if (!state.gt_idle.empty()) {
+			if (not state.gt_idle.empty()) {
 				double dt_ms = dt * 1000.0;
 				if (dt_ms <= 0.0) dt_ms = 1.0;
+				// EMA smoothing factor: higher = more responsive, lower = smoother
 				constexpr double EMA_ALPHA = 0.3;
 				for (auto& gt : state.gt_idle) {
 					uint64_t idle_ms = 0;
 					ifstream idle_file(gt.idle_path);
-					if (!(idle_file >> idle_ms)) continue;
+					if (not (idle_file >> idle_ms)) continue;
 					
+					// Check power gating state: gt-c6 = power gated (GPU idle)
 					bool is_power_gated = false;
-					if (!gt.status_path.empty()) {
+					if (not gt.status_path.empty()) {
 						string status;
 						ifstream status_file(gt.status_path);
 						if (status_file >> status) {
@@ -2226,7 +2241,8 @@ namespace Gpu {
 						gt.prev_idle_ms = idle_ms;
 						
 						double raw_util;
-						if (delta_idle == 0 && is_power_gated) {
+						// Counter stall + power gated = truly idle, not false 100%
+						if (delta_idle == 0 and is_power_gated) {
 							raw_util = 0.0;
 						} else {
 							double idle_ratio = (double)delta_idle / dt_ms;
@@ -2246,7 +2262,7 @@ namespace Gpu {
 						if (util > main_util) main_util = util;
 					}
 				}
-				if (gpus_slice->supported_functions.gt_utilization && has_main && has_media) {
+				if (gpus_slice->supported_functions.gt_utilization and has_main and has_media) {
 					long long rc_util = clamp((long long)round(main_util), 0ll, 100ll);
 					long long mc_util = clamp((long long)round(media_util), 0ll, 100ll);
 					gpus_slice->encoder_utilization = rc_util;
@@ -2256,7 +2272,7 @@ namespace Gpu {
 				}
 			} else {
 				for (auto& eng : state.engines) {
-					if (eng.active_fd < 0 || eng.total_fd < 0) continue;
+					if (eng.active_fd < 0 or eng.total_fd < 0) continue;
 					uint64_t active_val = 0, total_val = 0;
 					if (read(eng.active_fd, &active_val, sizeof(active_val)) < 0) continue;
 					if (read(eng.total_fd, &total_val, sizeof(total_val)) < 0) continue;
@@ -2278,7 +2294,7 @@ namespace Gpu {
 				gpus_slice->mem_total = state.mem_total;
 				uint64_t mem_total = 0;
 				uint64_t mem_used = 0;
-				if (query_mem_info(state.drm_fd, mem_total, mem_used) && mem_total > 0) {
+				if (query_mem_info(state.drm_fd, mem_total, mem_used) and mem_total > 0) {
 					gpus_slice->mem_total = mem_total;
 					if (mem_used > 0) {
 						gpus_slice->mem_used = mem_used;
@@ -2287,7 +2303,7 @@ namespace Gpu {
 				}
 			}
 
-			if (!state.freq_sysfs_path.empty()) {
+			if (not state.freq_sysfs_path.empty()) {
 				ifstream freq_file(state.freq_sysfs_path);
 				if (freq_file) {
 					unsigned int freq_mhz = 0;
