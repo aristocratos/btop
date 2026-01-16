@@ -1,0 +1,20 @@
+---
+name: CI (FreeBSD)
+
+permissions: {}
+
+on:
+  push:
+    branches: ["main"]
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  ci-build-freebsd:
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/anyvm-org/anyvm
+      options: --device /dev/kvm:/dev/kvm:rw --entrypoint "/anyvm.org/entrypoint.sh --os freebsd --version 15.0"
+    steps:
+      - name: Whatever
+        run: ls -alh
