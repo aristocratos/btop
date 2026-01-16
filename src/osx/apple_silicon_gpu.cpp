@@ -1223,7 +1223,8 @@ namespace Gpu {
 					long long ane_pwr_mw = (ane_power_watts >= 0.01) ? static_cast<long long>(ane_power_watts * 1000) : 0;
 
 					//? Thread-safe update of power history deques and max values
-					Pwr::update_history(cpu_pwr_mw, gpu_pwr_mw, ane_pwr_mw, 100);
+					//? 300 entries = 150 braille chars max, supports wide terminals
+					Pwr::update_history(cpu_pwr_mw, gpu_pwr_mw, ane_pwr_mw, 300);
 
 					if (do_debug) {
 						Logger::debug("AppleSiliconGpu: collect() - GPU: freq={}MHz usage={}% power={}W temp={}C",
