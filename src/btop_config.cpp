@@ -19,6 +19,7 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <fmt/format.h>
 #include <fstream>
 #include <iterator>
 #include <locale>
@@ -678,7 +679,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-			Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
+			Global::exit_error_msg = fmt::format("Exception during Config::unlock() : {}", e.what());
 			clean_quit(1);
 		}
 
