@@ -1457,6 +1457,9 @@ namespace Pwr {
 	//? Graphs for power history
 	Draw::Graph cpu_pwr_graph, gpu_pwr_graph, ane_pwr_graph;
 
+	//? Track last max values for auto-scaling - recreate graphs when max changes significantly
+	long long last_cpu_max = 0, last_gpu_max = 0, last_ane_max = 0;
+
 	string draw(bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		if (not shown) return "";
@@ -1493,14 +1496,33 @@ namespace Pwr {
 		auto gpu_max = get_gpu_pwr_max();
 		auto ane_max = get_ane_pwr_max();
 
+		//? Check if max values changed significantly (>10% change triggers graph recreation)
+		//? This enables dynamic auto-scaling as power usage patterns change
+		auto max_changed = [](long long current, long long last) -> bool {
+			if (last == 0) return current > 0;  //? First time or was zero
+			long long diff = std::abs(current - last);
+			return (diff * 100 / last) > 10;  //? More than 10% change
+		};
+
+		bool recreate_graphs = redraw
+			or max_changed(cpu_max, last_cpu_max)
+			or max_changed(gpu_max, last_gpu_max)
+			or max_changed(ane_max, last_ane_max);
+
 		//? Redraw structural elements on resize/force
 		if (redraw) {
 			out += box;
+		}
 
-			//? Create/update graphs with fixed 2-line height using thread-safe copies
+		//? Create/update graphs when structure changes or max values change significantly
+		if (recreate_graphs) {
 			cpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", cpu_history, graph_symbol, false, false, cpu_max, -23};
 			gpu_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", gpu_history, graph_symbol, false, false, gpu_max, -23};
 			ane_pwr_graph = Draw::Graph{graph_width, graph_height, "cached", ane_history, graph_symbol, false, false, ane_max, -23};
+			//? Update last max trackers
+			last_cpu_max = cpu_max;
+			last_gpu_max = gpu_max;
+			last_ane_max = ane_max;
 		}
 
 		//? Get current power values with acquire semantics for proper visibility
@@ -1557,7 +1579,7 @@ namespace Pwr {
 
 		//? Row 2: "CPU " + graph_line_1 + " 45°C"
 		out += Mv::to(y + row, col1_x) + Theme::c("main_fg") + Fx::b + "CPU " + Fx::ub;
-		out += Mv::to(y + row, graph_x) + cpu_pwr_graph(cpu_history, data_same or redraw);
+		out += Mv::to(y + row, graph_x) + cpu_pwr_graph(cpu_history, data_same or recreate_graphs);
 		//? CPU temperature with color gradient (100°C = max red) - on first graph line
 		{
 			long long temp_pct = cpu_temp > 0 ? clamp(cpu_temp, 0ll, 100ll) : 0;
@@ -1578,7 +1600,7 @@ namespace Pwr {
 
 		//? Row 2: "GPU " + graph_line_1 + " 45°C"
 		out += Mv::to(y + row, col2_x) + Theme::c("main_fg") + Fx::b + "GPU " + Fx::ub;
-		out += Mv::to(y + row, graph_x) + gpu_pwr_graph(gpu_history, data_same or redraw);
+		out += Mv::to(y + row, graph_x) + gpu_pwr_graph(gpu_history, data_same or recreate_graphs);
 		//? GPU temperature with color gradient (100°C = max red) - on first graph line
 		if (gpu_temp > 0) {
 			long long temp_pct = clamp(gpu_temp, 0ll, 100ll);
@@ -1598,7 +1620,7 @@ namespace Pwr {
 
 		//? Row 2: "ANE " + graph_line_1 (ANE has no temperature sensor)
 		out += Mv::to(y + row, col3_x) + Theme::c("main_fg") + Fx::b + "ANE " + Fx::ub;
-		out += Mv::to(y + row, graph_x) + ane_pwr_graph(ane_history, data_same or redraw);
+		out += Mv::to(y + row, graph_x) + ane_pwr_graph(ane_history, data_same or recreate_graphs);
 
 		row += graph_height;
 		//? Clear value line before drawing (prevents leftover characters)
