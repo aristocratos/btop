@@ -76,13 +76,11 @@ namespace Runner {
 	extern atomic<bool> stopping;
 	extern atomic<bool> redraw;
 	extern atomic<bool> coreNum_reset;
-	extern pthread_t runner_id;
 	extern bool pause_output;
 	extern string debug_bg;
 
-	void run(const string& box="", bool no_update = false, bool force_redraw = false);
+	void run(const string& box = "", bool no_update = false, bool force_redraw = false);
 	void stop();
-
 }
 
 namespace Tools {

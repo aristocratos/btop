@@ -124,6 +124,10 @@ namespace Global {
 	atomic<bool> reload_conf (false);
 }
 
+namespace Runner {
+	static pthread_t runner_id;
+} // namespace Runner
+
 //* Handler for SIGWINCH and general resizing events, does nothing if terminal hasn't been resized unless force=true
 void term_resize(bool force) {
 	static atomic<bool> resizing (false);
@@ -355,7 +359,7 @@ namespace Runner {
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
-	
+
 	static inline auto set_active(bool value) noexcept {
 		active.store(value, std::memory_order_relaxed);
 		active.notify_all();
@@ -408,7 +412,6 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output{};
 	sigset_t mask;
-	pthread_t runner_id;
 	pthread_mutex_t mtx;
 
 	enum debug_actions {

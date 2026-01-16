@@ -29,7 +29,6 @@ tab-size = 4
 #include <cstdint>
 #include <filesystem>
 #include <limits.h>
-#include <pthread.h>
 #include <ranges>
 #include <regex>
 #include <string>
