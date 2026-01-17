@@ -255,6 +255,7 @@ namespace Input {
 					}
 					Config::current_preset = -1;
 					Draw::calcSizes();
+					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
 				}
@@ -273,6 +274,7 @@ namespace Input {
 						return;
 					}
 					Draw::calcSizes();
+					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
 				} else if (is_in(key, "ctrl_r")) {
