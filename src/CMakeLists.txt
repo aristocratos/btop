@@ -103,6 +103,8 @@ target_link_libraries(
         Threads::Threads
         ${CMAKE_DL_LIBS}
         fmt::fmt-header-only
+        tomlplusplus::tomlplusplus
+        reflectcpp::reflectcpp
         $<$<BOOL:${APPLE}>:$<LINK_LIBRARY:FRAMEWORK,CoreFoundation>>
         $<$<BOOL:${APPLE}>:$<LINK_LIBRARY:FRAMEWORK,IOKit>>
         $<$<BOOL:${BSD}>:kvm::kvm>

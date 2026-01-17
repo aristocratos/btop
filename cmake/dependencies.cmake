@@ -36,6 +36,42 @@ else()
     FetchContent_MakeAvailable(fmt)
 endif()
 
+if(BTOP_USE_SYSTEM_TOMLPLUSPLUS)
+    find_package(tomlplusplus REQUIRED)
+else()
+    FetchContent_Declare(
+        tomlplusplus
+        GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+        # gersemi: off
+        # Includes a fix for running clang-tidy.
+        GIT_TAG 30172438cee64926dc41fdd9c11fb3ba5b2ba9de # v3.4.0
+        GIT_SHALLOW
+        FIND_PACKAGE_ARGS
+        # gersemi: on
+    )
+    FetchContent_MakeAvailable(tomlplusplus)
+endif()
+
+if(BTOP_USE_SYSTEM_REFLECTCPP)
+    find_package(reflectcpp REQUIRED)
+else()
+    set(REFLECTCPP_JSON OFF)
+    set(REFLECTCPP_TOML ON)
+    set(REFLECTCPP_USE_STD_EXPECTED ON)
+    FetchContent_Declare(
+        reflect-cpp
+        GIT_REPOSITORY https://github.com/getml/reflect-cpp.git
+        # gersemi: off
+        # Includes a fix for running clang-tidy.
+        GIT_TAG 09e17b2b8578e95625fc1fc92ec863d2583e1723 # v0.23.0
+        GIT_SHALLOW
+        GIT_SUBMODULES ""
+        FIND_PACKAGE_ARGS NAMES reflectcpp
+        # gersemi: on
+    )
+    FetchContent_MakeAvailable(reflect-cpp)
+endif()
+
 if(BTOP_TESTS)
     if(BTOP_USE_SYSTEM_GTEST)
         find_package(GTest REQUIRED)

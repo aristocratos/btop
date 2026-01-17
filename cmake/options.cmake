@@ -15,6 +15,8 @@ if(LINUX)
     option(BTOP_GPU "Enable GPU support" ON)
 endif()
 option(BTOP_USE_SYSTEM_FMT "Disable automatic download of fmt" OFF)
+option(BTOP_USE_SYSTEM_REFLECTCPP "Disable automatic download of reflect-cpp" OFF)
+option(BTOP_USE_SYSTEM_TOMLPLUSPLUS "Disable automatic download of tomlplusplus" OFF)
 
 option(BTOP_TESTS "Build tests" ON)
 if(BTOP_TESTS)
