@@ -514,11 +514,11 @@ namespace Cpu {
 
 					int64_t high = 0;
 					int64_t crit = 0;
-					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
-						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
+					for (int ii = 0; fs::exists(basepath / fmt::format("trip_point_{}_temp", ii)); ii++) {
+						const string trip_type = readfile(basepath / fmt::format("trip_point_{}_type", ii));
 						if (not is_in(trip_type, "high", "critical")) continue;
 						auto& val = (trip_type == "high" ? high : crit);
-						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+						val = stol(readfile(basepath / fmt::format("trip_point_{}_temp", ii), "0")) / 1000;
 					}
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
@@ -2219,11 +2219,13 @@ namespace Mem {
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
 								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
-										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
-											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+									const auto stat = fmt::format("/sys/block/{}/stat", devname);
+									if (fs::exists(stat, ec) and access(stat.c_str(), R_OK) == 0) {
+										const auto mount_stat = fmt::format("/sys/block/{}/{}/stat", devname, disks.at(mountpoint).dev.filename());
+										if (c > 0 and fs::exists(mount_stat, ec))
+											disks.at(mountpoint).stat = std::move(mount_stat);
 										else
-											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+											disks.at(mountpoint).stat = std::move(stat);
 										break;
 									//? Set ZFS stat filepath
 									} else if (fstype == "zfs") {
