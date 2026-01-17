@@ -156,7 +156,7 @@ endif
 
 #? The Directories, Source, Includes, Objects and Binary
 SRCDIR		:= src
-INCDIRS		:= include $(wildcard lib/**/include)
+INCDIRS		:= include/fmt include/widecharwidth $(wildcard lib/**/include)
 BUILDDIR	:= obj
 TARGETDIR	:= bin
 SRCEXT		:= cpp
