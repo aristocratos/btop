@@ -20,6 +20,7 @@ tab-size = 4
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
+#include <cstddef>
 #include <libproc.h>
 #include <mach/mach.h>
 #include <mach/mach_host.h>
@@ -52,9 +53,9 @@ tab-size = 4
 #include <mutex>
 #include <numeric>
 #include <ranges>
-#include <regex>
 #include <string>
 #include <unordered_set>
+#include <cstring>
 
 #include <fmt/format.h>
 
@@ -68,15 +69,15 @@ tab-size = 4
 #endif
 #include "smc.hpp"
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
-#define kIOMainPortDefault kIOMasterPortDefault
-#endif
+#include "iokit.hpp"
+#include "gpu.hpp"
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
 namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
+
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
@@ -123,17 +124,35 @@ namespace Mem {
 		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
 	};
 
-namespace Shared {
+namespace Gpu {
+    //? List of all GPU information
+    std::vector<gpu_info> gpus;
+#ifdef GPU_SUPPORT
+    namespace IOAccelerator {
+        bool initialized = false;
 
+        size_t device_count = 0;
+        //? IO_GPU contains the actual vector with the list of GPUs and their data to perform the query.
+		IOGPU io_gpu;
+        
+		bool init();
+        bool shutdown();
+        template <bool is_init>
+        bool collect(gpu_info* gpus_slice, size_t i = 0);
+
+    } // namespace IOAccelerator
+    auto collect(bool no_update) -> std::vector<gpu_info>&;
+#endif // GPU_SUPPORT
+} // namespace Gpu
+
+namespace Shared {
 	fs::path passwd_path;
 	uint64_t totalMem;
 	long pageSize, coreCount, clkTck, physicalCoreCount, arg_max;
 	double machTck;
 	int totalMem_len;
-
 	void init() {
-		//? Shared global variables init
-
+		//? Shared global variables init		
 		coreCount = sysconf(_SC_NPROCESSORS_ONLN); // this returns all logical cores (threads)
 		if (coreCount < 1) {
 			coreCount = 1;
@@ -191,6 +210,33 @@ namespace Shared {
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
+
+		#ifdef GPU_SUPPORT
+		auto shown_gpus = Config::getS("shown_gpus");
+
+		if (shown_gpus.contains("apple")) {
+			Gpu::IOAccelerator::init();
+		}
+
+
+		if (not Gpu::gpu_names.empty()) {
+			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
+				Cpu::available_fields.push_back(key);
+			for (auto const& [key, _] : Gpu::shared_gpu_percent)
+				Cpu::available_fields.push_back(key);
+
+			using namespace Gpu;
+			count = gpus.size();
+			gpu_b_height_offsets.resize(gpus.size());
+			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
+				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
+					+ gpus[i].supported_functions.pwr_usage
+					+ (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
+					+ (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
+						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
+		}
+		#endif
+
 	}
 
 }  // namespace Shared
@@ -301,17 +347,18 @@ namespace Cpu {
 		}
 	}
 
-	string get_cpuHz() {
+	std::string get_cpuHz() {
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
-
 		int mib[] = {CTL_HW, HW_CPU_FREQ};
 
 		if (sysctl(mib, 2, &freq, &size, nullptr, 0) < 0) {
-			// this fails on Apple Silicon macs. Apparently you're not allowed to know
 			return "";
 		}
-		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
+
+		// Convert from Hz to GHz and return a numeric string without units
+		const double freq_ghz = static_cast<double>(freq) / 1000000000.0;
+		return fmt::format("{:.2f}", freq_ghz);
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -396,22 +443,13 @@ namespace Cpu {
 				if (CFArrayGetCount(one_ps_descriptor())) {
 					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info(), CFArrayGetValueAtIndex(one_ps_descriptor(), 0));
 					has_battery = true;
-					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
-					int32_t estimatedMinutesRemaining;
-					if (remaining) {
-						CFNumberGetValue(remaining, kCFNumberSInt32Type, &estimatedMinutesRemaining);
-						seconds = estimatedMinutesRemaining * 60;
-					}
-					CFNumberRef charge = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSCurrentCapacityKey));
-					if (charge) {
-						CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
-					}
-					CFBooleanRef charging = (CFBooleanRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSIsChargingKey));
+
+					int32_t estimatedMinutesRemaining = safe_cfdictionary_to_int64(one_ps, CFSTR(kIOPSTimeToEmptyKey)).value_or(0);
+					seconds = estimatedMinutesRemaining * 60;
+					percent = safe_cfdictionary_to_int64(one_ps, CFSTR(kIOPSCurrentCapacityKey)).value_or(0);
+					bool charging =  safe_cfdictionary_to_bool(one_ps,  CFSTR(kIOPSIsChargingKey)).value_or(false);
 					if (charging) {
-						bool isCharging = CFBooleanGetValue(charging);
-						if (isCharging) {
-							status = "charging";
-						}
+						status = "charging";
 					}
 					if (percent == 100) {
 						status = "full";
@@ -541,27 +579,6 @@ namespace Mem {
 		return Shared::totalMem;
 	}
 
-	int64_t getCFNumber(CFDictionaryRef dict, const void *key) {
-		CFNumberRef ref = (CFNumberRef)CFDictionaryGetValue(dict, key);
-		if (ref) {
-			int64_t value;
-			CFNumberGetValue(ref, kCFNumberSInt64Type, &value);
-			return value;
-		}
-		return 0;
-	}
-
-	string getCFString(io_registry_entry_t volumeRef, CFStringRef key) {
-		CFStringRef bsdNameRef = (CFStringRef)IORegistryEntryCreateCFProperty(volumeRef, key, kCFAllocatorDefault, 0);
-		if (bsdNameRef) {
-			char buf[200];
-			CFStringGetCString(bsdNameRef, buf, 200, kCFStringEncodingASCII);
-			CFRelease(bsdNameRef);
-			return string(buf);
-		}
-		return "";
-	}
-
 	bool isWhole(io_registry_entry_t volumeRef) {
 		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
 		Boolean val = CFBooleanGetValue(isWhole);
@@ -598,8 +615,15 @@ namespace Mem {
 			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
 			if (volumeRef) {
 				if (!isWhole(volumeRef)) {
-					string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
-					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
+					string bsdName;
+					string device;
+
+					CFMutableDictionaryRef properties = nullptr;
+					if (IORegistryEntryCreateCFProperties(volumeRef, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS) {
+						bsdName = safe_cfdictionary_to_std_string(properties, CFSTR("BSD Name")).value_or("");
+						device  = safe_cfdictionary_to_std_string(properties, CFSTR("VolGroupMntFromName")).value_or("");
+					}
+					
 					if (!mapping.contains(device)) {
 						device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have VolGroupMntFromName property
 					}
@@ -608,13 +632,11 @@ namespace Mem {
 							string mountpoint = mapping.at(device);
 							if (disks.contains(mountpoint)) {
 								auto& disk = disks.at(mountpoint);
-								CFDictionaryRef properties;
-								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
 								if (properties) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
 										disk_ios++;
-										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
+										int64_t readBytes = safe_cfdictionary_to_int64(statistics, CFSTR("Bytes read from block device")).value_or(0);
 										if (disk.io_read.empty())
 											disk.io_read.push_back(0);
 										else
@@ -622,7 +644,7 @@ namespace Mem {
 										disk.old_io.at(0) = readBytes;
 										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
 
-										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
+										int64_t writeBytes = safe_cfdictionary_to_int64(statistics, CFSTR("Bytes written to block device")).value_or(0);
 										if (disk.io_write.empty())
 											disk.io_write.push_back(0);
 										else
@@ -638,10 +660,12 @@ namespace Mem {
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 									}
 								}
-								CFRelease(properties);
 							}
 						}
 					}
+
+					if(properties)
+						CFRelease(properties);
 				}
 			}
 		}
@@ -1438,3 +1462,154 @@ namespace Tools {
 		return 0.0;
 	}
 }  // namespace Tools
+
+
+namespace Gpu {
+
+#ifdef GPU_SUPPORT
+    namespace IOAccelerator {
+        //? Initialize Apple Silicon GPU monitoring Although the chips always have 1 GPU, I assume we can reuse them later on Intel Macs.
+        bool init() {
+            const size_t index = gpus.size();
+            auto & io_gpus = io_gpu.get_gpus();
+			device_count += io_gpus.size();
+
+			if (io_gpus.empty()) {
+				 return false;
+			}
+               
+			initialized = true;
+
+			for(size_t i = 0; i < io_gpus.size() ; i++){
+				gpus.emplace_back();  
+				std::string name = fmt::format("{} ({})", io_gpus[i].get_name(), io_gpus[i].get_core_count());
+            	gpu_names.emplace_back(name);
+				collect<true>(&gpus[index], i);
+			}
+            return true;
+        }
+
+        //? Shutdown Apple Silicon GPU monitoring
+        bool shutdown() {
+            initialized = false;
+            return true;
+        }
+
+        //? Collect GPU metrics into the provided slice
+        template <bool is_init>
+        bool collect(gpu_info* gpus_slice, size_t index) {
+			if (not initialized) {
+				return false;
+			}
+
+			auto& io_gpus = io_gpu.get_gpus();
+			if (io_gpus.empty() || index >= io_gpus.size()) {
+				return false;
+			}
+
+			if constexpr (is_init) {
+				gpus_slice->supported_functions = {
+					.gpu_utilization = true,
+					.mem_utilization = false,
+					.gpu_clock = IOReport::lib_handle ? true : false,
+					.mem_clock = false,
+					.pwr_usage = IOReport::lib_handle ? true : false,
+					.pwr_state = false,
+					.temp_info = false, // IOReport::LibHandle ? true : false
+					.mem_total = true,
+					.mem_used  = true,
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
+				};
+				gpus_slice->pwr_max_usage = 30'000; //? 30w
+			}
+
+			io_gpus[index].refresh();
+			auto gpu_data = io_gpus[index].get_statistics();
+
+			gpus_slice->gpu_percent.at("gpu-totals").push_back(gpu_data.device_utilization);
+
+			gpus_slice->mem_total = gpu_data.alloc_system_memory;
+			gpus_slice->mem_used  = gpu_data.in_use_system_memory;
+			long long mem_percent = 0;
+			if (gpus_slice->mem_total > 0) {
+				mem_percent = static_cast<long long>((static_cast<double>(gpus_slice->mem_used) / static_cast<double>(gpus_slice->mem_total)) * 100.0);
+			}
+			gpus_slice->gpu_percent.at("gpu-vram-totals").push_back(mem_percent);
+			//gpus_slice->mem_utilization_percent.push_back(mem_percent);
+
+			if(IOReport::lib_handle) {
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(gpu_data.milliwatts);
+				gpus_slice->pwr_usage = gpu_data.milliwatts;
+				gpus_slice->gpu_clock_speed = gpu_data.gpu_frequency / 1'000'000;
+				//gpus_slice->temp.push_back( gpu_data.temp_c);
+			}
+            
+            return true;
+        }
+
+    } // namespace IOAccelerator
+
+
+	//? Full based (copied) on linux (intel/amd) gpu collect
+    auto collect(bool no_update) -> std::vector<gpu_info>& {
+        if (Runner::stopping || (no_update && !gpus.empty()))
+            return gpus;
+
+        IOAccelerator::collect<false>(gpus.data());
+
+        //* Calculate average metrics
+        long long avg = 0;
+        long long mem_usage_total = 0;
+        long long mem_total = 0;
+        long long pwr_total = 0;
+
+        for (auto& gpu : gpus) {
+            if (gpu.supported_functions.gpu_utilization)
+                avg += gpu.gpu_percent.at("gpu-totals").back();
+            if (gpu.supported_functions.mem_used)
+                mem_usage_total += gpu.mem_used;
+            if (gpu.supported_functions.mem_total)
+                mem_total += gpu.mem_total;
+            if (gpu.supported_functions.pwr_usage)
+                pwr_total += gpu.pwr_usage;
+
+            //* Trim vectors if they exceed graph width
+            if (width != 0) {
+                while (cmp_greater(gpu.gpu_percent.at("gpu-totals").size(), width * 2)) 
+                    gpu.gpu_percent.at("gpu-totals").pop_front();
+                while (cmp_greater(gpu.mem_utilization_percent.size(), width)) 
+                    gpu.mem_utilization_percent.pop_front();
+                while (cmp_greater(gpu.gpu_percent.at("gpu-pwr-totals").size(), width)) 
+                    gpu.gpu_percent.at("gpu-pwr-totals").pop_front();
+                while (cmp_greater(gpu.temp.size(), 18)) 
+                    gpu.temp.pop_front();
+                while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width / 2)) 
+                    gpu.gpu_percent.at("gpu-vram-totals").pop_front();
+            }
+        }
+
+        // Update shared GPU metrics
+        shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
+        if (mem_total != 0)
+            shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
+        if (gpu_pwr_total_max != 0)
+            shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
+
+        if (width != 0) {
+            while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) 
+                shared_gpu_percent.at("gpu-average").pop_front();
+            while (cmp_greater(shared_gpu_percent.at("gpu-pwr-total").size(), width * 2)) 
+                shared_gpu_percent.at("gpu-pwr-total").pop_front();
+            while (cmp_greater(shared_gpu_percent.at("gpu-vram-total").size(), width * 2)) 
+                shared_gpu_percent.at("gpu-vram-total").pop_front();
+        }
+
+        count = gpus.size();
+        return gpus;
+    }
+
+#endif // GPU_SUPPORT
+
+} // namespace Gpu

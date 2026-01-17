@@ -110,7 +110,6 @@ namespace Cpu {
 
 		io_connect_t conn;
 		kern_return_t result;
-		mach_port_t masterPort;
 		io_iterator_t iterator;
 		io_object_t device;
 	};

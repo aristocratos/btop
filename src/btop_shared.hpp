@@ -177,12 +177,19 @@ namespace Gpu {
 		// vector<proc_info> compute_processes = {};
 	};
 
+	#ifndef __APPLE__
 	namespace Nvml {
 		extern bool shutdown();
 	}
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+	#else
+	namespace IOAccelerator 
+	{
+		extern bool shutdown();
+	}
+	#endif
 
 	//* Collect gpu stats and temperatures
     auto collect(bool no_update = false) -> vector<gpu_info>&;
