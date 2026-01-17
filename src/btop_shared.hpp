@@ -348,6 +348,8 @@ namespace Proc {
 
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
+	extern int width_p;
+	extern atomic<bool> resized;
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
