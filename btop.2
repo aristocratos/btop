@@ -1,0 +1,68 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "btop" "1" "2025-05-01" "" "User Commands"
+.SH NAME
+.LP
+btop - Resource monitor that shows usage and stats for processor, memory, disks, network, and processes.
+.SH SYNOPSIS
+.LP
+\fBbtop\fR [\fB-c\fR \fIfile\fR] [\fB-d\fR] [\fB-f\fR \fIfilter\fR] [\fB-l\fR] [\fB-p\fR \fIid\fR] [\fB-t\fR] [\fB-u\fR \fIms\fR] [\fB--force-utf\fR] [\fB--themes-dir\fR \fIdir\fR]
+.PP
+\fBbtop\fR [\fB--default-config\fR | {\fB-h\fR | \fB--help\fR} | {\fB-V\fR | \fB--version\fR}]
+.SH DESCRIPTION
+.LP
+\fBbtop\fR is a program that shows usage and stats for processor, memory, disks, network, and processes.
+.SH OPTIONS
+.LP
+The program follows the usual GNU command line syntax, with long options
+starting with two dashes (\(oq-\(cq). A summary of options is included below.
+.TP 3
+\fB-c\fR, \fB--config \f(BIfile\fB\fR
+Path to a config file.
+.TP 3
+\fB-d\fR, \fB--debug\fR
+Start in debug mode with additional logs and metrics.
+.TP 3
+\fB-f\fR, \fB--filter \f(BIfilter\fB\fR
+Set an initial process filter.
+.TP 3
+\fB--force-utf\fR
+Force start even if no UTF-8 locale was detected.
+.TP 3
+\fB-l\fR, \fB--low-color\fR
+Disable true color, 256 colors only.
+.TP 3
+\fB-p\fR, \fB--preset \f(BIid\fB\fR
+Start with a preset (0-9).
+.TP 3
+\fB-t\fR, \fB--tty\fR
+Force tty mode with ANSI graph symbols and 16 colors only.
+.TP 3
+\fB--no-tty\fR
+Force disable tty mode.
+.TP 3
+\fB--themes-dir \f(BIdir\fB\fR
+Path to a custom themes directory. When specified, this directory takes priority over the default theme search paths.
+.TP 3
+\fB-u\fR, \fB--update \f(BIms\fB\fR
+Set an initial update rate in milliseconds.
+.TP 3
+\fB--default-config\fR
+Print default config to standard output.
+.TP 3
+\fB-h\fR, \fB--help\fR
+Show summary of options.
+.TP 3
+\fB-V\fR, \fB--version\fR
+Show version of program.
+.SH BUGS
+.LP
+The upstream bug tracker can be found at \c
+.UR https://github.com/aristocratos/btop/issues
+.UE \c
+\&.
+.SH SEE ALSO
+.LP
+\fBtop\fR(1), \fBhtop\fR(1)
+.SH AUTHOR
+.LP
+\fBbtop\fR was written by Jakob P. Liljenberg a.k.a. \(lqAristocratos\(rq.
