@@ -65,3 +65,14 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build
+
+  format:
+    name: Check CMake Formatting
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - name: Check Formatting
+        run: uvx gersemi --indent 4 --line-length 120 --definitions cmake/flags.cmake cmake/features.cmake --check --diff .

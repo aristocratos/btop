@@ -23,7 +23,7 @@ on:
       - 'src/osx/*pp'
 
 jobs:
-  cmake_build_on_macos:
+  build:
     runs-on: macos-15
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
