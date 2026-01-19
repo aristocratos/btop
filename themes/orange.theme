@@ -79,3 +79,13 @@ theme[download_end]="#ffa500"
 theme[upload_start]="#996300"
 theme[upload_mid]=""
 theme[upload_end]="#ffa500"
+
+# Process list banner attributes
+theme[proc_pause_bg]="#996300"
+theme[proc_follow_bg]="#ffa500"
+theme[proc_banner_bg]="#ffcc66"
+theme[proc_banner_fg]="#000000"
+
+# Process following attributes
+theme[followed_bg]="#ffa500"
+theme[followed_fg]="#000000"
