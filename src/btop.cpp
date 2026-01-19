@@ -534,7 +534,7 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
-			#ifdef GPU_SUPPORT
+#if defined(GPU_SUPPORT)
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
 					Config::getS("cpu_graph_lower").starts_with("gpu-")
@@ -555,9 +555,7 @@ namespace Runner {
 					if (Global::debug) debug_timer("gpu", collect_done);
 				}
 				auto& gpus_ref = gpus;
-			#else
-				vector<Gpu::gpu_info> gpus_ref{};
-			#endif
+#endif // GPU_SUPPORT
 
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
@@ -578,7 +576,16 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, gpus_ref, conf.force_redraw, conf.no_update);
+						if (not pause_output) {
+							output += Cpu::draw(
+								cpu,
+#if defined(GPU_SUPPORT)
+								gpus_ref,
+#endif // GPU_SUPPORT
+								conf.force_redraw,
+								conf.no_update
+							);
+						}
 
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}

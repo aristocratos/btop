@@ -132,9 +132,10 @@ namespace Cpu {
 	std::unordered_map<int, int> core_mapping;
 }
 
+#if defined(GPU_SUPPORT)
+
 namespace Gpu {
 	vector<gpu_info> gpus;
-#ifdef GPU_SUPPORT
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -254,8 +255,9 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
-#endif
 }
+
+#endif // GPU_SUPPORT
 
 namespace Mem {
 	double old_uptime;
