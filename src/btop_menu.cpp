@@ -291,11 +291,14 @@ namespace Menu {
 				"P=(0 or 1) for alternate positions.",
 				"G=graph symbol to use for box.",
 				"",
+				"proc box format can also be \"proc:P:G:W\"",
+				"W=(0 - 100) for box width percentage.\n",
+				"",
 				"Use whitespace \" \" as separator between",
 				"different presets.",
 				"",
 				"Example:",
-				"\"mem:0:tty,proc:1:default cpu:0:braille\""},
+				"\"mem:0:tty,proc:1:default:80 cpu:0:braille\""},
 			{"shown_boxes",
 				"Manually set which boxes to show.",
 				"",
@@ -1388,6 +1391,7 @@ static int optionsMenu(const string& key) {
 					if (option == "proc_box_width_percent") {
 						editor.text = fmt::format("{}", std::clamp(stoi(editor.text), 0, 100));
 						screen_redraw = true;
+						Config::current_preset.reset();
 					}
 					Config::set(option, stoi(editor.text));
 				}
@@ -1477,6 +1481,7 @@ static int optionsMenu(const string& key) {
 					if (option == "proc_box_width_percent") {
 						value = std::clamp(static_cast<int>(value), 0, 100);
 						screen_redraw = true;
+						Config::current_preset.reset();
 					}
 					Config::set(option, static_cast<int>(value));
 				}

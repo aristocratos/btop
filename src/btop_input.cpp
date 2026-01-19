@@ -313,7 +313,7 @@ namespace Input {
 							new_proc_box_width_percent = Proc::width_p; // set to default width
 
 						if (proc_box_width_percent != new_proc_box_width_percent) {
-							Config::current_preset = -1;
+							Config::current_preset.reset();
 							Config::set("proc_box_width_percent", new_proc_box_width_percent);
 							Draw::calcSizes(!Proc::shown);
 							Draw::update_clock(true);
