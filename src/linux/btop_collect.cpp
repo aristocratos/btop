@@ -57,11 +57,23 @@ tab-size = 4
 #include "../btop_tools.hpp"
 
 #if defined(GPU_SUPPORT)
+	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
+	// since the C library uses "class" as a struct member and keywords are not allowed to be used
+	// as identifiers in C++.
+	#if defined(__clang__)
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wkeyword-macro"
+	#endif // __clang__
+
 	#define class class_
 extern "C" {
-	#include "./intel_gpu_top/intel_gpu_top.h"
+	#include "intel_gpu_top/intel_gpu_top.h"
 }
 	#undef class
+
+	#if defined(__clang__)
+		#pragma clang diagnostic pop
+	#endif // __clang__
 #endif
 
 using std::abs;
