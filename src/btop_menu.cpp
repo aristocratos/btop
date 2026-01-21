@@ -1380,7 +1380,7 @@ static int optionsMenu(const string& key) {
 					if (option == "proc_box_width_percent") {
 						editor.text = fmt::format("{}", std::clamp(stoi(editor.text), 0, 100));
 						screen_redraw = true;
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 					}
 					Config::set(option, stoi(editor.text));
 				}
@@ -1470,7 +1470,7 @@ static int optionsMenu(const string& key) {
 					if (option == "proc_box_width_percent") {
 						value = std::clamp(static_cast<int>(value), 0, 100);
 						screen_redraw = true;
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 					}
 					Config::set(option, static_cast<int>(value));
 				}
