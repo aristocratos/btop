@@ -254,11 +254,9 @@ namespace Input {
 						return;
 					}
 					Config::current_preset = -1;
-					if (Proc::shown) Proc::resized = true;
 					Draw::calcSizes();
 					Draw::update_clock(true);
-					Proc::resized = false;
-					Runner::run("all", true, true);
+					Runner::run("all", false, true);
 					return;
 				}
 				else if (is_in(key, "p", "P") and Config::preset_list.size() > 1) {
@@ -275,11 +273,9 @@ namespace Input {
 						Config::current_preset = old_preset;
 						return;
 					}
-					if (Proc::shown) Proc::resized = true;
 					Draw::calcSizes();
 					Draw::update_clock(true);
-					Proc::resized = false;
-					Runner::run("all", true, true);
+					Runner::run("all", false, true);
 					return;
 				} else if (is_in(key, "ctrl_r")) {
 					kill(getpid(), SIGUSR2);
