@@ -1303,7 +1303,6 @@ static int optionsMenu(const string& key) {
 			Theme::updateThemes();
 		}
 		int retval = Changed;
-		bool recollect{};
 		bool screen_redraw{};
 		bool theme_refresh{};
 
@@ -1464,9 +1463,6 @@ static int optionsMenu(const string& key) {
 				else if (option == "background_update") {
 					Runner::pause_output = false;
 				}
-				else if (option == "base_10_sizes") {
-					recollect = true;
-				}
 				else if (option == "save_config_on_exit" and not Config::getB("save_config_on_exit")) {
 					const bool old_write_new = Config::write_new;
 					Config::write_new = true;
@@ -1493,7 +1489,7 @@ static int optionsMenu(const string& key) {
 					Logger::info("Logger set to {}", optList.at(i));
 				}
 				else if (option == "base_10_bitrate") {
-				    recollect = true;
+				    screen_redraw = true;
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
@@ -1629,10 +1625,6 @@ static int optionsMenu(const string& key) {
 			Draw::calcSizes();
 			Global::overlay = std::move(overlay_bkp);
 			Global::clock = std::move(clock_bkp);
-			recollect = true;
-		}
-		if (recollect) {
-			Runner::run("all", false, true);
 			retval = NoChange;
 		}
 
