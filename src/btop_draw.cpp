@@ -1562,7 +1562,6 @@ namespace Proc {
 	int user_size, thread_size, prog_size, cmd_size, tree_size;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 	bool previous_proc_banner_state = false;
-	atomic<bool> resized (false);
 
 	string box;
 
@@ -2190,7 +2189,7 @@ namespace Proc {
 }
 
 namespace Draw {
-	void calcSizes() {
+	void calcSizes(const bool clear_proc_graphs) {
 		atomic_wait(Runner::active);
 		Config::unlock();
 		auto boxes = Config::getS("shown_boxes");
@@ -2207,7 +2206,7 @@ namespace Draw {
 		Global::overlay.clear();
 		Runner::pause_output = false;
 		Runner::redraw = true;
-		if (not (Proc::resized or Global::resized)) {
+		if (clear_proc_graphs) {
 			Proc::p_counters.clear();
 			Proc::p_graphs.clear();
 		}

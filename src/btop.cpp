@@ -1067,6 +1067,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Config::set_boxes("cpu mem net proc");
 		Config::set("shown_boxes", "cpu mem net proc"s);
 	}
+	Config::set_seen_boxes(Config::getS("shown_boxes"));
 
 	//? Update list of available themes and generate the selected theme
 	Theme::updateThemes();
@@ -1163,7 +1164,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
-				Draw::calcSizes();
+				Draw::calcSizes(false);
 				Draw::update_clock(true);
 				Global::resized = false;
 				if (Menu::active) Menu::process();
