@@ -210,6 +210,7 @@ namespace Gpu {
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
 		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_MEM_TYPE_GTT             2
 		#define RSMI_TEMP_CURRENT             0
 		#define RSMI_TEMP_TYPE_EDGE           0
 		#define RSMI_CLK_TYPE_MEM             4
@@ -352,6 +353,13 @@ namespace Shared {
 			Gpu::Intel::init();
 		}
 
+		// Initialize available_fields with at least "Auto" even when no GPUs are detected
+		{
+			using namespace Gpu;
+			available_fields.clear();
+			available_fields.push_back("Auto");
+		}
+
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -361,12 +369,19 @@ namespace Shared {
 			using namespace Gpu;
 			count = gpus.size();
 			gpu_b_height_offsets.resize(gpus.size());
+			// Add all gpu_percent keys as available fields
+			if (not gpus.empty()) {
+				for (const auto& [key, _] : gpus[0].gpu_percent) {
+					available_fields.push_back(key);
+				}
+			}
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
 					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
-						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
+						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization)
+					   + gpus[i].supported_functions.gtt_used * (2 + (gpus[i].gtt_total > 0));
 		}
 	#endif
 
@@ -1767,6 +1782,29 @@ namespace Gpu {
 					} else gpus_slice[i].mem_total = total;
 				}
 
+				// in btop_collect.cpp Gpu::Rsmi::collect, defined 1603 ... https://github.com/aristocratos/btop/issues/1413
+				if (gpus_slice[i].supported_functions.gtt_used) {
+					//? GTT total memory
+					if constexpr(is_init) {
+						uint64_t total;
+						result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &total);
+						if (result == RSMI_STATUS_SUCCESS) {
+							gpus_slice[i].gtt_total = total;
+						}
+					}
+					//? GTT used memory
+					uint64_t used;
+					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_GTT, &used);
+					if (result != RSMI_STATUS_SUCCESS) {
+						Logger::warning("ROCm SMI: Failed to get GTT usage");
+						if constexpr(is_init) gpus_slice[i].supported_functions.gtt_used = false;
+					} else {
+						gpus_slice[i].gtt_used = used;
+						if (gpus_slice[i].gtt_total > 0)
+							gpus_slice[i].gpu_percent.at("gpu-gtt-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].gtt_total));
+					}
+				}
+
 				if (gpus_slice[i].supported_functions.mem_used) {
 					uint64_t used;
 					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &used);
@@ -1950,6 +1988,8 @@ namespace Gpu {
 				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
 				//? Memory usage
 				while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width/2)) gpu.gpu_percent.at("gpu-vram-totals").pop_front();
+				//? GTT memory usage
+				while (cmp_greater(gpu.gpu_percent.at("gpu-gtt-totals").size(), width/2)) gpu.gpu_percent.at("gpu-gtt-totals").pop_front();
 			}
 		}
 

@@ -584,6 +584,46 @@ namespace Menu {
 				"Horizontally mirror the GPU graph.",
 				"",
 				"True or False."},
+			{"gpu_graph_upper",
+				"GPU upper graph.",
+				"",
+				"Sets the stat shown in upper half of",
+				"the GPU graph.",
+				"",
+				"\"Auto\" = GPU usage (default).",
+				"\"gpu-totals\" = GPU usage.",
+				"\"gpu-vram-totals\" = VRAM usage.",
+				"\"gpu-gtt-totals\" = GTT memory (AMD).",
+				"\"gpu-pwr-totals\" = Power usage.",
+				"",
+				"Not all stats supported on all devices."},
+			{"gpu_graph_lower",
+				"GPU lower graph.",
+				"",
+				"Sets the stat shown in lower half of",
+				"the GPU graph.",
+				"",
+				"\"Auto\" = Mirrors upper graph.",
+				"\"none\" = Disable lower graph.",
+				"\"gpu-totals\" = GPU usage.",
+				"\"gpu-vram-totals\" = VRAM usage.",
+				"\"gpu-gtt-totals\" = GTT memory (AMD).",
+				"\"gpu-pwr-totals\" = Power usage.",
+				"",
+				"Not all stats supported on all devices."},
+			{"gpu_graph_field",
+				"GPU graph data field. [Deprecated]",
+				"",
+				"Use gpu_graph_upper instead.",
+				"Select what stat to show in GPU graph.",
+				"",
+				"\"Auto\" = GPU usage (default).",
+				"\"gpu-totals\" = GPU usage.",
+				"\"gpu-vram-totals\" = VRAM usage.",
+				"\"gpu-gtt-totals\" = GTT memory usage (AMD).",
+				"\"gpu-pwr-totals\" = Power usage.",
+				"",
+				"Not all stats supported on all devices."},
 			{"shown_gpus",
 				"Manually set which gpu vendors to show.",
 				"",
@@ -1288,6 +1328,9 @@ static int optionsMenu(const string& key) {
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
+			{"gpu_graph_upper", std::cref(Gpu::available_fields)},
+			{"gpu_graph_lower", std::cref(Gpu::available_fields)},
+			{"gpu_graph_field", std::cref(Gpu::available_fields)},
 		#endif
 		};
 		auto tty_mode = Config::getB("tty_mode");
@@ -1481,6 +1524,9 @@ static int optionsMenu(const string& key) {
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
 				int i = v_index(optList, Config::getS(option));
+
+				// If current value is not in the list, default to first option
+				if (i >= (int)optList.size()) i = 0;
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
