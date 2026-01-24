@@ -240,6 +240,19 @@ namespace Cpu {
 
 	auto get_cpuHz() -> string;
 
+#ifdef __APPLE__
+	//* Apple Silicon P-core and E-core information
+	struct core_info {
+		int p_cores = 0;      // Performance cores (perflevel0) - indices e_cores to e_cores+p_cores-1
+		int e_cores = 0;      // Efficiency cores (perflevel1) - indices 0 to e_cores-1
+		int p_freq_mhz = 0;   // Current P-cluster frequency in MHz
+		int e_freq_mhz = 0;   // Current E-cluster frequency in MHz
+	};
+	extern core_info cpu_core_info;
+	auto get_core_info() -> core_info;
+	void update_core_frequencies();  // Update current P/E frequencies via IOReport
+#endif
+
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, float, long, string>;
 

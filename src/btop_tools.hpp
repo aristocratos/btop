@@ -205,6 +205,21 @@ namespace Tools {
 		return str;
 	}
 
+	//* Format CPU frequency: 3 digits max, e.g., "1.9 GHz" or "600 MHz"
+	inline string format_freq(int mhz) {
+		if (mhz <= 0) return "";
+		string str;
+		if (mhz > 999) {
+			str = fmt::format("{:.1f}", mhz / 1000.0);
+			if (str.size() > 3) str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " GHz";
+		} else {
+			str = fmt::format("{} MHz", mhz);
+		}
+		return str;
+	}
+
 	//* Check if vector <vec> contains value <find_val>
 	template <typename T, typename T2>
 	inline bool v_contains(const vector<T>& vec, const T2& find_val) {
