@@ -884,12 +884,30 @@ namespace Cpu {
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
 
 			if (show_temps and not hide_cores) {
-				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, n+1).back(), temp_scale);
-				const auto temp_color = enabled ? Theme::g("temp").at(clamp(safeVal(cpu.temp, n+1).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
-				if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n))
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
-						+ temp_graphs.at(n+1)(safeVal(cpu.temp, n+1), data_same or redraw);
-				out += temp_color + rjust(to_string(temp), 4) + Theme::c(enabled ? "main_fg" : "inactive_fg") + unit;
+				const auto core_temps = safeVal(cpu.temp, n + 1);
+				if (!core_temps.empty()) {
+					// FIXME: This should be checked during collection and just not be made available with
+					// something like `std::nullopt`.
+					const auto last_temp = core_temps.back();
+					const auto [temp, unit] = celsius_to(last_temp, temp_scale);
+					const auto temp_color = enabled ? Theme::g("temp").at(clamp(last_temp * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
+					if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n)) {
+						fmt::format_to(
+							std::back_inserter(out),
+							" {}{}{}{}", Theme::c("inactive_fg"),
+							graph_bg * 5, Mv::l(5),
+							temp_graphs.at(n + 1)(core_temps, data_same || redraw)
+						);
+					}
+					fmt::format_to(
+						std::back_inserter(out),
+						"{}{}{}{}",
+						temp_color,
+						rjust(std::to_string(temp), 4),
+						Theme::c(enabled ? "main_fg" : "inactive_fg"),
+						unit
+					);
+				}
 			}
 
 			out += Theme::c("div_line") + Symbols::v_line;
