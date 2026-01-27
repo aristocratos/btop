@@ -251,11 +251,16 @@ namespace Gpu {
 
 	//? Intel data collection
 	namespace Intel {
-		string pmu_device = "i915";
-		string driver_name;
-		string card_path;
-		struct engines *engines = nullptr;
+		struct GpuInstance {
+			string card_path;
+			string driver_name;
+			string pmu_device;
+			string device_name;
+			struct engines *i915_engines = nullptr;
+			int xe_state_index = -1;
+		};
 
+		vector<GpuInstance> gpu_instances;
 		bool initialized = false;
 		bool init();
 		bool shutdown();
@@ -300,9 +305,12 @@ namespace Gpu {
 			XeState state;
 			bool initialized = false;
 
-			bool init(const string& card_path, const string& pmu_device);
-			bool shutdown();
-			template <bool is_init> bool collect(gpu_info* gpus_slice);
+			bool init(int gpu_index, const string& card_path, const string& pmu_device);
+			bool shutdown(int gpu_index);
+			template <bool is_init> bool collect(int gpu_index, gpu_info* gpus_slice);
+
+			vector<XeState> states;
+			vector<bool> initialized_states;
 		}
 #endif
 }
@@ -2022,37 +2030,45 @@ namespace Gpu {
 		}
 
 
-		bool init(const string& card_path, const string& pmu_dev) {
-			if (initialized) return false;
+		bool init(int gpu_index, const string& card_path, const string& pmu_dev) {
+			if (gpu_index < 0) return false;
 
-			state.pmu_device = pmu_dev;
-			state.pmu_type = get_pmu_type(pmu_dev);
+			while (states.size() <= static_cast<size_t>(gpu_index)) {
+				states.push_back(XeState{});
+				initialized_states.push_back(false);
+			}
+
+			if (initialized_states[gpu_index]) return false;
+
+			XeState& st = states[gpu_index];
+			st.pmu_device = pmu_dev;
+			st.pmu_type = get_pmu_type(pmu_dev);
 
 			string drm_path = "/dev/dri/" + fs::path(card_path).filename().string();
-			state.drm_fd = open(drm_path.c_str(), O_RDONLY);
-			if (state.drm_fd < 0) {
+			st.drm_fd = open(drm_path.c_str(), O_RDONLY);
+			if (st.drm_fd < 0) {
 				Logger::debug("Xe: Failed to open {}", drm_path);
 				return false;
 			}
 
-			if (not enumerate_engines(state.drm_fd, state.engines)) {
+			if (not enumerate_engines(st.drm_fd, st.engines)) {
 				Logger::warning("Xe: Engine enumeration failed, utilization disabled");
 			}
 
-			discover_gt_idle(fs::path(card_path) / "device", state.gt_idle);
+			discover_gt_idle(fs::path(card_path) / "device", st.gt_idle);
 
 			uint64_t mem_total = 0;
 			uint64_t mem_used = 0;
-			if (query_mem_info(state.drm_fd, mem_total, mem_used)) {
-				state.mem_total = mem_total;
+			if (query_mem_info(st.drm_fd, mem_total, mem_used)) {
+				st.mem_total = mem_total;
 			}
 
 			// PMU fallback when gtidle sysfs is unavailable
-			if (state.gt_idle.empty()) {
-				if (state.pmu_type < 0) {
+			if (st.gt_idle.empty()) {
+				if (st.pmu_type < 0) {
 					Logger::debug("Xe: Failed to get PMU type for {}", pmu_dev);
-					close(state.drm_fd);
-					state.drm_fd = -1;
+					close(st.drm_fd);
+					st.drm_fd = -1;
 					return false;
 				}
 
@@ -2061,28 +2077,28 @@ namespace Gpu {
 
 				if (active_event == 0 or total_event == 0) {
 					Logger::debug("Xe: Required PMU events not found");
-					close(state.drm_fd);
-					state.drm_fd = -1;
+					close(st.drm_fd);
+					st.drm_fd = -1;
 					return false;
 				}
 
-				for (auto& eng : state.engines) {
+				for (auto& eng : st.engines) {
 					// Pack event ID, engine class/instance/gt into perf config field
 					uint64_t active_cfg = build_config(active_event, eng.gt_id, eng.engine_class, eng.engine_instance);
 					uint64_t total_cfg = build_config(total_event, eng.gt_id, eng.engine_class, eng.engine_instance);
 
-					if (state.group_fd == -1) {
-						eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, -1);
+					if (st.group_fd == -1) {
+						eng.active_fd = open_perf_counter(st.pmu_type, active_cfg, -1);
 						if (eng.active_fd >= 0) {
-							state.group_fd = eng.active_fd;
+							st.group_fd = eng.active_fd;
 						}
 					} else {
-						eng.active_fd = open_perf_counter(state.pmu_type, active_cfg, state.group_fd);
+						eng.active_fd = open_perf_counter(st.pmu_type, active_cfg, st.group_fd);
 					}
-					eng.total_fd = open_perf_counter(state.pmu_type, total_cfg, state.group_fd);
+					eng.total_fd = open_perf_counter(st.pmu_type, total_cfg, st.group_fd);
 
-					if (eng.active_fd >= 0) state.member_fds.push_back(eng.active_fd);
-					if (eng.total_fd >= 0) state.member_fds.push_back(eng.total_fd);
+					if (eng.active_fd >= 0) st.member_fds.push_back(eng.active_fd);
+					if (eng.total_fd >= 0) st.member_fds.push_back(eng.total_fd);
 				}
 			}
 
@@ -2092,15 +2108,15 @@ namespace Gpu {
 					if (gt_entry.path().filename().string().rfind("gt", 0) == 0) {
 						fs::path freq_path = gt_entry.path() / "freq0" / "cur_freq";
 						if (fs::exists(freq_path)) {
-							state.freq_sysfs_path = freq_path.string();
+							st.freq_sysfs_path = freq_path.string();
 							break;
 						}
 					}
 				}
 			}
 
-			if (state.group_fd >= 0) {
-				if (ioctl(state.group_fd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
+			if (st.group_fd >= 0) {
+				if (ioctl(st.group_fd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
 					Logger::warning("Xe: Failed to enable PMU counters");
 				}
 			}
@@ -2108,48 +2124,54 @@ namespace Gpu {
 			struct timespec ts;
 			if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) {
 				Logger::warning("Xe: clock_gettime failed during init");
-				state.prev_time_ns = 0;
+				st.prev_time_ns = 0;
 			} else {
-				state.prev_time_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+				st.prev_time_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 			}
 
-			for (auto& eng : state.engines) {
+			for (auto& eng : st.engines) {
 				if (eng.active_fd >= 0) (void)read(eng.active_fd, &eng.prev_active, sizeof(eng.prev_active));
 				if (eng.total_fd >= 0) (void)read(eng.total_fd, &eng.prev_total, sizeof(eng.prev_total));
 			}
 
-			initialized = true;
+			initialized_states[gpu_index] = true;
 			return true;
 		}
 
-		bool shutdown() {
-			if (not initialized) return false;
-			for (int fd : state.member_fds) {
+		bool shutdown(int gpu_index) {
+			if (gpu_index < 0 or static_cast<size_t>(gpu_index) >= initialized_states.size()) return false;
+			if (not initialized_states[gpu_index]) return false;
+
+			XeState& st = states[gpu_index];
+			for (int fd : st.member_fds) {
 				if (fd >= 0) close(fd);
 			}
-			state.member_fds.clear();
-			if (state.drm_fd >= 0) {
-				close(state.drm_fd);
-				state.drm_fd = -1;
+			st.member_fds.clear();
+			if (st.drm_fd >= 0) {
+				close(st.drm_fd);
+				st.drm_fd = -1;
 			}
-			state.group_fd = -1;
-			state.engines.clear();
-			state.gt_idle.clear();
-			state.mem_total = 0;
-			state.freq_sysfs_path.clear();
-			state.first_sample = true;
-			initialized = false;
+			st.group_fd = -1;
+			st.engines.clear();
+			st.gt_idle.clear();
+			st.mem_total = 0;
+			st.freq_sysfs_path.clear();
+			st.first_sample = true;
+			initialized_states[gpu_index] = false;
 			return true;
 		}
 
-		template <bool is_init> bool collect(gpu_info* gpus_slice) {
-			if (not initialized) return false;
+		template <bool is_init> bool collect(int gpu_index, gpu_info* gpus_slice) {
+			if (gpu_index < 0 or static_cast<size_t>(gpu_index) >= initialized_states.size()) return false;
+			if (not initialized_states[gpu_index]) return false;
+
+			XeState& st = states[gpu_index];
 
 			if constexpr(is_init) {
-				bool has_mem_info = state.mem_total > 0;
+				bool has_mem_info = st.mem_total > 0;
 				bool has_main_gt = false;
 				bool has_media_gt = false;
-				for (const auto& gt : state.gt_idle) {
+				for (const auto& gt : st.gt_idle) {
 					if (gt.is_media) {
 						has_media_gt = true;
 					} else {
@@ -2158,9 +2180,9 @@ namespace Gpu {
 				}
 				bool split_gt = has_main_gt and has_media_gt;
 				gpus_slice->supported_functions = {
-					.gpu_utilization = (not state.gt_idle.empty() or not state.engines.empty()),
+					.gpu_utilization = (not st.gt_idle.empty() or not st.engines.empty()),
 					.mem_utilization = false,
-					.gpu_clock = not state.freq_sysfs_path.empty(),
+					.gpu_clock = not st.freq_sysfs_path.empty(),
 					.mem_clock = false,
 					.pwr_usage = false,
 					.pwr_state = false,
@@ -2181,21 +2203,23 @@ namespace Gpu {
 			}
 			uint64_t now_ns = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 
-			if (state.first_sample) {
-				state.prev_time_ns = now_ns;
-				for (auto& gt : state.gt_idle) {
+			if (st.first_sample) {
+				st.prev_time_ns = now_ns;
+				for (auto& gt : st.gt_idle) {
 					uint64_t idle_ms = 0;
 					ifstream idle_file(gt.idle_path);
 					if (idle_file >> idle_ms) {
 						gt.prev_idle_ms = idle_ms;
 					}
 				}
-				for (auto& eng : state.engines) {
+				for (auto& eng : st.engines) {
 					if (eng.active_fd >= 0) (void)read(eng.active_fd, &eng.prev_active, sizeof(eng.prev_active));
 					if (eng.total_fd >= 0) (void)read(eng.total_fd, &eng.prev_total, sizeof(eng.prev_total));
 				}
-				state.first_sample = false;
+				st.first_sample = false;
 				gpus_slice->gpu_percent.at("gpu-totals").push_back(0);
+				gpus_slice->gpu_percent.at("gpu-vram-totals").push_back(0);
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
 				if (gpus_slice->supported_functions.gt_utilization) {
 					gpus_slice->gpu_percent.at("gpu-rc-totals").push_back(0);
 					gpus_slice->gpu_percent.at("gpu-mc-totals").push_back(0);
@@ -2205,21 +2229,21 @@ namespace Gpu {
 				return true;
 			}
 
-			double dt = (double)(now_ns - state.prev_time_ns) / 1e9;
+			double dt = (double)(now_ns - st.prev_time_ns) / 1e9;
 			if (dt < MIN_DT_SECONDS) dt = MIN_DT_SECONDS;
-			state.prev_time_ns = now_ns;
+			st.prev_time_ns = now_ns;
 
 			double max_util = 0;
 			double main_util = 0;
 			double media_util = 0;
 			bool has_main = false;
 			bool has_media = false;
-			if (not state.gt_idle.empty()) {
+			if (not st.gt_idle.empty()) {
 				double dt_ms = dt * 1000.0;
 				if (dt_ms <= 0.0) dt_ms = 1.0;
 				// EMA smoothing factor: higher = more responsive, lower = smoother
 				constexpr double EMA_ALPHA = 0.3;
-				for (auto& gt : state.gt_idle) {
+				for (auto& gt : st.gt_idle) {
 					uint64_t idle_ms = 0;
 					ifstream idle_file(gt.idle_path);
 					if (not (idle_file >> idle_ms)) continue;
@@ -2271,7 +2295,7 @@ namespace Gpu {
 					gpus_slice->gpu_percent.at("gpu-mc-totals").push_back(mc_util);
 				}
 			} else {
-				for (auto& eng : state.engines) {
+				for (auto& eng : st.engines) {
 					if (eng.active_fd < 0 or eng.total_fd < 0) continue;
 					uint64_t active_val = 0, total_val = 0;
 					if (read(eng.active_fd, &active_val, sizeof(active_val)) < 0) continue;
@@ -2290,11 +2314,11 @@ namespace Gpu {
 			}
 			gpus_slice->gpu_percent.at("gpu-totals").push_back(clamp((long long)round(max_util), 0ll, 100ll));
 
-			if (state.mem_total > 0) {
-				gpus_slice->mem_total = state.mem_total;
+			if (st.mem_total > 0) {
+				gpus_slice->mem_total = st.mem_total;
 				uint64_t mem_total = 0;
 				uint64_t mem_used = 0;
-				if (query_mem_info(state.drm_fd, mem_total, mem_used) and mem_total > 0) {
+				if (query_mem_info(st.drm_fd, mem_total, mem_used) and mem_total > 0) {
 					gpus_slice->mem_total = mem_total;
 					if (mem_used > 0) {
 						gpus_slice->mem_used = mem_used;
@@ -2303,8 +2327,8 @@ namespace Gpu {
 				}
 			}
 
-			if (not state.freq_sysfs_path.empty()) {
-				ifstream freq_file(state.freq_sysfs_path);
+			if (not st.freq_sysfs_path.empty()) {
+				ifstream freq_file(st.freq_sysfs_path);
 				if (freq_file) {
 					unsigned int freq_mhz = 0;
 					if (freq_file >> freq_mhz) {
@@ -2320,6 +2344,19 @@ namespace Gpu {
 	}
 
 	namespace Intel {
+		static bool has_pmu_permissions() {
+			struct perf_event_attr attr = {};
+			attr.type = PERF_TYPE_SOFTWARE;
+			attr.config = PERF_COUNT_SW_CPU_CLOCK;
+			attr.size = sizeof(attr);
+			int fd = syscall(__NR_perf_event_open, &attr, -1, 0, -1, 0);
+			if (fd >= 0) {
+				close(fd);
+				return true;
+			}
+			return false;
+		}
+
 		static string detect_driver(const string& gpu_path) {
 			fs::path driver_link = fs::path(gpu_path) / "device" / "driver";
 			if (fs::is_symlink(driver_link)) {
@@ -2407,134 +2444,207 @@ namespace Gpu {
 			return device_id;
 		}
 
+		static vector<string> discover_intel_gpus() {
+			vector<string> gpu_paths;
+			if (not fs::exists("/sys/class/drm")) return gpu_paths;
+
+			for (const auto& entry : fs::directory_iterator("/sys/class/drm")) {
+				string name = entry.path().filename().string();
+				if (name.rfind("card", 0) != 0) continue;
+				if (name.find('-') != string::npos) continue;
+
+				fs::path vendor_path = entry.path() / "device" / "vendor";
+				ifstream vendor_file(vendor_path);
+				string vendor_id;
+				if (vendor_file >> vendor_id and vendor_id == "0x8086") {
+					gpu_paths.push_back(entry.path().string());
+				}
+			}
+			sort(gpu_paths.begin(), gpu_paths.end());
+			return gpu_paths;
+		}
+
 		bool init() {
 			if (initialized) return false;
 
-			char *gpu_path = find_intel_gpu_dir();
-			if (!gpu_path) {
+			vector<string> all_gpu_paths = discover_intel_gpus();
+			if (all_gpu_paths.empty()) {
 				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
 				return false;
 			}
 
-			card_path = string(gpu_path);
-			driver_name = detect_driver(card_path);
+			for (const auto& path : all_gpu_paths) {
+				GpuInstance instance;
+				instance.card_path = path;
+				instance.driver_name = detect_driver(path);
 
-			string sysfs_device_id = get_device_id_from_sysfs(card_path);
-			string device_name = lookup_pci_device_name("8086", sysfs_device_id);
+				string sysfs_device_id = get_device_id_from_sysfs(path);
+				instance.device_name = lookup_pci_device_name("8086", sysfs_device_id);
 
-			if (device_name.empty()) {
-				char *gpu_device_id = get_intel_device_id(gpu_path);
-				if (!gpu_device_id) {
-					Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
-					return false;
+				if (instance.device_name.empty()) {
+					char *gpu_device_id = get_intel_device_id(path.c_str());
+					if (gpu_device_id) {
+						char *gpu_device_name = get_intel_device_name(gpu_device_id);
+						instance.device_name = gpu_device_name ? string(gpu_device_name) : "Intel GPU";
+						free(gpu_device_id);
+						free(gpu_device_name);
+					} else {
+						instance.device_name = "Intel GPU";
+					}
 				}
 
-				char *gpu_device_name = get_intel_device_name(gpu_device_id);
-				device_name = gpu_device_name ? string(gpu_device_name) : "Intel GPU";
-				free(gpu_device_id);
-				free(gpu_device_name);
+				string pci_slot = get_pci_slot(path);
+				instance.pmu_device = find_pmu_device(instance.driver_name, pci_slot);
+
+				if (instance.pmu_device.empty()) {
+					Logger::debug("Intel GPU: Could not find PMU device for driver {} on {}", instance.driver_name, path);
+					continue;
+				}
+
+				if (instance.driver_name == "xe") {
+					int xe_idx = static_cast<int>(Xe::states.size());
+					if (Xe::init(xe_idx, path, instance.pmu_device)) {
+						instance.xe_state_index = xe_idx;
+						gpu_instances.push_back(instance);
+					} else {
+						Logger::debug("Intel GPU: Xe initialization failed for {}", path);
+					}
+				} else if (instance.driver_name == "i915") {
+					if (not has_pmu_permissions()) {
+						Logger::warning("Intel GPU (i915): Insufficient PMU permissions. Use 'sudo make setcap' or run with sudo.");
+						continue;
+					}
+
+					instance.i915_engines = discover_engines(instance.pmu_device.c_str());
+					if (not instance.i915_engines) {
+						Logger::debug("Failed to find Intel GPU engines for {}", path);
+						continue;
+					}
+
+					int ret = pmu_init(instance.i915_engines);
+					if (ret) {
+						Logger::warning("Intel GPU: Failed to initialize PMU for {}", path);
+						free_engines(instance.i915_engines);
+						instance.i915_engines = nullptr;
+						continue;
+					}
+					pmu_sample(instance.i915_engines);
+					gpu_instances.push_back(instance);
+				} else {
+					Logger::debug("Intel GPU: Unknown driver '{}' for {}, skipping", instance.driver_name, path);
+				}
 			}
 
-			string pci_slot = get_pci_slot(card_path);
-			pmu_device = find_pmu_device(driver_name, pci_slot);
-
-			if (pmu_device.empty()) {
-				Logger::debug("Intel GPU: Could not find PMU device for driver {}", driver_name);
+			if (gpu_instances.empty()) {
 				return false;
 			}
 
-			if (driver_name == "xe") {
-				if (!Xe::init(card_path, pmu_device)) {
-					Logger::debug("Intel GPU: Xe initialization failed");
-					return false;
-				}
-			} else {
-				engines = discover_engines(pmu_device.c_str());
-				if (!engines) {
-					Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
-					return false;
-				}
-
-				int ret = pmu_init(engines);
-				if (ret) {
-					Logger::warning("Intel GPU: Failed to initialize PMU");
-					free_engines(engines);
-					engines = nullptr;
-					return false;
-				}
-				pmu_sample(engines);
-			}
-
-			device_count = 1;
+			device_count = gpu_instances.size();
 			gpus.resize(gpus.size() + device_count);
 			gpu_names.resize(gpus.size());
-			gpu_names[Nvml::device_count + Rsmi::device_count] = device_name;
+
+			for (size_t i = 0; i < gpu_instances.size(); ++i) {
+				gpu_names[Nvml::device_count + Rsmi::device_count + i] = gpu_instances[i].device_name;
+			}
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+
+			for (size_t i = 0; i < gpu_instances.size(); ++i) {
+				gpu_info* slice = gpus.data() + Nvml::device_count + Rsmi::device_count + i;
+				if (gpu_instances[i].driver_name == "xe") {
+					Xe::collect<1>(gpu_instances[i].xe_state_index, slice);
+				} else if (gpu_instances[i].driver_name == "i915" and gpu_instances[i].i915_engines) {
+					slice->supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = false,
+						.gpu_clock = true,
+						.mem_clock = false,
+						.pwr_usage = true,
+						.pwr_state = false,
+						.temp_info = false,
+						.mem_total = false,
+						.mem_used = false,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false
+					};
+					slice->pwr_max_usage = 10'000;
+					slice->gpu_percent.at("gpu-totals").push_back(0);
+					slice->gpu_percent.at("gpu-vram-totals").push_back(0);
+					slice->gpu_percent.at("gpu-pwr-totals").push_back(0);
+				}
+			}
 
 			return true;
 		}
 
 		bool shutdown() {
-			if (!initialized) return false;
-			if (driver_name == "xe") {
-				Xe::shutdown();
-			} else if (engines) {
-				free_engines(engines);
-				engines = nullptr;
+			if (not initialized) return false;
+			for (auto& inst : gpu_instances) {
+				if (inst.driver_name == "xe" and inst.xe_state_index >= 0) {
+					Xe::shutdown(inst.xe_state_index);
+				} else if (inst.i915_engines) {
+					free_engines(inst.i915_engines);
+					inst.i915_engines = nullptr;
+				}
 			}
+			gpu_instances.clear();
 			initialized = false;
 			return true;
 		}
 
 		template <bool is_init> bool collect(gpu_info* gpus_slice) {
-			if (!initialized) return false;
+			if (not initialized) return false;
 
-			if (driver_name == "xe") {
-				return Xe::collect<is_init>(gpus_slice);
-			}
+			for (size_t i = 0; i < gpu_instances.size(); ++i) {
+				auto& inst = gpu_instances[i];
+				gpu_info* slice = gpus_slice + i;
 
-			if constexpr(is_init) {
-				gpus_slice->supported_functions = {
-					.gpu_utilization = true,
-					.mem_utilization = false,
-					.gpu_clock = true,
-					.mem_clock = false,
-					.pwr_usage = true,
-					.pwr_state = false,
-					.temp_info = false,
-					.mem_total = false,
-					.mem_used = false,
-					.pcie_txrx = false,
-					.encoder_utilization = false,
-					.decoder_utilization = false
-				};
-				gpus_slice->pwr_max_usage = 10'000;
-			}
+				if (inst.driver_name == "xe" and inst.xe_state_index >= 0) {
+					Xe::collect<is_init>(inst.xe_state_index, slice);
+				} else if (inst.driver_name == "i915" and inst.i915_engines) {
+					if constexpr(is_init) {
+						slice->supported_functions = {
+							.gpu_utilization = true,
+							.mem_utilization = false,
+							.gpu_clock = true,
+							.mem_clock = false,
+							.pwr_usage = true,
+							.pwr_state = false,
+							.temp_info = false,
+							.mem_total = false,
+							.mem_used = false,
+							.pcie_txrx = false,
+							.encoder_utilization = false,
+							.decoder_utilization = false
+						};
+						slice->pwr_max_usage = 10'000;
+					}
 
-			pmu_sample(engines);
-			double t = (double)(engines->ts.cur - engines->ts.prev) / 1e9;
+					pmu_sample(inst.i915_engines);
+					double t = (double)(inst.i915_engines->ts.cur - inst.i915_engines->ts.prev) / 1e9;
 
-			double max_util = 0;
-			for (unsigned int i = 0; i < engines->num_engines; i++) {
-				struct engine *engine = &(&engines->engine)[i];
-				double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
-				if (util > max_util) {
-					max_util = util;
+					double max_util = 0;
+					for (unsigned int j = 0; j < inst.i915_engines->num_engines; j++) {
+						struct engine *engine = &(&inst.i915_engines->engine)[j];
+						double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
+						if (util > max_util) {
+							max_util = util;
+						}
+					}
+					slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
+
+					double pwr = pmu_calc(&inst.i915_engines->r_gpu.val, 1, t, inst.i915_engines->r_gpu.scale);
+					slice->pwr_usage = (long long)round(pwr * 1000);
+					if (slice->pwr_usage > slice->pwr_max_usage)
+						slice->pwr_max_usage = slice->pwr_usage;
+
+					slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)slice->pwr_usage * 100.0 / (double)slice->pwr_max_usage), 0ll, 100ll));
+
+					double freq = pmu_calc(&inst.i915_engines->freq_act.val, 1, t, 1);
+					slice->gpu_clock_speed = (unsigned int)round(freq);
 				}
 			}
-			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
-
-			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale);
-			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
-			if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
-				gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
-
-			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
-
-			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1);
-			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
 
 			return true;
 		}
@@ -2543,6 +2653,8 @@ namespace Gpu {
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
+
+		if (gpus.empty()) return gpus;
 
 		// DebugTimer gpu_timer("GPU Total");
 
@@ -2564,7 +2676,7 @@ namespace Gpu {
 			if (gpu.supported_functions.mem_total)
 				mem_total += gpu.mem_total;
 			if (gpu.supported_functions.pwr_usage)
-				mem_total += gpu.pwr_usage;
+				pwr_total += gpu.pwr_usage;
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
@@ -2583,9 +2695,9 @@ namespace Gpu {
 		}
 
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
-		if (mem_total != 0)
+		if (mem_total > 0)
 			shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
-		if (gpu_pwr_total_max != 0)
+		if (gpu_pwr_total_max > 0)
 			shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
 
 		if (width != 0) {
