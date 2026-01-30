@@ -57,11 +57,23 @@ tab-size = 4
 #include "../btop_tools.hpp"
 
 #if defined(GPU_SUPPORT)
+	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
+	// since the C library uses "class" as a struct member and keywords are not allowed to be used
+	// as identifiers in C++.
+	#if defined(__clang__)
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wkeyword-macro"
+	#endif // __clang__
+
 	#define class class_
 extern "C" {
-	#include "./intel_gpu_top/intel_gpu_top.h"
+	#include "intel_gpu_top/intel_gpu_top.h"
 }
 	#undef class
+
+	#if defined(__clang__)
+		#pragma clang diagnostic pop
+	#endif // __clang__
 	#include <linux/perf_event.h>
 	#include <sys/syscall.h>
 	#include <sys/ioctl.h>
@@ -290,6 +302,7 @@ namespace Gpu {
 
 			struct XeState {
 				string pmu_device;
+				string pci_slot;  // e.g., "0000:00:02.0"
 				string freq_sysfs_path;
 				int pmu_type = -1;
 				int drm_fd = -1;
@@ -300,6 +313,13 @@ namespace Gpu {
 				uint64_t mem_total = 0;
 				uint64_t prev_time_ns = 0;
 				bool first_sample = true;
+				// fdinfo cycle tracking
+				uint64_t prev_rcs_cycles = 0;
+				uint64_t prev_vcs_cycles = 0;
+				uint64_t prev_total_cycles = 0;
+				double smoothed_rcs_util = 0.0;
+				double smoothed_vcs_util = 0.0;
+				bool fdinfo_available = false;
 			};
 
 			XeState state;
@@ -572,11 +592,11 @@ namespace Cpu {
 
 					int64_t high = 0;
 					int64_t crit = 0;
-					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
-						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
+					for (int ii = 0; fs::exists(basepath / fmt::format("trip_point_{}_temp", ii)); ii++) {
+						const string trip_type = readfile(basepath / fmt::format("trip_point_{}_type", ii));
 						if (not is_in(trip_type, "high", "critical")) continue;
 						auto& val = (trip_type == "high" ? high : crit);
-						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+						val = stol(readfile(basepath / fmt::format("trip_point_{}_temp", ii), "0")) / 1000;
 					}
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
@@ -1940,6 +1960,98 @@ namespace Gpu {
 			return not engines.empty();
 		}
 
+		// Struct to hold fdinfo cycle counts
+		struct FdinfoCycles {
+			uint64_t rcs_cycles = 0;   // Render/Compute
+			uint64_t vcs_cycles = 0;   // Video decode
+			uint64_t total_cycles = 0;
+			bool found = false;
+		};
+
+		// Collect GPU cycles from all processes' fdinfo with client-id deduplication
+		static FdinfoCycles collect_fdinfo_cycles(const string &pci_slot) {
+			FdinfoCycles result;
+			std::unordered_set<unsigned> seen_clients;
+
+			try {
+				for (const auto &proc_entry : fs::directory_iterator("/proc")) {
+					if (not proc_entry.is_directory())
+						continue;
+					string pid_str = proc_entry.path().filename().string();
+					if (pid_str.empty() or not std::isdigit(pid_str[0]))
+						continue;
+
+					fs::path fdinfo_dir = proc_entry.path() / "fdinfo";
+					if (not fs::exists(fdinfo_dir))
+						continue;
+
+					try {
+						for (const auto &fd_entry : fs::directory_iterator(fdinfo_dir)) {
+							ifstream file(fd_entry.path());
+							if (not file) continue;
+
+							string line;
+							bool is_xe = false;
+							bool matches_slot = false;
+							unsigned client_id = 0;
+							bool has_client_id = false;
+							FdinfoCycles fd_cycles;
+
+							while (getline(file, line)) {
+								if (line.rfind("drm-driver:", 0) == 0) {
+									string driver = line.substr(11);
+									size_t start = driver.find_first_not_of(" \t");
+									if (start != string::npos) driver = driver.substr(start);
+									is_xe = (driver == "xe");
+								}
+								else if (line.rfind("drm-pdev:", 0) == 0) {
+									string slot = line.substr(line.find(':') + 1);
+									size_t start = slot.find_first_not_of(" \t");
+									if (start != string::npos) slot = slot.substr(start);
+									matches_slot = (slot == pci_slot);
+								}
+								else if (line.rfind("drm-client-id:", 0) == 0) {
+									try {
+										client_id = stoul(line.substr(14));
+										has_client_id = true;
+									} catch (...) {}
+								}
+								else if (is_xe and matches_slot) {
+									if (line.rfind("drm-cycles-rcs:", 0) == 0) {
+										try { fd_cycles.rcs_cycles = stoull(line.substr(15)); } catch (...) {}
+									}
+									else if (line.rfind("drm-cycles-vcs:", 0) == 0) {
+										try { fd_cycles.vcs_cycles = stoull(line.substr(15)); } catch (...) {}
+									}
+									else if (line.rfind("drm-total-cycles-rcs:", 0) == 0) {
+										try {
+											fd_cycles.total_cycles = stoull(line.substr(21));
+											fd_cycles.found = true;
+										} catch (...) {}
+									}
+								}
+							}
+
+							// Only count each client once
+							if (is_xe and matches_slot and fd_cycles.found and has_client_id) {
+								if (seen_clients.find(client_id) == seen_clients.end()) {
+									seen_clients.insert(client_id);
+									result.rcs_cycles += fd_cycles.rcs_cycles;
+									result.vcs_cycles += fd_cycles.vcs_cycles;
+									if (fd_cycles.total_cycles > result.total_cycles) {
+										result.total_cycles = fd_cycles.total_cycles;
+									}
+									result.found = true;
+								}
+							}
+						}
+					} catch (...) {}
+				}
+			} catch (...) {}
+
+			return result;
+		}
+
 		// Add a GT idle entry from sysfs gtidle directory
 		static bool add_gt_idle_entry(const fs::path& gtidle_dir, vector<XeGtIdle>& gt_idle) {
 			fs::path idle_path = gtidle_dir / "idle_residency_ms";
@@ -2044,6 +2156,15 @@ namespace Gpu {
 			st.pmu_device = pmu_dev;
 			st.pmu_type = get_pmu_type(pmu_dev);
 
+			// Extract PCI slot from PMU device name (e.g., "xe_0000_00_02.0" -> "0000:00:02.0")
+			if (pmu_dev.rfind("xe_", 0) == 0 and pmu_dev.size() > 3) {
+				string slot = pmu_dev.substr(3);  // Remove "xe_" prefix
+				for (size_t i = 0; i < slot.size(); ++i) {
+					if (slot[i] == '_') slot[i] = ':';
+				}
+				st.pci_slot = slot;
+			}
+
 			string drm_path = "/dev/dri/" + fs::path(card_path).filename().string();
 			st.drm_fd = open(drm_path.c_str(), O_RDONLY);
 			if (st.drm_fd < 0) {
@@ -2061,6 +2182,20 @@ namespace Gpu {
 			uint64_t mem_used = 0;
 			if (query_mem_info(st.drm_fd, mem_total, mem_used)) {
 				st.mem_total = mem_total;
+			}
+
+			// Test fdinfo availability
+			if (not st.pci_slot.empty()) {
+				FdinfoCycles test_cycles = collect_fdinfo_cycles(st.pci_slot);
+				st.fdinfo_available = test_cycles.found and test_cycles.total_cycles > 0;
+				if (st.fdinfo_available) {
+					st.prev_total_cycles = test_cycles.total_cycles;
+					st.prev_rcs_cycles = test_cycles.rcs_cycles;
+					st.prev_vcs_cycles = test_cycles.vcs_cycles;
+					Logger::debug("Xe: Using fdinfo for GPU utilization (PCI: {})", st.pci_slot);
+				} else {
+					Logger::debug("Xe: fdinfo not available, falling back to gtidle");
+				}
 			}
 
 			// PMU fallback when gtidle sysfs is unavailable
@@ -2238,7 +2373,46 @@ namespace Gpu {
 			double media_util = 0;
 			bool has_main = false;
 			bool has_media = false;
-			if (not st.gt_idle.empty()) {
+
+			// Use fdinfo for accurate utilization if available
+			if (st.fdinfo_available) {
+				constexpr double EMA_ALPHA = 0.3;
+				FdinfoCycles current = collect_fdinfo_cycles(st.pci_slot);
+
+				if (current.found and current.total_cycles > st.prev_total_cycles) {
+					uint64_t delta_total = current.total_cycles - st.prev_total_cycles;
+					uint64_t delta_rcs = current.rcs_cycles - st.prev_rcs_cycles;
+					uint64_t delta_vcs = current.vcs_cycles - st.prev_vcs_cycles;
+
+					double raw_rcs_util = 100.0 * (double)delta_rcs / (double)delta_total;
+					double raw_vcs_util = 100.0 * (double)delta_vcs / (double)delta_total;
+
+					if (raw_rcs_util > 100.0) raw_rcs_util = 100.0;
+					if (raw_vcs_util > 100.0) raw_vcs_util = 100.0;
+
+					st.smoothed_rcs_util = EMA_ALPHA * raw_rcs_util + (1.0 - EMA_ALPHA) * st.smoothed_rcs_util;
+					st.smoothed_vcs_util = EMA_ALPHA * raw_vcs_util + (1.0 - EMA_ALPHA) * st.smoothed_vcs_util;
+
+					st.prev_total_cycles = current.total_cycles;
+					st.prev_rcs_cycles = current.rcs_cycles;
+					st.prev_vcs_cycles = current.vcs_cycles;
+				}
+
+				main_util = st.smoothed_rcs_util;
+				media_util = st.smoothed_vcs_util;
+				max_util = std::max(main_util, media_util);
+				has_main = true;
+				has_media = true;
+
+				if (gpus_slice->supported_functions.gt_utilization) {
+					long long rc_util = clamp((long long)round(main_util), 0ll, 100ll);
+					long long mc_util = clamp((long long)round(media_util), 0ll, 100ll);
+					gpus_slice->encoder_utilization = rc_util;
+					gpus_slice->decoder_utilization = mc_util;
+					gpus_slice->gpu_percent.at("gpu-rc-totals").push_back(rc_util);
+					gpus_slice->gpu_percent.at("gpu-mc-totals").push_back(mc_util);
+				}
+			} else if (not st.gt_idle.empty()) {
 				double dt_ms = dt * 1000.0;
 				if (dt_ms <= 0.0) dt_ms = 1.0;
 				// EMA smoothing factor: higher = more responsive, lower = smoother
@@ -2695,9 +2869,9 @@ namespace Gpu {
 		}
 
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
-		if (mem_total > 0)
+		if (mem_total != 0)
 			shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
-		if (gpu_pwr_total_max > 0)
+		if (gpu_pwr_total_max != 0)
 			shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
 
 		if (width != 0) {
@@ -2972,11 +3146,13 @@ namespace Mem {
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
 								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
-										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
-											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+									const auto stat = fmt::format("/sys/block/{}/stat", devname);
+									if (fs::exists(stat, ec) and access(stat.c_str(), R_OK) == 0) {
+										const auto mount_stat = fmt::format("/sys/block/{}/{}/stat", devname, disks.at(mountpoint).dev.filename());
+										if (c > 0 and fs::exists(mount_stat, ec))
+											disks.at(mountpoint).stat = std::move(mount_stat);
 										else
-											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+											disks.at(mountpoint).stat = std::move(stat);
 										break;
 									//? Set ZFS stat filepath
 									} else if (fstype == "zfs") {
@@ -3922,13 +4098,14 @@ namespace Proc {
 			}
 			//? Set correct state of dead processes if paused
 			else {
+				const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 				for (auto& r : current_procs) {
 					if (rng::find(found, r.pid) == found.end()) {
 						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clkTck);
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
 						//? Reset cpu usage for dead processes if paused and option is set
-						if (!Config::getB("keep_dead_proc_usage")) {
+						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
 						}
