@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,16 +30,12 @@ tab-size = 4
 #include <unordered_map>
 #include <vector>
 
-#include <unistd.h>
-
-// From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
-// clang-format off
 #include <net/if.h>
 #include <ifaddrs.h>
-// clang-format on
+#include <unistd.h>
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-# include <kvm.h>
+#	include <kvm.h>
 #endif
 
 using std::array;
@@ -51,7 +47,7 @@ using std::vector;
 
 using namespace std::literals; // for operator""s
 
-void term_resize(bool force=false);
+void term_resize(bool force = false);
 void banner_gen();
 
 extern void clean_quit(int sig);
@@ -68,7 +64,7 @@ namespace Global {
 	extern string clock;
 	extern uid_t real_uid, set_uid;
 	extern atomic<bool> init_conf;
-}
+} // namespace Global
 
 namespace Runner {
 	extern atomic<bool> active;
@@ -81,12 +77,12 @@ namespace Runner {
 
 	void run(const string& box = "", bool no_update = false, bool force_redraw = false);
 	void stop();
-}
+} // namespace Runner
 
 namespace Tools {
 	//* Platform specific function for system_uptime (seconds since last restart)
 	double system_uptime();
-}
+} // namespace Tools
 
 namespace Shared {
 	//* Initialize platform specific needed variables and check for errors
@@ -96,13 +92,11 @@ namespace Shared {
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
-		void operator()(kvm_t* handle) {
-			kvm_close(handle);
-		}
+		void operator()(kvm_t* handle) { kvm_close(handle); }
 	};
 	using KvmPtr = std::unique_ptr<kvm_t, KvmDeleter>;
 #endif
-}
+} // namespace Shared
 
 #if defined(GPU_SUPPORT)
 
@@ -120,28 +114,28 @@ namespace Gpu {
 
 	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
-	const array mem_names { "used"s, "free"s };
+	const array mem_names {"used"s, "free"s};
 
 	//* Container for process information // TODO
 	/*struct proc_info {
-    unsigned int pid;
-    unsigned long long mem;
+unsigned int pid;
+unsigned long long mem;
 	};*/
 
 	//* Container for supported Gpu::*::collect() functions
 	struct gpu_info_supported {
-		bool gpu_utilization = true,
-		   	 mem_utilization = true,
-				 gpu_clock = true,
-				 mem_clock = true,
-				 pwr_usage = true,
-				 pwr_state = true,
-				 temp_info = true,
-				 mem_total = true,
-				 mem_used = true,
-				 pcie_txrx = true,
-				 encoder_utilization = true,
-				 decoder_utilization = true;
+		bool gpu_utilization = true;
+		bool mem_utilization = true;
+		bool gpu_clock = true;
+		bool mem_clock = true;
+		bool pwr_usage = true;
+		bool pwr_state = true;
+		bool temp_info = true;
+		bool mem_total = true;
+		bool mem_used = true;
+		bool pcie_txrx = true;
+		bool encoder_utilization = true;
+		bool decoder_utilization = true;
 	};
 
 	//* Per-device container for GPU info
@@ -163,7 +157,7 @@ namespace Gpu {
 		long long mem_total = 0;
 		long long mem_used = 0;
 		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
-		long long mem_clock_speed = 0; // MHz
+		long long mem_clock_speed = 0;					// MHz
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;
@@ -185,11 +179,11 @@ namespace Gpu {
 	}
 
 	//* Collect gpu stats and temperatures
-    auto collect(bool no_update = false) -> vector<gpu_info>&;
+	auto collect(bool no_update = false) -> vector<gpu_info>&;
 
 	//* Draw contents of gpu box using <gpus> as source
-  	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
-}
+	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
+} // namespace Gpu
 
 #endif // GPU_SUPPORT
 
@@ -229,7 +223,7 @@ namespace Cpu {
 	auto collect(bool no_update = false) -> cpu_info&;
 
 	//* Draw contents of cpu box using <cpu> as source
-    string draw(
+	string draw(
 		const cpu_info& cpu,
 #if defined(GPU_SUPPORT)
 		const vector<Gpu::gpu_info>& gpu,
@@ -248,26 +242,26 @@ namespace Cpu {
 	auto get_battery() -> tuple<int, float, long, string>;
 
 	string trim_name(string);
-}
+} // namespace Cpu
 
 namespace Mem {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool has_swap, shown, redraw;
-	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
-	const array swap_names { "swap_used"s, "swap_free"s };
+	const array mem_names {"used"s, "available"s, "cached"s, "free"s};
+	const array swap_names {"swap_used"s, "swap_free"s};
 	extern int disk_ios;
 
 	struct disk_info {
 		std::filesystem::path dev;
 		string name;
-		string fstype{};                // defaults to ""
-		std::filesystem::path stat{};   // defaults to ""
-		int64_t total{};
-		int64_t used{};
-		int64_t free{};
-		int used_percent{};
-		int free_percent{};
+		string fstype {};			   // defaults to ""
+		std::filesystem::path stat {}; // defaults to ""
+		int64_t total {};
+		int64_t used {};
+		int64_t free {};
+		int used_percent {};
+		int free_percent {};
 
 		array<int64_t, 3> old_io = {0, 0, 0};
 		deque<long long> io_read = {};
@@ -276,12 +270,24 @@ namespace Mem {
 	};
 
 	struct mem_info {
-		std::unordered_map<string, uint64_t> stats =
-			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
-			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
-		std::unordered_map<string, deque<long long>> percent =
-			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
-			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
+		std::unordered_map<string, uint64_t> stats = {
+			{"used", 0},
+			{"available", 0},
+			{"cached", 0},
+			{"free", 0},
+			{"swap_total", 0},
+			{"swap_used", 0},
+			{"swap_free", 0}
+		};
+		std::unordered_map<string, deque<long long>> percent = {
+			{"used", {}},
+			{"available", {}},
+			{"cached", {}},
+			{"free", {}},
+			{"swap_total", {}},
+			{"swap_used", {}},
+			{"swap_free", {}}
+		};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};
@@ -295,7 +301,7 @@ namespace Mem {
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, bool force_redraw = false, bool data_same = false);
 
-}
+} // namespace Mem
 
 namespace Net {
 	extern string box;
@@ -307,31 +313,32 @@ namespace Net {
 	extern std::unordered_map<string, uint64_t> graph_max;
 
 	struct net_stat {
-		uint64_t speed{};
-		uint64_t top{};
-		uint64_t total{};
-		uint64_t last{};
-		uint64_t offset{};
-		uint64_t rollover{};
+		uint64_t speed {};
+		uint64_t top {};
+		uint64_t total {};
+		uint64_t last {};
+		uint64_t offset {};
+		uint64_t rollover {};
 	};
 
 	struct net_info {
-		std::unordered_map<string, deque<long long>> bandwidth = { {"download", {}}, {"upload", {}} };
-		std::unordered_map<string, net_stat> stat = { {"download", {}}, {"upload", {}} };
-		string ipv4{};      // defaults to ""
-		string ipv6{};      // defaults to ""
-		bool connected{};
+		std::unordered_map<string, deque<long long>> bandwidth = {{"download", {}}, {"upload", {}}};
+		std::unordered_map<string, net_stat> stat = {{"download", {}}, {"upload", {}}};
+		string ipv4 {}; // defaults to ""
+		string ipv6 {}; // defaults to ""
+		bool connected {};
 	};
 
 	class IfAddrsPtr {
 		struct ifaddrs* ifaddr;
 		int status;
-	public:
+
+	  public:
 		IfAddrsPtr() { status = getifaddrs(&ifaddr); }
 		~IfAddrsPtr() noexcept { freeifaddrs(ifaddr); }
-		IfAddrsPtr(const IfAddrsPtr &) = delete;
+		IfAddrsPtr(const IfAddrsPtr&) = delete;
 		IfAddrsPtr& operator=(IfAddrsPtr& other) = delete;
-		IfAddrsPtr(IfAddrsPtr &&) = delete;
+		IfAddrsPtr(IfAddrsPtr&&) = delete;
 		IfAddrsPtr& operator=(IfAddrsPtr&& other) = delete;
 		[[nodiscard]] constexpr auto operator()() -> struct ifaddrs* { return ifaddr; }
 		[[nodiscard]] constexpr auto get() -> struct ifaddrs* { return ifaddr; }
@@ -341,11 +348,11 @@ namespace Net {
 	extern std::unordered_map<string, net_info> current_net;
 
 	//* Collect net upload/download stats
-	auto collect(bool no_update=false) -> net_info&;
+	auto collect(bool no_update = false) -> net_info&;
 
 	//* Draw contents of net box using <net> as source
 	string draw(const net_info& net, bool force_redraw = false, bool data_same = false);
-}
+} // namespace Net
 
 namespace Proc {
 	extern atomic<int> numpids;
@@ -389,33 +396,33 @@ namespace Proc {
 
 	//* Container for process information
 	struct proc_info {
-		size_t pid{};
-		string name{};          // defaults to ""
-		string cmd{};           // defaults to ""
-		string short_cmd{};     // defaults to ""
-		size_t threads{};
-		int name_offset{};
-		string user{};          // defaults to ""
-		uint64_t mem{};
-		double cpu_p{};         // defaults to = 0.0
-		double cpu_c{};         // defaults to = 0.0
+		size_t pid {};
+		string name {};		 // defaults to ""
+		string cmd {};		 // defaults to ""
+		string short_cmd {}; // defaults to ""
+		size_t threads {};
+		int name_offset {};
+		string user {}; // defaults to ""
+		uint64_t mem {};
+		double cpu_p {}; // defaults to = 0.0
+		double cpu_c {}; // defaults to = 0.0
 		char state = '0';
-		int64_t p_nice{};
-		uint64_t ppid{};
-		uint64_t cpu_s{};
-		uint64_t cpu_t{};
-		uint64_t death_time{};
-		string prefix{};        // defaults to ""
-		size_t depth{};
-		size_t tree_index{};
-		bool collapsed{};
-		bool filtered{};
+		int64_t p_nice {};
+		uint64_t ppid {};
+		uint64_t cpu_s {};
+		uint64_t cpu_t {};
+		uint64_t death_time {};
+		string prefix {}; // defaults to ""
+		size_t depth {};
+		size_t tree_index {};
+		bool collapsed {};
+		bool filtered {};
 	};
 
 	//* Container for process info box
 	struct detail_container {
-		size_t last_pid{};
-		bool skip_smaps{};
+		size_t last_pid {};
+		bool skip_smaps {};
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;
@@ -447,19 +454,34 @@ namespace Proc {
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
 
 	//* Recursive sort of process tree
-	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused,
-					int& c_index, const int index_max, bool collapsed = false);
+	void tree_sort(
+		vector<tree_proc>& proc_vec,
+		const string& sorting,
+		bool reverse,
+		bool paused,
+		int& c_index,
+		const int index_max,
+		bool collapsed = false
+	);
 
 	auto matches_filter(const proc_info& proc, const std::string& filter) -> bool;
 
 	//* Generate process tree list
-	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
-				   int cur_depth, bool collapsed, const string& filter,
-				   bool found = false, bool no_update = false, bool should_filter = false);
+	void _tree_gen(
+		proc_info& cur_proc,
+		vector<proc_info>& in_procs,
+		vector<tree_proc>& out_procs,
+		int cur_depth,
+		bool collapsed,
+		const string& filter,
+		bool found = false,
+		bool no_update = false,
+		bool should_filter = false
+	);
 
 	//* Build prefixes for tree view
-	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
-}
+	void _collect_prefixes(tree_proc& t, bool is_last, const string& header = "");
+} // namespace Proc
 
 /// Detect container engine.
 auto detect_container() -> std::optional<std::string>;

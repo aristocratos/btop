@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,26 +18,26 @@ tab-size = 4
 
 #include <Availability.h>
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
-#include "sensors.hpp"
+#	include "sensors.hpp"
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/hidsystem/IOHIDEventSystemClient.h>
+#	include <numeric>
+#	include <string>
+#	include <vector>
 
-#include <string>
-#include <numeric>
-#include <vector>
+#	include <CoreFoundation/CoreFoundation.h>
+#	include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 
 extern "C" {
-typedef struct __IOHIDEvent *IOHIDEventRef;
-typedef struct __IOHIDServiceClient *IOHIDServiceClientRef;
-#ifdef __LP64__
+typedef struct __IOHIDEvent* IOHIDEventRef;
+typedef struct __IOHIDServiceClient* IOHIDServiceClientRef;
+#	ifdef __LP64__
 typedef double IOHIDFloat;
-#else
+#	else
 typedef float IOHIDFloat;
-#endif
+#	endif
 
-#define IOHIDEventFieldBase(type) (type << 16)
-#define kIOHIDEventTypeTemperature 15
+#	define IOHIDEventFieldBase(type) (type << 16)
+#	define kIOHIDEventTypeTemperature 15
 
 IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef allocator);
 int IOHIDEventSystemClientSetMatching(IOHIDEventSystemClientRef client, CFDictionaryRef match);
@@ -56,14 +56,16 @@ CFDictionaryRef matching(int page, int usage) {
 	nums[0] = CFNumberCreate(0, kCFNumberSInt32Type, &page);
 	nums[1] = CFNumberCreate(0, kCFNumberSInt32Type, &usage);
 
-	CFDictionaryRef dict = CFDictionaryCreate(0, (const void **)keys, (const void **)nums, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	CFDictionaryRef dict = CFDictionaryCreate(
+		0, (const void**)keys, (const void**)nums, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks
+	);
 	CFRelease(keys[0]);
 	CFRelease(keys[1]);
 	return dict;
 }
 
 double getValue(IOHIDServiceClientRef sc) {
-	IOHIDEventRef event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0);  // here we use ...CopyEvent
+	IOHIDEventRef event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0); // here we use ...CopyEvent
 	IOHIDFloat temp = 0.0;
 	if (event != 0) {
 		temp = IOHIDEventGetFloatValue(event, IOHIDEventFieldBase(kIOHIDEventTypeTemperature));
@@ -72,12 +74,12 @@ double getValue(IOHIDServiceClientRef sc) {
 	return temp;
 }
 
-}  // extern C
+} // extern C
 
 long long Cpu::ThermalSensors::getSensors() {
-	CFDictionaryRef thermalSensors = matching(0xff00, 5);  // 65280_10 = FF00_16
-														   // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
-														   // can be checked by ioreg -lfx
+	CFDictionaryRef thermalSensors = matching(0xff00, 5); // 65280_10 = FF00_16
+														  // thermalSensors's PrimaryUsagePage should be 0xff00 for M1
+														  // chip, instead of 0xff05 can be checked by ioreg -lfx
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	IOHIDEventSystemClientSetMatching(system, thermalSensors);
 	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
@@ -87,7 +89,7 @@ long long Cpu::ThermalSensors::getSensors() {
 		for (int i = 0; i < count; i++) {
 			IOHIDServiceClientRef sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(matchingsrvs, i);
 			if (sc) {
-				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));  // here we use ...CopyProperty
+				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product")); // here we use ...CopyProperty
 				if (name) {
 					char buf[200];
 					CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);

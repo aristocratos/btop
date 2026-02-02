@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,12 +18,12 @@ tab-size = 4
 
 #pragma once
 
+#include <stdexcept>
+
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
-
-#include <stdexcept>
 
 #define VERSION "0.01"
 
@@ -43,11 +43,11 @@ tab-size = 4
 #define DATATYPE_SP78 "sp78"
 
 // key values
-#define SMC_KEY_CPU_TEMP "TC0P" // proximity temp?
+#define SMC_KEY_CPU_TEMP "TC0P"		  // proximity temp?
 #define SMC_KEY_CPU_DIODE_TEMP "TC0D" // diode temp?
-#define SMC_KEY_CPU_DIE_TEMP "TC0F" // die temp?
+#define SMC_KEY_CPU_DIE_TEMP "TC0F"	  // die temp?
 #define SMC_KEY_CPU1_TEMP "TC1C"
-#define SMC_KEY_CPU2_TEMP "TC2C"  // etc
+#define SMC_KEY_CPU2_TEMP "TC2C" // etc
 #define SMC_KEY_FAN0_RPM_CUR "F0Ac"
 
 typedef struct {
@@ -97,16 +97,16 @@ typedef struct {
 
 namespace Cpu {
 	class SMCConnection {
-	   public:
+	  public:
 		SMCConnection();
 		virtual ~SMCConnection();
 
 		long long getTemp(int core);
 
-	   private:
-		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);
-		long long getSMCTemp(char *key);
-		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure);
+	  private:
+		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t* val);
+		long long getSMCTemp(char* key);
+		kern_return_t SMCCall(int index, SMCKeyData_t* inputStructure, SMCKeyData_t* outputStructure);
 
 		io_connect_t conn;
 		kern_return_t result;
@@ -114,4 +114,4 @@ namespace Cpu {
 		io_iterator_t iterator;
 		io_object_t device;
 	};
-}  // namespace Cpu
+} // namespace Cpu

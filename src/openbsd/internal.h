@@ -14,6 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+ #pragma once
+
+ #include <sys/sysctl.h>
+
 struct sysctls {
 	const char *name;
 	int mib0;

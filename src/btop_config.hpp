@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,9 +21,8 @@ tab-size = 4
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <vector>
-
 #include <unordered_map>
+#include <vector>
 
 using std::string;
 using std::vector;
@@ -41,25 +40,34 @@ namespace Config {
 	extern std::unordered_map<std::string_view, int> ints;
 	extern std::unordered_map<std::string_view, int> intsTmp;
 
-	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
-	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
+	const vector<string> valid_graph_symbols = {"braille", "block", "tty"};
+	const vector<string> valid_graph_symbols_def = {"default", "braille", "block", "tty"};
 	const vector<string> valid_boxes = {
-		"cpu", "mem", "net", "proc"
+		"cpu",
+		"mem",
+		"net",
+		"proc"
 #ifdef GPU_SUPPORT
-		,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
+		,
+		"gpu0",
+		"gpu1",
+		"gpu2",
+		"gpu3",
+		"gpu4",
+		"gpu5"
 #endif
-		};
-	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
+	};
+	const vector<string> temp_scales = {"celsius", "fahrenheit", "kelvin", "rankine"};
 #ifdef __linux__
-	const vector<string> freq_modes = { "first", "range", "lowest", "highest", "average" };
+	const vector<string> freq_modes = {"first", "range", "lowest", "highest", "average"};
 #endif
 #ifdef GPU_SUPPORT
-	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
+	const vector<string> show_gpu_values = {"Auto", "On", "Off"};
 #endif
-    const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
+	const vector<string> base_10_bitrate_values = {"Auto", "True", "False"};
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
-	const vector<string> disable_preset_options = { "Off", "Default", "Custom", "All" };
+	const vector<string> disable_preset_options = {"Off", "Default", "Custom", "All"};
 	extern vector<string> available_batteries;
 	extern std::optional<int> current_preset;
 
@@ -86,13 +94,19 @@ namespace Config {
 	bool _locked(const std::string_view name);
 
 	//* Return bool for config key <name>
-	inline bool getB(const std::string_view name) { return bools.at(name); }
+	inline bool getB(const std::string_view name) {
+		return bools.at(name);
+	}
 
 	//* Return integer for config key <name>
-	inline const int& getI(const std::string_view name) { return ints.at(name); }
+	inline const int& getI(const std::string_view name) {
+		return ints.at(name);
+	}
 
 	//* Return string for config key <name>
-	inline const string& getS(const std::string_view name) { return strings.at(name); }
+	inline const string& getS(const std::string_view name) {
+		return strings.at(name);
+	}
 
 	string getAsString(const std::string_view name);
 
@@ -138,4 +152,4 @@ namespace Config {
 
 	// Write default config to an in-memory buffer
 	[[nodiscard]] auto current_config() -> std::string;
-}
+} // namespace Config
