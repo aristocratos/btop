@@ -24,6 +24,7 @@ tab-size = 4
 #include <clocale>
 #include <filesystem>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <pthread.h>
 #include <span>
@@ -371,25 +372,6 @@ namespace Runner {
 	inline void thread_wait() { do_work.acquire(); }
 	inline void thread_trigger() { do_work.release(); }
 
-	//* RAII wrapper for pthread_mutex locking
-	class thread_lock {
-		pthread_mutex_t& pt_mutex;
-	public:
-		int status;
-		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-			pthread_mutex_init(&pt_mutex, nullptr);
-			status = pthread_mutex_lock(&pt_mutex);
-		}
-		~thread_lock() noexcept {
-			if (status == 0)
-				pthread_mutex_unlock(&pt_mutex);
-		}
-		thread_lock(const thread_lock& other) = delete;
-		thread_lock& operator=(const thread_lock& other) = delete;
-		thread_lock(thread_lock&& other) = delete;
-		thread_lock& operator=(thread_lock&& other) = delete;
-	};
-
 	//* Wrapper for raising privileges when using SUID bit
 	class gain_priv {
 		int status = -1;
@@ -412,7 +394,7 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output{};
 	sigset_t mask;
-	pthread_mutex_t mtx;
+	std::mutex mtx;
 
 	enum debug_actions {
 		collect_begin,
@@ -483,14 +465,8 @@ namespace Runner {
 		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
-		//? pthread_mutex_lock to lock thread and monitor health from main thread
-		thread_lock pt_lck(mtx);
-		if (pt_lck.status != 0) {
-			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-			Global::thread_exception = true;
-			Input::interrupt();
-			stopping = true;
-		}
+		// TODO: On first glance it looks redudant with `Runner::active`. 
+		std::lock_guard lock {mtx};
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
@@ -804,15 +780,15 @@ namespace Runner {
 	//* Stops any work being done in runner thread and checks for thread errors
 	void stop() {
 		stopping = true;
-		int ret = pthread_mutex_trylock(&mtx);
-		if (ret != EBUSY and not Global::quitting) {
+		auto lock = std::unique_lock {mtx, std::defer_lock};
+		const auto is_runner_busy = !lock.try_lock();
+		if (!is_runner_busy and not Global::quitting) {
 			if (active) {
 				set_active(false);
 			}
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
 			clean_quit(1);
-		}
-		else if (ret == EBUSY) {
+		} else if (is_runner_busy) {
 			atomic_wait_for(active, true, 5000);
 			if (active) {
 				set_active(false);
