@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,36 +16,11 @@ indent = tab
 tab-size = 4
 */
 
-#include <Availability.h>
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOKitLib.h>
-#include <arpa/inet.h>
-#include <libproc.h>
-#include <mach/mach.h>
-#include <mach/mach_host.h>
-#include <mach/mach_init.h>
-#include <mach/mach_types.h>
-#include <mach/processor_info.h>
-#include <mach/vm_statistics.h>
-#include <mach/mach_time.h>
-// BUGS
-//     If both <net/if.h> and <ifaddrs.h> are being included, <net/if.h> must be
-//     included before <ifaddrs.h>.
-// from: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/getifaddrs.3.html
-#include <net/if.h>
-#include <ifaddrs.h>
-#include <net/if_dl.h>
-#include <netdb.h>
-#include <netinet/tcp_fsm.h>
-#include <pwd.h>
-#include <sys/socket.h>
-#include <sys/statvfs.h>
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#include <netinet/in.h> // for inet_ntop
-#include <unistd.h>
-#include <stdexcept>
-#include <utility>
+#include "../btop_config.hpp"
+#include "../btop_log.hpp"
+#include "../btop_shared.hpp"
+#include "../btop_tools.hpp"
+#include "smc.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -53,23 +28,44 @@ tab-size = 4
 #include <numeric>
 #include <ranges>
 #include <regex>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <libproc.h>
+#include <net/if_dl.h>
+#include <netdb.h>
+#include <netinet/in.h> // for inet_ntop
+#include <netinet/tcp_fsm.h>
+#include <pwd.h>
+#include <sys/socket.h>
+#include <sys/statvfs.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <Availability.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
 #include <fmt/format.h>
-
-#include "../btop_config.hpp"
-#include "../btop_log.hpp"
-#include "../btop_shared.hpp"
-#include "../btop_tools.hpp"
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#include <mach/mach_init.h>
+#include <mach/mach_time.h>
+#include <mach/mach_types.h>
+#include <mach/processor_info.h>
+#include <mach/vm_statistics.h>
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
-#include "sensors.hpp"
+#	include "sensors.hpp"
 #endif
-#include "smc.hpp"
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
-#define kIOMainPortDefault kIOMasterPortDefault
+#	define kIOMainPortDefault kIOMasterPortDefault
 #endif
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
@@ -109,19 +105,23 @@ namespace Cpu {
 	string cpu_sensor;
 	vector<string> core_sensors;
 	std::unordered_map<int, int> core_mapping;
-}  // namespace Cpu
+} // namespace Cpu
 
 namespace Mem {
 	double old_uptime;
 }
 
-	class MachProcessorInfo {
-	public:
-		processor_info_array_t info_array;
-		mach_msg_type_number_t info_count;
-		MachProcessorInfo() {}
-		virtual ~MachProcessorInfo() {vm_deallocate(mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count);}
-	};
+class MachProcessorInfo {
+  public:
+	processor_info_array_t info_array;
+	mach_msg_type_number_t info_count;
+	MachProcessorInfo() {}
+	virtual ~MachProcessorInfo() {
+		vm_deallocate(
+			mach_task_self(), (vm_address_t)info_array, (vm_size_t)sizeof(processor_info_array_t) * info_count
+		);
+	}
+};
 
 namespace Shared {
 
@@ -148,21 +148,29 @@ namespace Shared {
 		pageSize = sysconf(_SC_PAGE_SIZE);
 		if (pageSize <= 0) {
 			pageSize = 4096;
-			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+			Logger::warning(
+				"Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect."
+			);
 		}
 
 		mach_timebase_info_data_t convf;
 		if (mach_timebase_info(&convf) == KERN_SUCCESS) {
 			machTck = convf.numer / convf.denom;
 		} else {
-			Logger::warning("Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be incorrect.");
+			Logger::warning(
+				"Could not get mach clock tick conversion factor. Defaulting to 100, processes cpu usage might be "
+				"incorrect."
+			);
 			machTck = 100;
 		}
 
 		clkTck = sysconf(_SC_CLK_TCK);
 		if (clkTck <= 0) {
 			clkTck = 100;
-			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
+			Logger::warning(
+				"Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be "
+				"incorrect."
+			);
 		}
 
 		int64_t memsize = 0;
@@ -181,8 +189,9 @@ namespace Shared {
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 		Cpu::collect();
-		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
-			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
+		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
+			if (not vec.empty() and not v_contains(Cpu::available_fields, field))
+				Cpu::available_fields.push_back(field);
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
@@ -193,7 +202,7 @@ namespace Shared {
 		Mem::collect();
 	}
 
-}  // namespace Shared
+} // namespace Shared
 
 namespace Cpu {
 	string cpuName;
@@ -205,12 +214,7 @@ namespace Cpu {
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
 	std::unordered_map<string, long long> cpu_old = {
-		{"totals", 0},
-		{"idles", 0},
-		{"user", 0},
-		{"nice", 0},
-		{"system", 0},
-		{"idle", 0}
+		{"totals", 0}, {"idles", 0}, {"user", 0}, {"nice", 0}, {"system", 0}, {"idle", 0}
 	};
 
 	string get_cpuName() {
@@ -225,7 +229,9 @@ namespace Cpu {
 	}
 
 	bool get_sensors() {
-		Logger::debug("get_sensors(): show_coretemp={} check_temp={}", Config::getB("show_coretemp"), Config::getB("check_temp"));
+		Logger::debug(
+			"get_sensors(): show_coretemp={} check_temp={}", Config::getB("show_coretemp"), Config::getB("check_temp")
+		);
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
@@ -242,7 +248,7 @@ namespace Cpu {
 				try {
 					SMCConnection smcCon;
 					Logger::debug("SMC connection established");
-					long long t = smcCon.getTemp(-1);  // check if we have package T
+					long long t = smcCon.getTemp(-1); // check if we have package T
 					if (t > -1) {
 						Logger::debug("intel sensors found");
 						got_sensors = true;
@@ -258,7 +264,7 @@ namespace Cpu {
 						Logger::debug("no intel sensors found");
 						got_sensors = false;
 					}
-				} catch (std::runtime_error &e) {
+				} catch (std::runtime_error& e) {
 					Logger::debug("SMC not available: {}", e.what());
 					// ignore, we don't have temp (common in VMs)
 					got_sensors = false;
@@ -271,14 +277,13 @@ namespace Cpu {
 	}
 
 	void update_sensors() {
-		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
+		current_cpu.temp_max = 95; // we have no idea how to get the critical temp
 		try {
 			if (macM1) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
 				current_cpu.temp.at(0).push_back(sensors.getSensors());
-				if (current_cpu.temp.at(0).size() > 20)
-					current_cpu.temp.at(0).pop_front();
+				if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
 #endif
 			} else {
 				SMCConnection smcCon;
@@ -287,15 +292,16 @@ namespace Cpu {
 				current_cpu.temp.at(0).push_back(packageT);
 
 				for (int core = 0; core < Shared::coreCount; core++) {
-					long long temp = smcCon.getTemp((core / threadsPerCore) + core_offset); // same temp for all threads of same physical core
+					long long temp = smcCon.getTemp(
+						(core / threadsPerCore) + core_offset
+					); // same temp for all threads of same physical core
 					if (cmp_less(core + 1, current_cpu.temp.size())) {
 						current_cpu.temp.at(core + 1).push_back(temp);
-						if (current_cpu.temp.at(core + 1).size() > 20)
-							current_cpu.temp.at(core + 1).pop_front();
+						if (current_cpu.temp.at(core + 1).size() > 20) current_cpu.temp.at(core + 1).pop_front();
 					}
 				}
 			}
-		} catch (std::runtime_error &e) {
+		} catch (std::runtime_error& e) {
 			got_sensors = false;
 			Logger::error("failed getting CPU temp");
 		}
@@ -323,7 +329,9 @@ namespace Cpu {
 		MachProcessorInfo info {};
 		kern_return_t error;
 
-		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
+		error = host_processor_info(
+			mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count
+		);
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU info");
 			return core_map;
@@ -332,7 +340,8 @@ namespace Cpu {
 			core_map[i] = i;
 		}
 
-		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
+		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2
+		// etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long) core_map.size() == Shared::coreCount / 2) {
 				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
@@ -349,10 +358,10 @@ namespace Cpu {
 		}
 
 		//? Apply user set custom mapping if any
-		const auto &custom_map = Config::getS("cpu_core_map");
+		const auto& custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
 			try {
-				for (const auto &split : ssplit(custom_map)) {
+				for (const auto& split : ssplit(custom_map)) {
 					const auto vals = ssplit(split, ':');
 					if (vals.size() != 2) continue;
 					int change_id = std::stoi(vals.at(0));
@@ -360,8 +369,7 @@ namespace Cpu {
 					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
 					core_map.at(change_id) = new_id;
 				}
-			} catch (...) {
-			}
+			} catch (...) {}
 		}
 
 		return core_map;
@@ -369,7 +377,8 @@ namespace Cpu {
 
 	class IOPSInfo_Wrap {
 		CFTypeRef data;
-	public:
+
+	  public:
 		IOPSInfo_Wrap() { data = IOPSCopyPowerSourcesInfo(); }
 		CFTypeRef& operator()() { return data; }
 		~IOPSInfo_Wrap() { CFRelease(data); }
@@ -377,7 +386,8 @@ namespace Cpu {
 
 	class IOPSList_Wrap {
 		CFArrayRef data;
-	public:
+
+	  public:
 		IOPSList_Wrap(CFTypeRef cft_ref) { data = IOPSCopyPowerSourcesList(cft_ref); }
 		CFArrayRef& operator()() { return data; }
 		~IOPSList_Wrap() { CFRelease(data); }
@@ -389,12 +399,13 @@ namespace Cpu {
 		uint32_t percent = -1;
 		long seconds = -1;
 		string status = "discharging";
-		IOPSInfo_Wrap ps_info{};
+		IOPSInfo_Wrap ps_info {};
 		if (ps_info()) {
 			IOPSList_Wrap one_ps_descriptor(ps_info());
 			if (one_ps_descriptor()) {
 				if (CFArrayGetCount(one_ps_descriptor())) {
-					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info(), CFArrayGetValueAtIndex(one_ps_descriptor(), 0));
+					CFDictionaryRef one_ps =
+						IOPSGetPowerSourceDescription(ps_info(), CFArrayGetValueAtIndex(one_ps_descriptor(), 0));
 					has_battery = true;
 					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
 					int32_t estimatedMinutesRemaining;
@@ -426,10 +437,9 @@ namespace Cpu {
 		return {percent, -1, seconds, status};
 	}
 
-	auto collect(bool no_update) -> cpu_info & {
-		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
-			return current_cpu;
-		auto &cpu = current_cpu;
+	auto collect(bool no_update) -> cpu_info& {
+		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
+		auto& cpu = current_cpu;
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
@@ -438,21 +448,24 @@ namespace Cpu {
 		natural_t cpu_count;
 		natural_t i;
 		kern_return_t error;
-		processor_cpu_load_info_data_t *cpu_load_info = nullptr;
+		processor_cpu_load_info_data_t* cpu_load_info = nullptr;
 
-		MachProcessorInfo info{};
-		error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
+		MachProcessorInfo info {};
+		error = host_processor_info(
+			mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count
+		);
 		if (error != KERN_SUCCESS) {
 			Logger::error("Failed getting CPU load info");
 		}
-		cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
+		cpu_load_info = (processor_cpu_load_info_data_t*)info.info_array;
 		long long global_totals = 0;
 		long long global_idles = 0;
 		vector<long long> times_summed = {0, 0, 0, 0};
 		for (i = 0; i < cpu_count; i++) {
 			vector<long long> times;
 			//? 0=user, 1=nice, 2=system, 3=idle
-			for (int x = 0; const unsigned int c_state : {CPU_STATE_USER, CPU_STATE_NICE, CPU_STATE_SYSTEM, CPU_STATE_IDLE}) {
+			for (int x = 0;
+				 const unsigned int c_state : {CPU_STATE_USER, CPU_STATE_NICE, CPU_STATE_SYSTEM, CPU_STATE_IDLE}) {
 				auto val = cpu_load_info[i].cpu_ticks[c_state];
 				times.push_back(val);
 				times_summed.at(x++) += val;
@@ -475,12 +488,14 @@ namespace Cpu {
 				core_old_totals.at(i) = totals;
 				core_old_idles.at(i) = idles;
 
-				cpu.core_percent.at(i).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+				cpu.core_percent.at(i).push_back(
+					clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll)
+				);
 
 				//? Reduce size if there are more values than needed for graph
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
-			} catch (const std::exception &e) {
+			} catch (const std::exception& e) {
 				Logger::error("Cpu::collect() : {}", e.what());
 				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
@@ -490,12 +505,16 @@ namespace Cpu {
 		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
 
 		//? Populate cpu.cpu_percent with all fields from syscall
-		for (int ii = 0; const auto &val : times_summed) {
-			cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+		for (int ii = 0; const auto& val : times_summed) {
+			cpu.cpu_percent.at(time_names.at(ii))
+				.push_back(clamp(
+					(long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll
+				));
 			cpu_old.at(time_names.at(ii)) = val;
 
 			//? Reduce size if there are more values than needed for graph
-			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2))
+				cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 			ii++;
 		}
@@ -504,10 +523,13 @@ namespace Cpu {
 		cpu_old.at("idles") = global_idles;
 
 		//? Total usage of cpu
-		cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+		cpu.cpu_percent.at("total").push_back(
+			clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll)
+		);
 
 		//? Reduce size if there are more values than needed for graph
-		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
+		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2))
+			cpu.cpu_percent.at("total").pop_front();
 
 		if (Config::getB("show_cpu_freq")) {
 			auto hz = get_cpuHz();
@@ -516,15 +538,13 @@ namespace Cpu {
 			}
 		}
 
-		if (Config::getB("check_temp") and got_sensors)
-			update_sensors();
+		if (Config::getB("check_temp") and got_sensors) update_sensors();
 
-		if (Config::getB("show_battery") and has_battery)
-			current_bat = get_battery();
+		if (Config::getB("show_battery") and has_battery) current_bat = get_battery();
 
 		return cpu;
 	}
-}  // namespace Cpu
+} // namespace Cpu
 
 namespace Mem {
 	bool has_swap = false;
@@ -532,16 +552,16 @@ namespace Mem {
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
-	static std::mutex iokit_mutex;  // Protect concurrent IOKit calls
-	static std::mutex interface_mutex;  // Protect concurrent interface access during USB device changes
+	static std::mutex iokit_mutex;	   // Protect concurrent IOKit calls
+	static std::mutex interface_mutex; // Protect concurrent interface access during USB device changes
 
-	mem_info current_mem{};
+	mem_info current_mem {};
 
 	uint64_t get_totalMem() {
 		return Shared::totalMem;
 	}
 
-	int64_t getCFNumber(CFDictionaryRef dict, const void *key) {
+	int64_t getCFNumber(CFDictionaryRef dict, const void* key) {
 		CFNumberRef ref = (CFNumberRef)CFDictionaryGetValue(dict, key);
 		if (ref) {
 			int64_t value;
@@ -563,22 +583,24 @@ namespace Mem {
 	}
 
 	bool isWhole(io_registry_entry_t volumeRef) {
-		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
+		CFBooleanRef isWhole =
+			(CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
 		Boolean val = CFBooleanGetValue(isWhole);
 		CFRelease(isWhole);
 		return bool(val);
 	}
 
 	class IOObject {
-		public:
-			IOObject(string name, io_object_t& obj) : name(name), object(obj) {}
-			virtual ~IOObject() { IOObjectRelease(object); }
-		private:
-			string name;
-			io_object_t &object;
+	  public:
+		IOObject(string name, io_object_t& obj) : name(name), object(obj) {}
+		virtual ~IOObject() { IOObjectRelease(object); }
+
+	  private:
+		string name;
+		io_object_t& object;
 	};
 
-	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
+	void collect_disk(std::unordered_map<string, disk_info>& disks, std::unordered_map<string, string>& mapping) {
 		// Lock mutex to prevent concurrent IOKit access
 		std::lock_guard<std::mutex> lock(iokit_mutex);
 
@@ -586,8 +608,7 @@ namespace Mem {
 		io_iterator_t drive_list;
 
 		/* Get the list of all drive objects. */
-		if (IOServiceGetMatchingServices(kIOMainPortDefault,
-										 IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
+		if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOMediaBSDClient"), &drive_list)) {
 			Logger::error("Error in IOServiceGetMatchingServices()");
 			return;
 		}
@@ -601,7 +622,8 @@ namespace Mem {
 					string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
 					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
 					if (!mapping.contains(device)) {
-						device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have VolGroupMntFromName property
+						device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have
+													// VolGroupMntFromName property
 					}
 					if (device != "") {
 						if (mapping.contains(device)) {
@@ -609,33 +631,43 @@ namespace Mem {
 							if (disks.contains(mountpoint)) {
 								auto& disk = disks.at(mountpoint);
 								CFDictionaryRef properties;
-								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
+								IORegistryEntryCreateCFProperties(
+									volumeRef, (CFMutableDictionaryRef*)&properties, kCFAllocatorDefault, 0
+								);
 								if (properties) {
-									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
+									CFDictionaryRef statistics =
+										(CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
 										disk_ios++;
-										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
-										if (disk.io_read.empty())
-											disk.io_read.push_back(0);
-										else
-											disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+										int64_t readBytes =
+											getCFNumber(statistics, CFSTR("Bytes read from block device"));
+										if (disk.io_read.empty()) disk.io_read.push_back(0);
+										else disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
 										disk.old_io.at(0) = readBytes;
-										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+										while (cmp_greater(disk.io_read.size(), width * 2))
+											disk.io_read.pop_front();
 
-										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
-										if (disk.io_write.empty())
-											disk.io_write.push_back(0);
-										else
-											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+										int64_t writeBytes =
+											getCFNumber(statistics, CFSTR("Bytes written to block device"));
+										if (disk.io_write.empty()) disk.io_write.push_back(0);
+										else disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
 										disk.old_io.at(1) = writeBytes;
-										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+										while (cmp_greater(disk.io_write.size(), width * 2))
+											disk.io_write.pop_front();
 
-										// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being 100% to get some activity indication)
-										if (disk.io_activity.empty())
-											disk.io_activity.push_back(0);
+										// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being
+										// 100% to get some activity indication)
+										if (disk.io_activity.empty()) disk.io_activity.push_back(0);
 										else
-											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
-										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+											disk.io_activity.push_back(clamp(
+												(long)round(
+													(double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)
+												),
+												0l,
+												100l
+											));
+										while (cmp_greater(disk.io_activity.size(), width * 2))
+											disk.io_activity.pop_front();
 									}
 								}
 								CFRelease(properties);
@@ -647,14 +679,13 @@ namespace Mem {
 		}
 	}
 
-	auto collect(bool no_update) -> mem_info & {
-		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
-			return current_mem;
+	auto collect(bool no_update) -> mem_info& {
+		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 
 		auto show_swap = Config::getB("show_swap");
 		auto show_disks = Config::getB("show_disks");
 		auto swap_disk = Config::getB("swap_disk");
-		auto &mem = current_mem;
+		auto& mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
 		vm_statistics64 p;
@@ -677,28 +708,28 @@ namespace Mem {
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
-			for (const auto &name : swap_names) {
+			for (const auto& name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2))
 					mem.percent.at(name).pop_front();
 			}
 			has_swap = true;
-		} else
-			has_swap = false;
+		} else has_swap = false;
 		//? Calculate percentages
-		for (const auto &name : mem_names) {
+		for (const auto& name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2))
 				mem.percent.at(name).pop_front();
 		}
 
 		if (show_disks) {
-			std::unordered_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			std::unordered_map<string, string>
+				mapping; // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
-			auto &disks_filter = Config::getS("disks_filter");
+			auto& disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
 			// auto only_physical = Config::getB("only_physical");
-			auto &disks = mem.disks;
+			auto& disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
 				filter = ssplit(disks_filter);
@@ -708,7 +739,7 @@ namespace Mem {
 				}
 			}
 
-			struct statfs *stfs;
+			struct statfs* stfs;
 			int count = getmntinfo(&stfs, MNT_WAIT);
 			vector<string> found;
 			found.reserve(last_found.size());
@@ -725,24 +756,20 @@ namespace Mem {
 				//? Match filter if not empty
 				if (not filter.empty()) {
 					bool match = v_contains(filter, mountpoint);
-					if ((filter_exclude and match) or (not filter_exclude and not match))
-						continue;
+					if ((filter_exclude and match) or (not filter_exclude and not match)) continue;
 				}
 
 				found.push_back(mountpoint);
 				if (not disks.contains(mountpoint)) {
-					disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+					disks[mountpoint] = disk_info {fs::canonical(dev, ec), fs::path(mountpoint).filename()};
 
-					if (disks.at(mountpoint).dev.empty())
-						disks.at(mountpoint).dev = dev;
+					if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
 
 					if (disks.at(mountpoint).name.empty())
 						disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				}
 
-
-				if (not v_contains(last_found, mountpoint))
-					redraw = true;
+				if (not v_contains(last_found, mountpoint)) redraw = true;
 
 				disks.at(mountpoint).free = stfs[i].f_bfree;
 				disks.at(mountpoint).total = stfs[i].f_iosize;
@@ -751,18 +778,15 @@ namespace Mem {
 			//? Remove disks no longer mounted or filtered out
 			if (swap_disk and has_swap) found.push_back("swap");
 			for (auto it = disks.begin(); it != disks.end();) {
-				if (not v_contains(found, it->first))
-					it = disks.erase(it);
-				else
-					it++;
+				if (not v_contains(found, it->first)) it = disks.erase(it);
+				else it++;
 			}
 			if (found.size() != last_found.size()) redraw = true;
 			last_found = std::move(found);
 
 			//? Get disk/partition stats
-			for (auto &[mountpoint, disk] : disks) {
-				if (std::error_code ec; not fs::exists(mountpoint, ec))
-					continue;
+			for (auto& [mountpoint, disk] : disks) {
+				if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
 					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
@@ -782,23 +806,19 @@ namespace Mem {
 
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
-			if (snapped and disks.contains("/mnt"))
-				mem.disks_order.push_back("/mnt");
-			else if (disks.contains("/"))
-				mem.disks_order.push_back("/");
+			if (snapped and disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+			else if (disks.contains("/")) mem.disks_order.push_back("/");
 			if (swap_disk and has_swap) {
 				mem.disks_order.push_back("swap");
-				if (not disks.contains("swap"))
-					disks["swap"] = {"", "swap"};
+				if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
 				disks.at("swap").total = mem.stats.at("swap_total");
 				disks.at("swap").used = mem.stats.at("swap_used");
 				disks.at("swap").free = mem.stats.at("swap_free");
 				disks.at("swap").used_percent = mem.percent.at("swap_used").back();
 				disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 			}
-			for (const auto &name : last_found)
-				if (not is_in(name, "/", "swap", "/dev"))
-					mem.disks_order.push_back(name);
+			for (const auto& name : last_found)
+				if (not is_in(name, "/", "swap", "/dev")) mem.disks_order.push_back(name);
 
 			disk_ios = 0;
 			collect_disk(disks, mapping);
@@ -808,7 +828,7 @@ namespace Mem {
 		return mem;
 	}
 
-}  // namespace Mem
+} // namespace Mem
 
 namespace Net {
 	std::unordered_map<string, net_info> current_net;
@@ -823,27 +843,27 @@ namespace Net {
 
 	//* RAII wrapper for getifaddrs
 	class getifaddr_wrapper {
-		struct ifaddrs *ifaddr;
+		struct ifaddrs* ifaddr;
 
-	   public:
+	  public:
 		int status;
 		getifaddr_wrapper() { status = getifaddrs(&ifaddr); }
 		~getifaddr_wrapper() { freeifaddrs(ifaddr); }
-		auto operator()() -> struct ifaddrs * { return ifaddr; }
+		auto operator()() -> struct ifaddrs* { return ifaddr; }
 	};
 
-	auto collect(bool no_update) -> net_info & {
+	auto collect(bool no_update) -> net_info& {
 		// Lock mutex to prevent concurrent interface access during USB device changes
 		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
-		auto &net = current_net;
-		auto &config_iface = Config::getS("net_iface");
+		auto& net = current_net;
+		auto& config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");
 		auto net_auto = Config::getB("net_auto");
 		auto new_timestamp = time_ms();
 
 		if (not no_update and errors < 3) {
 			//? Get interface list using getifaddrs() wrapper
-			getifaddr_wrapper if_wrap{};
+			getifaddr_wrapper if_wrap {};
 			if (if_wrap.status != 0) {
 				errors++;
 				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_wrap.status);
@@ -852,16 +872,18 @@ namespace Net {
 			}
 			int family = 0;
 			static_assert(INET6_ADDRSTRLEN >= INET_ADDRSTRLEN); // 46 >= 16, compile-time assurance.
-			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
+			enum {
+				IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN
+			}; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto* ifa = if_wrap(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
-				const auto &iface = ifa->ifa_name;
+				const auto& iface = ifa->ifa_name;
 				//? Update available interfaces vector and get status of interface
 				if (not v_contains(interfaces, iface)) {
 					interfaces.push_back(iface);
@@ -875,22 +897,40 @@ namespace Net {
 				//? Get IPv4 address
 				if (family == AF_INET) {
 					if (net[iface].ipv4.empty()) {
-						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(
+										   family,
+										   &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr),
+										   ip,
+										   IPBUFFER_MAXSIZE
+									   )) {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
+							Logger::error(
+								"Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}",
+								iface,
+								strerror(errsv)
+							);
 						}
 					}
 				}
 				//? Get IPv6 address
 				else if (family == AF_INET6) {
 					if (net[iface].ipv6.empty()) {
-						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(
+										   family,
+										   &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr),
+										   ip,
+										   IPBUFFER_MAXSIZE
+									   )) {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
+							Logger::error(
+								"Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}",
+								iface,
+								strerror(errsv)
+							);
 						}
 					}
 				} // else, ignoring family==AF_LINK (see man 3 getifaddrs)
@@ -906,14 +946,14 @@ namespace Net {
 				if (sysctl(mib, 6, buf.get(), &len, nullptr, 0) < 0) {
 					Logger::error("failed getting network interfaces");
 				} else {
-					char *lim = buf.get() + len;
-					char *next = nullptr;
+					char* lim = buf.get() + len;
+					char* next = nullptr;
 					for (next = buf.get(); next < lim;) {
-						struct if_msghdr *ifm = (struct if_msghdr *)next;
+						struct if_msghdr* ifm = (struct if_msghdr*)next;
 						next += ifm->ifm_msglen;
 						if (ifm->ifm_type == RTM_IFINFO2) {
-							struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
-							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
+							struct if_msghdr2* if2m = (struct if_msghdr2*)ifm;
+							struct sockaddr_dl* sdl = (struct sockaddr_dl*)(if2m + 1);
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
@@ -924,10 +964,10 @@ namespace Net {
 			}
 
 			//? Get total received and transmitted bytes + device address if no ip was found
-			for (const auto &iface : interfaces) {
+			for (const auto& iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
-					auto &saved_stat = net.at(iface).stat.at(dir);
-					auto &bandwidth = net.at(iface).bandwidth.at(dir);
+					auto& saved_stat = net.at(iface).stat.at(dir);
+					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 					uint64_t val = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
 
 					//? Update speed, total and top values
@@ -935,11 +975,15 @@ namespace Net {
 						saved_stat.rollover += saved_stat.last;
 						saved_stat.last = 0;
 					}
-					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+					if (cmp_greater(
+							(unsigned long long)saved_stat.rollover + (unsigned long long)val,
+							numeric_limits<uint64_t>::max()
+						)) {
 						saved_stat.rollover = 0;
 						saved_stat.last = 0;
 					}
-					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
+					saved_stat.speed =
+						round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
 					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
 					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
@@ -947,7 +991,8 @@ namespace Net {
 
 					//? Add values to graph
 					bandwidth.push_back(saved_stat.speed);
-					while (cmp_greater(bandwidth.size(), width * 2)) bandwidth.pop_front();
+					while (cmp_greater(bandwidth.size(), width * 2))
+						bandwidth.pop_front();
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
@@ -965,56 +1010,57 @@ namespace Net {
 			//? Clean up net map if needed
 			if (net.size() > interfaces.size()) {
 				for (auto it = net.begin(); it != net.end();) {
-					if (not v_contains(interfaces, it->first))
-						it = net.erase(it);
-					else
-						it++;
+					if (not v_contains(interfaces, it->first)) it = net.erase(it);
+					else it++;
 				}
 			}
 
 			timestamp = new_timestamp;
 		}
 		//? Return empty net_info struct if no interfaces was found
-		if (net.empty())
-			return empty_net;
+		if (net.empty()) return empty_net;
 
 		//? Find an interface to display if selected isn't set or valid
 		if (selected_iface.empty() or not v_contains(interfaces, selected_iface)) {
 			max_count["download"][0] = max_count["download"][1] = max_count["upload"][0] = max_count["upload"][1] = 0;
 			redraw = true;
 			if (net_auto) rescale = true;
-			if (not config_iface.empty() and v_contains(interfaces, config_iface))
-				selected_iface = config_iface;
+			if (not config_iface.empty() and v_contains(interfaces, config_iface)) selected_iface = config_iface;
 			else {
 				//? Sort interfaces by total upload + download bytes
 				auto sorted_interfaces = interfaces;
-				rng::sort(sorted_interfaces, [&](const auto &a, const auto &b) {
-					return cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
-									   net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
+				rng::sort(sorted_interfaces, [&](const auto& a, const auto& b) {
+					return cmp_greater(
+						net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
+						net.at(b).stat["download"].total + net.at(b).stat["upload"].total
+					);
 				});
 				selected_iface.clear();
 				//? Try to set to a connected interface
-				for (const auto &iface : sorted_interfaces) {
+				for (const auto& iface : sorted_interfaces) {
 					if (net.at(iface).connected) selected_iface = iface;
 					break;
 				}
 				//? If no interface is connected set to first available
-				if (selected_iface.empty() and not sorted_interfaces.empty())
-					selected_iface = sorted_interfaces.at(0);
-				else if (sorted_interfaces.empty())
-					return empty_net;
+				if (selected_iface.empty() and not sorted_interfaces.empty()) selected_iface = sorted_interfaces.at(0);
+				else if (sorted_interfaces.empty()) return empty_net;
 			}
 		}
 
 		//? Calculate max scale for graphs if needed
 		if (net_auto) {
 			bool sync = false;
-			for (const auto &dir : {"download", "upload"}) {
-				for (const auto &sel : {0, 1}) {
+			for (const auto& dir : {"download", "upload"}) {
+				for (const auto& sel : {0, 1}) {
 					if (rescale or max_count[dir][sel] >= 5) {
-						const long long avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
-														? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
-														: net[selected_iface].stat[dir].speed);
+						const long long avg_speed =
+							(net[selected_iface].bandwidth[dir].size() > 5
+								 ? std::accumulate(
+									   net.at(selected_iface).bandwidth.at(dir).rbegin(),
+									   net.at(selected_iface).bandwidth.at(dir).rbegin() + 5,
+									   0ll
+								   ) / 5
+								 : net[selected_iface].stat[dir].speed);
 						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
 						redraw = true;
@@ -1035,7 +1081,7 @@ namespace Net {
 		rescale = false;
 		return net.at(selected_iface);
 	}
-}  // namespace Net
+} // namespace Net
 
 namespace Proc {
 
@@ -1067,7 +1113,7 @@ namespace Proc {
 	}
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, vector<proc_info> &procs) {
+	void _collect_details(const size_t pid, vector<proc_info>& procs) {
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
@@ -1081,13 +1127,15 @@ namespace Proc {
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
-		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
+		while (cmp_greater(detailed.cpu_percent.size(), width))
+			detailed.cpu_percent.pop_front();
 
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
 		gettimeofday(&currentTime, nullptr);
 		//? Get elapsed time if process isn't dead
-		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(currentTime.tv_sec - (detailed.entry.cpu_s / 1'000'000));
+		if (detailed.entry.state != 'X')
+			detailed.elapsed = sec_to_dhms(currentTime.tv_sec - (detailed.entry.cpu_s / 1'000'000));
 		else detailed.elapsed = sec_to_dhms(detailed.entry.death_time);
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
@@ -1103,15 +1151,17 @@ namespace Proc {
 		detailed.mem_bytes.push_back(detailed.entry.mem);
 		detailed.memory = floating_humanizer(detailed.entry.mem);
 
-		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
+		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or
+			detailed.first_mem > detailed.mem_bytes.back() * 4) {
 			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
 			redraw = true;
 		}
 
-		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+		while (cmp_greater(detailed.mem_bytes.size(), width))
+			detailed.mem_bytes.pop_front();
 
 		rusage_info_current rusage;
-		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
+		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void**)&rusage) == 0) {
 			// this fails for processes we don't own - same as in Linux
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
@@ -1119,10 +1169,10 @@ namespace Proc {
 	}
 
 	//* Collects and sorts process information from /proc
-	auto collect(bool no_update) -> vector<proc_info> & {
-		const auto &sorting = Config::getS("proc_sorting");
+	auto collect(bool no_update) -> vector<proc_info>& {
+		const auto& sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
-		const auto &filter = Config::getS("proc_filter");
+		const auto& filter = Config::getS("proc_filter");
 		auto per_core = Config::getB("proc_per_core");
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
@@ -1147,24 +1197,26 @@ namespace Proc {
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
-			//* ---------------------------------------------Collection start----------------------------------------------
+			//* ---------------------------------------------Collection
+			// start----------------------------------------------
 
-			{  //* Get CPU totals
+			{ //* Get CPU totals
 				natural_t cpu_count;
 				kern_return_t error;
-				processor_cpu_load_info_data_t *cpu_load_info = nullptr;
-				MachProcessorInfo info{};
-				error = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count);
+				processor_cpu_load_info_data_t* cpu_load_info = nullptr;
+				MachProcessorInfo info {};
+				error = host_processor_info(
+					mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpu_count, &info.info_array, &info.info_count
+				);
 				if (error != KERN_SUCCESS) {
 					Logger::error("Failed getting CPU load info");
 				}
-				cpu_load_info = (processor_cpu_load_info_data_t *)info.info_array;
+				cpu_load_info = (processor_cpu_load_info_data_t*)info.info_array;
 				cputimes = 0;
 				for (natural_t i = 0; i < cpu_count; i++) {
-					cputimes 	+= (cpu_load_info[i].cpu_ticks[CPU_STATE_USER]
-								+ cpu_load_info[i].cpu_ticks[CPU_STATE_NICE]
-								+ cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM]
-								+ cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
+					cputimes +=
+						(cpu_load_info[i].cpu_ticks[CPU_STATE_USER] + cpu_load_info[i].cpu_ticks[CPU_STATE_NICE] +
+						 cpu_load_info[i].cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info[i].cpu_ticks[CPU_STATE_IDLE]);
 				}
 			}
 
@@ -1182,7 +1234,7 @@ namespace Proc {
 			std::unique_ptr<kinfo_proc[]> processes(new kinfo_proc[size / sizeof(kinfo_proc)]);
 			if (sysctl(mib, 4, processes.get(), &size, nullptr, 0) == 0) {
 				size_t count = size / sizeof(struct kinfo_proc);
-				for (size_t i = 0; i < count; i++) {  //* iterate over all processes in kinfo_proc
+				for (size_t i = 0; i < count; i++) { //* iterate over all processes in kinfo_proc
 					struct kinfo_proc& kproc = processes.get()[i];
 					const size_t pid = (size_t)kproc.kp_proc.p_pid;
 					if (pid < 1) continue;
@@ -1197,12 +1249,10 @@ namespace Proc {
 							current_procs.push_back({pid});
 							find_old = current_procs.end() - 1;
 							no_cache = true;
-						}
-						else continue;
-					}
-					else if (dead_procs.contains(pid)) continue;
+						} else continue;
+					} else if (dead_procs.contains(pid)) continue;
 
-					auto &new_proc = *find_old;
+					auto& new_proc = *find_old;
 
 					//? Get program name, command, username, parent pid, nice and status
 					if (no_cache) {
@@ -1225,10 +1275,13 @@ namespace Proc {
 								memcpy(&argc, &proc_chars.get()[0], sizeof(argc));
 								std::string_view proc_args(proc_chars.get(), argmax);
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
-									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
-										while (argc-- > 0 and null_pos != string::npos and cmp_less(new_proc.cmd.size(), 1000)) {
+									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos);
+										start_pos != string::npos) {
+										while (argc-- > 0 and null_pos != string::npos and
+											   cmp_less(new_proc.cmd.size(), 1000)) {
 											null_pos = proc_args.find('\0', start_pos);
-											new_proc.cmd += (string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
+											new_proc.cmd +=
+												(string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
 											start_pos = null_pos + 1;
 										}
 									}
@@ -1242,19 +1295,20 @@ namespace Proc {
 							new_proc.cmd.shrink_to_fit();
 						}
 						new_proc.ppid = kproc.kp_eproc.e_ppid;
-						new_proc.cpu_s = kproc.kp_proc.p_starttime.tv_sec * 1'000'000 + kproc.kp_proc.p_starttime.tv_usec;
-						struct passwd *pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
-                        if (pwd != nullptr) {
-                            new_proc.user = pwd->pw_name;
-                        } else {
-                            new_proc.user = std::to_string(kproc.kp_eproc.e_ucred.cr_uid);
-                        }
+						new_proc.cpu_s =
+							kproc.kp_proc.p_starttime.tv_sec * 1'000'000 + kproc.kp_proc.p_starttime.tv_usec;
+						struct passwd* pwd = getpwuid(kproc.kp_eproc.e_ucred.cr_uid);
+						if (pwd != nullptr) {
+							new_proc.user = pwd->pw_name;
+						} else {
+							new_proc.user = std::to_string(kproc.kp_eproc.e_ucred.cr_uid);
+						}
 					}
 					new_proc.p_nice = kproc.kp_proc.p_nice;
 					new_proc.state = kproc.kp_proc.p_stat;
 
 					//? Get threads, mem and cpu usage
-					struct proc_taskinfo pti{};
+					struct proc_taskinfo pti {};
 					if (sizeof(pti) == proc_pidinfo(new_proc.pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti))) {
 						new_proc.threads = pti.pti_threadnum;
 						new_proc.mem = pti.pti_resident_size;
@@ -1269,7 +1323,14 @@ namespace Proc {
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(
+						round(
+							((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)
+						) * cmult /
+							1000.0,
+						0.0,
+						100.0 * Shared::coreCount
+					);
 
 					//? Process cumulative cpu usage since process start
 					new_proc.cpu_c = (double)(cpu_t * Shared::machTck) / (timeNow - new_proc.cpu_s);
@@ -1284,7 +1345,9 @@ namespace Proc {
 
 				//? Clear dead processes from current_procs if not paused
 				if (not pause_proc_list) {
-					auto eraser = rng::remove_if(current_procs, [&](const auto& element) { return not v_contains(found, element.pid); });
+					auto eraser = rng::remove_if(current_procs, [&](const auto& element) {
+						return not v_contains(found, element.pid);
+					});
 					current_procs.erase(eraser.begin(), eraser.end());
 					if (!dead_procs.empty()) dead_procs.clear();
 				}
@@ -1326,7 +1389,7 @@ namespace Proc {
 		//* Match filter if defined
 		if (should_filter) {
 			filter_found = 0;
-			for (auto &p : current_procs) {
+			for (auto& p : current_procs) {
 				if (not tree and not filter.empty()) {
 					if (!matches_filter(p, filter)) {
 						p.filtered = true;
@@ -1351,11 +1414,11 @@ namespace Proc {
 
 			if (toggle_children != -1) {
 				auto collapser = rng::find(current_procs, toggle_children, &proc_info::pid);
-				if (collapser != current_procs.end()){
+				if (collapser != current_procs.end()) {
 					for (auto& p : current_procs) {
 						if (p.ppid == collapser->pid) {
 							auto child = rng::find(current_procs, p.pid, &proc_info::pid);
-							if (child != current_procs.end()){
+							if (child != current_procs.end()) {
 								child->collapsed = not child->collapsed;
 							}
 						}
@@ -1364,17 +1427,15 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
 					if (collapse == expand) {
 						collapser->collapsed = not collapser->collapsed;
-					}
-					else if (collapse > -1) {
+					} else if (collapse > -1) {
 						collapser->collapsed = true;
-					}
-					else if (expand > -1) {
+					} else if (expand > -1) {
 						collapser->collapsed = false;
 					}
 					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
@@ -1393,16 +1454,23 @@ namespace Proc {
 			}
 
 			//? Stable sort to retain selected sorting among processes with the same parent
-			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
+			rng::stable_sort(current_procs, rng::less {}, &proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
-			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less {}, &proc_info::ppid)) {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
 			}
 
 			//? Recursive sort over tree structure to account for collapsed processes in the tree
 			int index = 0;
-			tree_sort(tree_procs, sorting, reverse, (pause_proc_list and not (sorted_change or tree_mode_change)), index, current_procs.size());
+			tree_sort(
+				tree_procs,
+				sorting,
+				reverse,
+				(pause_proc_list and not(sorted_change or tree_mode_change)),
+				index,
+				current_procs.size()
+			);
 
 			//? Recursive construction of ASCII tree prefixes.
 			for (auto t = tree_procs.begin(); t != tree_procs.end(); ++t) {
@@ -1424,7 +1492,7 @@ namespace Proc {
 		numpids = (int)current_procs.size() - filter_found;
 		return current_procs;
 	}
-}  // namespace Proc
+} // namespace Proc
 
 namespace Tools {
 	double system_uptime() {
@@ -1437,4 +1505,4 @@ namespace Tools {
 		}
 		return 0.0;
 	}
-}  // namespace Tools
+} // namespace Tools

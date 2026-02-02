@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,13 +18,13 @@ tab-size = 4
 
 #pragma once
 
+#include "btop_input.hpp"
+
 #include <atomic>
 #include <bitset>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include "btop_input.hpp"
 
 using std::atomic;
 using std::bitset;
@@ -47,14 +47,19 @@ namespace Menu {
 	//? Strings in content vector is not checked for box width overflow
 	class msgBox {
 		string box_contents, button_left, button_right;
-		int height{};
-		int width{};
-		int boxtype{};
-		int selected{};
-		int x{};
-		int y{};
-	public:
-		enum BoxTypes { OK, YES_NO, NO_YES };
+		int height {};
+		int width {};
+		int boxtype {};
+		int selected {};
+		int x {};
+		int y {};
+
+	  public:
+		enum BoxTypes {
+			OK,
+			YES_NO,
+			NO_YES
+		};
 		enum msgReturn {
 			Invalid,
 			Ok_Yes,
@@ -72,8 +77,8 @@ namespace Menu {
 
 		//? Clears content vector and private strings
 		void clear();
-        int getX() const { return x; }
-        int getY() const { return y; }
+		int getX() const { return x; }
+		int getY() const { return y; }
 	};
 
 	extern bitset<8> menuMask;
@@ -86,7 +91,7 @@ namespace Menu {
 		SignalReturn,
 		Options,
 		Help,
-	    Renice,
+		Renice,
 		Main
 	};
 
@@ -94,6 +99,6 @@ namespace Menu {
 	void process(const std::string_view key = "");
 
 	//* Show a menu from enum Menu::Menus
-	void show(int menu, int signal=-1);
+	void show(int menu, int signal = -1);
 
-}
+} // namespace Menu
