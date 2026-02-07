@@ -65,6 +65,12 @@ namespace Config {
 		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
+		{"disable_presets",		"#* Option to disable presets. Either the default preset, custom presets, or all presets.\n"
+								"#* \"Off\" All presets are enabled.\n"
+								"#* \"Default\" preset is disabled."
+								"#* \"Custom\" presets are disabled."
+								"#* \"All\" presets are disabled."},
+
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
 								"#* Use whitespace \" \" as separator between different presets.\n"
@@ -247,6 +253,7 @@ namespace Config {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
+		{"disable_presets", "Off"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
 		{"graph_symbol_gpu", "default"},
@@ -442,7 +449,7 @@ namespace Config {
 
 	vector<string> current_boxes;
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
-	int current_preset = -1;
+	std::optional<int> current_preset;
 
 	bool presetsValid(const string& presets) {
 		vector<string> new_presets = {preset_list.at(0)};

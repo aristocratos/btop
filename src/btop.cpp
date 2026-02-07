@@ -192,7 +192,7 @@ void term_resize(bool force) {
 					if (intKey > 0 and intKey < 5) {
 				#endif
 						const auto& box = all_boxes.at(intKey);
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
 					}
@@ -1091,7 +1091,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	Config::presetsValid(Config::getS("presets"));
 	if (cli.preset.has_value()) {
 		Config::current_preset = min(static_cast<std::int32_t>(cli.preset.value()), static_cast<std::int32_t>(Config::preset_list.size() - 1));
-		Config::apply_preset(Config::preset_list.at(Config::current_preset));
+		Config::apply_preset(Config::preset_list.at(Config::current_preset.value()));
 	}
 
 	{
