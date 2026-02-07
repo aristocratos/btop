@@ -288,7 +288,12 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 		{"show_gpu_info", "Auto"},
+	#ifdef __APPLE__
+		{"shown_gpus", "apple"},
+	#else
 		{"shown_gpus", "nvidia amd intel"}
+	#endif
+
 	#endif
 	};
 	std::unordered_map<std::string_view, string> stringsTmp;
