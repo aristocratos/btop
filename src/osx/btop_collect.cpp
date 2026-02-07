@@ -67,6 +67,7 @@ tab-size = 4
 #include "sensors.hpp"
 #endif
 #include "smc.hpp"
+#include "ioreport.hpp"
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 120000
 #define kIOMainPortDefault kIOMasterPortDefault
@@ -109,6 +110,7 @@ namespace Cpu {
 	string cpu_sensor;
 	vector<string> core_sensors;
 	std::unordered_map<int, int> core_mapping;
+	core_info cpu_core_info;
 }  // namespace Cpu
 
 namespace Mem {
@@ -187,6 +189,7 @@ namespace Shared {
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
 		Cpu::core_mapping = Cpu::get_core_mapping();
+		Cpu::cpu_core_info = Cpu::get_core_info();
 
 		//? Init for namespace Mem
 		Mem::old_uptime = system_uptime();
@@ -367,6 +370,42 @@ namespace Cpu {
 		return core_map;
 	}
 
+	auto get_core_info() -> core_info {
+		core_info info;
+		size_t size = sizeof(int);
+
+		// On Apple Silicon:
+		// - perflevel0 = Performance cores (P-cores)
+		// - perflevel1 = Efficiency cores (E-cores)
+		// Note: E-cores are enumerated FIRST (indices 0 to e_cores-1), P-cores SECOND
+		if (sysctlbyname("hw.perflevel0.physicalcpu", &info.p_cores, &size, nullptr, 0) != 0) {
+			info.p_cores = 0;
+		}
+
+		size = sizeof(int);
+		if (sysctlbyname("hw.perflevel1.physicalcpu", &info.e_cores, &size, nullptr, 0) != 0) {
+			info.e_cores = 0;
+		}
+
+		// Fallback: if detection fails (Intel Mac or error), treat all as P-cores
+		if (info.p_cores == 0 and info.e_cores == 0) {
+			info.p_cores = Shared::coreCount;
+		}
+
+		return info;
+	}
+
+	void update_core_frequencies() {
+		//? Initialize IOReport (handles double-init internally)
+		IOReport::init();
+
+		if (IOReport::is_available()) {
+			auto [e_freq, p_freq] = IOReport::get_cpu_frequencies();
+			cpu_core_info.e_freq_mhz = static_cast<int>(e_freq);
+			cpu_core_info.p_freq_mhz = static_cast<int>(p_freq);
+		}
+	}
+
 	class IOPSInfo_Wrap {
 		CFTypeRef data;
 	public:
@@ -430,6 +469,9 @@ namespace Cpu {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
 			return current_cpu;
 		auto &cpu = current_cpu;
+
+		//? Update P/E core frequencies
+		update_core_frequencies();
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
