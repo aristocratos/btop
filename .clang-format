@@ -1,0 +1,49 @@
+---
+# BasedOnStyle: LLVM
+Language: Cpp
+
+IndentWidth: 4
+TabWidth: 4
+ContinuationIndentWidth: 4
+UseTab: Always
+ColumnLimit: 120
+PPIndentWidth: -1
+
+AlignAfterOpenBracket: BlockIndent
+AlignOperands: AlignAfterOperator
+AllowShortBlocksOnASingleLine: Empty
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: false
+BinPackLongBracedList: false
+BinPackParameters: OnePerLine
+ExperimentalAutoDetectBinPacking: true
+IndentPPDirectives: AfterHash
+NamespaceIndentation: All
+PenaltyReturnTypeOnItsOwnLine: 300
+PointerAlignment: Left
+QualifierAlignment: Left
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCpp11BracedList: true
+
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^".*"'
+    Priority: 1
+  - Regex: '^<[a-z0-9_]+>$'
+    Priority: 2
+  # Make sure 'net/if.h' comes before 'ifaddrs.h'
+  - Regex: '^<net/if\.h>$'
+    Priority: 3
+  - Regex: '^<Availability\.h>$'
+    Priority: 5
+  - Regex: '^<[^/]+\.h>$'
+    Priority: 3
+    SortPriority: 4
+  - Regex: '^<(arpa|linux|net(inet)?|prop|sys|u?vm)/'
+    Priority: 3
+    SortPriority: 4
+  - Regex: '.*'
+    Priority: 5

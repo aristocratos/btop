@@ -20,12 +20,13 @@
 #include <system_error>
 #include <utility>
 
+#include <sys/types.h>
+#include <unistd.h>
+
 #include <fmt/base.h>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <fmt/std.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 namespace fs = std::filesystem;
 
@@ -61,10 +62,10 @@ namespace Logger {
 		}
 
 		class DropPrivilegeGuard {
-		private:
+		  private:
 			uid_t saved_euid {};
 
-		public:
+		  public:
 			DropPrivilegeGuard() {
 				saved_euid = geteuid();
 				auto real_uid = getuid();
@@ -89,13 +90,13 @@ namespace Logger {
 
 	void init(const fs::path& path) {
 		auto& state = get_state();
-		std::lock_guard guard { state.lock };
+		std::lock_guard guard {state.lock};
 		state.path = std::make_optional(path);
 	}
 
 	void set_log_level(Level level) {
 		auto& state = get_state();
-		std::lock_guard guard { state.lock };
+		std::lock_guard guard {state.lock};
 		state.level = level;
 	}
 
@@ -103,7 +104,7 @@ namespace Logger {
 		auto& state = get_state();
 		auto it = std::ranges::find(log_levels, level);
 		if (it != log_levels.end()) {
-			std::lock_guard guard { state.lock };
+			std::lock_guard guard {state.lock};
 			state.level = static_cast<Level>(std::distance(log_levels.begin(), it));
 		}
 	}
@@ -117,7 +118,7 @@ namespace Logger {
 		void log_write(Level level, const std::string_view msg) {
 			auto& state = get_state();
 
-			auto guard = std::lock_guard { state.lock };
+			auto guard = std::lock_guard {state.lock};
 
 			if (!is_enabled(level) || !state.path.has_value()) {
 				return;
@@ -144,7 +145,7 @@ namespace Logger {
 				return;
 			}
 
-			auto file = std::ofstream { path, std::ios::app };
+			auto file = std::ofstream {path, std::ios::app};
 			if (!file.is_open()) {
 				return;
 			}
