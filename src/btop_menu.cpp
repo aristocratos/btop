@@ -1455,9 +1455,13 @@ static int optionsMenu(const string& key) {
 					theme_refresh = true;
 					Config::flip("lowcolor");
 				}
+			#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+				else if (option == "force_tty" and not Term::current_tty.starts_with("/dev/tty")) {
+			#else
 				else if (option == "force_tty") {
+			#endif
 					theme_refresh = true;
-					Config::flip("tty_mode");
+					Config::set("tty_mode", Config::getB("force_tty"));
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;

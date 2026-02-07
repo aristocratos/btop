@@ -837,13 +837,17 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	if (force_tty.has_value()) {
 		Config::set("tty_mode", force_tty.value());
 		Logger::debug("TTY mode set via command line");
-  	}
+	}
+	else if (Config::getB("force_tty")) {
+		Config::set("tty_mode", true);
+		Logger::debug("TTY mode set via config");
+	}
 
 #if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 	else if (Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::debug("Auto detect real TTY");
-  	}
+	}
 #endif
 
 	Logger::debug("TTY mode enabled: {}", Config::getB("tty_mode"));
