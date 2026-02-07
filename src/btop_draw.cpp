@@ -845,9 +845,9 @@ namespace Cpu {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
 			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
 			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
-				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5)
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
-			out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+			out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 		}
 
 		if (show_watts) {
