@@ -1,0 +1,110 @@
+# Flexoki Light theme (https://stephango.com/flexoki)
+# by Steph Ango
+
+# Colors should be in 6 or 2 character hexadecimal or single spaced rgb decimal: "#RRGGBB", "#BW" or "0-255 0-255 0-255"
+# example for white: "#ffffff", "#ff" or "255 255 255".
+
+# All graphs and meters can be gradients
+# For single color graphs leave "mid" and "end" variable empty.
+# Use "start" and "end" variables for two color gradient
+# Use "start", "mid" and "end" for three color gradient
+
+# Main background, empty for terminal default, need to be empty if you want transparent background
+theme[main_bg]="#FFFCF0"
+
+# Main text color
+theme[main_fg]="#343331"
+
+# Title color for boxes
+theme[title]="#100F0F"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#BC5215"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#E6E4D9"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#100F0F"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#B7B5AC"
+
+# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+theme[graph_text]="#6F6E69"
+
+# Background color of the percentage meters
+theme[meter_bg]="#DAD8CE"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#66800B"
+
+# Cpu box outline color
+theme[cpu_box]="#205EA6"
+
+# Memory/disks box outline color
+theme[mem_box]="#66800B"
+
+# Net up/down box outline color
+theme[net_box]="#A02F6F"
+
+# Processes box outline color
+theme[proc_box]="#24837B"
+
+# Box divider line and small boxes line color
+theme[div_line]="#CECDC3"
+
+# Temperature graph colors
+theme[temp_start]="#205EA6"
+theme[temp_mid]="#5E409D"
+theme[temp_end]="#AF3029"
+
+# CPU graph colors
+theme[cpu_start]="#24837B"
+theme[cpu_mid]="#AD8301"
+theme[cpu_end]="#AF3029"
+
+# Mem/Disk free meter
+theme[free_start]="#DAD8CE"
+theme[free_mid]="#B7B5AC"
+theme[free_end]="#66800B"
+
+# Mem/Disk cached meter
+theme[cached_start]="#4385BE"
+theme[cached_mid]="#205EA6"
+theme[cached_end]="#24837B"
+
+# Mem/Disk available meter
+theme[available_start]="#D0A215"
+theme[available_mid]="#AD8301"
+theme[available_end]="#BC5215"
+
+# Mem/Disk used meter
+theme[used_start]="#66800B"
+theme[used_mid]="#BC5215"
+theme[used_end]="#AF3029"
+
+# Download graph colors
+theme[download_start]="#4385BE"
+theme[download_mid]="#205EA6"
+theme[download_end]="#24837B"
+
+# Upload graph colors
+theme[upload_start]="#CE5D97"
+theme[upload_mid]="#A02F6F"
+theme[upload_end]="#5E409D"
+
+# Process box color gradient for threads, mem and cpu usage
+theme[process_start]="#66800B"
+theme[process_mid]="#AD8301"
+theme[process_end]="#AF3029"
+
+# Process box banner colors
+theme[proc_pause_bg]="#AF3029"
+theme[proc_follow_bg]="#205EA6"
+theme[proc_banner_bg]="#5E409D"
+theme[proc_banner_fg]="#FFFCF0"
+
+# Process following attributes
+theme[followed_bg]="#205EA6"
+theme[followed_fg]="#FFFCF0"
