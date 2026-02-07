@@ -62,11 +62,15 @@ namespace Config {
 	extern vector<string> available_batteries;
 	extern int current_preset;
 
+	extern bool did_proc_graph_symbol_change;
 	extern bool write_new;
 
 	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 
 	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
+
+	// Add boxes to seen_boxes if they haven't been seen before
+	bool set_seen_boxes(const string& boxes);
 
 	//* Check if string only contains space separated valid names for boxes and set current_boxes
 	bool set_boxes(const string& boxes);

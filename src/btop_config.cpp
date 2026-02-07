@@ -440,7 +440,9 @@ namespace Config {
 
 	vector<string> available_batteries = {"Auto"};
 
+	bool did_proc_graph_symbol_change = false;
 	vector<string> current_boxes;
+	vector<string> seen_boxes;
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
 	int current_preset = -1;
 
@@ -509,6 +511,8 @@ namespace Config {
 			if (vals.at(0).starts_with("gpu")) {
 				set("graph_symbol_gpu", vals.at(2));
 			} else {
+				if (vals.at(0) == "proc" and getS("graph_symbol_proc") != vals.at(2))
+					did_proc_graph_symbol_change = true;
 				set(strings.find("graph_symbol_" + vals.at(0))->first, vals.at(2));
 			}
 		}
@@ -684,6 +688,20 @@ namespace Config {
 		}
 
 		locked = false;
+	}
+
+	// Add boxes to seen_boxes if they haven't been seen before
+	bool set_seen_boxes(const string& boxes) {
+		auto new_boxes = ssplit(boxes);
+		bool were_new_boxes_seen = false;
+		
+		for (auto& box : new_boxes) {
+			if (not v_contains(seen_boxes, box)) {
+				seen_boxes.push_back(box);
+				were_new_boxes_seen = true;
+			}
+		}
+		return were_new_boxes_seen;
 	}
 
 	bool set_boxes(const string& boxes) {
