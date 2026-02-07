@@ -1,0 +1,160 @@
+{
+  "version": 10,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "_root-config",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_COLOR_DIAGNOSTICS": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BTOP_TESTS": "ON"
+      }
+    },
+    {
+      "name": "default",
+      "inherits": "_root-config",
+      "environment": {
+        "CC": "$penv{CC}",
+        "CXX": "$penv{CXX}"
+      }
+    },
+    {
+      "name": "gcc",
+      "inherits": "_root-config",
+      "environment": {
+        "CC": "gcc",
+        "CXX": "g++"
+      }
+    },
+    {
+      "name": "clang",
+      "inherits": "_root-config",
+      "environment": {
+        "CC": "clang",
+        "CXX": "clang++"
+      }
+    },
+    {
+      "name": "clang-tidy",
+      "inherits": "clang",
+      "cacheVariables": {
+        "CMAKE_CXX_CLANG_TIDY": "clang-tidy;--quiet;--use-color"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "_root-build",
+      "hidden": true,
+      "verbose": true
+    },
+    {
+      "name": "default",
+      "inherits": "_root-build",
+      "configurePreset": "default"
+    },
+    {
+      "name": "gcc",
+      "inherits": "_root-build",
+      "configurePreset": "gcc"
+    },
+    {
+      "name": "clang",
+      "inherits": "_root-build",
+      "configurePreset": "clang"
+    },
+    {
+      "name": "clang-tidy",
+      "inherits": "_root-build",
+      "configurePreset": "clang-tidy"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "gcc",
+      "configurePreset": "gcc"
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "default"
+        },
+        {
+          "type": "build",
+          "name": "default"
+        },
+        {
+          "type": "test",
+          "name": "default"
+        }
+      ]
+    },
+    {
+      "name": "gcc",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc"
+        },
+        {
+          "type": "build",
+          "name": "gcc"
+        },
+        {
+          "type": "test",
+          "name": "gcc"
+        }
+      ]
+    },
+    {
+      "name": "clang",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "clang"
+        },
+        {
+          "type": "build",
+          "name": "clang"
+        },
+        {
+          "type": "test",
+          "name": "clang"
+        }
+      ]
+    },
+    {
+      "name": "clang-tidy",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "clang-tidy"
+        },
+        {
+          "type": "build",
+          "name": "clang-tidy"
+        }
+      ]
+    }
+  ]
+}
