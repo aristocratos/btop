@@ -239,6 +239,13 @@ namespace Config {
 		{"rsmi_measure_pcie_speeds",
 								"#* Measure PCIe throughput on AMD cards, may impact performance on certain cards."},
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+		{"gpu_graph_upper",	"#* Sets the stat shown in upper half of the GPU graph.\n"
+								"#* Select from a list of detected attributes from the options menu."},
+		{"gpu_graph_lower",	"#* Sets the stat shown in lower half of the GPU graph.\n"
+								"#* \"Auto\" mirrors the upper graph. Select \"none\" to disable lower graph.\n"
+								"#* Select from a list of detected attributes from the options menu."},
+		{"gpu_graph_field",	"#* [Deprecated] Use gpu_graph_upper instead. Sets the stat shown in the GPU graph. \"Auto\" for device defaults.\n"
+								"#* Select from a list of detected attributes from the options menu."},
 		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
@@ -263,6 +270,11 @@ namespace Config {
 		{"proc_sorting", "cpu lazy"},
 		{"cpu_graph_upper", "Auto"},
 		{"cpu_graph_lower", "Auto"},
+	#ifdef GPU_SUPPORT
+		{"gpu_graph_upper", "Auto"},
+		{"gpu_graph_lower", "Auto"},
+		{"gpu_graph_field", "Auto"},
+	#endif
 		{"cpu_sensor", "Auto"},
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},

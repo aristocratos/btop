@@ -50,6 +50,7 @@ namespace Symbols {
 	const string div_left			= "├";
 	const string div_up				= "┬";
 	const string div_down			= "┴";
+	const string div_cross		    = "┼";
 
 
 	const string up = "↑";
