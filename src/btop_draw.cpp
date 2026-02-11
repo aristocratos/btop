@@ -1969,15 +1969,12 @@ namespace Proc {
 			const int item_width = floor((double)(d_width - 2) / min(item_fit, 8));
 
 			//? Graph part of box
-			string cpu_str = (alive or pause_proc_list ? fmt::format("{:.2f}", detailed.entry.cpu_p) : "");
-			if (alive or pause_proc_list) {
-				cpu_str.resize(4);
-				if (cpu_str.ends_with('.')) { cpu_str.pop_back(); cpu_str.pop_back(); }
-			}
-			out += Mv::to(d_y + 1, dgraph_x + 1) + Fx::ub + detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive))
-				+ Mv::to(d_y + 1, dgraph_x + 1) + Theme::c("title") + Fx::b + rjust(cpu_str, 4) + "%";
+			fmt::format_to(std::back_inserter(out), "{move}{unbold}{graph}{move}{fg_color}{bold}{cpu_str}%",
+				"move"_a = Mv::to(d_y + 1, dgraph_x + 1), "bold"_a = Fx::b, "unbold"_a = Fx::ub, "fg_color"_a = Theme::c("title"),
+				"graph"_a = detailed_cpu_graph(detailed.cpu_percent, (redraw or data_same or not alive)),
+				"cpu_str"_a = (alive or pause_proc_list) ? fmt::format("{:>4.{}f}", detailed.entry.cpu_p, detailed.entry.cpu_p < 9.995f ? 2 : detailed.entry.cpu_p < 99.95f ? 1 : 0) : "");
 			for (int i = 0; const auto& l : {'C', 'P', 'U'})
-					out += Mv::to(d_y + 3 + i++, dgraph_x + 1) + l;
+				fmt::format_to(std::back_inserter(out), "{}{}", Mv::to(d_y + 3 + i++, dgraph_x + 1), l);
 
 			//? Info part of box
 			const string stat_color = (not alive ? Theme::c("inactive_fg") : (detailed.status == "Running" ? Theme::c("proc_misc") : Theme::c("main_fg")));
