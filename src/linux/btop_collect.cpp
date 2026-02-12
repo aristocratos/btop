@@ -57,23 +57,25 @@ tab-size = 4
 #include "../btop_tools.hpp"
 
 #if defined(GPU_SUPPORT)
-	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
-	// since the C library uses "class" as a struct member and keywords are not allowed to be used
-	// as identifiers in C++.
-	#if defined(__clang__)
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wkeyword-macro"
-	#endif // __clang__
+	#if defined(INTEL_GPU_SUPPORT)
+		// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
+		// since the C library uses "class" as a struct member and keywords are not allowed to be used
+		// as identifiers in C++.
+		#if defined(__clang__)
+			#pragma clang diagnostic push
+			#pragma clang diagnostic ignored "-Wkeyword-macro"
+		#endif // __clang__
 
-	#define class class_
-extern "C" {
-	#include "intel_gpu_top/intel_gpu_top.h"
-}
-	#undef class
+		#define class class_
+	extern "C" {
+		#include "intel_gpu_top/intel_gpu_top.h"
+	}
+		#undef class
 
-	#if defined(__clang__)
-		#pragma clang diagnostic pop
-	#endif // __clang__
+		#if defined(__clang__)
+			#pragma clang diagnostic pop
+		#endif // __clang__
+	#endif // INTEL_GPU_SUPPORT
 #endif
 
 using std::abs;
@@ -257,6 +259,7 @@ namespace Gpu {
 
 
 	//? Intel data collection
+	#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		const char* device = "i915";
 		struct engines *engines = nullptr;
@@ -267,6 +270,40 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+	#else
+	namespace Intel {
+		bool initialized = false;
+		uint32_t device_count = 0;
+		bool init() { return false; }
+		bool shutdown() { return false; }
+		template <bool is_init> bool collect(gpu_info*) { return false; }
+	}
+	#endif // INTEL_GPU_SUPPORT
+
+	//? Jetson data collection
+	#if defined(JETSON_GPU_SUPPORT)
+	namespace Jetson {
+		bool initialized = false;
+		uint32_t device_count = 0;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+
+		// Cached sysfs paths
+		fs::path devfreq_path;
+		fs::path device_load_path;
+		fs::path thermal_temp_path;
+		long long thermal_crit = 97;
+	}
+	#else
+	namespace Jetson {
+		bool initialized = false;
+		uint32_t device_count = 0;
+		bool init() { return false; }
+		bool shutdown() { return false; }
+		template <bool is_init> bool collect(gpu_info*) { return false; }
+	}
+	#endif // JETSON_GPU_SUPPORT
 }
 
 #endif // GPU_SUPPORT
@@ -352,6 +389,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+		}
+
+		if (shown_gpus.contains("jetson")) {
+			Gpu::Jetson::init();
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -1806,6 +1847,7 @@ namespace Gpu {
 		}
 	}
 
+	#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		bool init() {
 			if (initialized) return false;
@@ -1920,6 +1962,194 @@ namespace Gpu {
 			return true;
 		}
 	}
+	#endif // INTEL_GPU_SUPPORT
+
+	#if defined(JETSON_GPU_SUPPORT)
+	namespace Jetson {
+		static constexpr array known_gpu_names = {
+			"gv11b"sv, "gp10b"sv, "ga10b"sv, "gb10b"sv, "gpu"sv
+		};
+
+		bool init() {
+			if (initialized) return false;
+
+			//? If NVML already found GPUs (JetPack 7+), skip Jetson sysfs backend
+			if (Nvml::initialized and Nvml::device_count > 0) {
+				Logger::debug("Jetson: NVML already initialized with {} GPU(s), skipping sysfs backend", Nvml::device_count);
+				return false;
+			}
+
+			//? Detect Jetson platform
+			bool is_jetson = fs::exists("/etc/nv_tegra_release");
+			if (not is_jetson) {
+				const string model = readfile("/sys/firmware/devicetree/base/model");
+				is_jetson = str_to_lower(model).contains("jetson");
+			}
+			if (not is_jetson) {
+				Logger::debug("Jetson: not a Jetson platform, skipping");
+				return false;
+			}
+
+			//? Find GPU devfreq entry
+			try {
+				for (const auto& entry : fs::directory_iterator("/sys/class/devfreq")) {
+					const fs::path of_node_name = fs::canonical(entry.path()) / "device" / "of_node" / "name";
+					if (not fs::exists(of_node_name)) continue;
+
+					string name = str_to_lower(string{trim(readfile(of_node_name))});
+					std::erase(name, '\0');
+					bool found = false;
+					for (const auto& known : known_gpu_names) {
+						if (name == known) { found = true; break; }
+					}
+					if (not found) continue;
+
+					devfreq_path = fs::canonical(entry.path());
+					Logger::debug("Jetson: found GPU devfreq at {}", devfreq_path.string());
+					break;
+				}
+			} catch (const std::exception& e) {
+				Logger::warning("Jetson: error scanning devfreq: {}", e.what());
+			}
+
+			if (devfreq_path.empty()) {
+				Logger::debug("Jetson: no GPU devfreq entry found");
+				return false;
+			}
+
+			//? Resolve device load path
+			try {
+				device_load_path = fs::canonical(devfreq_path / "device") / "load";
+			} catch (...) {
+				device_load_path.clear();
+			}
+
+			if (not device_load_path.empty() and fs::exists(device_load_path)) {
+				Logger::debug("Jetson: load path={}", device_load_path.string());
+			} else {
+				device_load_path.clear();
+				Logger::debug("Jetson: no device load path found");
+			}
+
+			//? Find GPU thermal zone
+			for (int i = 0; i < 20; ++i) {
+				const fs::path tz = fs::path("/sys/devices/virtual/thermal") / fmt::format("thermal_zone{}", i);
+				if (not fs::exists(tz / "type")) continue;
+
+				string type = str_to_lower(string{trim(readfile(tz / "type"))});
+				std::erase(type, '\0');
+				if (not type.contains("gpu")) continue;
+
+				thermal_temp_path = tz / "temp";
+				Logger::debug("Jetson: found GPU thermal zone at {}", tz.string());
+
+				//? Read critical trip point
+				for (int t = 0; t < 10; ++t) {
+					const fs::path trip_type = tz / fmt::format("trip_point_{}_type", t);
+					if (not fs::exists(trip_type)) break;
+					string trip_type_str = string{trim(readfile(trip_type))};
+					std::erase(trip_type_str, '\0');
+					if (trip_type_str == "critical") {
+						const string crit_str = readfile(tz / fmt::format("trip_point_{}_temp", t));
+						try {
+							long long crit_val = std::stoll(crit_str);
+							thermal_crit = crit_val / 1000; // millidegrees to degrees
+						} catch (...) {}
+						break;
+					}
+				}
+				break;
+			}
+
+			//? Get GPU name
+			string gpu_name;
+			const string model = readfile("/sys/firmware/devicetree/base/model");
+			if (not model.empty()) {
+				// Extract "Jetson ..." portion
+				auto pos = model.find("Jetson");
+				if (pos != string::npos) {
+					gpu_name = trim(model.substr(pos));
+					// Remove null terminators that devicetree strings may have
+					while (not gpu_name.empty() and gpu_name.back() == '\0')
+						gpu_name.pop_back();
+					gpu_name += " GPU";
+				}
+			}
+			if (gpu_name.empty()) {
+				// Fallback to of_node name
+				string of_name = string{trim(readfile(devfreq_path / "device" / "of_node" / "name"))};
+				std::erase(of_name, '\0');
+				gpu_name = not of_name.empty() ? "Tegra " + of_name + " GPU" : "Tegra GPU";
+			}
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpu_names.size() + device_count);
+			gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count] = gpu_name;
+
+			initialized = true;
+			Jetson::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Intel::device_count);
+
+			Logger::debug("Jetson: initialized with GPU \"{}\"", gpu_name);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			if constexpr (is_init) {
+				gpus_slice->supported_functions = {
+					.gpu_utilization = not device_load_path.empty(),
+					.mem_utilization = false,
+					.gpu_clock = true,
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = not thermal_temp_path.empty(),
+					.mem_total = false,
+					.mem_used = false,
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
+				};
+			}
+
+			//? GPU utilization (Jetson sysfs load is always in tenths: 0-1000)
+			if (not device_load_path.empty()) {
+				const string load_str = readfile(device_load_path);
+				long long load_val = 0;
+				try { load_val = std::stoll(load_str); } catch (...) {}
+				load_val = clamp(load_val / 10, 0ll, 100ll);
+				gpus_slice->gpu_percent.at("gpu-totals").push_back(load_val);
+			}
+
+			//? GPU clock speed (devfreq reports in Hz)
+			{
+				const string freq_str = readfile(devfreq_path / "cur_freq");
+				long long freq_hz = 0;
+				try { freq_hz = std::stoll(freq_str); } catch (...) {}
+				gpus_slice->gpu_clock_speed = static_cast<unsigned int>(freq_hz / 1'000'000);
+			}
+
+			//? Temperature
+			if (not thermal_temp_path.empty()) {
+				const string temp_str = readfile(thermal_temp_path);
+				long long temp_mdeg = 0;
+				try { temp_mdeg = std::stoll(temp_str); } catch (...) {}
+				gpus_slice->temp.push_back(temp_mdeg / 1000);
+				gpus_slice->temp_max = thermal_crit;
+			}
+
+			return true;
+		}
+	}
+	#endif // JETSON_GPU_SUPPORT
 
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
@@ -1931,6 +2161,7 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		Jetson::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Intel::device_count); // size = Jetson::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
