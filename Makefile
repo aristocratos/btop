@@ -37,10 +37,15 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? GPU Support
-ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
+ifeq ($(PLATFORM_LC),linux)
 	ifneq ($(STATIC),true)
-		GPU_SUPPORT := true
-		INTEL_GPU_SUPPORT := true
+		ifeq ($(ARCH),x86_64)
+			GPU_SUPPORT := true
+			INTEL_GPU_SUPPORT := true
+		else ifeq ($(ARCH),aarch64)
+			GPU_SUPPORT := true
+			JETSON_GPU_SUPPORT := true
+		endif
 	endif
 endif
 ifneq ($(GPU_SUPPORT),true)
@@ -49,6 +54,12 @@ endif
 
 ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
+endif
+ifeq ($(INTEL_GPU_SUPPORT),true)
+	override ADDFLAGS += -DINTEL_GPU_SUPPORT
+endif
+ifeq ($(JETSON_GPU_SUPPORT),true)
+	override ADDFLAGS += -DJETSON_GPU_SUPPORT
 endif
 
 #? Compiler and Linker
