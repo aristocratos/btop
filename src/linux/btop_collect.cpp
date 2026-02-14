@@ -211,6 +211,7 @@ namespace Gpu {
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
 		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_MEM_TYPE_GTT             2
 		#define RSMI_TEMP_CURRENT             0
 		#define RSMI_TEMP_TYPE_EDGE           0
 		#define RSMI_CLK_TYPE_MEM             4
@@ -253,6 +254,17 @@ namespace Gpu {
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
+
+		//? Sysfs fallback for AMD GPUs
+		namespace Sysfs {
+			bool use_sysfs = false;
+			vector<string> device_paths;  // Paths like /sys/class/drm/card1
+			vector<string> hwmon_paths;   // Paths like /sys/class/drm/card1/device/hwmon/hwmon6
+	
+			bool init();
+			bool shutdown();
+			template <bool is_init> bool collect(gpu_info* gpus_slice);
+		}
 	}
 
 
@@ -354,6 +366,13 @@ namespace Shared {
 			Gpu::Intel::init();
 		}
 
+		// Initialize available_fields with at least "Auto" even when no GPUs are detected
+		{
+			using namespace Gpu;
+			available_fields.clear();
+			available_fields.push_back("Auto");
+		}
+
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -363,12 +382,19 @@ namespace Shared {
 			using namespace Gpu;
 			count = gpus.size();
 			gpu_b_height_offsets.resize(gpus.size());
+			// Add all gpu_percent keys as available fields
+			if (not gpus.empty()) {
+				for (const auto& [key, _] : gpus[0].gpu_percent) {
+					available_fields.push_back(key);
+				}
+			}
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
 					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
-						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
+						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization)
+					   + gpus[i].supported_functions.gtt_used * (2 + (gpus[i].gtt_total > 0));
 		}
 	#endif
 
@@ -1526,8 +1552,8 @@ namespace Gpu {
  			}
 
 			if (!rsmi_dl_handle) {
-				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: {}", dlerror());
-				return false;
+				Logger::info("Failed to load librocm_smi64.so, trying sysfs fallback: {}", dlerror());
+				return Sysfs::init(); // Try sysfs fallback
 			}
 
 			auto load_rsmi_sym = [&](const char sym_name[]) {
@@ -1607,6 +1633,7 @@ namespace Gpu {
 		}
 
 		bool shutdown() {
+			if (Sysfs::use_sysfs) return Sysfs::shutdown();
 			if (!initialized) return false;
     		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS) {
 				initialized = false;
@@ -1620,6 +1647,7 @@ namespace Gpu {
 
 		template <bool is_init>
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
+			if (Sysfs::use_sysfs) return Sysfs::collect<is_init>(gpus_slice);
 			if (!initialized) return false;
 			rsmi_status_t result;
 
@@ -1772,6 +1800,29 @@ namespace Gpu {
 					} else gpus_slice[i].mem_total = total;
 				}
 
+				// in btop_collect.cpp Gpu::Rsmi::collect, defined 1603 ... https://github.com/aristocratos/btop/issues/1413
+				if (gpus_slice[i].supported_functions.gtt_used) {
+					//? GTT total memory
+					if constexpr(is_init) {
+						uint64_t total;
+						result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &total);
+						if (result == RSMI_STATUS_SUCCESS) {
+							gpus_slice[i].gtt_total = total;
+						}
+					}
+					//? GTT used memory
+					uint64_t used;
+					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_GTT, &used);
+					if (result != RSMI_STATUS_SUCCESS) {
+						Logger::warning("ROCm SMI: Failed to get GTT usage");
+						if constexpr(is_init) gpus_slice[i].supported_functions.gtt_used = false;
+					} else {
+						gpus_slice[i].gtt_used = used;
+						if (gpus_slice[i].gtt_total > 0)
+							gpus_slice[i].gpu_percent.at("gpu-gtt-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].gtt_total));
+					}
+				}
+
 				if (gpus_slice[i].supported_functions.mem_used) {
 					uint64_t used;
 					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &used);
@@ -1803,6 +1854,290 @@ namespace Gpu {
     		}
 
 			return true;
+		}
+
+		//? Sysfs fallback implementation
+		namespace Sysfs {
+			bool init() {
+				if (use_sysfs) return false;
+				
+				//? Search for AMD GPUs in /sys/class/drm
+				const string drm_path = "/sys/class/drm";
+				if (!fs::exists(drm_path)) {
+					Logger::debug("Sysfs: /sys/class/drm not found");
+					return false;
+				}
+
+				//? Enumerate DRM cards
+				vector<string> temp_names; // Temporary storage for GPU names
+				for (const auto& entry : fs::directory_iterator(drm_path)) {
+					string card_path = entry.path().string();
+					if (!card_path.contains("/card")) continue;
+					if (card_path.contains("-")) continue; // Skip connectors like card0-DP-1
+
+					//? Check if this is an AMD GPU
+					string vendor_path = card_path + "/device/vendor";
+					if (!fs::exists(vendor_path)) continue;
+
+					ifstream vendor_file(vendor_path);
+					string vendor_id;
+					if (!getline(vendor_file, vendor_id)) continue;
+
+					//? AMD vendor ID is 0x1002
+					if (vendor_id != "0x1002") continue;
+
+					//? Found an AMD GPU
+					device_paths.push_back(card_path);
+
+					//? Find hwmon path for this device
+					string hwmon_base = card_path + "/device/hwmon";
+					if (fs::exists(hwmon_base)) {
+						for (const auto& hwmon_entry : fs::directory_iterator(hwmon_base)) {
+							if (hwmon_entry.path().filename().string().starts_with("hwmon")) {
+								hwmon_paths.push_back(hwmon_entry.path().string());
+								break;
+							}
+						}
+					}
+
+					//? Get device name
+					string name_path = card_path + "/device/product_name";
+					string gpu_name = "AMD Radeon GPU";
+					if (fs::exists(name_path)) {
+						ifstream name_file(name_path);
+						if (getline(name_file, gpu_name)) {
+							//? Trim whitespace
+							gpu_name.erase(0, gpu_name.find_first_not_of(" \t\n\r"));
+							gpu_name.erase(gpu_name.find_last_not_of(" \t\n\r") + 1);
+						}
+					}
+					temp_names.push_back(gpu_name);
+				}
+
+				device_count = device_paths.size();
+				if (device_count == 0) {
+					Logger::debug("Sysfs: No AMD GPUs found");
+					return false;
+				}
+
+				Logger::info("Sysfs: Found {} AMD GPU{} (ROCm SMI not available, using sysfs fallback)", 
+					device_count, device_count > 1 ? "s" : "");
+
+				//? Resize GPU vectors
+				gpus.resize(gpus.size() + device_count);
+				gpu_names.resize(gpu_names.size() + device_count);
+
+				//? Copy GPU names to the global vector
+				for (size_t i = 0; i < device_count; i++) {
+					gpu_names[Nvml::device_count + i] = temp_names[i];
+				}
+
+				use_sysfs = true;
+				initialized = true;
+
+				//? Initialize and collect initial data
+				Sysfs::collect<1>(gpus.data() + Nvml::device_count);
+
+				return true;
+			}
+
+			bool shutdown() {
+				if (!use_sysfs) return false;
+				device_paths.clear();
+				hwmon_paths.clear();
+				use_sysfs = false;
+				initialized = false;
+				return true;
+			}
+
+			template <bool is_init>
+			bool collect(gpu_info* gpus_slice) {
+				if (!use_sysfs) return false;
+
+				for (uint32_t i = 0; i < device_count; ++i) {
+					const string& device_path = device_paths[i];
+					const string& hwmon_path = i < hwmon_paths.size() ? hwmon_paths[i] : "";
+
+					if constexpr(is_init) {
+						//? Get maximum values during initialization
+						if (fs::exists(hwmon_path + "/power1_cap")) {
+							ifstream pwr_cap_file(hwmon_path + "/power1_cap");
+							uint64_t max_power;
+							if (pwr_cap_file >> max_power) {
+								gpus_slice[i].pwr_max_usage = (long long)(max_power / 1000); // microWatts to milliWatts
+								gpu_pwr_total_max += gpus_slice[i].pwr_max_usage;
+							}
+						}
+
+						if (fs::exists(hwmon_path + "/temp1_max")) {
+							ifstream temp_max_file(hwmon_path + "/temp1_max");
+							long long temp_max;
+							if (temp_max_file >> temp_max) {
+								gpus_slice[i].temp_max = temp_max / 1000; // millidegrees to degrees
+							}
+						}
+
+						//? Disable features not available via sysfs
+						gpus_slice[i].supported_functions.encoder_utilization = false;
+						gpus_slice[i].supported_functions.decoder_utilization = false;
+						gpus_slice[i].supported_functions.mem_utilization = false; // Not reliably available
+						gpus_slice[i].supported_functions.pwr_state = false;
+						gpus_slice[i].supported_functions.pcie_txrx = false; // Could be added later
+					}
+
+					//? GPU utilization from gpu_busy_percent
+					if (gpus_slice[i].supported_functions.gpu_utilization) {
+						string busy_path = device_path + "/device/gpu_busy_percent";
+						if (fs::exists(busy_path)) {
+							ifstream busy_file(busy_path);
+							uint32_t utilization;
+							if (busy_file >> utilization) {
+								gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization);
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.gpu_utilization = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.gpu_utilization = false;
+						}
+					}
+
+					//? GPU clock speed from hwmon
+					if (gpus_slice[i].supported_functions.gpu_clock && !hwmon_path.empty()) {
+						string freq_path = hwmon_path + "/freq1_input";
+						if (fs::exists(freq_path)) {
+							ifstream freq_file(freq_path);
+							uint64_t freq_hz;
+							if (freq_file >> freq_hz) {
+								gpus_slice[i].gpu_clock_speed = (long long)(freq_hz / 1000000); // Hz to MHz
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.gpu_clock = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.gpu_clock = false;
+						}
+					}
+
+					//? Memory clock - not commonly available via sysfs for AMD
+					if constexpr(is_init) {
+						gpus_slice[i].supported_functions.mem_clock = false;
+					}
+
+					//? Power usage from hwmon
+					if (gpus_slice[i].supported_functions.pwr_usage && !hwmon_path.empty()) {
+						string pwr_path = hwmon_path + "/power1_average";
+						if (!fs::exists(pwr_path)) {
+							pwr_path = hwmon_path + "/power1_input";
+						}
+						
+						if (fs::exists(pwr_path)) {
+							ifstream pwr_file(pwr_path);
+							uint64_t power_uw;
+							if (pwr_file >> power_uw) {
+								gpus_slice[i].pwr_usage = (long long)(power_uw / 1000); // microWatts to milliWatts
+								if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage) {
+									gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
+								}
+								gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(
+									clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll)
+								);
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.pwr_usage = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.pwr_usage = false;
+						}
+					}
+
+					//? Temperature from hwmon
+					if (gpus_slice[i].supported_functions.temp_info && !hwmon_path.empty()) {
+						if (Config::getB("check_temp") or is_init) {
+							string temp_path = hwmon_path + "/temp1_input";
+							if (fs::exists(temp_path)) {
+								ifstream temp_file(temp_path);
+								long long temp_millidegrees;
+								if (temp_file >> temp_millidegrees) {
+									gpus_slice[i].temp.push_back(temp_millidegrees / 1000); // millidegrees to degrees
+								} else if constexpr(is_init) {
+									gpus_slice[i].supported_functions.temp_info = false;
+								}
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.temp_info = false;
+							}
+						}
+					}
+
+					//? Memory info from sysfs
+					if (gpus_slice[i].supported_functions.mem_total) {
+						string mem_total_path = device_path + "/device/mem_info_vram_total";
+						if (fs::exists(mem_total_path)) {
+							ifstream mem_total_file(mem_total_path);
+							uint64_t total;
+							if (mem_total_file >> total) {
+								gpus_slice[i].mem_total = total;
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.mem_total = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.mem_total = false;
+						}
+					}
+
+					//? GTT memory
+					if (gpus_slice[i].supported_functions.gtt_used) {
+						if constexpr(is_init) {
+							string gtt_total_path = device_path + "/device/mem_info_gtt_total";
+							if (fs::exists(gtt_total_path)) {
+								ifstream gtt_total_file(gtt_total_path);
+								uint64_t total;
+								if (gtt_total_file >> total) {
+									gpus_slice[i].gtt_total = total;
+								}
+							}
+						}
+
+						string gtt_used_path = device_path + "/device/mem_info_gtt_used";
+						if (fs::exists(gtt_used_path)) {
+							ifstream gtt_used_file(gtt_used_path);
+							uint64_t used;
+							if (gtt_used_file >> used) {
+								gpus_slice[i].gtt_used = used;
+								if (gpus_slice[i].gtt_total > 0) {
+									gpus_slice[i].gpu_percent.at("gpu-gtt-totals").push_back(
+										(long long)round((double)used * 100.0 / (double)gpus_slice[i].gtt_total)
+									);
+								}
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.gtt_used = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.gtt_used = false;
+						}
+					}
+
+					//? VRAM used
+					if (gpus_slice[i].supported_functions.mem_used) {
+						string mem_used_path = device_path + "/device/mem_info_vram_used";
+						if (fs::exists(mem_used_path)) {
+							ifstream mem_used_file(mem_used_path);
+							uint64_t used;
+							if (mem_used_file >> used) {
+								gpus_slice[i].mem_used = used;
+								if (gpus_slice[i].mem_total > 0) {
+									gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(
+										(long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total)
+									);
+								}
+							} else if constexpr(is_init) {
+								gpus_slice[i].supported_functions.mem_used = false;
+							}
+						} else if constexpr(is_init) {
+							gpus_slice[i].supported_functions.mem_used = false;
+						}
+					}
+				}
+
+				return true;
+			}
 		}
 	}
 
@@ -1958,6 +2293,8 @@ namespace Gpu {
 				while (cmp_greater(gpu.temp.size(), 18)) gpu.temp.pop_front();
 				//? Memory usage
 				while (cmp_greater(gpu.gpu_percent.at("gpu-vram-totals").size(), width/2)) gpu.gpu_percent.at("gpu-vram-totals").pop_front();
+				//? GTT memory usage
+				while (cmp_greater(gpu.gpu_percent.at("gpu-gtt-totals").size(), width/2)) gpu.gpu_percent.at("gpu-gtt-totals").pop_front();
 			}
 		}
 

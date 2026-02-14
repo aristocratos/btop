@@ -1008,6 +1008,7 @@ namespace Gpu {
 	vector<Draw::Graph> graph_upper_vec = {}, graph_lower_vec = {};
 	vector<Draw::Graph> temp_graph_vec = {};
 	vector<Draw::Graph> mem_used_graph_vec = {}, mem_util_graph_vec = {};
+	vector<Draw::Graph> gtt_used_graph_vec = {};
 	vector<Draw::Meter> gpu_meter_vec = {};
 	vector<Draw::Meter> pwr_meter_vec = {};
 	vector<Draw::Meter> enc_meter_vec = {};
@@ -1026,6 +1027,7 @@ namespace Gpu {
 		auto& temp_graph = temp_graph_vec[index];
 		auto& mem_used_graph = mem_used_graph_vec[index];
 		auto& mem_util_graph = mem_util_graph_vec[index];
+		auto& gtt_used_graph = gtt_used_graph_vec[index];
 		auto& gpu_meter = gpu_meter_vec[index];
 		auto& pwr_meter = pwr_meter_vec[index];
 		auto& enc_meter = enc_meter_vec[index];
@@ -1041,6 +1043,17 @@ namespace Gpu {
 		int height = gpu_b_height_offsets[index] + 4;
 		out.reserve(width * height);
 
+		//? Determine GPU graph fields
+		auto gpu_graph_upper_field = Config::getS("gpu_graph_upper");
+		if (gpu_graph_upper_field.empty()) gpu_graph_upper_field = Config::getS("gpu_graph_field"); // backward compatibility
+		if (gpu_graph_upper_field == "Auto" or gpu_graph_upper_field.empty()) gpu_graph_upper_field = "gpu-totals";
+		if (not gpu.gpu_percent.contains(gpu_graph_upper_field)) gpu_graph_upper_field = "gpu-totals";
+
+		auto gpu_graph_lower_field = Config::getS("gpu_graph_lower");
+		bool disable_lower = (gpu_graph_lower_field == "none");
+		if (gpu_graph_lower_field == "Auto" or gpu_graph_lower_field.empty()) gpu_graph_lower_field = gpu_graph_upper_field; // mirror upper
+		if (not gpu.gpu_percent.contains(gpu_graph_lower_field)) gpu_graph_lower_field = gpu_graph_upper_field;
+
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw[index]) {
 			out += box[index];
@@ -1048,13 +1061,13 @@ namespace Gpu {
 			graph_up_height = single_graph ? b_height_vec[index] : (b_height_vec[index] + 1) / 2;
 			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
 
-			if (gpu.supported_functions.gpu_utilization) {
-				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
-            	if (not single_graph) {
+			if (gpu.supported_functions.gpu_utilization or gpu.gpu_percent.contains(gpu_graph_upper_field)) {
+				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, gpu_graph_upper_field), graph_symbol, false, true};
+            	if (not single_graph and not disable_lower) {
                 	graph_lower = Draw::Graph{
                     	x + width - b_width - 3,
                     	graph_low_height, "cpu",
-                    	safeVal(gpu.gpu_percent, "gpu-totals"s),
+                    	safeVal(gpu.gpu_percent, gpu_graph_lower_field),
                     	graph_symbol,
                     	Config::getB("cpu_invert_lower"), true
                 	};
@@ -1069,6 +1082,8 @@ namespace Gpu {
 				mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% utilization
 			if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total)
 				mem_used_graph = Draw::Graph{b_width/2 - 2, 2 + 2*(gpu.supported_functions.mem_utilization), "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol};
+			if (gpu.supported_functions.gtt_used and gpu.gtt_total > 0)
+				gtt_used_graph = Draw::Graph{b_width/2 - 2, 2, "used", safeVal(gpu.gpu_percent, "gpu-gtt-totals"s), graph_symbol};
 			if (gpu.supported_functions.encoder_utilization)
 				enc_meter = Draw::Meter{b_width/2 - 10, "cpu"};
 		}
@@ -1077,13 +1092,13 @@ namespace Gpu {
 		//* General GPU info
 		int rows_used = 1;
 		//? Gpu graph, meter & clock speed
-		if (gpu.supported_functions.gpu_utilization) {
-			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
-			if (not single_graph)
-				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
+	if (gpu.supported_functions.gpu_utilization or gpu.gpu_percent.contains(gpu_graph_upper_field)) {
+		out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, gpu_graph_upper_field), (data_same or redraw[index]));
+		if (not single_graph and not disable_lower)
+			out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, gpu_graph_lower_field), (data_same or redraw[index]));
 
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
-				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
+		out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
+			+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
 			//? Temperature graph, I assume the device supports utilization if it supports temperature
 			if (show_temps) {
@@ -1159,6 +1174,35 @@ namespace Gpu {
 
 				if (gpu.supported_functions.mem_clock)
 					out += "   VRAM clock:" + rjust(to_string(gpu.mem_clock_speed) + " MHz", b_width/2-13);
+			}
+			rows_used += (gpu.supported_functions.mem_total or gpu.supported_functions.mem_used)
+				* (1 + 2*(gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) + 2*gpu.supported_functions.mem_utilization);
+		}
+
+		//? GTT memory (AMD GPUs)
+		if (gpu.supported_functions.gtt_used) {
+			if (gpu.gtt_total > 0) {
+				//? GTT with graph and total
+				string gtt_used_string = floating_humanizer(gpu.gtt_used);
+				out += Mv::to(b_y + rows_used, b_x)
+					+ Theme::c("div_line") + Symbols::div_left + Symbols::h_line + Symbols::title_left + Fx::b + Theme::c("title") + "gtt" + Theme::c("div_line") + Fx::ub + Symbols::title_right
+					+ Symbols::h_line*(b_width/2-7) + Symbols::div_up
+					+ Mv::l(1)+Mv::d(3) + Symbols::div_down
+					+ Mv::l(1)+Mv::u(1) + Symbols::v_line
+					+ Mv::l(1)+Mv::u(1) + Symbols::v_line
+					+ Mv::l(1)+Mv::u(1) + Symbols::div_cross
+					+ Symbols::h_line + Theme::c("title") + "Used:" + Theme::c("div_line")
+					+ Symbols::h_line*(b_width/2+b_width%2-9-gtt_used_string.size()) + Theme::c("title") + gtt_used_string + Theme::c("div_line") + Symbols::h_line + Symbols::div_right
+					+ Mv::d(1) + Mv::l(b_width - 2) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.gtt_total), b_width/2-9) + Fx::ub
+					+ Mv::r(3) + gtt_used_graph(safeVal(gpu.gpu_percent, "gpu-gtt-totals"s), (data_same or redraw[index]))
+					+ Mv::u(1) + Mv::l(b_width/2-2) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-gtt-totals"s).back()), 3) + '%'
+					;
+				rows_used += 3;
+			} else {
+				//? GTT without graph (no total available)
+				out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GTT:" + Fx::ub
+					+ rjust(floating_humanizer(gpu.gtt_used), b_width - 6);
+				rows_used++;
 			}
 		}
 
@@ -2353,6 +2397,7 @@ namespace Draw {
 			graph_upper_vec.resize(shown); graph_lower_vec.resize(shown);
 			temp_graph_vec.resize(shown);
 			mem_used_graph_vec.resize(shown); mem_util_graph_vec.resize(shown);
+			gtt_used_graph_vec.resize(shown);
 			gpu_meter_vec.resize(shown);
 			pwr_meter_vec.resize(shown);
 			enc_meter_vec.resize(shown);
