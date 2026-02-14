@@ -208,6 +208,12 @@ if(APPLE)
   target_link_libraries(libbtop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
+  if(BTOP_GPU)
+    find_library(IOREPORT_LIB IOReport)
+    if(IOREPORT_LIB)
+      target_link_libraries(libbtop ${IOREPORT_LIB})
+    endif()
+  endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH
