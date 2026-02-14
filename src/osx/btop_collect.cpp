@@ -121,6 +121,43 @@ namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
 
+//? RAII wrapper for CoreFoundation types — releases via CFRelease() on destruction
+template <typename T>
+struct CFRef {
+	T ref;
+	CFRef() : ref(nullptr) {}
+	CFRef(T ref) : ref(ref) {}
+	~CFRef() { if (ref) CFRelease((CFTypeRef)ref); }
+	CFRef(const CFRef&) = delete;
+	CFRef& operator=(const CFRef&) = delete;
+	CFRef(CFRef&& other) noexcept : ref(other.ref) { other.ref = nullptr; }
+	CFRef& operator=(CFRef&& other) noexcept {
+		if (this != &other) { reset(); ref = other.ref; other.ref = nullptr; }
+		return *this;
+	}
+	operator T() const { return ref; }
+	T get() const { return ref; }
+	T* ptr() { return &ref; }
+	void reset(T new_ref = nullptr) {
+		if (ref) CFRelease((CFTypeRef)ref);
+		ref = new_ref;
+	}
+	T release() { T r = ref; ref = nullptr; return r; }
+};
+
+//? RAII wrapper for IOKit object types — releases via IOObjectRelease() on destruction
+struct IORef {
+	io_object_t ref;
+	IORef() : ref(0) {}
+	IORef(io_object_t ref) : ref(ref) {}
+	~IORef() { if (ref) IOObjectRelease(ref); }
+	IORef(const IORef&) = delete;
+	IORef& operator=(const IORef&) = delete;
+	operator io_object_t() const { return ref; }
+	io_object_t get() const { return ref; }
+	io_object_t* ptr() { return &ref; }
+};
+
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Cpu {
@@ -208,17 +245,21 @@ namespace Gpu {
 
 		//? Read GPU DVFS frequency table from IORegistry pmgr node
 		static void get_gpu_freqs_from_pmgr() {
-			io_iterator_t iter;
+			io_iterator_t iter_raw;
+			//? matchDict ownership is consumed by IOServiceGetMatchingServices
 			CFMutableDictionaryRef matchDict = IOServiceMatching("AppleARMIODevice");
-			if (IOServiceGetMatchingServices(kIOMainPortDefault, matchDict, &iter) != kIOReturnSuccess)
+			if (IOServiceGetMatchingServices(kIOMainPortDefault, matchDict, &iter_raw) != kIOReturnSuccess)
 				return;
+			IORef iter(iter_raw);
 
-			io_object_t entry;
-			while ((entry = IOIteratorNext(iter)) != 0) {
+			io_object_t entry_raw;
+			while ((entry_raw = IOIteratorNext(iter)) != 0) {
+				IORef entry(entry_raw);
 				char name[128];
 				if (IORegistryEntryGetName(entry, name) == kIOReturnSuccess and string(name) == "pmgr") {
-					CFMutableDictionaryRef props = nullptr;
-					if (IORegistryEntryCreateCFProperties(entry, &props, kCFAllocatorDefault, 0) == kIOReturnSuccess and props) {
+					CFMutableDictionaryRef props_raw = nullptr;
+					if (IORegistryEntryCreateCFProperties(entry, &props_raw, kCFAllocatorDefault, 0) == kIOReturnSuccess and props_raw) {
+						CFRef<CFMutableDictionaryRef> props(props_raw);
 						CFDataRef dvfs_data = (CFDataRef)CFDictionaryGetValue(props, CFSTR("voltage-states9"));
 						if (dvfs_data) {
 							auto len = CFDataGetLength(dvfs_data);
@@ -230,12 +271,9 @@ namespace Gpu {
 								if (freq > 0) gpu_freqs.push_back(freq / (1000 * 1000)); // Hz -> MHz
 							}
 						}
-						CFRelease(props);
 					}
 				}
-				IOObjectRelease(entry);
 			}
-			IOObjectRelease(iter);
 		}
 
 		bool init() {
@@ -245,32 +283,26 @@ namespace Gpu {
 			get_gpu_freqs_from_pmgr();
 
 			//? Set up IOReport channels for GPU Stats and Energy Model
-			CFStringRef gpu_stats_group = CFStringCreateWithCString(kCFAllocatorDefault, "GPU Stats", kCFStringEncodingUTF8);
-			CFStringRef gpu_perf_subgroup = CFStringCreateWithCString(kCFAllocatorDefault, "GPU Performance States", kCFStringEncodingUTF8);
-			CFStringRef energy_group = CFStringCreateWithCString(kCFAllocatorDefault, "Energy Model", kCFStringEncodingUTF8);
+			CFRef<CFStringRef> gpu_stats_group(CFStringCreateWithCString(kCFAllocatorDefault, "GPU Stats", kCFStringEncodingUTF8));
+			CFRef<CFStringRef> gpu_perf_subgroup(CFStringCreateWithCString(kCFAllocatorDefault, "GPU Performance States", kCFStringEncodingUTF8));
+			CFRef<CFStringRef> energy_group(CFStringCreateWithCString(kCFAllocatorDefault, "Energy Model", kCFStringEncodingUTF8));
 
-			CFDictionaryRef gpu_chan = IOReportCopyChannelsInGroup(gpu_stats_group, gpu_perf_subgroup, 0, 0, 0);
-			CFDictionaryRef energy_chan = IOReportCopyChannelsInGroup(energy_group, nullptr, 0, 0, 0);
+			CFRef<CFDictionaryRef> gpu_chan(IOReportCopyChannelsInGroup(gpu_stats_group, gpu_perf_subgroup, 0, 0, 0));
+			CFRef<CFDictionaryRef> energy_chan(IOReportCopyChannelsInGroup(energy_group, nullptr, 0, 0, 0));
 
-			CFRelease(gpu_stats_group);
-			CFRelease(gpu_perf_subgroup);
-			CFRelease(energy_group);
-
-			if (not gpu_chan and not energy_chan) {
+			if (not gpu_chan.get() and not energy_chan.get()) {
 				Logger::info("Apple Silicon GPU: No IOReport channels found, GPU monitoring unavailable");
 				return false;
 			}
 
 			//? Merge channels into a single subscription
-			if (gpu_chan and energy_chan) {
+			if (gpu_chan.get() and energy_chan.get()) {
 				IOReportMergeChannels(gpu_chan, energy_chan, nullptr);
 			}
-			CFDictionaryRef base_chan = gpu_chan ? gpu_chan : energy_chan;
+			CFDictionaryRef base_chan = gpu_chan.get() ? gpu_chan.get() : energy_chan.get();
 
 			auto size = CFDictionaryGetCount(base_chan);
 			ior_chan = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, size, base_chan);
-			if (gpu_chan) CFRelease(gpu_chan);
-			if (energy_chan and energy_chan != base_chan) CFRelease(energy_chan);
 
 			//? Create IOReport subscription
 			CFMutableDictionaryRef sub_dict = nullptr;
@@ -314,26 +346,21 @@ namespace Gpu {
 			constexpr int kHIDUsage_TemperatureSensor = 5;
 			constexpr int64_t kIOHIDEventTypeTemperature = 15;
 
-			CFNumberRef nums[2];
-			CFStringRef keys[2];
-			keys[0] = CFSTR("PrimaryUsagePage");
-			keys[1] = CFSTR("PrimaryUsage");
+			CFStringRef keys[2] = { CFSTR("PrimaryUsagePage"), CFSTR("PrimaryUsage") };
 			int page = kHIDPage_AppleVendor, usage = kHIDUsage_TemperatureSensor;
-			nums[0] = CFNumberCreate(nullptr, kCFNumberSInt32Type, &page);
-			nums[1] = CFNumberCreate(nullptr, kCFNumberSInt32Type, &usage);
-			CFDictionaryRef match = CFDictionaryCreate(nullptr,
-				(const void**)keys, (const void**)nums, 2,
-				&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-			CFRelease(nums[0]);
-			CFRelease(nums[1]);
+			CFRef<CFNumberRef> num0(CFNumberCreate(nullptr, kCFNumberSInt32Type, &page));
+			CFRef<CFNumberRef> num1(CFNumberCreate(nullptr, kCFNumberSInt32Type, &usage));
+			const void* values[] = { num0.get(), num1.get() };
+			CFRef<CFDictionaryRef> match(CFDictionaryCreate(nullptr,
+				(const void**)keys, values, 2,
+				&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
 
-			auto system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
-			if (not system) { CFRelease(match); return -1; }
+			CFRef<IOHIDEventSystemClientRef> system(IOHIDEventSystemClientCreate(kCFAllocatorDefault));
+			if (not system.get()) return -1;
 			IOHIDEventSystemClientSetMatching(system, match);
-			CFArrayRef services = IOHIDEventSystemClientCopyServices(system);
-			CFRelease(match);
+			CFRef<CFArrayRef> services(IOHIDEventSystemClientCopyServices(system));
 
-			if (not services) { CFRelease(system); return -1; }
+			if (not services.get()) return -1;
 
 			double gpu_temp_sum = 0;
 			int gpu_temp_count = 0;
@@ -341,27 +368,23 @@ namespace Gpu {
 			for (long i = 0; i < count; i++) {
 				auto sc = (IOHIDServiceClientRef)CFArrayGetValueAtIndex(services, i);
 				if (not sc) continue;
-				CFStringRef name = IOHIDServiceClientCopyProperty(sc, CFSTR("Product"));
-				if (not name) continue;
+				CFRef<CFStringRef> name(IOHIDServiceClientCopyProperty(sc, CFSTR("Product")));
+				if (not name.get()) continue;
 				char buf[200];
 				CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
 				string n(buf);
-				CFRelease(name);
 				//? "GPU MTR Temp Sensor" is the standard Apple Silicon GPU temp sensor name
 				if (n.find("GPU") != string::npos) {
-					auto event = IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0);
-					if (event) {
+					CFRef<IOHIDEventRef> event(IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0));
+					if (event.get()) {
 						double temp = IOHIDEventGetFloatValue(event, kIOHIDEventTypeTemperature << 16);
 						if (temp > 0 and temp < 150) {
 							gpu_temp_sum += temp;
 							gpu_temp_count++;
 						}
-						CFRelease(event);
 					}
 				}
 			}
-			CFRelease(services);
-			CFRelease(system);
 
 			if (gpu_temp_count > 0)
 				return static_cast<long long>(round(gpu_temp_sum / gpu_temp_count));
@@ -416,19 +439,19 @@ namespace Gpu {
 			uint64_t dt = cur_time - prev_sample_time;
 			if (dt == 0) dt = 1;
 
-			CFDictionaryRef delta = nullptr;
+			CFRef<CFDictionaryRef> delta;
 			if (prev_sample) {
-				delta = IOReportCreateSamplesDelta(prev_sample, cur_sample, nullptr);
+				delta.reset(IOReportCreateSamplesDelta(prev_sample, cur_sample, nullptr));
 				CFRelease(prev_sample);
 			}
 			prev_sample = cur_sample;
 			prev_sample_time = cur_time;
 
-			if (not delta) return false;
+			if (not delta.get()) return false;
 
 			//? Parse delta samples
 			CFArrayRef channels = (CFArrayRef)CFDictionaryGetValue(delta, CFSTR("IOReportChannels"));
-			if (not channels) { CFRelease(delta); return false; }
+			if (not channels) return false;
 
 			long long gpu_utilization = 0;
 			bool got_gpu_util = false;
@@ -550,7 +573,6 @@ namespace Gpu {
 				}
 			}
 
-			CFRelease(delta);
 			return true;
 		}
 
