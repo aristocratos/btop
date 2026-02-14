@@ -198,6 +198,11 @@ if(BTOP_STATIC)
   target_link_options(libbtop PUBLIC -static LINKER:--fatal-warnings)
 endif()
 
+# Enable GPU support on Apple Silicon
+if(APPLE AND BTOP_GPU)
+  target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+endif()
+
 # Other platform dependent flags
 if(APPLE)
   target_link_libraries(libbtop

@@ -183,6 +183,9 @@ namespace Gpu {
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+	namespace AppleSilicon {
+		extern bool shutdown();
+	}
 
 	//* Collect gpu stats and temperatures
     auto collect(bool no_update = false) -> vector<gpu_info>&;
