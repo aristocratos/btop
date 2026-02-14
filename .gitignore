@@ -88,3 +88,6 @@ CMakeUserPresets.json
 
 # CLion
 cmake-build-*
+
+# Claude Code
+CLAUDE.md
