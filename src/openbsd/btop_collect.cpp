@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,63 +15,61 @@
 indent = tab
 tab-size = 4
 */
-#include <arpa/inet.h>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-// man 3 getifaddrs: "BUGS: If	both <net/if.h>	and <ifaddrs.h>	are being included, <net/if.h> must be included before <ifaddrs.h>"
-#include <net/if.h>
-#include <ifaddrs.h>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <netdb.h>
-#include <netinet/tcp_fsm.h>
-#include <netinet/in.h> // for inet_ntop stuff
-#include <pwd.h>
-#include <sys/endian.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
-#include <sys/statvfs.h>
-#include <sys/sysctl.h>
-#include <sys/sched.h>
-#include <sys/signal.h>
-#include <sys/siginfo.h>
-#include <sys/proc.h>
-#include <sys/types.h>
-#include <sys/user.h>
-#include <sys/param.h>
-#include <sys/ucred.h>
-#include <sys/mount.h>
-#include <sys/vmmeter.h>
-#include <sys/limits.h>
-#include <sys/sensors.h>
-#include <sys/disk.h>
-#include <vector>
-#include <kvm.h>
-#include <paths.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <stdexcept>
-#include <cmath>
-#include <fstream>
-#include <numeric>
-#include <ranges>
-#include <algorithm>
-#include <regex>
-#include <string>
-#include <memory>
-#include <unordered_set>
-
-#include <fmt/format.h>
-
 #include "../btop_config.hpp"
 #include "../btop_log.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
-
 #include "./sysctlbyname.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <memory>
+#include <numeric>
+#include <ranges>
+#include <regex>
+#include <stdexcept>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <kvm.h>
+#include <net/if_dl.h>
+#include <net/route.h>
+#include <netdb.h>
+#include <netinet/in.h> // for inet_ntop stuff
+#include <netinet/tcp_fsm.h>
+#include <paths.h>
+#include <pwd.h>
+#include <sys/disk.h>
+#include <sys/endian.h>
+#include <sys/limits.h>
+#include <sys/mount.h>
+#include <sys/param.h>
+#include <sys/proc.h>
+#include <sys/resource.h>
+#include <sys/sched.h>
+#include <sys/sensors.h>
+#include <sys/siginfo.h>
+#include <sys/signal.h>
+#include <sys/socket.h>
+#include <sys/statvfs.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <sys/ucred.h>
+#include <sys/user.h>
+#include <sys/vmmeter.h>
+#include <unistd.h>
+
+#include <fmt/format.h>
 
 using std::clamp, std::string_literals::operator""s, std::cmp_equal, std::cmp_less, std::cmp_greater;
 using std::ifstream, std::numeric_limits, std::streamsize, std::round, std::max, std::min;
@@ -109,7 +107,7 @@ namespace Cpu {
 	string cpu_sensor;
 	vector<string> core_sensors;
 	std::unordered_map<int, int> core_mapping;
-}  // namespace Cpu
+} // namespace Cpu
 
 namespace Mem {
 	double old_uptime;
@@ -139,13 +137,18 @@ namespace Shared {
 		pageSize = sysconf(_SC_PAGE_SIZE);
 		if (pageSize <= 0) {
 			pageSize = 4096;
-			Logger::warning("Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect.");
+			Logger::warning(
+				"Could not get system page size. Defaulting to 4096, processes memory usage might be incorrect."
+			);
 		}
 
 		clkTck = sysconf(_SC_CLK_TCK);
 		if (clkTck <= 0) {
 			clkTck = 100;
-			Logger::warning("Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be incorrect.");
+			Logger::warning(
+				"Could not get system clock ticks per second. Defaulting to 100, processes cpu usage might be "
+				"incorrect."
+			);
 		}
 
 		int64_t memsize = 0;
@@ -177,8 +180,9 @@ namespace Shared {
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 		Cpu::collect();
-		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
-			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
+		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
+			if (not vec.empty() and not v_contains(Cpu::available_fields, field))
+				Cpu::available_fields.push_back(field);
 		}
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
@@ -188,7 +192,7 @@ namespace Shared {
 		Mem::old_uptime = system_uptime();
 		Mem::collect();
 	}
-}  // namespace Shared
+} // namespace Shared
 
 namespace Cpu {
 	string cpuName;
@@ -199,12 +203,7 @@ namespace Cpu {
 	const array<string, 10> time_names = {"user", "nice", "system", "idle"};
 
 	std::unordered_map<string, long long> cpu_old = {
-		{"totals", 0},
-		{"idles", 0},
-		{"user", 0},
-		{"nice", 0},
-		{"system", 0},
-		{"idle", 0}
+		{"totals", 0}, {"idles", 0}, {"user", 0}, {"nice", 0}, {"system", 0}, {"idle", 0}
 	};
 
 	string get_cpuName() {
@@ -230,10 +229,8 @@ namespace Cpu {
 		for (dev = 0;; dev++) {
 			mib[2] = dev;
 			if (sysctl(mib, 3, &sensordev, &sdlen, NULL, 0) == -1) {
-				if (errno == ENXIO)
-					continue;
-				if (errno == ENOENT)
-					break;
+				if (errno == ENXIO) continue;
+				if (errno == ENOENT) break;
 			}
 			if (strstr(sensordev.xname, device.c_str())) {
 				mib[4] = num;
@@ -244,8 +241,7 @@ namespace Cpu {
 							Logger::warning("sysctl");
 							continue;
 						}
-					} else
-						return sensor.value;
+					} else return sensor.value;
 				}
 			}
 		}
@@ -255,7 +251,7 @@ namespace Cpu {
 	bool get_sensors() {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
-			if (get_sensor(string("cpu0"), { SENSOR_TEMP }, 0) > 0) {
+			if (get_sensor(string("cpu0"), {SENSOR_TEMP}, 0) > 0) {
 				got_sensors = true;
 				current_cpu.temp_max = 100; // we don't have this info
 			} else {
@@ -271,22 +267,19 @@ namespace Cpu {
 		int temp = 0;
 		int p_temp = 0;
 
-		temp = get_sensor(string("cpu0"), { SENSOR_TEMP }, 0);
+		temp = get_sensor(string("cpu0"), {SENSOR_TEMP}, 0);
 		if (temp > -1) {
 			temp = MUKTOC(temp);
 			p_temp = temp;
 			for (int i = 0; i < Shared::coreCount; i++) {
 				if (cmp_less(i + 1, current_cpu.temp.size())) {
 					current_cpu.temp.at(i + 1).push_back(temp);
-					if (current_cpu.temp.at(i + 1).size() > 20)
-						current_cpu.temp.at(i + 1).pop_front();
+					if (current_cpu.temp.at(i + 1).size() > 20) current_cpu.temp.at(i + 1).pop_front();
 				}
 			}
 			current_cpu.temp.at(0).push_back(p_temp);
-			if (current_cpu.temp.at(0).size() > 20)
-				current_cpu.temp.at(0).pop_front();
+			if (current_cpu.temp.at(0).size() > 20) current_cpu.temp.at(0).pop_front();
 		}
-
 	}
 
 	string get_cpuHz() {
@@ -296,7 +289,7 @@ namespace Cpu {
 		if (sysctlbyname("hw.cpuspeed", &freq, &size, nullptr, 0) < 0) {
 			return "";
 		}
-		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
+		return std::to_string(freq / 1000.0).substr(0, 3); // seems to be in MHz
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -307,7 +300,8 @@ namespace Cpu {
 			core_map[i] = i;
 		}
 
-		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
+		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2
+		// etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long) core_map.size() == Shared::coreCount / 2) {
 				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
@@ -324,10 +318,10 @@ namespace Cpu {
 		}
 
 		//? Apply user set custom mapping if any
-		const auto &custom_map = Config::getS("cpu_core_map");
+		const auto& custom_map = Config::getS("cpu_core_map");
 		if (not custom_map.empty()) {
 			try {
-				for (const auto &split : ssplit(custom_map)) {
+				for (const auto& split : ssplit(custom_map)) {
 					const auto vals = ssplit(split, ':');
 					if (vals.size() != 2) continue;
 					int change_id = std::stoi(vals.at(0));
@@ -335,8 +329,7 @@ namespace Cpu {
 					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
 					core_map.at(change_id) = new_id;
 				}
-			} catch (...) {
-			}
+			} catch (...) {}
 		}
 
 		return core_map;
@@ -350,10 +343,10 @@ namespace Cpu {
 		float rate = -1.0f;
 		string status = "discharging";
 		int64_t full, remaining, watts;
-		full = get_sensor("acpibat0", { SENSOR_AMPHOUR, SENSOR_WATTHOUR }, 0);
-		remaining = get_sensor("acpibat0", { SENSOR_AMPHOUR, SENSOR_WATTHOUR }, 3);
-		watts = get_sensor("acpibat0", { SENSOR_WATTS }, 0);
-		int64_t state = get_sensor("acpibat0", { SENSOR_INTEGER }, 0);
+		full = get_sensor("acpibat0", {SENSOR_AMPHOUR, SENSOR_WATTHOUR}, 0);
+		remaining = get_sensor("acpibat0", {SENSOR_AMPHOUR, SENSOR_WATTHOUR}, 3);
+		watts = get_sensor("acpibat0", {SENSOR_WATTS}, 0);
+		int64_t state = get_sensor("acpibat0", {SENSOR_INTEGER}, 0);
 		if (full < 0) {
 			has_battery = false;
 			Logger::warning("failed to get battery");
@@ -370,33 +363,30 @@ namespace Cpu {
 				status = "full";
 			}
 			switch (state) {
-				case 0:
-					status = "full";
-					percent = 100;
-					break;
-				case 2:
-					status = "charging";
-					break;
+			case 0:
+				status = "full";
+				percent = 100;
+				break;
+			case 2:
+				status = "charging";
+				break;
 			}
 		}
 
 		return {percent, rate, seconds, status};
 	}
 
-	auto collect(bool no_update) -> cpu_info & {
-		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty()))
-			return current_cpu;
-		auto &cpu = current_cpu;
+	auto collect(bool no_update) -> cpu_info& {
+		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
+		auto& cpu = current_cpu;
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");
 		}
 
-		auto cp_time = std::unique_ptr<struct cpustats[]>{
-			new struct cpustats[Shared::coreCount]
-		};
+		auto cp_time = std::unique_ptr<struct cpustats[]> {new struct cpustats[Shared::coreCount]};
 		size_t size = Shared::coreCount * sizeof(struct cpustats);
-		static int cpustats_mib[] = {CTL_KERN, KERN_CPUSTATS, /*fillme*/0};
+		static int cpustats_mib[] = {CTL_KERN, KERN_CPUSTATS, /*fillme*/ 0};
 		for (int i = 0; i < Shared::coreCount; i++) {
 			cpustats_mib[2] = i / 2;
 			if (sysctl(cpustats_mib, 3, &cp_time[i], &size, NULL, 0) == -1) {
@@ -432,28 +422,33 @@ namespace Cpu {
 				core_old_totals.at(i) = totals;
 				core_old_idles.at(i) = idles;
 
-				cpu.core_percent.at(i).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+				cpu.core_percent.at(i).push_back(
+					clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll)
+				);
 
 				//? Reduce size if there are more values than needed for graph
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
-			} catch (const std::exception &e) {
+			} catch (const std::exception& e) {
 				Logger::error("Cpu::collect() : {}", e.what());
 				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
-
 		}
 
 		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
 		const long long calc_idles = max(1ll, global_idles - cpu_old.at("idles"));
 
 		//? Populate cpu.cpu_percent with all fields from syscall
-		for (int ii = 0; const auto &val : times_summed) {
-			cpu.cpu_percent.at(time_names.at(ii)).push_back(clamp((long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll));
+		for (int ii = 0; const auto& val : times_summed) {
+			cpu.cpu_percent.at(time_names.at(ii))
+				.push_back(clamp(
+					(long long)round((double)(val - cpu_old.at(time_names.at(ii))) * 100 / calc_totals), 0ll, 100ll
+				));
 			cpu_old.at(time_names.at(ii)) = val;
 
 			//? Reduce size if there are more values than needed for graph
-			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2)) cpu.cpu_percent.at(time_names.at(ii)).pop_front();
+			while (cmp_greater(cpu.cpu_percent.at(time_names.at(ii)).size(), width * 2))
+				cpu.cpu_percent.at(time_names.at(ii)).pop_front();
 
 			ii++;
 		}
@@ -462,10 +457,13 @@ namespace Cpu {
 		cpu_old.at("idles") = global_idles;
 
 		//? Total usage of cpu
-		cpu.cpu_percent.at("total").push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
+		cpu.cpu_percent.at("total").push_back(
+			clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll)
+		);
 
 		//? Reduce size if there are more values than needed for graph
-		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
+		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2))
+			cpu.cpu_percent.at("total").pop_front();
 
 		if (Config::getB("show_cpu_freq")) {
 			auto hz = get_cpuHz();
@@ -474,15 +472,13 @@ namespace Cpu {
 			}
 		}
 
-		if (Config::getB("check_temp") and got_sensors)
-			update_sensors();
+		if (Config::getB("check_temp") and got_sensors) update_sensors();
 
-		if (Config::getB("show_battery") and has_battery)
-			current_bat = get_battery();
+		if (Config::getB("show_battery") and has_battery) current_bat = get_battery();
 
 		return cpu;
 	}
-}  // namespace Cpu
+} // namespace Cpu
 
 namespace Mem {
 	bool has_swap = false;
@@ -491,7 +487,7 @@ namespace Mem {
 	int disk_ios = 0;
 	vector<string> last_found;
 
-	mem_info current_mem{};
+	mem_info current_mem {};
 
 	uint64_t get_totalMem() {
 		return Shared::totalMem;
@@ -505,7 +501,8 @@ namespace Mem {
 			disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
 		}
 		disk.old_io.at(0) = readBytes;
-		while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+		while (cmp_greater(disk.io_read.size(), width * 2))
+			disk.io_read.pop_front();
 
 		if (disk.io_write.empty()) {
 			disk.io_write.push_back(0);
@@ -513,31 +510,33 @@ namespace Mem {
 			disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
 		}
 		disk.old_io.at(1) = writeBytes;
-		while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+		while (cmp_greater(disk.io_write.size(), width * 2))
+			disk.io_write.pop_front();
 
 		// no io times - need to push something anyway or we'll get an ABORT
-		if (disk.io_activity.empty())
-			disk.io_activity.push_back(0);
+		if (disk.io_activity.empty()) disk.io_activity.push_back(0);
 		else
-			disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
-		while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
+			disk.io_activity.push_back(
+				clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l)
+			);
+		while (cmp_greater(disk.io_activity.size(), width * 2))
+			disk.io_activity.pop_front();
 	}
 
-	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
+	void collect_disk(std::unordered_map<string, disk_info>& disks, std::unordered_map<string, string>& mapping) {
 		uint64_t total_bytes_read = 0;
 		uint64_t total_bytes_write = 0;
 
 		int num_drives = 0;
-		int mib[2] = { CTL_HW, HW_DISKCOUNT };
+		int mib[2] = {CTL_HW, HW_DISKCOUNT};
 
 		size_t size;
 		if (sysctl(mib, 2, &num_drives, &size, NULL, 0) >= 0) {
 			mib[0] = CTL_HW;
 			mib[1] = HW_DISKSTATS;
 			size = num_drives * sizeof(struct diskstats);
-			auto p = std::unique_ptr<struct diskstats[], void(*)(void*)> {
-				reinterpret_cast<struct diskstats*>(malloc(size)),
-				free
+			auto p = std::unique_ptr<struct diskstats[], void (*)(void*)> {
+				reinterpret_cast<struct diskstats*>(malloc(size)), free
 			};
 			if (sysctl(mib, 2, p.get(), &size, NULL, 0) == -1) {
 				Logger::error("failed to get disk stats");
@@ -556,14 +555,13 @@ namespace Mem {
 		}
 	}
 
-	auto collect(bool no_update) -> mem_info & {
-		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
-			return current_mem;
+	auto collect(bool no_update) -> mem_info& {
+		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 
 		auto show_swap = Config::getB("show_swap");
 		auto show_disks = Config::getB("show_disks");
 		auto swap_disk = Config::getB("swap_disk");
-		auto &mem = current_mem;
+		auto& mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
 		u_int memActive, memWire, cachedMem;
@@ -589,8 +587,8 @@ namespace Mem {
 		cachedMem = bcstats.numbufpages * Shared::pageSize;
 		mem.stats.at("used") = memActive;
 		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-   		mem.stats.at("cached") = cachedMem;
-  		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
+		mem.stats.at("cached") = cachedMem;
+		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
 
 		if (show_swap) {
 			int total = uvmexp.swpages * Shared::pageSize;
@@ -601,28 +599,28 @@ namespace Mem {
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
-			for (const auto &name : swap_names) {
+			for (const auto& name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2))
 					mem.percent.at(name).pop_front();
 			}
 			has_swap = true;
-		} else
-			has_swap = false;
+		} else has_swap = false;
 		//? Calculate percentages
-		for (const auto &name : mem_names) {
+		for (const auto& name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
 			while (cmp_greater(mem.percent.at(name).size(), width * 2))
 				mem.percent.at(name).pop_front();
 		}
 
 		if (show_disks) {
-			std::unordered_map<string, string> mapping;  // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
+			std::unordered_map<string, string>
+				mapping; // keep mapping from device -> mountpoint, since IOKit doesn't give us the mountpoint
 			double uptime = system_uptime();
-			auto &disks_filter = Config::getS("disks_filter");
+			auto& disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
 			// auto only_physical = Config::getB("only_physical");
-			auto &disks = mem.disks;
+			auto& disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
 				filter = ssplit(disks_filter);
@@ -632,14 +630,14 @@ namespace Mem {
 				}
 			}
 
-			struct statfs *stfs;
+			struct statfs* stfs;
 			int count = getmntinfo(&stfs, MNT_WAIT);
 			vector<string> found;
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
 				auto fstype = string(stfs[i].f_fstypename);
-				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs" ||
-					fstype == "fdesckfs") {
+				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" ||
+					fstype == "tmpfs" || fstype == "linsysfs" || fstype == "fdesckfs") {
 					// in memory filesystems -> not useful to show
 					continue;
 				}
@@ -652,24 +650,20 @@ namespace Mem {
 				//? Match filter if not empty
 				if (not filter.empty()) {
 					bool match = v_contains(filter, mountpoint);
-					if ((filter_exclude and match) or (not filter_exclude and not match))
-						continue;
+					if ((filter_exclude and match) or (not filter_exclude and not match)) continue;
 				}
 
 				found.push_back(mountpoint);
 				if (not disks.contains(mountpoint)) {
-					disks[mountpoint] = disk_info{fs::canonical(dev, ec), fs::path(mountpoint).filename()};
+					disks[mountpoint] = disk_info {fs::canonical(dev, ec), fs::path(mountpoint).filename()};
 
-					if (disks.at(mountpoint).dev.empty())
-						disks.at(mountpoint).dev = dev;
+					if (disks.at(mountpoint).dev.empty()) disks.at(mountpoint).dev = dev;
 
 					if (disks.at(mountpoint).name.empty())
 						disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
 				}
 
-
-				if (not v_contains(last_found, mountpoint))
-					redraw = true;
+				if (not v_contains(last_found, mountpoint)) redraw = true;
 
 				disks.at(mountpoint).free = stfs[i].f_bfree;
 				disks.at(mountpoint).total = stfs[i].f_iosize;
@@ -678,18 +672,15 @@ namespace Mem {
 			//? Remove disks no longer mounted or filtered out
 			if (swap_disk and has_swap) found.push_back("swap");
 			for (auto it = disks.begin(); it != disks.end();) {
-				if (not v_contains(found, it->first))
-					it = disks.erase(it);
-				else
-					it++;
+				if (not v_contains(found, it->first)) it = disks.erase(it);
+				else it++;
 			}
 			if (found.size() != last_found.size()) redraw = true;
 			last_found = std::move(found);
 
 			//? Get disk/partition stats
-			for (auto &[mountpoint, disk] : disks) {
-				if (std::error_code ec; not fs::exists(mountpoint, ec))
-					continue;
+			for (auto& [mountpoint, disk] : disks) {
+				if (std::error_code ec; not fs::exists(mountpoint, ec)) continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
 					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
@@ -709,23 +700,19 @@ namespace Mem {
 
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
-			if (snapped and disks.contains("/mnt"))
-				mem.disks_order.push_back("/mnt");
-			else if (disks.contains("/"))
-				mem.disks_order.push_back("/");
+			if (snapped and disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+			else if (disks.contains("/")) mem.disks_order.push_back("/");
 			if (swap_disk and has_swap) {
 				mem.disks_order.push_back("swap");
-				if (not disks.contains("swap"))
-					disks["swap"] = {"", "swap"};
+				if (not disks.contains("swap")) disks["swap"] = {"", "swap"};
 				disks.at("swap").total = mem.stats.at("swap_total");
 				disks.at("swap").used = mem.stats.at("swap_used");
 				disks.at("swap").free = mem.stats.at("swap_free");
 				disks.at("swap").used_percent = mem.percent.at("swap_used").back();
 				disks.at("swap").free_percent = mem.percent.at("swap_free").back();
 			}
-			for (const auto &name : last_found)
-				if (not is_in(name, "/", "swap", "/dev"))
-					mem.disks_order.push_back(name);
+			for (const auto& name : last_found)
+				if (not is_in(name, "/", "swap", "/dev")) mem.disks_order.push_back(name);
 
 			disk_ios = 0;
 			collect_disk(disks, mapping);
@@ -735,7 +722,7 @@ namespace Mem {
 		return mem;
 	}
 
-}  // namespace Mem
+} // namespace Mem
 
 namespace Net {
 	std::unordered_map<string, net_info> current_net;
@@ -748,9 +735,9 @@ namespace Net {
 	bool rescale = true;
 	uint64_t timestamp = 0;
 
-	auto collect(bool no_update) -> net_info & {
-		auto &net = current_net;
-		auto &config_iface = Config::getS("net_iface");
+	auto collect(bool no_update) -> net_info& {
+		auto& net = current_net;
+		auto& config_iface = Config::getS("net_iface");
 		auto net_sync = Config::getB("net_sync");
 		auto net_auto = Config::getB("net_auto");
 		auto new_timestamp = time_ms();
@@ -766,16 +753,18 @@ namespace Net {
 			}
 			int family = 0;
 			static_assert(INET6_ADDRSTRLEN >= INET_ADDRSTRLEN); // 46 >= 16, compile-time assurance.
-			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
+			enum {
+				IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN
+			}; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
 			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
-			for (auto *ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
+			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
 				if (ifa->ifa_addr == nullptr) continue;
 				family = ifa->ifa_addr->sa_family;
-				const auto &iface = ifa->ifa_name;
+				const auto& iface = ifa->ifa_name;
 				//? Update available interfaces vector and get status of interface
 				if (not v_contains(interfaces, iface)) {
 					interfaces.push_back(iface);
@@ -790,26 +779,44 @@ namespace Net {
 				//? Get IPv4 address
 				if (family == AF_INET) {
 					if (net[iface].ipv4.empty()) {
-						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(
+										   family,
+										   &(reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr)->sin_addr),
+										   ip,
+										   IPBUFFER_MAXSIZE
+									   )) {
 
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
+							Logger::error(
+								"Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}",
+								iface,
+								strerror(errsv)
+							);
 						}
 					}
 				}
 				//? Get IPv6 address
 				else if (family == AF_INET6) {
 					if (net[iface].ipv6.empty()) {
-						if (nullptr != inet_ntop(family, &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr), ip, IPBUFFER_MAXSIZE)) {
+						if (nullptr != inet_ntop(
+										   family,
+										   &(reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr)->sin6_addr),
+										   ip,
+										   IPBUFFER_MAXSIZE
+									   )) {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
+							Logger::error(
+								"Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}",
+								iface,
+								strerror(errsv)
+							);
 						}
 					}
-				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
+				} // else, ignoring family==AF_LINK (see man 3 getifaddrs)
 			}
 
 			std::unordered_map<string, std::tuple<uint64_t, uint64_t>> ifstats;
@@ -822,14 +829,14 @@ namespace Net {
 				if (sysctl(mib, 6, buf.get(), &len, nullptr, 0) < 0) {
 					Logger::error("failed getting network interfaces");
 				} else {
-					char *lim = buf.get() + len;
-					char *next = nullptr;
+					char* lim = buf.get() + len;
+					char* next = nullptr;
 					for (next = buf.get(); next < lim;) {
-						struct if_msghdr *ifm = (struct if_msghdr *)next;
+						struct if_msghdr* ifm = (struct if_msghdr*)next;
 						next += ifm->ifm_msglen;
 						struct if_data ifm_data = ifm->ifm_data;
 						if (ifm->ifm_addrs & RTA_IFP) {
-							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(ifm + 1);
+							struct sockaddr_dl* sdl = (struct sockaddr_dl*)(ifm + 1);
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
@@ -840,10 +847,10 @@ namespace Net {
 			}
 
 			//? Get total received and transmitted bytes + device address if no ip was found
-			for (const auto &iface : interfaces) {
+			for (const auto& iface : interfaces) {
 				for (const string dir : {"download", "upload"}) {
-					auto &saved_stat = net.at(iface).stat.at(dir);
-					auto &bandwidth = net.at(iface).bandwidth.at(dir);
+					auto& saved_stat = net.at(iface).stat.at(dir);
+					auto& bandwidth = net.at(iface).bandwidth.at(dir);
 					uint64_t val = dir == "download" ? std::get<0>(ifstats[iface]) : std::get<1>(ifstats[iface]);
 
 					//? Update speed, total and top values
@@ -851,11 +858,15 @@ namespace Net {
 						saved_stat.rollover += saved_stat.last;
 						saved_stat.last = 0;
 					}
-					if (cmp_greater((unsigned long long)saved_stat.rollover + (unsigned long long)val, numeric_limits<uint64_t>::max())) {
+					if (cmp_greater(
+							(unsigned long long)saved_stat.rollover + (unsigned long long)val,
+							numeric_limits<uint64_t>::max()
+						)) {
 						saved_stat.rollover = 0;
 						saved_stat.last = 0;
 					}
-					saved_stat.speed = round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
+					saved_stat.speed =
+						round((double)(val - saved_stat.last) / ((double)(new_timestamp - timestamp) / 1000));
 					if (saved_stat.speed > saved_stat.top) saved_stat.top = saved_stat.speed;
 					if (saved_stat.offset > val + saved_stat.rollover) saved_stat.offset = 0;
 					saved_stat.total = (val + saved_stat.rollover) - saved_stat.offset;
@@ -863,7 +874,8 @@ namespace Net {
 
 					//? Add values to graph
 					bandwidth.push_back(saved_stat.speed);
-					while (cmp_greater(bandwidth.size(), width * 2)) bandwidth.pop_front();
+					while (cmp_greater(bandwidth.size(), width * 2))
+						bandwidth.pop_front();
 
 					//? Set counters for auto scaling
 					if (net_auto and selected_iface == iface) {
@@ -881,56 +893,57 @@ namespace Net {
 			//? Clean up net map if needed
 			if (net.size() > interfaces.size()) {
 				for (auto it = net.begin(); it != net.end();) {
-					if (not v_contains(interfaces, it->first))
-						it = net.erase(it);
-					else
-						it++;
+					if (not v_contains(interfaces, it->first)) it = net.erase(it);
+					else it++;
 				}
 			}
 
 			timestamp = new_timestamp;
 		}
 		//? Return empty net_info struct if no interfaces was found
-		if (net.empty())
-			return empty_net;
+		if (net.empty()) return empty_net;
 
 		//? Find an interface to display if selected isn't set or valid
 		if (selected_iface.empty() or not v_contains(interfaces, selected_iface)) {
 			max_count["download"][0] = max_count["download"][1] = max_count["upload"][0] = max_count["upload"][1] = 0;
 			redraw = true;
 			if (net_auto) rescale = true;
-			if (not config_iface.empty() and v_contains(interfaces, config_iface))
-				selected_iface = config_iface;
+			if (not config_iface.empty() and v_contains(interfaces, config_iface)) selected_iface = config_iface;
 			else {
 				//? Sort interfaces by total upload + download bytes
 				auto sorted_interfaces = interfaces;
-				rng::sort(sorted_interfaces, [&](const auto &a, const auto &b) {
-					return cmp_greater(net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
-									   net.at(b).stat["download"].total + net.at(b).stat["upload"].total);
+				rng::sort(sorted_interfaces, [&](const auto& a, const auto& b) {
+					return cmp_greater(
+						net.at(a).stat["download"].total + net.at(a).stat["upload"].total,
+						net.at(b).stat["download"].total + net.at(b).stat["upload"].total
+					);
 				});
 				selected_iface.clear();
 				//? Try to set to a connected interface
-				for (const auto &iface : sorted_interfaces) {
+				for (const auto& iface : sorted_interfaces) {
 					if (net.at(iface).connected) selected_iface = iface;
 					break;
 				}
 				//? If no interface is connected set to first available
-				if (selected_iface.empty() and not sorted_interfaces.empty())
-					selected_iface = sorted_interfaces.at(0);
-				else if (sorted_interfaces.empty())
-					return empty_net;
+				if (selected_iface.empty() and not sorted_interfaces.empty()) selected_iface = sorted_interfaces.at(0);
+				else if (sorted_interfaces.empty()) return empty_net;
 			}
 		}
 
 		//? Calculate max scale for graphs if needed
 		if (net_auto) {
 			bool sync = false;
-			for (const auto &dir : {"download", "upload"}) {
-				for (const auto &sel : {0, 1}) {
+			for (const auto& dir : {"download", "upload"}) {
+				for (const auto& sel : {0, 1}) {
 					if (rescale or max_count[dir][sel] >= 5) {
-						const long long avg_speed = (net[selected_iface].bandwidth[dir].size() > 5
-														? std::accumulate(net.at(selected_iface).bandwidth.at(dir).rbegin(), net.at(selected_iface).bandwidth.at(dir).rbegin() + 5, 0ll) / 5
-														: net[selected_iface].stat[dir].speed);
+						const long long avg_speed =
+							(net[selected_iface].bandwidth[dir].size() > 5
+								 ? std::accumulate(
+									   net.at(selected_iface).bandwidth.at(dir).rbegin(),
+									   net.at(selected_iface).bandwidth.at(dir).rbegin() + 5,
+									   0ll
+								   ) / 5
+								 : net[selected_iface].stat[dir].speed);
 						graph_max[dir] = max(uint64_t(avg_speed * (sel == 0 ? 1.3 : 3.0)), (uint64_t)10 << 10);
 						max_count[dir][0] = max_count[dir][1] = 0;
 						redraw = true;
@@ -951,7 +964,7 @@ namespace Net {
 		rescale = false;
 		return net.at(selected_iface);
 	}
-}  // namespace Net
+} // namespace Net
 
 namespace Proc {
 
@@ -983,7 +996,7 @@ namespace Proc {
 	}
 
 	//* Get detailed info for selected process
-	void _collect_details(const size_t pid, vector<proc_info> &procs) {
+	void _collect_details(const size_t pid, vector<proc_info>& procs) {
 		if (pid != detailed.last_pid) {
 			detailed = {};
 			detailed.last_pid = pid;
@@ -997,7 +1010,8 @@ namespace Proc {
 		//? Update cpu percent deque for process cpu graph
 		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
-		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
+		while (cmp_greater(detailed.cpu_percent.size(), width))
+			detailed.cpu_percent.pop_front();
 
 		//? Process runtime : current time - start time (both in unix time - seconds since epoch)
 		struct timeval currentTime;
@@ -1019,19 +1033,21 @@ namespace Proc {
 		detailed.mem_bytes.push_back(detailed.entry.mem);
 		detailed.memory = floating_humanizer(detailed.entry.mem);
 
-		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or detailed.first_mem > detailed.mem_bytes.back() * 4) {
+		if (detailed.first_mem == -1 or detailed.first_mem < detailed.mem_bytes.back() / 2 or
+			detailed.first_mem > detailed.mem_bytes.back() * 4) {
 			detailed.first_mem = min((uint64_t)detailed.mem_bytes.back() * 2, Mem::get_totalMem());
 			redraw = true;
 		}
 
-		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+		while (cmp_greater(detailed.mem_bytes.size(), width))
+			detailed.mem_bytes.pop_front();
 	}
 
 	//* Collects and sorts process information from /proc
-	auto collect(bool no_update) -> vector<proc_info> & {
-		const auto &sorting = Config::getS("proc_sorting");
+	auto collect(bool no_update) -> vector<proc_info>& {
+		const auto& sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
-		const auto &filter = Config::getS("proc_filter");
+		const auto& filter = Config::getS("proc_filter");
 		auto per_core = Config::getB("proc_per_core");
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
@@ -1056,7 +1072,8 @@ namespace Proc {
 		if (no_update and not current_procs.empty()) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
-			//* ---------------------------------------------Collection start----------------------------------------------
+			//* ---------------------------------------------Collection
+			// start----------------------------------------------
 
 			should_filter = true;
 			found.clear();
@@ -1067,7 +1084,8 @@ namespace Proc {
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
 			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get() , KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
+			const struct kinfo_proc* kprocs =
+				kvm_getprocs(kd.get(), KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
 
 			for (int i = 0; i < count; i++) {
 				const struct kinfo_proc* kproc = &kprocs[i];
@@ -1084,12 +1102,10 @@ namespace Proc {
 						current_procs.push_back({pid});
 						find_old = current_procs.end() - 1;
 						no_cache = true;
-					}
-					else continue;
-				}
-				else if (dead_procs.contains(pid)) continue;
+					} else continue;
+				} else if (dead_procs.contains(pid)) continue;
 
-				auto &new_proc = *find_old;
+				auto& new_proc = *find_old;
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
@@ -1113,21 +1129,21 @@ namespace Proc {
 					}
 					new_proc.ppid = kproc->p_ppid;
 					new_proc.cpu_s = round(kproc->p_ustart_sec);
-					struct passwd *pwd = getpwuid(kproc->p_uid);
-					if (pwd)
-						new_proc.user = pwd->pw_name;
+					struct passwd* pwd = getpwuid(kproc->p_uid);
+					if (pwd) new_proc.user = pwd->pw_name;
 				}
 				new_proc.p_nice = kproc->p_nice;
 				new_proc.state = kproc->p_stat;
 
 				int cpu_t = 0;
-				cpu_t 	= kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
+				cpu_t = kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
 
 				new_proc.mem = kproc->p_vm_rssize * Shared::pageSize;
 				new_proc.threads = 1; // can't seem to find this in kinfo_proc
 
 				//? Process cpu usage since last update
-				new_proc.cpu_p = clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
+				new_proc.cpu_p =
+					clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
 
 				//? Process cumulative cpu usage since process start
 				new_proc.cpu_c = (double)(cpu_t * Shared::clkTck / 1'000'000) / max(1.0, timeNow - new_proc.cpu_s);
@@ -1142,7 +1158,9 @@ namespace Proc {
 
 			//? Clear dead processes from current_procs if not paused
 			if (not pause_proc_list) {
-				auto eraser = rng::remove_if(current_procs, [&](const auto& element) { return not v_contains(found, element.pid); });
+				auto eraser = rng::remove_if(current_procs, [&](const auto& element) {
+					return not v_contains(found, element.pid);
+				});
 				current_procs.erase(eraser.begin(), eraser.end());
 				if (!dead_procs.empty()) dead_procs.clear();
 			}
@@ -1176,7 +1194,6 @@ namespace Proc {
 			}
 
 			old_cputimes = cputimes;
-
 		}
 
 		//* ---------------------------------------------Collection done-----------------------------------------------
@@ -1209,11 +1226,11 @@ namespace Proc {
 
 			if (toggle_children != -1) {
 				auto collapser = rng::find(current_procs, toggle_children, &proc_info::pid);
-				if (collapser != current_procs.end()){
+				if (collapser != current_procs.end()) {
 					for (auto& p : current_procs) {
 						if (p.ppid == collapser->pid) {
 							auto child = rng::find(current_procs, p.pid, &proc_info::pid);
-							if (child != current_procs.end()){
+							if (child != current_procs.end()) {
 								child->collapsed = not child->collapsed;
 							}
 						}
@@ -1222,17 +1239,15 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
 					if (collapse == expand) {
 						collapser->collapsed = not collapser->collapsed;
-					}
-					else if (collapse > -1) {
+					} else if (collapse > -1) {
 						collapser->collapsed = true;
-					}
-					else if (expand > -1) {
+					} else if (expand > -1) {
 						collapser->collapsed = false;
 					}
 					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
@@ -1251,16 +1266,23 @@ namespace Proc {
 			}
 
 			//? Stable sort to retain selected sorting among processes with the same parent
-			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
+			rng::stable_sort(current_procs, rng::less {}, &proc_info::ppid);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
-			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
+			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less {}, &proc_info::ppid)) {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
 			}
 
 			//? Recursive sort over tree structure to account for collapsed processes in the tree
 			int index = 0;
-			tree_sort(tree_procs, sorting, reverse, (pause_proc_list and not (sorted_change or tree_mode_change)), index, current_procs.size());
+			tree_sort(
+				tree_procs,
+				sorting,
+				reverse,
+				(pause_proc_list and not(sorted_change or tree_mode_change)),
+				index,
+				current_procs.size()
+			);
 
 			//? Recursive construction of ASCII tree prefixes.
 			for (auto t = tree_procs.begin(); t != tree_procs.end(); ++t) {
@@ -1282,7 +1304,7 @@ namespace Proc {
 		numpids = (int)current_procs.size() - filter_found;
 		return current_procs;
 	}
-}  // namespace Proc
+} // namespace Proc
 
 namespace Tools {
 	double system_uptime() {
@@ -1295,4 +1317,4 @@ namespace Tools {
 		}
 		return 0.0;
 	}
-}  // namespace Tools
+} // namespace Tools

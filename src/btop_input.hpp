@@ -4,7 +4,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-	   http://www.apache.org/licenses/LICENSE-2.0
+		   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,7 @@ tab-size = 4
 
 #include <array>
 #include <atomic>
+#include <csignal>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -31,9 +32,9 @@ using std::deque;
 using std::string;
 
 /* The input functions rely on the following termios parameters being set:
-	Non-canonical mode (c_lflags & ~(ICANON))
-	VMIN and VTIME (c_cc) set to 0
-	These will automatically be set when running Term::init() from btop_tools.cpp
+		Non-canonical mode (c_lflags & ~(ICANON))
+		VMIN and VTIME (c_cc) set to 0
+		These will automatically be set when running Term::init() from btop_tools.cpp
 */
 
 //* Functions and variables for handling keyboard and mouse input
@@ -58,7 +59,7 @@ namespace Input {
 	extern deque<string> history;
 
 	//* Poll keyboard & mouse input for <timeout> ms and return input availability as a bool
-	bool poll(const uint64_t timeout=0);
+	bool poll(const uint64_t timeout = 0);
 
 	//* Get a key or mouse action from input
 	string get();
@@ -75,4 +76,4 @@ namespace Input {
 	//* Process actions for input <key>
 	void process(const std::string_view key);
 
-}
+} // namespace Input

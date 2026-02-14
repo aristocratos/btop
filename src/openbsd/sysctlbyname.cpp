@@ -14,24 +14,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <sys/types.h>
-#include <sys/sysctl.h>
+#include "../btop_tools.hpp"
+#include "internal.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
 
-#include "internal.h"
-#include "../btop_tools.hpp"
-
-int
-sysctlbyname(const char *name, void *oldp, size_t *oldlenp,
-    void *newp, size_t newlen)
-{
+int sysctlbyname(const char* name, void* oldp, size_t* oldlenp, void* newp, size_t newlen) {
 	int i, mib[2];
 
 	for (i = 0; i < 132; i++) {
-	// for (i = 0; i < sizeof(sysctlnames) / sizeof(sysctlnames[0]); i++) {
+		// for (i = 0; i < sizeof(sysctlnames) / sizeof(sysctlnames[0]); i++) {
 		if (!strcmp(name, sysctlnames[i].name)) {
 			mib[0] = sysctlnames[i].mib0;
 			mib[1] = sysctlnames[i].mib1;

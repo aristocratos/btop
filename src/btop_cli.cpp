@@ -2,6 +2,10 @@
 
 #include "btop_cli.hpp"
 
+#include "btop_config.hpp"
+#include "btop_shared.hpp"
+#include "config.h"
+
 #include <algorithm>
 #include <expected>
 #include <filesystem>
@@ -17,10 +21,6 @@
 
 #include <fmt/base.h>
 #include <fmt/format.h>
-
-#include "btop_config.hpp"
-#include "btop_shared.hpp"
-#include "config.h"
 
 using namespace std::string_view_literals;
 
@@ -63,16 +63,16 @@ namespace Cli {
 			if (arg == "-h" || arg == "--help") {
 				usage();
 				help();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 			if (arg == "-v" || arg == "-V") {
 				version();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 			if (arg == "--version") {
 				version();
 				build_info();
-				return std::unexpected { 0 };
+				return std::unexpected {0};
 			}
 
 			if (arg == "-d" || arg == "--debug") {
@@ -90,7 +90,7 @@ namespace Cli {
 			if (arg == "-t" || arg == "--tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				cli.force_tty = std::make_optional(true);
 				continue;
@@ -98,7 +98,7 @@ namespace Cli {
 			if (arg == "--no-tty") {
 				if (cli.force_tty.has_value()) {
 					error("tty mode can't be set twice");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				cli.force_tty = std::make_optional(false);
 				continue;
@@ -108,15 +108,15 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Config requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
-				auto config_file = stdfs::path { arg };
+				auto config_file = stdfs::path {arg};
 
 				if (stdfs::is_directory(config_file)) {
 					error("Config file can't be a directory");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				cli.config_file = std::make_optional(config_file);
@@ -126,7 +126,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Filter requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -137,7 +137,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Preset requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -146,10 +146,10 @@ namespace Cli {
 					cli.preset = std::make_optional(preset_id);
 				} catch (std::invalid_argument& e) {
 					error("Preset must be a positive number");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				} catch (std::out_of_range& e) {
 					error(fmt::format("Preset argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				continue;
 			}
@@ -157,15 +157,15 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Themes directory requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
-				auto themes_dir = stdfs::path { arg };
+				auto themes_dir = stdfs::path {arg};
 
 				if (not stdfs::is_directory(themes_dir)) {
 					error("Themes directory does not exist or is not a directory");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				cli.themes_dir = std::make_optional(themes_dir);
@@ -175,7 +175,7 @@ namespace Cli {
 				// This flag requires an argument.
 				if (++it == args.end()) {
 					error("Update requires an argument");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 
 				auto arg = *it;
@@ -184,16 +184,16 @@ namespace Cli {
 					cli.updates = refresh_rate;
 				} catch (std::invalid_argument& e) {
 					error("Update must be a positive number");
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				} catch (std::out_of_range& e) {
 					error(fmt::format("Update argument is out of range: {}", arg.data()));
-					return std::unexpected { 1 };
+					return std::unexpected {1};
 				}
 				continue;
 			}
 
 			error(fmt::format("Unknown argument '{}{}{}'", YELLOW, arg, RESET));
-			return std::unexpected { 1 };
+			return std::unexpected {1};
 		}
 		return cli;
 	}
@@ -202,34 +202,26 @@ namespace Cli {
 		// The idea of using `current_config` is that the CLI parser is run before loading the actual config and thus
 		// provides default values.
 		auto config = Config::current_config();
-		
+
 		if (isatty(STDOUT_FILENO)) {
 			std::string buffer {};
 			// The config buffer ends in `\n`. `std::views::split` will then create an empty element after the last
 			// newline, which we would write as an additional empty line at the very end.
 			auto trimmed_config = config.substr(0, config.length() - 1);
 			for (const auto line : std::views::split(trimmed_config, '\n')) {
-				auto line_view = std::string_view { line };
+				auto line_view = std::string_view {line};
 				if (line_view.starts_with("#")) {
-					fmt::format_to(
-						std::back_inserter(buffer), "{1}{0}{2}\n", line_view, BOLD_BRIGHT_BLACK, RESET
-					);
+					fmt::format_to(std::back_inserter(buffer), "{1}{0}{2}\n", line_view, BOLD_BRIGHT_BLACK, RESET);
 				} else if (!line_view.empty()) {
 					auto pos = line_view.find("=");
 					if (pos == line_view.npos) {
 						error("invalid default config: '=' not found");
-						return std::unexpected { 1 };
+						return std::unexpected {1};
 					}
 					auto name = line_view.substr(0, pos);
 					auto value = line_view.substr(pos + 1);
 					fmt::format_to(
-						std::back_inserter(buffer),
-						"{2}{0}{4}={3}{1}{4}\n",
-						name,
-						value,
-						BOLD_YELLOW,
-						BOLD_GREEN,
-						RESET
+						std::back_inserter(buffer), "{2}{0}{4}={3}{1}{4}\n", name, value, BOLD_YELLOW, BOLD_GREEN, RESET
 					);
 				} else {
 					fmt::format_to(std::back_inserter(buffer), "\n");
@@ -239,7 +231,7 @@ namespace Cli {
 		} else {
 			fmt::print("{}", config);
 		}
-		return std::unexpected { 0 };
+		return std::unexpected {0};
 	}
 
 	void usage() noexcept {
@@ -262,7 +254,9 @@ namespace Cli {
 			"  {2}    --default-config{1}    Print default config to standard output\n"
 			"  {2}-h, --help{1}              Show this help message and exit\n"
 			"  {2}-V, --version{1}           Show a version message and exit (more with --version)\n",
-			BOLD_UNDERLINE, RESET, BOLD
+			BOLD_UNDERLINE,
+			RESET,
+			BOLD
 		);
 	}
 
