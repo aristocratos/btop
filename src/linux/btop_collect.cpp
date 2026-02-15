@@ -1945,7 +1945,7 @@ namespace Gpu {
 			if (gpu.supported_functions.mem_total)
 				mem_total += gpu.mem_total;
 			if (gpu.supported_functions.pwr_usage)
-				mem_total += gpu.pwr_usage;
+				pwr_total += gpu.pwr_usage;
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
