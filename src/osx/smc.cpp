@@ -16,6 +16,9 @@ indent = tab
 tab-size = 4
 */
 
+/* Not supported on PowerPC */
+#ifndef __POWERPC__
+
 #include "smc.hpp"
 
 static constexpr size_t MaxIndexCount = sizeof("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") - 1;
@@ -152,3 +155,5 @@ namespace Cpu {
 	}
 
 }  // namespace Cpu
+
+#endif // __POWERPC__

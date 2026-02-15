@@ -778,6 +778,7 @@ namespace Cpu {
 				macM1 = true;
 			} else {
 #endif
+#ifndef __POWERPC__
 				// try SMC (intel)
 				Logger::debug("checking intel");
 				try {
@@ -804,6 +805,10 @@ namespace Cpu {
 					// ignore, we don't have temp (common in VMs)
 					got_sensors = false;
 				}
+#else
+            Logger::debug("not supported on PowerPC yet");
+            got_sensors = false;
+#endif // __POWERPC__
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			}
 #endif
@@ -814,6 +819,7 @@ namespace Cpu {
 	void update_sensors() {
 		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
 		try {
+#ifndef __POWERPC__
 			if (macM1) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
@@ -836,6 +842,7 @@ namespace Cpu {
 					}
 				}
 			}
+#endif // __POWERPC__
 		} catch (std::runtime_error &e) {
 			got_sensors = false;
 			Logger::error("failed getting CPU temp");
@@ -1198,6 +1205,7 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060 && !defined(__ppc__) && !defined(__i386__)
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
@@ -1206,6 +1214,15 @@ namespace Mem {
 			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
 			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 		}
+#else
+		vm_statistics p;
+		mach_msg_type_number_t info_size = HOST_VM_INFO_COUNT;
+		if (host_statistics(mach_host_self(), HOST_VM_INFO, (host_info_t)&p, &info_size) == KERN_SUCCESS) {
+			mem.stats.at("free") = p.free_count * Shared::pageSize;
+			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
+			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+		}
+#endif
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
 
@@ -1651,12 +1668,14 @@ namespace Proc {
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
 		rusage_info_current rusage;
 		if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
 			// this fails for processes we don't own - same as in Linux
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
 		}
+#endif
 	}
 
 	//* Collects and sorts process information from /proc
