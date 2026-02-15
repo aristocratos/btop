@@ -531,6 +531,8 @@ namespace Cpu {
 	vector<Draw::Graph> graphs_upper;
 	vector<Draw::Graph> graphs_lower;
 	Draw::Meter cpu_meter;
+#ifdef __APPLE__
+#endif
 	vector<Draw::Meter> gpu_meters;
 	vector<Draw::Graph> core_graphs;
 	vector<Draw::Graph> temp_graphs;
@@ -703,7 +705,6 @@ namespace Cpu {
 			}
 
 			cpu_meter = Draw::Meter{cpu_meter_width, "cpu"};
-
 			if (mid_line) {
 				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
 					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
@@ -839,6 +840,12 @@ namespace Cpu {
 					+ Symbols::h_line * ((freq_range ? 17 : 7) - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 
+	#ifdef __APPLE__
+		//? Skip default CPU bar if we have P/E cores - we'll draw P-CPU and E-CPU bars in the core section
+		const bool skip_cpu_bar = (Cpu::cpu_core_info.p_cores > 0 and Cpu::cpu_core_info.e_cores > 0);
+		if (not skip_cpu_bar)
+	#endif
+		{
 		out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
 			+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
 		if (show_temps) {
@@ -855,10 +862,11 @@ namespace Cpu {
 			string cwatts_post = "W";
 
 			max_observed_pwr = max(max_observed_pwr, cpu.usage_watts);
-			out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post; 
+			out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post;
 		}
 
 			out += Theme::c("div_line") + Symbols::v_line;
+		}
 		} catch (const std::exception& e) {
 			throw std::runtime_error("graphs, clock, meter : " + string{e.what()});
 		}
@@ -875,12 +883,41 @@ namespace Cpu {
 		};
 
 		//? Core text and graphs
+	#ifdef __APPLE__
+		//? On Apple Silicon, start at row 0 since we skip the default CPU bar
+		const bool pe_layout = (Cpu::cpu_core_info.p_cores > 0 and Cpu::cpu_core_info.e_cores > 0);
+		int cx = 0, cy = (pe_layout ? 0 : 1), cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
+	#else
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
+	#endif
 		if (Shared::coreCount >= 100) core_width++;
-		for (const auto& n : iota(0, Shared::coreCount)) {
+
+		//? Helper lambda to draw a single core line
+	#ifdef __APPLE__
+		const int p_cores_count = Cpu::cpu_core_info.p_cores;
+		const int e_cores_count = Cpu::cpu_core_info.e_cores;
+		const bool use_pe_labels = (p_cores_count > 0 and e_cores_count > 0);
+	#endif
+
+		auto draw_core = [&](int n) {
 			auto enabled = is_cpu_enabled(n);
+		#ifdef __APPLE__
+			string core_label;
+			if (use_pe_labels) {
+				// On Apple Silicon: E-cores are indices 0 to e_cores-1, P-cores are e_cores to end
+				if (n < e_cores_count) {
+					core_label = "E" + to_string(n);
+				} else {
+					core_label = "P" + to_string(n - e_cores_count);
+				}
+			} else {
+				core_label = (Shared::coreCount < 100 ? "C" : "") + to_string(n);
+			}
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + Fx::b + ljust(core_label, core_width + 1) + Fx::ub;
+		#else
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
+		#endif
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
@@ -916,10 +953,107 @@ namespace Cpu {
 			}
 
 			out += Theme::c("div_line") + Symbols::v_line;
+		};
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
-				if (++cc >= b_columns) break;
-				cy = 1; cx = (b_width / b_columns) * cc;
+	#ifdef __APPLE__
+		//? ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+		//? Apple Silicon P/E Core Layout
+		//?
+		//? Apple Silicon chips have Performance (P) and Efficiency (E) cores.
+		//? We display them in separate sections with their own frequency bars:
+		//?   ┌─────────────────────────┐
+		//?   │ P-CPU ■■■■■■■■■ 3.2 GHz │  <- P-core average + frequency
+		//?   │ P0 ▃▅▇ 45% │ P1 ▂▄▆ 32% │  <- Individual P-cores
+		//?   │ E-CPU ■■■■■■■■■ 2.1 GHz │  <- E-core average + frequency
+		//?   │ E0 ▁▃▅ 12% │ E1 ▂▄▆ 18% │  <- Individual E-cores
+		//?   └─────────────────────────┘
+		//?
+		//? Core indices: E-cores are 0 to e_cores-1, P-cores are e_cores to end.
+		//? Frequency is obtained via IOReport framework (sudoless).
+		//? ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+		const int p_cores_total = Cpu::cpu_core_info.p_cores;
+		const int e_cores_total = Cpu::cpu_core_info.e_cores;
+		const bool has_pe_cores = (p_cores_total > 0 and e_cores_total > 0);
+
+		if (has_pe_cores) {
+			const int col_width = b_width / b_columns;
+
+			//? On Apple Silicon: E-cores are indices 0 to e_cores-1, P-cores are e_cores to end
+			//? Calculate P-core and E-core average percentages
+			long long p_sum = 0, e_sum = 0;
+			for (int i = 0; i < e_cores_total and i < (int)cpu.core_percent.size(); ++i) {
+				e_sum += safeVal(cpu.core_percent, i).back();
+			}
+			for (int i = e_cores_total; i < e_cores_total + p_cores_total and i < (int)cpu.core_percent.size(); ++i) {
+				p_sum += safeVal(cpu.core_percent, i).back();
+			}
+			const long long p_avg = p_cores_total > 0 ? p_sum / p_cores_total : 0;
+			const long long e_avg = e_cores_total > 0 ? e_sum / e_cores_total : 0;
+
+			//? P-CPU bar (spans full width of all columns)
+			string p_label = "P-CPU";
+			const int p_freq = Cpu::cpu_core_info.p_freq_mhz;
+			const string p_freq_str = p_freq > 0 ? " " + format_freq(p_freq) : "";
+			//? Total row width = b_width - 1 (content area, box border is separate)
+			//? Content = "P-CPU " (6) + meter + freq_str + border (1) = b_width - 1
+			const int p_freq_width = static_cast<int>(p_freq_str.size());
+			const int p_meter = max(1, b_width - 7 - p_freq_width - 1);
+			out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + p_label + Fx::ub + " "
+				+ Draw::Meter{p_meter, "cpu"}(p_avg)
+				+ Theme::g("cpu").at(clamp(p_avg, 0ll, 100ll)) + p_freq_str
+				+ Theme::c("div_line") + Symbols::v_line;
+			cy++;
+
+			//? Draw P-cores (indices e_cores_total to e_cores_total+p_cores_total-1)
+			int p_drawn = 0;
+			const int p_rows = (p_cores_total + b_columns - 1) / b_columns;
+			for (int row = 0; row < p_rows and p_drawn < p_cores_total and cy < max_row; ++row) {
+				for (int col = 0; col < b_columns and p_drawn < p_cores_total; ++col) {
+					cx = col * col_width;
+					draw_core(e_cores_total + p_drawn);
+					p_drawn++;
+				}
+				cy++;
+			}
+
+			//? E-CPU section header bar (spans full width of all columns)
+			if (cy < max_row) {
+				cx = 0;
+				string e_label = "E-CPU";
+				const int e_freq = Cpu::cpu_core_info.e_freq_mhz;
+				const string e_freq_str = e_freq > 0 ? " " + format_freq(e_freq) : "";
+				const int e_freq_width = static_cast<int>(e_freq_str.size());
+				const int e_meter = max(1, b_width - 7 - e_freq_width - 1);
+				out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + e_label + Fx::ub + " "
+					+ Draw::Meter{e_meter, "cpu"}(e_avg)
+					+ Theme::g("cpu").at(clamp(e_avg, 0ll, 100ll)) + e_freq_str
+					+ Theme::c("div_line") + Symbols::v_line;
+				cy++;
+			}
+
+			//? Draw E-cores (indices 0 to e_cores_total-1)
+			const int e_rows = (e_cores_total + b_columns - 1) / b_columns;
+			int e_drawn = 0;
+			for (int row = 0; row < e_rows and e_drawn < e_cores_total and cy < max_row; ++row) {
+				for (int col = 0; col < b_columns and e_drawn < e_cores_total; ++col) {
+					cx = col * col_width;
+					draw_core(e_drawn);
+					e_drawn++;
+				}
+				cy++;
+			}
+			cx = 0;
+		} else
+	#endif
+		{
+			//? Standard layout: all cores in columns
+			for (const auto& n : iota(0, Shared::coreCount)) {
+				draw_core(n);
+
+				if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
+					if (++cc >= b_columns) break;
+					cy = 1; cx = (b_width / b_columns) * cc;
+				}
 			}
 		}
 
@@ -2299,6 +2433,22 @@ namespace Draw {
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
+		#ifdef __APPLE__
+			//? Apple Silicon P/E layout needs extra rows for section headers.
+			//? Adjust columns so both P-core and E-core sections fit vertically.
+			//? Iterative solution is O(max_cores) ≈ O(16), negligible cost.
+			if (Cpu::cpu_core_info.p_cores > 0 and Cpu::cpu_core_info.e_cores > 0) {
+				const int p_cores = Cpu::cpu_core_info.p_cores;
+				const int e_cores = Cpu::cpu_core_info.e_cores;
+				const int available_rows = height - 5 - 2;  // -2 for P-CPU and E-CPU header bars
+				while (b_columns < Shared::coreCount) {
+					int p_rows = (p_cores + b_columns - 1) / b_columns;
+					int e_rows = (e_cores + b_columns - 1) / b_columns;
+					if (p_rows + e_rows <= available_rows) break;
+					b_columns++;
+				}
+			}
+		#endif
 			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
 				b_width =  max(29, (21 + 12 * show_temp) * b_columns - (b_columns - 1));
@@ -2321,6 +2471,22 @@ namespace Draw {
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
 		#else
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
+		#endif
+		#ifdef __APPLE__
+			//? On Apple Silicon with P/E cores, recalculate b_height based on actual P/E row needs
+			//? P/E layout needs: P-CPU header + P rows + E-CPU header + E rows + base (4)
+			if (Cpu::cpu_core_info.p_cores > 0 and Cpu::cpu_core_info.e_cores > 0) {
+				const int p_cores = Cpu::cpu_core_info.p_cores;
+				const int e_cores = Cpu::cpu_core_info.e_cores;
+				int p_rows = (p_cores + b_columns - 1) / b_columns;
+				int e_rows = (e_cores + b_columns - 1) / b_columns;
+				//? +4 base, +2 for P-CPU and E-CPU headers (we skip default CPU bar, so net +1 from original)
+				int pe_height = p_rows + e_rows + 4 + 1;
+			#ifdef GPU_SUPPORT
+				pe_height += gpus_extra_height;
+			#endif
+				b_height = min(height - 2, pe_height);
+			}
 		#endif
 
 			b_x = x + width - b_width - 1;
