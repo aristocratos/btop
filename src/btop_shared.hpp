@@ -357,13 +357,13 @@ namespace Proc {
 
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
+	extern int width_p;
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
 	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth, toggle_children;
 	extern int scroll_pos;
 	extern string selected_name;
-	extern atomic<bool> resized;
 
 	//? Contains the valid sorting options for processes
 	const vector<string> sort_vector = {
