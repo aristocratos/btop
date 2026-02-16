@@ -160,6 +160,11 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(libbtop Threads::Threads)
 
+# Enable io_uring for optimized process collection (Linux only)
+if(LINUX)
+  target_link_libraries(libbtop uring)
+endif()
+
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)

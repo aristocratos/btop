@@ -1344,6 +1344,10 @@ namespace Proc {
 		numpids = (int)current_procs.size() - filter_found;
 		return current_procs;
 	}
+
+	void cleanup() {
+		// No resources to cleanup on FreeBSD
+	}
 }  // namespace Proc
 
 namespace Tools {

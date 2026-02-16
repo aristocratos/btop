@@ -33,11 +33,14 @@ tab-size = 4
 #include <utility>
 
 #include <arpa/inet.h> // for inet_ntop()
+#include <dirent.h>
 #include <dlfcn.h>
 #include <ifaddrs.h>
+#include <liburing.h>
 #include <net/if.h>
 #include <netdb.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <fmt/format.h>
@@ -279,6 +282,7 @@ namespace Shared {
 
 	fs::path procPath, passwd_path;
 	long pageSize, clkTck, coreCount;
+	int proc_fd = -1;  //* File descriptor for /proc directory
 
 	void init() {
 
@@ -286,6 +290,9 @@ namespace Shared {
 		procPath = (fs::is_directory(fs::path("/proc")) and access("/proc", R_OK) != -1) ? "/proc" : "";
 		if (procPath.empty())
 			throw std::runtime_error("Proc filesystem not found or no permission to read from it!");
+
+		//? Open /proc directory fd for faster openat calls
+		proc_fd = open(procPath.c_str(), O_RDONLY | O_DIRECTORY);
 
 		passwd_path = (fs::is_regular_file(fs::path("/etc/passwd")) and access("/etc/passwd", R_OK) != -1) ? "/etc/passwd" : "";
 		if (passwd_path.empty())
@@ -2812,6 +2819,216 @@ namespace Proc {
 	constexpr size_t KTHREADD = 2;
 	static std::unordered_set<size_t> kernels_procs = {KTHREADD};
 	static std::unordered_set<size_t> dead_procs;
+	static uint64_t cached_totalMem = 0;
+	static int cached_totalMem_len = 0;
+
+	//* io_uring state for batched process stat reads
+	static constexpr size_t URING_ENTRIES = 512;
+	static constexpr size_t STAT_BUF_SIZE = 512;
+	static struct io_uring ring;
+	static bool ring_initialized = false;
+
+	//* Persistent file descriptors for /proc/[pid]/stat
+	static std::unordered_map<size_t, int> pid_fds;
+
+	//* Buffers for async reads
+	static std::unordered_map<size_t, std::array<char, STAT_BUF_SIZE>> stat_bufs;
+
+	//* linux_dirent64 structure for getdents64 syscall
+	//* Uses d_name[1] (C++ compliant) instead of flexible array member
+	struct linux_dirent64 {
+		uint64_t d_ino;
+		int64_t d_off;
+		uint16_t d_reclen;
+		uint8_t d_type;
+		char d_name[1];
+	};
+
+	//* Count digits in a uint64_t without string allocation
+	[[nodiscard]] inline int count_digits(uint64_t n) noexcept {
+		if (n < 10ULL) return 1;
+		if (n < 100ULL) return 2;
+		if (n < 1000ULL) return 3;
+		if (n < 10000ULL) return 4;
+		if (n < 100000ULL) return 5;
+		if (n < 1000000ULL) return 6;
+		if (n < 10000000ULL) return 7;
+		if (n < 100000000ULL) return 8;
+		if (n < 1000000000ULL) return 9;
+		if (n < 10000000000ULL) return 10;
+		if (n < 100000000000ULL) return 11;
+		if (n < 1000000000000ULL) return 12;
+		if (n < 10000000000000ULL) return 13;
+		if (n < 100000000000000ULL) return 14;
+		if (n < 1000000000000000ULL) return 15;
+		if (n < 10000000000000000ULL) return 16;
+		if (n < 100000000000000000ULL) return 17;
+		if (n < 1000000000000000000ULL) return 18;
+		if (n < 10000000000000000000ULL) return 19;
+		return 20;
+	}
+
+	//* Initialize io_uring with fallback modes
+	static bool init_io_uring() {
+		if (ring_initialized) return true;
+
+		struct io_uring_params params = {};
+
+		// Try modes in order of preference: SQPOLL > optimized > basic
+		constexpr unsigned int flag_sets[] = {
+			IORING_SETUP_SQPOLL | IORING_SETUP_SINGLE_ISSUER,
+			IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN | IORING_SETUP_COOP_TASKRUN,
+			0
+		};
+		constexpr int sq_thread_idle_ms = 2000;
+
+		for (const auto flags : flag_sets) {
+			params = {};
+			params.flags = flags;
+			if (flags & IORING_SETUP_SQPOLL) {
+				params.sq_thread_idle = sq_thread_idle_ms;
+			}
+			if (io_uring_queue_init_params(URING_ENTRIES, &ring, &params) >= 0) {
+				ring_initialized = true;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//* Fast PID list using getdents64 syscall
+	static vector<size_t> get_pids_fast() {
+		vector<size_t> pids;
+		alignas(16) char buf[65536];
+
+		const int fd = open(Shared::procPath.c_str(), O_RDONLY | O_DIRECTORY);
+		if (fd < 0) return pids;
+
+		while (true) {
+			const ssize_t n = syscall(SYS_getdents64, fd, buf, sizeof(buf));
+			if (n <= 0) break;
+
+			for (ssize_t pos = 0; pos < n;) {
+				auto* d = reinterpret_cast<linux_dirent64*>(buf + pos);
+				if (d->d_type == DT_DIR) {
+					const char* name = d->d_name;
+					if (name[0] >= '0' && name[0] <= '9') {
+						size_t pid = 0;
+						while (*name >= '0' && *name <= '9') {
+							pid = pid * 10 + (*name - '0');
+							name++;
+						}
+						if (*name == '\0') {
+							pids.push_back(pid);
+						}
+					}
+				}
+				pos += d->d_reclen;
+			}
+		}
+		close(fd);
+		return pids;
+	}
+
+	//* Fast stat parsing from buffer
+	static bool parse_stat_buffer(proc_info& proc, const char* buf, ssize_t len, uint64_t& cpu_t, uint64_t totalMem, int totalMem_len) {
+			if (len <= 50) return false;
+
+			const char* end = buf + len;
+			const char* p = buf;
+
+			// Find (comm) - skip pid
+			while (p < end && *p != '(') p++;
+			if (p >= end) return false;
+			p++;
+
+			// Find matching )
+			const char* close = end - 1;
+			while (close > p && *close != ')') close--;
+			if (close <= p) return false;
+
+			// After ) comes space then state
+			p = close + 2;
+			if (p >= end) return false;
+
+			// Field 3: state
+			proc.state = *p++;
+
+			// Field 4: ppid
+			while (p < end && *p == ' ') p++;
+			uint64_t ppid = 0;
+			while (p < end && *p >= '0' && *p <= '9') ppid = ppid * 10 + (*p++ - '0');
+			proc.ppid = ppid;
+
+			// Skip fields 5-13 (9 fields)
+			for (int i = 0; i < 9; i++) {
+				while (p < end && *p != ' ') p++;
+				while (p < end && *p == ' ') p++;
+			}
+			if (p >= end) return false;
+
+			// Field 14: utime
+			uint64_t utime = 0;
+			while (p < end && *p >= '0' && *p <= '9') utime = utime * 10 + (*p++ - '0');
+			while (p < end && *p == ' ') p++;
+
+			// Field 15: stime
+			uint64_t stime = 0;
+			while (p < end && *p >= '0' && *p <= '9') stime = stime * 10 + (*p++ - '0');
+
+			cpu_t = utime + stime;
+
+			// Skip fields 16-18 (3 fields)
+			for (int i = 0; i < 3; i++) {
+				while (p < end && *p != ' ') p++;
+				while (p < end && *p == ' ') p++;
+			}
+			if (p >= end) return false;
+
+			// Field 19: nice
+			int64_t nice = 0;
+			bool neg = (*p == '-');
+			if (neg) p++;
+			while (p < end && *p >= '0' && *p <= '9') nice = nice * 10 + (*p++ - '0');
+			if (neg) nice = -nice;
+			proc.p_nice = nice;
+
+			// Field 20: threads
+			while (p < end && *p == ' ') p++;
+			uint64_t threads = 0;
+			while (p < end && *p >= '0' && *p <= '9') threads = threads * 10 + (*p++ - '0');
+			proc.threads = threads;
+
+			// Skip field 21
+			while (p < end && *p != ' ') p++;
+			while (p < end && *p == ' ') p++;
+
+			// Field 22: starttime (only on first read)
+			if (proc.cpu_s == 0) {
+				uint64_t starttime = 0;
+				while (p < end && *p >= '0' && *p <= '9') starttime = starttime * 10 + (*p++ - '0');
+				proc.cpu_s = starttime;
+			} else {
+				while (p < end && *p != ' ') p++;
+				while (p < end && *p == ' ') p++;
+			}
+
+			// Skip field 23 (vsize)
+			while (p < end && *p != ' ') p++;
+			while (p < end && *p == ' ') p++;
+
+			// Field 24: rss
+			uint64_t rss = 0;
+			while (p < end && *p >= '0' && *p <= '9') rss = rss * 10 + (*p++ - '0');
+
+			if (cmp_greater(count_digits(rss), totalMem_len)) {
+				proc.mem = totalMem;
+			} else {
+				proc.mem = rss * Shared::pageSize;
+			}
+
+			return true;
+		}
 
 	//* Get detailed info for selected process
 	static void _collect_details(const size_t pid, const uint64_t uptime, vector<proc_info>& procs) {
@@ -2964,7 +3181,12 @@ namespace Proc {
 			}
 
 			auto totalMem = Mem::get_totalMem();
-			int totalMem_len = to_string(totalMem >> 10).size();
+			int totalMem_len;
+			if (totalMem != cached_totalMem) {
+				cached_totalMem = totalMem;
+				cached_totalMem_len = count_digits(totalMem >> 10);
+			}
+			totalMem_len = cached_totalMem_len;
 
 			//? Update uid_user map if /etc/passwd changed since last run
 			if (not Shared::passwd_path.empty() and fs::last_write_time(Shared::passwd_path) != passwd_time) {
@@ -2998,17 +3220,23 @@ namespace Proc {
 			else throw std::runtime_error("Failure to read /proc/stat");
 			pread.close();
 
-			//? Iterate over all pids in /proc
-			for (const auto& d: fs::directory_iterator(Shared::procPath)) {
+			//? Initialize io_uring if not already done
+			if (not ring_initialized) {
+				init_io_uring();
+			}
+
+			//? Get all PIDs using fast getdents64
+			auto pids = get_pids_fast();
+			std::sort(pids.begin(), pids.end());
+
+			//? Track which PIDs we need to read stats for
+			vector<size_t> pids_to_read;
+			pids_to_read.reserve(pids.size());
+
+			//? First pass: process new processes and prepare FDs
+			for (const auto pid : pids) {
 				if (Runner::stopping)
 					return current_procs;
-
-				if (pread.is_open()) pread.close();
-
-				const string pid_str = d.path().filename();
-				if (not isdigit(pid_str[0])) continue;
-
-				const size_t pid = stoul(pid_str);
 
 				if (should_filter_kernel and kernels_procs.contains(pid)) {
 					continue;
@@ -3032,16 +3260,17 @@ namespace Proc {
 
 				auto& new_proc = *find_old;
 
-				//? Get program name, command and username
+				//? Get program name, command and username (for new processes only)
 				if (no_cache) {
-					pread.open(d.path() / "comm");
+					fs::path pid_path = Shared::procPath / std::to_string(pid);
+					pread.open(pid_path / "comm");
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
 					pread.close();
 					//? Check for whitespace characters in name and set offset to get correct fields from stat file
 					new_proc.name_offset = rng::count(new_proc.name, ' ');
 
-					pread.open(d.path() / "cmdline");
+					pread.open(pid_path / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
 					while(getline(pread, long_string, '\0')) {
@@ -3054,7 +3283,7 @@ namespace Proc {
 					pread.close();
 					if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();
 
-					pread.open(d.path() / "status");
+					pread.open(pid_path / "status");
 					if (not pread.good()) continue;
 					string uid;
 					string line;
@@ -3091,77 +3320,82 @@ namespace Proc {
 					}
 				}
 
-				//? Parse /proc/[pid]/stat
-				pread.open(d.path() / "stat");
-				if (not pread.good()) continue;
-
-				const auto& offset = new_proc.name_offset;
-				short_str.clear();
-				int x = 0, next_x = 3;
-				uint64_t cpu_t = 0;
-				try {
-					for (;;) {
-						while (pread.good() and ++x < next_x + offset) pread.ignore(SSmax, ' ');
-						if (not pread.good()) break;
-						else getline(pread, short_str, ' ');
-
-						switch (x-offset) {
-							case 3: //? Process state
-								new_proc.state = short_str.at(0);
-								if (new_proc.ppid != 0) next_x = 14;
-								continue;
-							case 4: //? Parent pid
-								new_proc.ppid = stoull(short_str);
-								next_x = 14;
-								continue;
-							case 14: //? Process utime
-								cpu_t = stoull(short_str);
-								continue;
-							case 15: //? Process stime
-								cpu_t += stoull(short_str);
-								next_x = 19;
-								continue;
-							case 19: //? Nice value
-								new_proc.p_nice = stoll(short_str);
-								continue;
-							case 20: //? Number of threads
-								new_proc.threads = stoull(short_str);
-								if (new_proc.cpu_s == 0) {
-									next_x = 22;
-									new_proc.cpu_t = cpu_t;
-								}
-								else
-									next_x = 24;
-								continue;
-							case 22: //? Get cpu seconds if missing
-								new_proc.cpu_s = stoull(short_str);
-								next_x = 24;
-								continue;
-							case 24: //? RSS memory (can be inaccurate, but parsing smaps increases total cpu usage by ~20x)
-								if (cmp_greater(short_str.size(), totalMem_len))
-									new_proc.mem = totalMem;
-								else
-									new_proc.mem = stoull(short_str) * Shared::pageSize;
-						}
-						break;
-					}
-
+				//? Open persistent fd for /proc/[pid]/stat if needed
+				if (pid_fds.find(pid) == pid_fds.end() || pid_fds[pid] < 0) {
+					char stat_path[32];
+					snprintf(stat_path, sizeof(stat_path), "%lu/stat", pid);
+					int fd = openat(Shared::proc_fd, stat_path, O_RDONLY);
+					pid_fds[pid] = fd;
 				}
-				catch (const std::invalid_argument&) { continue; }
-				catch (const std::out_of_range&) { continue; }
 
-				pread.close();
+				int fd = pid_fds[pid];
+				if (fd >= 0) {
+					pids_to_read.push_back(pid);
+				}
+			}
+
+			//? Batch read all stat files using io_uring
+			size_t n_submitted = 0;
+			for (const auto pid : pids_to_read) {
+				struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+				if (!sqe) break;
+
+				io_uring_prep_read(sqe, pid_fds[pid], stat_bufs[pid].data(), STAT_BUF_SIZE - 1, 0);
+				io_uring_sqe_set_data(sqe, (void*)pid);
+				n_submitted++;
+			}
+
+			//? Submit all requests
+			int submit_ret = io_uring_submit(&ring);
+			(void)submit_ret;
+
+			//? Wait for all completions in batch
+			size_t n_completed = 0;
+			while (n_completed < n_submitted) {
+				struct io_uring_cqe *cqe = nullptr;
+				int ret = io_uring_wait_cqe_nr(&ring, &cqe, 1);
+				if (ret < 0 || !cqe) break;
+
+				size_t pid = (size_t)io_uring_cqe_get_data(cqe);
+				ssize_t len = cqe->res;
+
+				io_uring_cqe_seen(&ring, cqe);
+				n_completed++;
+
+				if (len <= 0) {
+					//? Mark FD as invalid
+					if (pid_fds[pid] >= 0) {
+						close(pid_fds[pid]);
+						pid_fds[pid] = -1;
+					}
+					continue;
+				}
+
+				stat_bufs[pid][len] = '\0';
+
+				//? Find the process and parse
+				auto find_proc = rng::find(current_procs, pid, &proc_info::pid);
+				if (find_proc == current_procs.end()) continue;
+
+				auto& new_proc = *find_proc;
+				uint64_t cpu_t = 0;
+
+				if (not parse_stat_buffer(new_proc, stat_bufs[pid].data(), len, cpu_t, totalMem, totalMem_len)) {
+					continue;
+				}
 
 				if (should_filter_kernel and new_proc.ppid == KTHREADD) {
 					kernels_procs.emplace(new_proc.pid);
-					found.pop_back();
+					//? Remove from found vector
+					auto found_it = rng::find(found, pid);
+					if (found_it != found.end()) found.erase(found_it);
+					continue;
 				}
-
-				if (x-offset < 24) continue;
 
 				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
 				if (new_proc.mem >= totalMem) {
-					pread.open(d.path() / "statm");
+					fs::path pid_path = Shared::procPath / std::to_string(pid);
+					pread.open(pid_path / "statm");
 					if (not pread.good()) continue;
 					pread.ignore(SSmax, ' ');
 					pread >> new_proc.mem;
@@ -3320,6 +3554,19 @@ namespace Proc {
 		numpids = (int)current_procs.size() - filter_found;
 
 		return current_procs;
+	}
+
+	//* Cleanup io_uring resources and close persistent file descriptors
+	void cleanup() {
+		if (ring_initialized) {
+			io_uring_queue_exit(&ring);
+			ring_initialized = false;
+		}
+		for (const auto& [pid, fd] : pid_fds) {
+			if (fd >= 0) close(fd);
+		}
+		pid_fds.clear();
+		stat_bufs.clear();
 	}
 }
 
