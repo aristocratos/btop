@@ -1282,6 +1282,10 @@ namespace Proc {
 		numpids = (int)current_procs.size() - filter_found;
 		return current_procs;
 	}
+
+	void cleanup() {
+		// No resources to cleanup on OpenBSD
+	}
 }  // namespace Proc
 
 namespace Tools {

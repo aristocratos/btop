@@ -236,6 +236,7 @@ void clean_quit(int sig) {
 	#endif
 #endif
 
+	Proc::cleanup();
 
 	if (Config::getB("save_config_on_exit")) {
 		Config::write();

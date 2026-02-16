@@ -93,6 +93,7 @@ namespace Shared {
 	void init();
 
 	extern long coreCount, page_size, clk_tck;
+	extern int proc_fd;  //* File descriptor for /proc directory
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	struct KvmDeleter {
@@ -433,6 +434,9 @@ namespace Proc {
 
 	//* Collect and sort process information from /proc
 	auto collect(bool no_update = false) -> vector<proc_info>&;
+
+	//* Cleanup resources on exit (io_uring, file descriptors)
+	void cleanup();
 
 	//* Update current selection and view, returns -1 if no change otherwise the current selection
 	int selection(const std::string_view cmd_key);
