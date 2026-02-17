@@ -1500,6 +1500,9 @@ show_disks = true
 #* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar.
 only_physical = true
 
+#* Filter out read-only filesystems.
+skip_ro_disks = False
+
 #* Read disks list from /etc/fstab. This also disables only_physical.
 use_fstab = true
 
