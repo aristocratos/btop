@@ -398,6 +398,7 @@ namespace Proc {
 		string name{};          // defaults to ""
 		string cmd{};           // defaults to ""
 		string short_cmd{};     // defaults to ""
+		string working_dir{};   // defaults to ""
 		size_t threads{};
 		int name_offset{};
 		string user{};          // defaults to ""
