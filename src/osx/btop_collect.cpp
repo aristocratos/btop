@@ -1657,6 +1657,13 @@ namespace Proc {
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
 		}
+
+		//? Get current working directory
+		detailed.cwd.clear();
+		struct proc_vnodepathinfo vpi;
+		if (proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &vpi, sizeof(vpi)) > 0) {
+			detailed.cwd = vpi.pvi_cdir.vip_path;
+		}
 	}
 
 	//* Collects and sorts process information from /proc
