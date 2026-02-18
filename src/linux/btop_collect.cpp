@@ -2909,6 +2909,14 @@ namespace Proc {
 			catch (const std::out_of_range&) {}
 			d_read.close();
 		}
+
+		//? Get current working directory from proc/[pid]/cwd symlink
+		detailed.cwd.clear();
+		try {
+			if (fs::is_symlink(pid_path / "cwd"))
+				detailed.cwd = fs::read_symlink(pid_path / "cwd").string();
+		}
+		catch (...) {}
 	}
 
 	//* Collects and sorts process information from /proc

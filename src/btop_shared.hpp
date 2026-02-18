@@ -422,7 +422,7 @@ namespace Proc {
 		size_t last_pid{};
 		bool skip_smaps{};
 		proc_info entry;
-		string elapsed, parent, status, io_read, io_write, memory;
+		string elapsed, parent, status, io_read, io_write, memory, cwd;
 		long long first_mem = -1;
 		deque<long long> cpu_percent;
 		deque<long long> mem_bytes;

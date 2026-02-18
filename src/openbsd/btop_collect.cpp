@@ -1025,6 +1025,9 @@ namespace Proc {
 		}
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+
+		//? OpenBSD doesn't expose other processes' cwd
+		detailed.cwd.clear();
 	}
 
 	//* Collects and sorts process information from /proc

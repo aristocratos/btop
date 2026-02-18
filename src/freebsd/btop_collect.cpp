@@ -1074,6 +1074,16 @@ namespace Proc {
 		// 	detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 		// 	detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
 		// }
+
+		//? Get current working directory via sysctl
+		detailed.cwd.clear();
+		{
+			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_CWD, (int)pid};
+			char cwdbuf[PATH_MAX];
+			size_t cwdlen = sizeof(cwdbuf);
+			if (sysctl(mib, 4, cwdbuf, &cwdlen, nullptr, 0) == 0)
+				detailed.cwd = cwdbuf;
+		}
 	}
 
 	//* Collects and sorts process information from /proc

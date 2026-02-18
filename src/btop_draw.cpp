@@ -1848,16 +1848,24 @@ namespace Proc {
 				if (item_fit >= 8) out += cjust("Nice:", item_width);
 
 
-				//? Command line
-				for (int i = 0; const auto& l : {'C', 'M', 'D'})
-				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
+				//? CWD and Command line
+				out += Mv::to(d_y + 5, d_x + 1) + Theme::c("title") + Fx::b + "CWD" + Fx::ub;
+				out += Mv::to(d_y + 6, d_x + 1) + Theme::c("title") + Fx::b + "CMD" + Fx::ub;
 
-				out += Theme::c("main_fg") + Fx::ub;
+				out += Theme::c("main_fg");
+				//? CWD line
+				out += Mv::to(d_y + 5, d_x + 5);
+				if (detailed.cwd.empty())
+					out += Theme::c("inactive_fg") + "(unavailable)";
+				else
+					out += uresize(detailed.cwd, d_width - 6, true);
+
+				//? Command lines (2 lines)
 				const auto san_cmd = replace_ascii_control(detailed.entry.cmd);
 				const int cmd_size = ulen(san_cmd, true);
-				for (int num_lines = min(3, (int)ceil((double)cmd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
-					out += Mv::to(d_y + 5 + (num_lines == 1 ? 1 : i), d_x + 3)
-						+ cjust(luresize(san_cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
+				for (int num_lines = min(2, (int)ceil((double)cmd_size / (d_width - 6))), i = 0; i < num_lines; i++) {
+					out += Mv::to(d_y + 6 + (num_lines == 1 ? 0 : i), d_x + 5)
+						+ cjust(luresize(san_cmd, cmd_size - (d_width - 6) * i, true), d_width - 6, true, true);
 				}
 
 			}

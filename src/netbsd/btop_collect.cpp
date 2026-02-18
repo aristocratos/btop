@@ -1160,6 +1160,16 @@ namespace Proc {
 		}
 
 		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+
+		//? Get current working directory via sysctl
+		detailed.cwd.clear();
+		{
+			int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_CWD, (int)pid};
+			char cwdbuf[PATH_MAX];
+			size_t cwdlen = sizeof(cwdbuf);
+			if (sysctl(mib, 4, cwdbuf, &cwdlen, nullptr, 0) == 0)
+				detailed.cwd = cwdbuf;
+		}
 	}
 
 	//* Collects and sorts process information from /proc
