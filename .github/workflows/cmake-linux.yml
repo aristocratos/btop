@@ -38,6 +38,8 @@ jobs:
             version: 20
           - compiler: clang
             version: 21
+          - compiler: clang
+            version: 22
           - compiler: gcc
             version: 14
     steps:
