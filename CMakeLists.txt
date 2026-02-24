@@ -103,16 +103,21 @@ include(CheckCXXSymbolExists)
 
 check_cxx_source_compiles(
   "
-  #include <version>
-  #if __cpp_lib_optional < 202110L
-  #error \"Missing __cpp_lib_optional < 202110L\"
-  #endif
-  int main() { return 0; }
+  #include <optional>
+
+  int main() {
+    std::optional<int> value{1};
+    auto next = value.and_then([](int v) -> std::optional<int> { return v + 1; });
+    return next.value_or(0) == 2 ? 0 : 1;
+  }
   "
   HAS_CXX_OPTIONAL_MONADS
 )
 if(NOT HAS_CXX_OPTIONAL_MONADS)
-  message(FATAL_ERROR "The compiler doesn't support std::optional::and_then")
+  message(FATAL_ERROR
+    "The compiler doesn't support std::optional::and_then "
+    "(${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION})."
+  )
 endif()
 check_cxx_symbol_exists("__cpp_lib_expected" "version" HAS_CXX_EXPECTED)
 if(NOT HAS_CXX_EXPECTED)

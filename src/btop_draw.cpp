@@ -1682,6 +1682,13 @@ namespace Proc {
 		auto mem_bytes = Config::getB("proc_mem_bytes");
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
+		#if defined(__linux__)
+			const bool show_gpu = width >= (show_graphs ? 70 : 65);
+			const bool show_gpu_mem = width >= (show_graphs ? 78 : 73);
+		#else
+			const bool show_gpu = false;
+			const bool show_gpu_mem = false;
+		#endif
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
@@ -1772,9 +1779,12 @@ namespace Proc {
 			//? Adapt sizes of text fields
 			user_size = (width < 75 ? 5 : 10);
 			thread_size = (width < 75 ? - 1 : 4);
-			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33));
-			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - 33 : -1);
-			tree_size = width - user_size - thread_size - 23;
+			const int gpu_cols = (show_gpu ? 6 : 0) + (show_gpu_mem ? 6 : 0);
+			const int proc_fixed = 33 + gpu_cols;
+			const int tree_fixed = 23 + gpu_cols;
+			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - proc_fixed));
+			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - proc_fixed : -1);
+			tree_size = width - user_size - thread_size - tree_fixed;
 			if (not show_graphs) {
 				cmd_size += 5;
 				tree_size += 5;
@@ -1958,7 +1968,10 @@ namespace Proc {
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
-					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
+					+ rjust("Cpu%", (show_graphs ? 10 : 5))
+					+ (show_gpu ? string{" "} + rjust("Gpu%", 5) : "")
+					+ (show_gpu_mem ? string{" "} + rjust("GMem", 5) : "")
+					+ Fx::ub;
 		}
 		//* End of redraw block
 
@@ -2110,6 +2123,13 @@ namespace Proc {
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
+			string gpu_str;
+			if (show_gpu) {
+				gpu_str = fmt::format("{:.1f}", clamp(p.gpu_p, 0.0, 100.0));
+				if (gpu_str.size() > 4) gpu_str.resize(4);
+				if (gpu_str.ends_with('.')) gpu_str.pop_back();
+			}
+			const string gpu_mem_str = show_gpu_mem ? floating_humanizer(p.gpu_m, true) : "";
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
@@ -2133,7 +2153,9 @@ namespace Proc {
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
-				+ c_color + rjust(cpu_str, 4) + "  " + end;
+				+ c_color + rjust(cpu_str, 4) + (show_gpu ? " " : "  ") + end
+				+ (show_gpu ? c_color + rjust(gpu_str, 5) + ' ' + end : "")
+				+ (show_gpu_mem ? c_color + rjust(gpu_mem_str, 5) + ' ' + end : "");
 			if (lc++ > height - 5) break;
 			else if (lc > height - 5 and proc_banner_shown) break;
 		}
