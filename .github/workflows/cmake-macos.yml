@@ -14,6 +14,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/osx/*pp'
+      - 'tests/**'
   pull_request:
     branches: main
     paths:
@@ -23,6 +24,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/osx/*pp'
+      - 'tests/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
