@@ -120,6 +120,7 @@ namespace Config {
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
+		{"proc_gpu_graphs",     "#* Show gpu graph for each process."},
 
 		{"proc_gpu_only",       "#* Show only processes with active GPU usage or GPU memory allocation in the process list."},
 
@@ -306,6 +307,7 @@ namespace Config {
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
 		{"proc_cpu_graphs", true},
+		{"proc_gpu_graphs", true},
 		{"proc_gpu_only", false},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
