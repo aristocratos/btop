@@ -3576,7 +3576,7 @@ namespace Proc {
 		if (should_filter) {
 			filter_found = 0;
 			for (auto& p : current_procs) {
-				if ((not tree and (not filter.empty() or gpu_only)) or gpu_only) {
+				if ((not tree and not filter.empty()) or gpu_only) {
 					if (not matches_filter(p, filter)) {
 						p.filtered = true;
 						filter_found++;
