@@ -2162,7 +2162,7 @@ namespace Proc {
 					if (gpu_str.ends_with('.')) gpu_str.pop_back();
 				}
 			}
-			const string gpu_mem_str = show_gpu_mem ? (p.gpu_p <= 0.0 and p.gpu_m == 0 ? "-" : floating_humanizer(p.gpu_m, true)) : "";
+			const string gpu_mem_str = show_gpu_mem ? (p.gpu_m == 0 ? "-" : floating_humanizer(p.gpu_m, true)) : "";
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
