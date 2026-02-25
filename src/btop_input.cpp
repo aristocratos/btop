@@ -377,6 +377,11 @@ namespace Input {
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
+				else if (key == "g") {
+					Config::flip("proc_gpu_only");
+					Config::set("update_following", true);
+				}
+
 				else if (key == "%")
 					Config::flip("proc_mem_bytes");
 

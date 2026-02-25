@@ -181,6 +181,10 @@ bool set_priority(pid_t pid, int priority) {
 	}
 
 	auto matches_filter(const proc_info& proc, const std::string& filter) -> bool {
+		if (Config::getB("proc_gpu_only") and proc.gpu_p <= 0.0 and proc.gpu_m == 0) {
+			return false;
+		}
+
 		if (filter.starts_with("!")) {
 			if (filter.size() == 1) {
 				return true;

@@ -1890,9 +1890,18 @@ namespace Proc {
 
 			//? pause, per-core, reverse, tree and sorting
 			const auto& sorting = Config::getS("proc_sorting");
+			const auto gpu_only = Config::getB("proc_gpu_only");
 			const int sort_len = sorting.size();
 			const int sort_pos = x + width - sort_len - 8;
 
+			if (width > 70 + sort_len) {
+			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+					Mv::to(y, sort_pos - 43), title_left, gpu_only ? Fx::b : "",
+					Theme::c("hi_fg"), 'g', Theme::c("title"), "pu-",
+					Theme::c("title"), "only",
+			    	Fx::ub, title_right);
+			    Input::mouse_mappings["g"] = {y, sort_pos - 42, 1, 8};
+			}
 			if (width > 60 + sort_len) {
 			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 32), title_left, pause_proc_list ? Fx::b : "",
@@ -2125,11 +2134,16 @@ namespace Proc {
 			}
 			string gpu_str;
 			if (show_gpu) {
-				gpu_str = fmt::format("{:.1f}", clamp(p.gpu_p, 0.0, 100.0));
-				if (gpu_str.size() > 4) gpu_str.resize(4);
-				if (gpu_str.ends_with('.')) gpu_str.pop_back();
+				if (p.gpu_p <= 0.0 and p.gpu_m == 0) {
+					gpu_str = "-";
+				}
+				else {
+					gpu_str = fmt::format("{:.1f}", clamp(p.gpu_p, 0.0, 100.0));
+					if (gpu_str.size() > 4) gpu_str.resize(4);
+					if (gpu_str.ends_with('.')) gpu_str.pop_back();
+				}
 			}
-			const string gpu_mem_str = show_gpu_mem ? floating_humanizer(p.gpu_m, true) : "";
+			const string gpu_mem_str = show_gpu_mem ? (p.gpu_p <= 0.0 and p.gpu_m == 0 ? "-" : floating_humanizer(p.gpu_m, true)) : "";
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);

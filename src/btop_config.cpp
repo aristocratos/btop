@@ -121,6 +121,8 @@ namespace Config {
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
+		{"proc_gpu_only",       "#* Show only processes with active GPU usage or GPU memory allocation in the process list."},
+
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
@@ -304,6 +306,7 @@ namespace Config {
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
 		{"proc_cpu_graphs", true},
+		{"proc_gpu_only", false},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
 		{"proc_filter_kernel", false},

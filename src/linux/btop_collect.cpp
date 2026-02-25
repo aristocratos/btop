@@ -202,6 +202,16 @@ namespace Gpu {
 				unsigned int computeInstanceId;
 				unsigned long long usedGpuCcProtectedMemory;
 			};
+			struct nvmlProcessInfo_v2_t {
+				unsigned int pid;
+				unsigned long long usedGpuMemory;
+				unsigned int gpuInstanceId;
+				unsigned int computeInstanceId;
+			};
+			struct nvmlProcessInfo_v1_t {
+				unsigned int pid;
+				unsigned long long usedGpuMemory;
+			};
 			struct proc_stat {
 				double gpu{};
 				uint64_t mem{};
@@ -226,7 +236,11 @@ namespace Gpu {
 			nvmlReturn_t (*nvmlDeviceGetEncoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
 			nvmlReturn_t (*nvmlDeviceGetDecoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
 			nvmlReturn_t (*nvmlDeviceGetProcessUtilization)(nvmlDevice_t, nvmlProcessUtilizationSample_t*, unsigned int*, unsigned long long);
+			nvmlReturn_t (*nvmlDeviceGetGraphicsRunningProcesses_v1)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_v1_t*);
+			nvmlReturn_t (*nvmlDeviceGetGraphicsRunningProcesses_v2)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_v2_t*);
 			nvmlReturn_t (*nvmlDeviceGetGraphicsRunningProcesses_v3)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_t*);
+			nvmlReturn_t (*nvmlDeviceGetComputeRunningProcesses_v1)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_v1_t*);
+			nvmlReturn_t (*nvmlDeviceGetComputeRunningProcesses_v2)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_v2_t*);
 			nvmlReturn_t (*nvmlDeviceGetComputeRunningProcesses_v3)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_t*);
 
 			//? Data
@@ -1300,15 +1314,20 @@ namespace Gpu {
 			LOAD_SYM(nvmlDeviceGetEncoderUtilization);
 			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
 			nvmlDeviceGetProcessUtilization = (decltype(nvmlDeviceGetProcessUtilization))try_load_nvml_sym("nvmlDeviceGetProcessUtilization");
+			nvmlDeviceGetGraphicsRunningProcesses_v1 = (decltype(nvmlDeviceGetGraphicsRunningProcesses_v1))try_load_nvml_sym("nvmlDeviceGetGraphicsRunningProcesses");
+			nvmlDeviceGetGraphicsRunningProcesses_v2 = (decltype(nvmlDeviceGetGraphicsRunningProcesses_v2))try_load_nvml_sym("nvmlDeviceGetGraphicsRunningProcesses_v2");
 			nvmlDeviceGetGraphicsRunningProcesses_v3 = (decltype(nvmlDeviceGetGraphicsRunningProcesses_v3))try_load_nvml_sym("nvmlDeviceGetGraphicsRunningProcesses_v3");
+			nvmlDeviceGetComputeRunningProcesses_v1 = (decltype(nvmlDeviceGetComputeRunningProcesses_v1))try_load_nvml_sym("nvmlDeviceGetComputeRunningProcesses");
+			nvmlDeviceGetComputeRunningProcesses_v2 = (decltype(nvmlDeviceGetComputeRunningProcesses_v2))try_load_nvml_sym("nvmlDeviceGetComputeRunningProcesses_v2");
 			nvmlDeviceGetComputeRunningProcesses_v3 = (decltype(nvmlDeviceGetComputeRunningProcesses_v3))try_load_nvml_sym("nvmlDeviceGetComputeRunningProcesses_v3");
-			if (nvmlDeviceGetGraphicsRunningProcesses_v3 == nullptr)
-				nvmlDeviceGetGraphicsRunningProcesses_v3 = (decltype(nvmlDeviceGetGraphicsRunningProcesses_v3))try_load_nvml_sym("nvmlDeviceGetGraphicsRunningProcesses_v2");
-			if (nvmlDeviceGetComputeRunningProcesses_v3 == nullptr)
-				nvmlDeviceGetComputeRunningProcesses_v3 = (decltype(nvmlDeviceGetComputeRunningProcesses_v3))try_load_nvml_sym("nvmlDeviceGetComputeRunningProcesses_v2");
 			process_utilization_function_available = nvmlDeviceGetProcessUtilization != nullptr;
-			process_memory_functions_available = nvmlDeviceGetGraphicsRunningProcesses_v3 != nullptr
-				and nvmlDeviceGetComputeRunningProcesses_v3 != nullptr;
+			process_memory_functions_available =
+				nvmlDeviceGetGraphicsRunningProcesses_v3 != nullptr or
+				nvmlDeviceGetGraphicsRunningProcesses_v2 != nullptr or
+				nvmlDeviceGetGraphicsRunningProcesses_v1 != nullptr or
+				nvmlDeviceGetComputeRunningProcesses_v3 != nullptr or
+				nvmlDeviceGetComputeRunningProcesses_v2 != nullptr or
+				nvmlDeviceGetComputeRunningProcesses_v1 != nullptr;
 
             #undef LOAD_SYM
 
@@ -1562,30 +1581,72 @@ namespace Gpu {
 
 			process_stats.clear();
 
-			auto append_process_memory = [&](nvmlDevice_t device, auto get_processes, std::unordered_map<size_t, uint64_t>& mem_by_pid) {
-				unsigned int proc_count = 64;
-				std::vector<nvmlProcessInfo_t> processes(proc_count);
-				auto result = get_processes(device, &proc_count, processes.data());
+			auto merge_process_memory = [&](unsigned int pid, unsigned long long used_mem, std::unordered_map<size_t, uint64_t>& mem_by_pid) {
+				if (used_mem == NVML_VALUE_NOT_AVAILABLE_ULL) return;
+				auto& mem = mem_by_pid[pid];
+				mem = max(mem, (uint64_t)used_mem);
+			};
 
-				if (result == NVML_ERROR_INSUFFICIENT_SIZE and proc_count > 0) {
-					processes.resize(proc_count);
-					result = get_processes(device, &proc_count, processes.data());
-				}
+			auto append_process_memory_v3 = [&](nvmlDevice_t device, auto fn, std::unordered_map<size_t, uint64_t>& mem_by_pid) {
+				if (fn == nullptr) return;
+				unsigned int proc_count = 0;
+				auto result = fn(device, &proc_count, nullptr);
+				if (result == NVML_ERROR_NOT_FOUND) return;
+				if (result != NVML_SUCCESS and result != NVML_ERROR_INSUFFICIENT_SIZE) return;
+				if (proc_count == 0) return;
+
+				std::vector<nvmlProcessInfo_t> processes(proc_count);
+				result = fn(device, &proc_count, processes.data());
 				if (result != NVML_SUCCESS) return;
 
 				for (unsigned int n = 0; n < proc_count; ++n) {
-					const auto& proc = processes[n];
-					if (proc.usedGpuMemory == NVML_VALUE_NOT_AVAILABLE_ULL) continue;
-					auto& mem = mem_by_pid[proc.pid];
-					mem = max(mem, (uint64_t)proc.usedGpuMemory);
+					merge_process_memory(processes[n].pid, processes[n].usedGpuMemory, mem_by_pid);
+				}
+			};
+
+			auto append_process_memory_v2 = [&](nvmlDevice_t device, auto fn, std::unordered_map<size_t, uint64_t>& mem_by_pid) {
+				if (fn == nullptr) return;
+				unsigned int proc_count = 0;
+				auto result = fn(device, &proc_count, nullptr);
+				if (result == NVML_ERROR_NOT_FOUND) return;
+				if (result != NVML_SUCCESS and result != NVML_ERROR_INSUFFICIENT_SIZE) return;
+				if (proc_count == 0) return;
+
+				std::vector<nvmlProcessInfo_v2_t> processes(proc_count);
+				result = fn(device, &proc_count, processes.data());
+				if (result != NVML_SUCCESS) return;
+
+				for (unsigned int n = 0; n < proc_count; ++n) {
+					merge_process_memory(processes[n].pid, processes[n].usedGpuMemory, mem_by_pid);
+				}
+			};
+
+			auto append_process_memory_v1 = [&](nvmlDevice_t device, auto fn, std::unordered_map<size_t, uint64_t>& mem_by_pid) {
+				if (fn == nullptr) return;
+				unsigned int proc_count = 0;
+				auto result = fn(device, &proc_count, nullptr);
+				if (result == NVML_ERROR_NOT_FOUND) return;
+				if (result != NVML_SUCCESS and result != NVML_ERROR_INSUFFICIENT_SIZE) return;
+				if (proc_count == 0) return;
+
+				std::vector<nvmlProcessInfo_v1_t> processes(proc_count);
+				result = fn(device, &proc_count, processes.data());
+				if (result != NVML_SUCCESS) return;
+
+				for (unsigned int n = 0; n < proc_count; ++n) {
+					merge_process_memory(processes[n].pid, processes[n].usedGpuMemory, mem_by_pid);
 				}
 			};
 
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if (process_memory_functions_available) {
 					std::unordered_map<size_t, uint64_t> mem_by_pid;
-					append_process_memory(devices[i], nvmlDeviceGetGraphicsRunningProcesses_v3, mem_by_pid);
-					append_process_memory(devices[i], nvmlDeviceGetComputeRunningProcesses_v3, mem_by_pid);
+					append_process_memory_v3(devices[i], nvmlDeviceGetGraphicsRunningProcesses_v3, mem_by_pid);
+					append_process_memory_v3(devices[i], nvmlDeviceGetComputeRunningProcesses_v3, mem_by_pid);
+					append_process_memory_v2(devices[i], nvmlDeviceGetGraphicsRunningProcesses_v2, mem_by_pid);
+					append_process_memory_v2(devices[i], nvmlDeviceGetComputeRunningProcesses_v2, mem_by_pid);
+					append_process_memory_v1(devices[i], nvmlDeviceGetGraphicsRunningProcesses_v1, mem_by_pid);
+					append_process_memory_v1(devices[i], nvmlDeviceGetComputeRunningProcesses_v1, mem_by_pid);
 
 					for (const auto& [pid, mem] : mem_by_pid) {
 						process_stats[pid].mem += mem;
@@ -2926,6 +2987,7 @@ namespace Proc {
 	string current_sort;
 	string current_filter;
 	bool current_rev{};
+	bool current_gpu_only{};
 	bool is_tree_mode;
 
 	fs::file_time_type passwd_time;
@@ -3158,14 +3220,17 @@ namespace Proc {
 		const auto& sorting = Config::getS("proc_sorting");
 		auto reverse = Config::getB("proc_reversed");
 		const auto& filter = Config::getS("proc_filter");
+		const bool gpu_only = Config::getB("proc_gpu_only");
 		auto per_core = Config::getB("proc_per_core");
 		auto should_filter_kernel = Config::getB("proc_filter_kernel");
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		const size_t detailed_pid = Config::getI("detailed_pid");
-		bool should_filter = current_filter != filter;
+		bool should_filter = current_filter != filter or current_gpu_only != gpu_only;
+		if (gpu_only) should_filter = true;
 		if (should_filter) current_filter = filter;
+		if (should_filter) current_gpu_only = gpu_only;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
 		bool tree_mode_change = tree != is_tree_mode;
 		if (sorted_change) {
@@ -3509,8 +3574,8 @@ namespace Proc {
 		if (should_filter) {
 			filter_found = 0;
 			for (auto& p : current_procs) {
-				if (not tree and not filter.empty()) {
-					if (!matches_filter(p, filter)) {
+				if ((not tree and (not filter.empty() or gpu_only)) or gpu_only) {
+					if (not matches_filter(p, filter)) {
 						p.filtered = true;
 						filter_found++;
 					} else {
