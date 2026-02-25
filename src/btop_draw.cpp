@@ -1899,19 +1899,19 @@ namespace Proc {
 			const int sort_pos = x + width - sort_len - 8;
 
 			if (width > 70 + sort_len) {
-			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 43), title_left, gpu_only ? Fx::b : "",
 					Theme::c("hi_fg"), 'g', Theme::c("title"), "pu-",
 					Theme::c("title"), "only",
-			    	Fx::ub, title_right);
-			    Input::mouse_mappings["g"] = {y, sort_pos - 42, 1, 8};
+					Fx::ub, title_right);
+				Input::mouse_mappings["g"] = {y, sort_pos - 42, 1, 8};
 			}
 			if (width > 60 + sort_len) {
-			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 32), title_left, pause_proc_list ? Fx::b : "",
 					Theme::c("title"), "pa", Theme::c("hi_fg"), 'u', Theme::c("title"), "se",
-			    	Fx::ub, title_right);
-			    Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
+					Fx::ub, title_right);
+				Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
 			}
 			if (width > 55 + sort_len) {
 				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")

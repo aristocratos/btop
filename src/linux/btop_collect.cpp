@@ -1639,6 +1639,7 @@ namespace Gpu {
 			};
 
 			for (unsigned int i = 0; i < device_count; ++i) {
+				// Merge per-device process stats from whichever NVML API versions are available.
 				if (process_memory_functions_available) {
 					std::unordered_map<size_t, uint64_t> mem_by_pid;
 					append_process_memory_v3(devices[i], nvmlDeviceGetGraphicsRunningProcesses_v3, mem_by_pid);
@@ -3092,7 +3093,8 @@ namespace Proc {
 				if (driver.empty() and (fd_total > 0 or fd_mem > 0)) driver = "unknown";
 				if (driver.empty() or (fd_total == 0 and fd_mem == 0)) continue;
 
-				const auto gpu_id = pdev.empty() ? driver : driver + ":" + pdev;
+				const auto gpu_id = pdev.empty() ? driver : fmt::format("{}:{}", driver, pdev);
+				// Keep the highest per-GPU values to avoid double-counting shared fdinfo snapshots.
 				if (fd_total > 0 and (not gpu_totals.contains(gpu_id) or fd_total > gpu_totals.at(gpu_id))) {
 					gpu_totals[gpu_id] = fd_total;
 				}
