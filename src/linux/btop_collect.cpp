@@ -1293,7 +1293,7 @@ namespace Gpu {
 			if (!initialized) return false;
 
 			nvmlReturn_t result;
-			std::thread pcie_tx_thread, pcie_rx_thread;
+			std::jthread pcie_tx_thread, pcie_rx_thread;
 			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
@@ -1338,7 +1338,7 @@ namespace Gpu {
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
 				if (gpus_slice[i].supported_functions.pcie_txrx and (Config::getB("nvml_measure_pcie_speeds") or is_init)) {
-					pcie_tx_thread = std::thread([gpus_slice, i]() {
+					pcie_tx_thread = std::jthread([gpus_slice, i]() {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
     					if (result != NVML_SUCCESS) {
@@ -1347,7 +1347,7 @@ namespace Gpu {
 						} else gpus_slice[i].pcie_tx = (long long)tx;
 					});
 
-					pcie_rx_thread = std::thread([gpus_slice, i]() {
+					pcie_rx_thread = std::jthread([gpus_slice, i]() {
 						unsigned int rx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
     					if (result != NVML_SUCCESS) {
