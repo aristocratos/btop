@@ -1293,7 +1293,8 @@ namespace Gpu {
 			if (!initialized) return false;
 
 			nvmlReturn_t result;
-			std::jthread pcie_tx_thread, pcie_rx_thread;
+			std::jthread pcie_tx_thread;
+			std::jthread pcie_rx_thread;
 			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
