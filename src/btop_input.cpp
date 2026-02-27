@@ -328,6 +328,7 @@ namespace Input {
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 					Config::set("update_following", true);
+					if (Config::getB("proc_tree")) no_update = false;
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
@@ -335,6 +336,7 @@ namespace Input {
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 					Config::set("update_following", true);
+					if (Config::getB("proc_tree")) no_update = false;
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
