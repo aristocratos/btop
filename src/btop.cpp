@@ -1153,7 +1153,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 			//? Trigger secondary thread to redraw if terminal has been resized
 			if (Global::resized) {
-				Draw::calcSizes();
+				Draw::calcSizes(false);
 				Draw::update_clock(true);
 				Global::resized = false;
 				if (Menu::active) Menu::process();
