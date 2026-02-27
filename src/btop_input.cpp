@@ -346,6 +346,11 @@ namespace Input {
 					no_update = false;
 					Config::set("update_following", true);
 				}
+				else if (key == "E" and Config::getB("proc_tree")) {
+					atomic_wait(Runner::active);
+					Proc::collapse_all = 1;
+					no_update = false;
+				}
 				else if (is_in(key, "u")) {
 					Config::flip("pause_proc_list");
 				}
