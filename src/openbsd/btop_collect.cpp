@@ -1267,15 +1267,23 @@ namespace Proc {
 			}
 
 			if (collapse_all != -1) {
-				//? If any parent process is currently expanded, collapse all; otherwise expand all
-				std::unordered_set<size_t> parent_pids;
-				for (const auto& p : current_procs)
+				//? Build sets of all pids and parent pids to identify root processes
+				std::unordered_set<size_t> pid_set, parent_pids;
+				for (const auto& p : current_procs) {
+					pid_set.insert(p.pid);
 					parent_pids.insert(static_cast<size_t>(p.ppid));
-				const bool do_collapse = rng::any_of(current_procs, [&parent_pids](const proc_info& p) {
-					return parent_pids.contains(p.pid) and not p.collapsed;
+				}
+				//? If any non-root parent is expanded, collapse; otherwise expand
+				const bool do_collapse = rng::any_of(current_procs, [&parent_pids, &pid_set](const proc_info& p) {
+					return parent_pids.contains(p.pid)
+						and pid_set.contains(static_cast<size_t>(p.ppid))
+						and not p.collapsed;
 				});
-				for (auto& p : current_procs)
+				//? Root processes (parent not in tracked list) are never touched
+				for (auto& p : current_procs) {
+					if (not pid_set.contains(static_cast<size_t>(p.ppid))) continue;
 					p.collapsed = do_collapse;
+				}
 				collapse_all = -1;
 				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
 			}
