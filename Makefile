@@ -43,9 +43,17 @@ ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
 		INTEL_GPU_SUPPORT := true
 	endif
 endif
+<<<<<<< HEAD
+
+ifeq ($(PLATFORM_LC)$(ARCH),macosarm64)
+	GPU_SUPPORT := true
+endif
+
+=======
 ifeq ($(PLATFORM_LC),macos)
 	GPU_SUPPORT := true
 endif
+>>>>>>> official
 ifneq ($(GPU_SUPPORT),true)
 	GPU_SUPPORT := false
 endif
