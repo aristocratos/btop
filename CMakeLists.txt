@@ -67,7 +67,7 @@ if(BTOP_LTO)
 endif()
 
 if(APPLE)
-  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp)
+  target_sources(libbtop PRIVATE src/osx/btop_collect.cpp src/osx/sensors.cpp src/osx/smc.cpp src/osx/ioreport.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   target_sources(libbtop PRIVATE src/freebsd/btop_collect.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
