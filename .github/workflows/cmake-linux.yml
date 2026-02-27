@@ -38,6 +38,9 @@ jobs:
             version: 20
           - compiler: clang
             version: 21
+          - compiler: clang
+            version: 22
+            lint: true
           - compiler: gcc
             version: 14
     steps:
@@ -46,6 +49,12 @@ jobs:
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}
         run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
+
+      - name: Install clang-tidy-sarif
+        if: ${{ matrix.lint }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: clang-tidy-sarif
 
       - name: Configure
         run: |
@@ -58,10 +67,22 @@ jobs:
             export CC=gcc-${{ matrix.version }}
             export CXX=g++-${{ matrix.version }}
           fi
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Compile
+        if: ${{ !matrix.lint }}
         run: cmake --build build --verbose
 
+      - name: Lint
+        if: ${{ matrix.lint }}
+        run: run-clang-tidy-${{ matrix.version }} -quiet -p build -hide-progress | clang-tidy-sarif > result.sarif
+
+      - name: Upload lints
+        if: ${{ matrix.lint }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: result.sarif
+
       - name: Test
+        if: ${{ !matrix.lint }}
         run: ctest --test-dir build
