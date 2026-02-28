@@ -1963,9 +1963,9 @@ namespace Gpu {
 
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
 		if (mem_total != 0)
-			shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
+			shared_gpu_percent.at("gpu-vram-total").push_back((long long)round((double)mem_usage_total * 100.0 / (double)mem_total));
 		if (gpu_pwr_total_max != 0)
-			shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
+			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp((long long)round((double)pwr_total * 100.0 / (double)gpu_pwr_total_max), 0ll, 100ll));
 
 		if (width != 0) {
 			while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
