@@ -78,7 +78,10 @@ namespace Logger {
 			~DropPrivilegeGuard() noexcept {
 				if (saved_euid != geteuid()) {
 					// Silently drop error status.
+					#pragma GCC diagnostic push
+					#pragma GCC diagnostic ignored "-Wunused-result"
 					seteuid(saved_euid);
+					#pragma GCC diagnostic pop
 				}
 			}
 

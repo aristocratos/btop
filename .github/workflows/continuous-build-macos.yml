@@ -58,7 +58,7 @@ jobs:
           mv bin/btop bin/btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}
           path: 'bin/*'
