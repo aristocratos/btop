@@ -975,7 +975,7 @@ namespace Cpu {
 		return {percent, watts, seconds, status};
 	}
 
-	long long get_cpuConsumptionUJoules()
+	static long long get_cpuConsumptionUJoules()
 	{
 		long long consumption = -1;
 		const auto rapl_power_usage_path = "/sys/class/powercap/intel-rapl:0/energy_uj";
@@ -987,7 +987,7 @@ namespace Cpu {
 		return consumption;
 	}
 
-	float get_cpuConsumptionWatts()
+	static float get_cpuConsumptionWatts()
 	{
 		static long long previous_usage = 0;
 		static long long previous_timestamp = 0;
