@@ -1026,7 +1026,7 @@ namespace Gpu {
 			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
 
 			if (gpu.supported_functions.gpu_utilization) {
-				const string graph_up_field = gpu.supported_functions.gt_utilization ? "gpu-rc-totals"s : "gpu-totals"s;
+				const string graph_up_field = (gpu.supported_functions.gt_utilization and not single_graph) ? "gpu-rc-totals"s : "gpu-totals"s;
 				const string graph_lo_field = gpu.supported_functions.gt_utilization ? "gpu-mc-totals"s : "gpu-totals"s;
 
 				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, graph_up_field), graph_symbol, false, true}; // TODO cpu -> gpu
@@ -1058,26 +1058,24 @@ namespace Gpu {
 		int rows_used = 1;
 		//? Gpu graph, meter & clock speed
 		if (gpu.supported_functions.gpu_utilization) {
-			const string graph_up_field = gpu.supported_functions.gt_utilization ? "gpu-rc-totals"s : "gpu-totals"s;
+			const string graph_up_field = (gpu.supported_functions.gt_utilization and not single_graph) ? "gpu-rc-totals"s : "gpu-totals"s;
 			const string graph_lo_field = gpu.supported_functions.gt_utilization ? "gpu-mc-totals"s : "gpu-totals"s;
 
 			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, graph_up_field), (data_same or redraw[index]));
 			if (not single_graph)
 				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, graph_lo_field), (data_same or redraw[index]));
 
-			if (not gpu.supported_functions.gt_utilization) {
-				out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
-					+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
+				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
-				//? Temperature graph, I assume the device supports utilization if it supports temperature
-				if (show_temps) {
-					const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
-						+ temp_graph(gpu.temp, data_same or redraw[index]);
-					out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
-				}
-				out += Theme::c("div_line") + Symbols::v_line;
+			//? Temperature graph, I assume the device supports utilization if it supports temperature
+			if (show_temps) {
+				const auto [temp, unit] = celsius_to(gpu.temp.back(), temp_scale);
+				out += ' ' + Theme::c("inactive_fg") + graph_bg * 6 + Mv::l(6) + Theme::g("temp").at(clamp(gpu.temp.back() * 100 / gpu.temp_max, 0ll, 100ll))
+					+ temp_graph(gpu.temp, data_same or redraw[index]);
+				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
+			out += Theme::c("div_line") + Symbols::v_line;
 			rows_used++;
 		}
 
