@@ -59,8 +59,9 @@ namespace Config {
     const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
+	const vector<string> disable_preset_options = { "Off", "Default", "Custom", "All" };
 	extern vector<string> available_batteries;
-	extern int current_preset;
+	extern std::optional<int> current_preset;
 
 	extern bool write_new;
 

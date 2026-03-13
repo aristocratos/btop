@@ -24,6 +24,7 @@ tab-size = 4
 #include <clocale>
 #include <filesystem>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <pthread.h>
 #include <span>
@@ -191,7 +192,7 @@ void term_resize(bool force) {
 					if (intKey > 0 and intKey < 5) {
 				#endif
 						const auto& box = all_boxes.at(intKey);
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
 					}
@@ -230,6 +231,9 @@ void clean_quit(int sig) {
 #ifdef GPU_SUPPORT
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
+	#ifdef __APPLE__
+	Gpu::AppleSilicon::shutdown();
+	#endif
 #endif
 
 
@@ -371,25 +375,6 @@ namespace Runner {
 	inline void thread_wait() { do_work.acquire(); }
 	inline void thread_trigger() { do_work.release(); }
 
-	//* RAII wrapper for pthread_mutex locking
-	class thread_lock {
-		pthread_mutex_t& pt_mutex;
-	public:
-		int status;
-		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-			pthread_mutex_init(&pt_mutex, nullptr);
-			status = pthread_mutex_lock(&pt_mutex);
-		}
-		~thread_lock() noexcept {
-			if (status == 0)
-				pthread_mutex_unlock(&pt_mutex);
-		}
-		thread_lock(const thread_lock& other) = delete;
-		thread_lock& operator=(const thread_lock& other) = delete;
-		thread_lock(thread_lock&& other) = delete;
-		thread_lock& operator=(thread_lock&& other) = delete;
-	};
-
 	//* Wrapper for raising privileges when using SUID bit
 	class gain_priv {
 		int status = -1;
@@ -412,7 +397,7 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output{};
 	sigset_t mask;
-	pthread_mutex_t mtx;
+	std::mutex mtx;
 
 	enum debug_actions {
 		collect_begin,
@@ -483,14 +468,8 @@ namespace Runner {
 		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
-		//? pthread_mutex_lock to lock thread and monitor health from main thread
-		thread_lock pt_lck(mtx);
-		if (pt_lck.status != 0) {
-			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-			Global::thread_exception = true;
-			Input::interrupt();
-			stopping = true;
-		}
+		// TODO: On first glance it looks redudant with `Runner::active`. 
+		std::lock_guard lock {mtx};
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
@@ -534,7 +513,7 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
-			#ifdef GPU_SUPPORT
+#if defined(GPU_SUPPORT)
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
 					Config::getS("cpu_graph_lower").starts_with("gpu-")
@@ -555,9 +534,7 @@ namespace Runner {
 					if (Global::debug) debug_timer("gpu", collect_done);
 				}
 				auto& gpus_ref = gpus;
-			#else
-				vector<Gpu::gpu_info> gpus_ref{};
-			#endif
+#endif // GPU_SUPPORT
 
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
@@ -578,7 +555,16 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, gpus_ref, conf.force_redraw, conf.no_update);
+						if (not pause_output) {
+							output += Cpu::draw(
+								cpu,
+#if defined(GPU_SUPPORT)
+								gpus_ref,
+#endif // GPU_SUPPORT
+								conf.force_redraw,
+								conf.no_update
+							);
+						}
 
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
@@ -804,15 +790,15 @@ namespace Runner {
 	//* Stops any work being done in runner thread and checks for thread errors
 	void stop() {
 		stopping = true;
-		int ret = pthread_mutex_trylock(&mtx);
-		if (ret != EBUSY and not Global::quitting) {
+		auto lock = std::unique_lock {mtx, std::defer_lock};
+		const auto is_runner_busy = !lock.try_lock();
+		if (!is_runner_busy and not Global::quitting) {
 			if (active) {
 				set_active(false);
 			}
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
 			clean_quit(1);
-		}
-		else if (ret == EBUSY) {
+		} else if (is_runner_busy) {
 			atomic_wait_for(active, true, 5000);
 			if (active) {
 				set_active(false);
@@ -837,13 +823,17 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	if (force_tty.has_value()) {
 		Config::set("tty_mode", force_tty.value());
 		Logger::debug("TTY mode set via command line");
-  	}
+	}
+	else if (Config::getB("force_tty")) {
+		Config::set("tty_mode", true);
+		Logger::debug("TTY mode set via config");
+	}
 
 #if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 	else if (Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::debug("Auto detect real TTY");
-  	}
+	}
 #endif
 
 	Logger::debug("TTY mode enabled: {}", Config::getB("tty_mode"));
@@ -1104,7 +1094,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	Config::presetsValid(Config::getS("presets"));
 	if (cli.preset.has_value()) {
 		Config::current_preset = min(static_cast<std::int32_t>(cli.preset.value()), static_cast<std::int32_t>(Config::preset_list.size() - 1));
-		Config::apply_preset(Config::preset_list.at(Config::current_preset));
+		Config::apply_preset(Config::preset_list.at(Config::current_preset.value()));
 	}
 
 	{

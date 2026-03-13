@@ -81,7 +81,7 @@ jobs:
           mv bin/btop bin/$FILENAME
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: btop-${{ matrix.toolchain }}
           path: '${{ github.workspace }}/bin/*'

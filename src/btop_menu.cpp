@@ -263,6 +263,16 @@ namespace Menu {
 				"is accessible while holding shift."},
 			{"disable_mouse",
 				"Disable all mouse events."},
+			{"disable_presets",
+				"Disable the presets.",
+				"",
+				"\"Off\" All presets are enabled.",
+				"",
+				"\"Default\" preset is disabled.",
+				"",
+				"\"Custom\" presets are disabled.",
+				"",
+				"\"All\" presets are disabled."},
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -588,7 +598,8 @@ namespace Menu {
 				"Manually set which gpu vendors to show.",
 				"",
 				"Available values are",
-				"\"nvidia\", \"amd\", and \"intel\".",
+				"\"nvidia\", \"amd\", \"intel\",",
+				"and \"apple\".",
 				"Separate values with whitespace.",
 				"",
 				"A restart is required to apply changes."},
@@ -1285,6 +1296,7 @@ static int optionsMenu(const string& key) {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 	        {"base_10_bitrate", std::cref(Config::base_10_bitrate_values)},
+			{"disable_presets", std::cref(Config::disable_preset_options)},
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
@@ -1344,7 +1356,7 @@ static int optionsMenu(const string& key) {
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 					}
 					else if (option == "clock_format") {
 						Draw::update_clock(true);
@@ -1455,9 +1467,13 @@ static int optionsMenu(const string& key) {
 					theme_refresh = true;
 					Config::flip("lowcolor");
 				}
+			#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+				else if (option == "force_tty" and not Term::current_tty.starts_with("/dev/tty")) {
+			#else
 				else if (option == "force_tty") {
+			#endif
 					theme_refresh = true;
-					Config::flip("tty_mode");
+					Config::set("tty_mode", Config::getB("force_tty"));
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;
@@ -1497,6 +1513,8 @@ static int optionsMenu(const string& key) {
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
+				else if (option == "disable_presets" and optList.at(i) != "Off")
+					Config::current_preset.reset();
 			}
 			else
 				retval = NoChange;

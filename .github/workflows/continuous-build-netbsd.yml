@@ -55,7 +55,7 @@ jobs:
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: btop-x86_64-netbsd-9.3
           path: 'bin/*'
