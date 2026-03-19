@@ -1537,25 +1537,23 @@ static int optionsMenu(const string& key) {
 			}
 
 			//? Get variable properties for currently selected option
-			if (selPred.none() or last_sel != (selected_cat << 8) + selected) {
-				selPred.reset();
-				last_sel = (selected_cat << 8) + selected;
-				const auto& selOption = categories[selected_cat][item_height * page + selected][0];
-				if (Config::ints.contains(selOption))
-					selPred.set(isInt);
-				else if (Config::bools.contains(selOption))
-					selPred.set(isBool);
-				else
-					selPred.set(isString);
+			selPred.reset();
+			last_sel = (selected_cat << 8) + selected;
+			const auto& selOption = categories[selected_cat][item_height * page + selected][0];
+			if (Config::ints.contains(selOption))
+				selPred.set(isInt);
+			else if (Config::bools.contains(selOption))
+				selPred.set(isBool);
+			else
+				selPred.set(isString);
 
-				if (not selPred.test(isString))
-					selPred.set(is2D);
-				else if (optionsList.contains(selOption)) {
-					selPred.set(isBrowsable);
-				}
-				if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
-					selPred.set(isEditable);
+			if (not selPred.test(isString))
+				selPred.set(is2D);
+			else if (optionsList.contains(selOption)) {
+				selPred.set(isBrowsable);
 			}
+			if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
+				selPred.set(isEditable);
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
