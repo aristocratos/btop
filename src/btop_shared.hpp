@@ -177,14 +177,21 @@ namespace Gpu {
 		// vector<proc_info> compute_processes = {};
 	};
 
+	#ifndef __APPLE__
 	namespace Nvml {
 		extern bool shutdown();
 	}
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+<<<<<<< HEAD
+	#else
+	namespace IOAccelerator 
+	{
+=======
 	#ifdef __APPLE__
 	namespace AppleSilicon {
+>>>>>>> official
 		extern bool shutdown();
 	}
 	#endif
