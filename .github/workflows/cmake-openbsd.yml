@@ -12,6 +12,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/openbsd/*pp'
+      - 'tests/**'
   pull_request:
     branches: main
     paths:
@@ -21,6 +22,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/openbsd/*pp'
+      - 'tests/**'
 
 jobs:
   build:
