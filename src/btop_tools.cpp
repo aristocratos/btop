@@ -436,25 +436,25 @@ namespace Tools {
 			"bit"s, "Kib"s, "Mib"s,
 			"Gib"s, "Tib"s, "Pib"s,
 			"Eib"s, "Zib"s, "Yib"s,
-			"Bib"s, "GEb"s
+			"Rib"s, "Qib"s
 		};
 		static const array mebiUnits_byte {
 			"Byte"s, "KiB"s, "MiB"s,
 			"GiB"s, "TiB"s, "PiB"s,
 			"EiB"s, "ZiB"s, "YiB"s,
-			"BiB"s, "GEB"s
+			"RiB"s, "QiB"s
 		};
 		static const array megaUnits_bit {
-			"bit"s, "Kb"s, "Mb"s,
+			"bit"s, "kb"s, "Mb"s,
 			"Gb"s, "Tb"s, "Pb"s,
 			"Eb"s, "Zb"s, "Yb"s,
-			"Bb"s, "Gb"s
+			"Rb"s, "Qb"s
 		};
 		static const array megaUnits_byte {
-			"Byte"s, "KB"s, "MB"s,
+			"Byte"s, "kB"s, "MB"s,
 			"GB"s, "TB"s, "PB"s,
 			"EB"s, "ZB"s, "YB"s,
-			"BB"s, "GB"s
+			"RB"s, "QB"s
 		};
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
