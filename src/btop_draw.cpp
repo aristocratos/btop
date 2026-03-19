@@ -1467,6 +1467,7 @@ namespace Net {
 		if (force_redraw) redraw = true;
 		auto net_sync = Config::getB("net_sync");
 		auto net_auto = Config::getB("net_auto");
+		auto show_ip = Config::getB("show_ip");
 		auto tty_mode = Config::getB("tty_mode");
 		auto swap_upload_download = Config::getB("swap_upload_download");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_net"));
@@ -1520,7 +1521,7 @@ namespace Net {
 		}
 
 		//? IP or device address
-		if (not ip_addr.empty() and cmp_greater(width - i_size - 36, ip_addr.size())) {
+		if (show_ip and not ip_addr.empty() and cmp_greater(width - i_size - 36, ip_addr.size())) {
 			out += Mv::to(y, x + 8) + title_left + Theme::c("title") + Fx::b + ip_addr + title_right;
 		}
 

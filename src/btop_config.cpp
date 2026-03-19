@@ -223,6 +223,8 @@ namespace Config {
 
 	    {"base_10_bitrate",     "#* \"True\" shows bitrates in base 10 (Kbps, Mbps). \"False\" shows bitrates in binary sizes (Kibps, Mibps, etc.). \"Auto\" uses base_10_sizes."},
 
+		{"show_ip", 			"#* \"True\" shows ip addresses. \"False\" hides ip addresses."},
+
 		{"show_battery", 		"#* Show battery stats in top right if battery is present."},
 
 		{"selected_battery",	"#* Which battery to use if multiple are present. \"Auto\" for auto detection."},
@@ -332,6 +334,7 @@ namespace Config {
 		{"io_graph_combined", false},
 		{"net_auto", true},
 		{"net_sync", true},
+		{"show_ip", true},
 		{"show_battery", true},
 		{"show_battery_watts", true},
 		{"vim_keys", false},

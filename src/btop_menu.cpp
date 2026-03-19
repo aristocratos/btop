@@ -799,6 +799,12 @@ namespace Menu {
 			    "       setting for bitrates",
 			    "",
 			    "True, False, or Auto",},
+			{"show_ip",
+				"IP address visibility.",
+				"",
+				"Manually set the IP address visibility.",
+				"",
+				"True or False."},
 		},
 		{
 			{"proc_left",
