@@ -267,6 +267,53 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+
+	//? MTT (Moore Threads) data collection
+	namespace Mtml {
+		//? MTT defines
+		#define MTML_SUCCESS 0
+		#define MTML_DEVICE_NAME_BUFFER_SIZE 128
+
+		//? MTT opaque types (forward declarations)
+		typedef void* MtmlLibrary;
+		typedef void* MtmlDevice;
+		typedef void* MtmlGpu;
+		typedef void* MtmlMemory;
+		typedef int MtmlReturn;
+
+		//? Function pointers
+		MtmlReturn (*mtmlLibraryInit)(MtmlLibrary**);
+		MtmlReturn (*mtmlLibraryShutDown)(MtmlLibrary*);
+		MtmlReturn (*mtmlLibraryCountDevice)(const MtmlLibrary*, unsigned int*);
+		MtmlReturn (*mtmlLibraryInitDeviceByIndex)(const MtmlLibrary*, unsigned int, MtmlDevice**);
+		MtmlReturn (*mtmlLibraryFreeDevice)(MtmlDevice*);
+		MtmlReturn (*mtmlDeviceInitGpu)(const MtmlDevice*, MtmlGpu**);
+		MtmlReturn (*mtmlDeviceInitMemory)(const MtmlDevice*, MtmlMemory**);
+		MtmlReturn (*mtmlDeviceFreeGpu)(MtmlGpu*);
+		MtmlReturn (*mtmlDeviceFreeMemory)(MtmlMemory*);
+		MtmlReturn (*mtmlDeviceGetName)(const MtmlDevice*, char*, unsigned int);
+		MtmlReturn (*mtmlDeviceGetPowerUsage)(const MtmlDevice*, unsigned int*);
+		MtmlReturn (*mtmlGpuGetUtilization)(const MtmlGpu*, unsigned int*);
+		MtmlReturn (*mtmlGpuGetTemperature)(const MtmlGpu*, int*);
+		MtmlReturn (*mtmlGpuGetClock)(const MtmlGpu*, unsigned int*);
+		MtmlReturn (*mtmlGpuGetMaxClock)(const MtmlGpu*, unsigned int*);
+		MtmlReturn (*mtmlMemoryGetTotal)(const MtmlMemory*, unsigned long long*);
+		MtmlReturn (*mtmlMemoryGetUsed)(const MtmlMemory*, unsigned long long*);
+		MtmlReturn (*mtmlMemoryGetUtilization)(const MtmlMemory*, unsigned int*);
+		MtmlReturn (*mtmlMemoryGetClock)(const MtmlMemory*, unsigned int*);
+
+		//? Data
+		void* mtml_dl_handle = nullptr;
+		MtmlLibrary* mtml_lib = nullptr;
+		vector<MtmlDevice*> mtml_devices;
+		vector<MtmlGpu*> mtml_gpus;
+		vector<MtmlMemory*> mtml_memories;
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -352,6 +399,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+		}
+
+		if (shown_gpus.contains("mtt")) {
+			Gpu::Mtml::init();
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -1922,6 +1973,294 @@ namespace Gpu {
 		}
 	}
 
+	//? MTT (Moore Threads) implementation
+	namespace Mtml {
+		bool init() {
+			if (initialized) return false;
+
+			//? Dynamic loading & linking
+			mtml_dl_handle = dlopen("libmtml.so", RTLD_LAZY);
+			if (!mtml_dl_handle) {
+				mtml_dl_handle = dlopen("libmtml.so.1", RTLD_LAZY);
+			}
+			
+			if (!mtml_dl_handle) {
+				Logger::info("Failed to load libmtml.so, MTT GPUs will not be detected: {}", dlerror());
+				return false;
+			}
+
+			auto load_mtml_sym = [&](const char sym_name[]) {
+				auto sym = dlsym(mtml_dl_handle, sym_name);
+				auto err = dlerror();
+				if (err != nullptr) {
+					Logger::error("MTML: Couldn't find function {}: {}", sym_name, err);
+					return (void*)nullptr;
+				} else return sym;
+			};
+
+			#define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_mtml_sym(#NAME)) == nullptr) return false
+
+			LOAD_SYM(mtmlLibraryInit);
+			LOAD_SYM(mtmlLibraryShutDown);
+			LOAD_SYM(mtmlLibraryCountDevice);
+			LOAD_SYM(mtmlLibraryInitDeviceByIndex);
+			LOAD_SYM(mtmlLibraryFreeDevice);
+			LOAD_SYM(mtmlDeviceInitGpu);
+			LOAD_SYM(mtmlDeviceInitMemory);
+			LOAD_SYM(mtmlDeviceFreeGpu);
+			LOAD_SYM(mtmlDeviceFreeMemory);
+			LOAD_SYM(mtmlDeviceGetName);
+			LOAD_SYM(mtmlDeviceGetPowerUsage);
+			LOAD_SYM(mtmlGpuGetUtilization);
+			LOAD_SYM(mtmlGpuGetTemperature);
+			LOAD_SYM(mtmlGpuGetClock);
+			LOAD_SYM(mtmlGpuGetMaxClock);
+			LOAD_SYM(mtmlMemoryGetTotal);
+			LOAD_SYM(mtmlMemoryGetUsed);
+			LOAD_SYM(mtmlMemoryGetUtilization);
+			LOAD_SYM(mtmlMemoryGetClock);
+
+			#undef LOAD_SYM
+
+			// Initialize MTML library
+			MtmlReturn result = mtmlLibraryInit(&mtml_lib);
+			if (result != MTML_SUCCESS) {
+				Logger::warning("MTML: Failed to initialize library: {}", result);
+				dlclose(mtml_dl_handle);
+				mtml_dl_handle = nullptr;
+				return false;
+			}
+
+			// Get device count
+			result = mtmlLibraryCountDevice(mtml_lib, &device_count);
+			if (result != MTML_SUCCESS || device_count == 0) {
+				Logger::debug("MTML: No MTT GPUs found or failed to get device count: {}", result);
+				mtmlLibraryShutDown(mtml_lib);
+				mtml_lib = nullptr;
+				dlclose(mtml_dl_handle);
+				mtml_dl_handle = nullptr;
+				return false;
+			}
+
+			// Initialize devices, GPUs and memories
+			mtml_devices.resize(device_count);
+			mtml_gpus.resize(device_count);
+			mtml_memories.resize(device_count);
+			
+			for (unsigned int i = 0; i < device_count; ++i) {
+				result = mtmlLibraryInitDeviceByIndex(mtml_lib, i, &mtml_devices[i]);
+				if (result != MTML_SUCCESS) {
+					Logger::warning("MTML: Failed to initialize device {}: {}", i, result);
+					continue;
+				}
+
+				result = mtmlDeviceInitGpu(mtml_devices[i], &mtml_gpus[i]);
+				if (result != MTML_SUCCESS) {
+					Logger::warning("MTML: Failed to initialize GPU for device {}: {}", i, result);
+				}
+
+				result = mtmlDeviceInitMemory(mtml_devices[i], &mtml_memories[i]);
+				if (result != MTML_SUCCESS) {
+					Logger::warning("MTML: Failed to initialize memory for device {}: {}", i, result);
+				}
+			}
+
+			// Resize global GPU vectors
+			size_t start_index = gpus.size();
+			gpus.resize(start_index + device_count);
+			gpu_names.resize(start_index + device_count);
+
+			initialized = true;
+			Mtml::collect<1>(gpus.data() + start_index);
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+
+			// Free memories
+			for (auto& mem : mtml_memories) {
+				if (mem) mtmlDeviceFreeMemory(mem);
+			}
+			mtml_memories.clear();
+
+			// Free GPUs
+			for (auto& gpu : mtml_gpus) {
+				if (gpu) mtmlDeviceFreeGpu(gpu);
+			}
+			mtml_gpus.clear();
+
+			// Free devices
+			for (auto& dev : mtml_devices) {
+				if (dev) mtmlLibraryFreeDevice(dev);
+			}
+			mtml_devices.clear();
+
+			// Shutdown library
+			if (mtml_lib) {
+				mtmlLibraryShutDown(mtml_lib);
+				mtml_lib = nullptr;
+			}
+
+			// Close library
+			if (mtml_dl_handle) {
+				dlclose(mtml_dl_handle);
+				mtml_dl_handle = nullptr;
+			}
+
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init>
+		bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			for (unsigned int i = 0; i < device_count; ++i) {
+				if (!mtml_devices[i] || !mtml_gpus[i] || !mtml_memories[i]) {
+					continue;
+				}
+
+				if constexpr(is_init) {
+					//? Device name
+					char name[MTML_DEVICE_NAME_BUFFER_SIZE];
+					MtmlReturn result = mtmlDeviceGetName(mtml_devices[i], name, MTML_DEVICE_NAME_BUFFER_SIZE);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get device name for device {}: {}", i, result);
+						gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count + i] = fmt::format("MTT GPU {}", i);
+					} else {
+						gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count + i] = string(name);
+					}
+
+					// Initialize supported functions
+					gpus_slice[i].supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = true,
+						.gpu_clock = true,
+						.mem_clock = true,
+						.pwr_usage = true,
+						.pwr_state = false, // MTT doesn't seem to have power state API
+						.temp_info = true,
+						.mem_total = true,
+						.mem_used = true,
+						.pcie_txrx = false, // TODO: Check if MTT has PCIe throughput API
+						.encoder_utilization = false, // TODO: Check if MTT has encoder/decoder API
+						.decoder_utilization = false
+					};
+
+					// Set default max values
+					gpus_slice[i].pwr_max_usage = 255000; // 255W default
+					gpus_slice[i].temp_max = 110; // 110°C default
+				}
+
+				//? GPU utilization
+				if (gpus_slice[i].supported_functions.gpu_utilization) {
+					unsigned int utilization;
+					MtmlReturn result = mtmlGpuGetUtilization(mtml_gpus[i], &utilization);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get GPU utilization for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
+					} else {
+						gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization);
+					}
+				}
+
+				//? Memory utilization
+				if (gpus_slice[i].supported_functions.mem_utilization) {
+					unsigned int mem_utilization;
+					MtmlReturn result = mtmlMemoryGetUtilization(mtml_memories[i], &mem_utilization);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get memory utilization for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
+					} else {
+						gpus_slice[i].mem_utilization_percent.push_back((long long)mem_utilization);
+					}
+				}
+
+				//? GPU clock speed
+				if (gpus_slice[i].supported_functions.gpu_clock) {
+					unsigned int gpu_clock;
+					MtmlReturn result = mtmlGpuGetClock(mtml_gpus[i], &gpu_clock);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get GPU clock for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+					} else {
+						gpus_slice[i].gpu_clock_speed = (long long)gpu_clock;
+					}
+				}
+
+				//? Memory clock speed
+				if (gpus_slice[i].supported_functions.mem_clock) {
+					unsigned int mem_clock;
+					MtmlReturn result = mtmlMemoryGetClock(mtml_memories[i], &mem_clock);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get memory clock for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+					} else {
+						gpus_slice[i].mem_clock_speed = (long long)mem_clock;
+					}
+				}
+
+				//? Power usage
+				if (gpus_slice[i].supported_functions.pwr_usage) {
+					unsigned int power;
+					MtmlReturn result = mtmlDeviceGetPowerUsage(mtml_devices[i], &power);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get power usage for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
+					} else {
+						gpus_slice[i].pwr_usage = (long long)power; // MTT returns power in mW
+						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
+							gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
+						gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
+					}
+				}
+
+				//? Temperature
+				if (gpus_slice[i].supported_functions.temp_info) {
+					int temp;
+					MtmlReturn result = mtmlGpuGetTemperature(mtml_gpus[i], &temp);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get temperature for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.temp_info = false;
+					} else {
+						gpus_slice[i].temp.push_back((long long)temp);
+					}
+				}
+
+				//? Memory info
+				if (gpus_slice[i].supported_functions.mem_total) {
+					unsigned long long total_mem;
+					MtmlReturn result = mtmlMemoryGetTotal(mtml_memories[i], &total_mem);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get total memory for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
+					} else {
+						gpus_slice[i].mem_total = (long long)total_mem;
+					}
+				}
+
+				if (gpus_slice[i].supported_functions.mem_used) {
+					unsigned long long used_mem;
+					MtmlReturn result = mtmlMemoryGetUsed(mtml_memories[i], &used_mem);
+					if (result != MTML_SUCCESS) {
+						Logger::warning("MTML: Failed to get used memory for device {}: {}", i, result);
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
+					} else {
+						gpus_slice[i].mem_used = (long long)used_mem;
+						if (gpus_slice[i].mem_total > 0) {
+							long long mem_percent = (gpus_slice[i].mem_used * 100) / gpus_slice[i].mem_total;
+							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(mem_percent);
+						}
+					}
+				}
+			}
+
+			return true;
+		}
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -1932,6 +2271,7 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		Mtml::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Intel::device_count); // size = Mtml::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
@@ -1978,6 +2318,7 @@ namespace Gpu {
 
 		return gpus;
 	}
+
 }
 #endif
 
