@@ -1007,7 +1007,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1, toggle_children = -1;
+	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
@@ -1301,6 +1301,29 @@ namespace Proc {
 				}
 				collapse = expand = -1;
 			}
+
+			if (collapse_all != -1) {
+				//? Build sets of all pids and parent pids to identify root processes
+				std::unordered_set<size_t> pid_set, parent_pids;
+				for (const auto& p : current_procs) {
+					pid_set.insert(p.pid);
+					parent_pids.insert(static_cast<size_t>(p.ppid));
+				}
+				//? If any non-root parent is expanded, collapse; otherwise expand
+				const bool do_collapse = rng::any_of(current_procs, [&parent_pids, &pid_set](const proc_info& p) {
+					return parent_pids.contains(p.pid)
+						and pid_set.contains(static_cast<size_t>(p.ppid))
+						and not p.collapsed;
+				});
+				//? Root processes (parent not in tracked list) are never touched
+				for (auto& p : current_procs) {
+					if (not pid_set.contains(static_cast<size_t>(p.ppid))) continue;
+					p.collapsed = do_collapse;
+				}
+				collapse_all = -1;
+				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+			}
+
 			if (should_filter or not filter.empty()) filter_found = 0;
 
 			vector<tree_proc> tree_procs;
