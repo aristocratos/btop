@@ -13,7 +13,11 @@ add_library(libbtop_test)
 target_include_directories(libbtop_test PUBLIC ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(libbtop_test libbtop GTest::gtest_main)
 
-add_executable(btop_test tools.cpp)
+set(TEST_SOURCES tools.cpp cpu_box_property_test.cpp)
+if(APPLE)
+  list(APPEND TEST_SOURCES ioreport_test.cpp)
+endif()
+add_executable(btop_test ${TEST_SOURCES})
 target_link_libraries(btop_test libbtop_test)
 
 include(GoogleTest)
