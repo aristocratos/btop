@@ -1400,6 +1400,9 @@ proc_cpu_graphs = true
 #* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)
 proc_info_smaps = false
 
+#* Percentage value for proc box width when mem or net is shown.
+proc_box_width_percent = 55
+
 #* Show proc box on left side of screen instead of right.
 proc_left = false
 

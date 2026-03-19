@@ -73,8 +73,9 @@ namespace Config {
 
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
+								"#* proc box format can also be \"proc:P:G:W\" W=(0-100) for proc width percentage.\n"
 								"#* Use whitespace \" \" as separator between different presets.\n"
-								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty\""},
+								"#* Example: \"cpu:0:default,mem:0:tty,proc:1:default:80 cpu:0:braille,proc:0:tty\""},
 
 		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
 								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
@@ -122,6 +123,8 @@ namespace Config {
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
+
+		{"proc_box_width_percent", "#* Percentage value for proc box width when mem or net is shown."},
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
@@ -373,6 +376,7 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
+		{"proc_box_width_percent", Proc::width_p},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
@@ -465,7 +469,7 @@ namespace Config {
 					return false;
 				}
 				const auto& vals = ssplit(box, ':');
-				if (vals.size() != 3) {
+				if (vals.size() != 3 and not (vals.size() == 4 and vals.at(0) == "proc")) {
 					validError = "Malformatted preset in config value presets!";
 					return false;
 				}
@@ -479,6 +483,10 @@ namespace Config {
 				}
 				if (not v_contains(valid_graph_symbols_def, vals.at(2))) {
 					validError = "Invalid graph name in config value presets!";
+					return false;
+				}
+				if (vals.size() == 4 and not (vals.at(3) == "default" or intValid("", vals.at(3)))) {
+					validError = "Invalid proc width percent in config value presets!";
 					return false;
 				}
 			}
@@ -512,6 +520,7 @@ namespace Config {
 				set("mem_below_net", (vals.at(1) != "0"));
 			} else if (vals.at(0) == "proc") {
 				set("proc_left", (vals.at(1) != "0"));
+				set("proc_box_width_percent", (vals.size() == 4 and vals.at(3) != "default") ? std::clamp(stoi(vals.at(3)), 0, 100) : Proc::width_p);
 			}
 			if (vals.at(0).starts_with("gpu")) {
 				set("graph_symbol_gpu", vals.at(2));
