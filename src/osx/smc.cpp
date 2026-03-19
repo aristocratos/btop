@@ -18,6 +18,8 @@ tab-size = 4
 
 #include "smc.hpp"
 
+#include <arpa/inet.h>
+
 static constexpr size_t MaxIndexCount = sizeof("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") - 1;
 static constexpr const char *KeyIndexes = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -105,6 +107,27 @@ namespace Cpu {
 			result = getSMCTemp(key);
 		}
 		return result;
+	}
+
+	float SMCConnection::getSMCFloat(char *key) {
+		SMCVal_t val;
+		kern_return_t result = SMCReadKey(key, &val);
+		if (result == kIOReturnSuccess && val.dataSize > 0) {
+			if (strcmp(val.dataType, DATATYPE_FLT) == 0 && val.dataSize == 4) {
+				uint32_t raw;
+				memcpy(&raw, val.bytes, 4);
+				raw = ntohl(raw);
+				float f;
+				memcpy(&f, &raw, 4);
+				return f;
+			}
+		}
+		return -1.0f;
+	}
+
+	float SMCConnection::getBatteryPower() {
+		char key[] = SMC_KEY_BATTERY_POWER;
+		return getSMCFloat(key);
 	}
 
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
