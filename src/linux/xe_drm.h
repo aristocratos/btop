@@ -49,7 +49,6 @@ struct drm_xe_engine {
 struct drm_xe_query_engines {
 	uint32_t num_engines;
 	uint32_t pad;
-	struct drm_xe_engine engines[];
 };
 
 #define DRM_XE_MEM_REGION_CLASS_SYSMEM 0
@@ -69,7 +68,6 @@ struct drm_xe_mem_region {
 struct drm_xe_query_mem_regions {
 	uint32_t num_mem_regions;
 	uint32_t pad;
-	struct drm_xe_mem_region mem_regions[];
 };
 
 struct drm_xe_device_query {

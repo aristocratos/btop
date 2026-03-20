@@ -1053,15 +1053,15 @@ namespace Gpu {
 				const string graph_lo_field = gpu.supported_functions.gt_utilization ? "gpu-mc-totals"s : "gpu-totals"s;
 
 				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, graph_up_field), graph_symbol, false, true}; // TODO cpu -> gpu
-            	if (not single_graph) {
-                	graph_lower = Draw::Graph{
-                    	x + width - b_width - 3,
-                    	graph_low_height, "cpu",
-                    	safeVal(gpu.gpu_percent, graph_lo_field),
-                    	graph_symbol,
-                    	Config::getB("cpu_invert_lower"), true
-                	};
-            	}
+				if (not single_graph) {
+					graph_lower = Draw::Graph{
+						x + width - b_width - 3,
+						graph_low_height, "cpu",
+						safeVal(gpu.gpu_percent, graph_lo_field),
+						graph_symbol,
+						Config::getB("cpu_invert_lower"), true
+					};
+				}
 				gpu_meter = Draw::Meter{b_width - (show_temps ? 25 : 12), "cpu"};
 			}
 			if (gpu.supported_functions.temp_info)
