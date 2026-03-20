@@ -929,6 +929,7 @@ namespace Cpu {
 
 		uint32_t percent = -1;
 		long seconds = -1;
+		float watts = -1;
 		string status = "discharging";
 		IOPSInfo_Wrap ps_info{};
 		if (ps_info()) {
@@ -964,7 +965,19 @@ namespace Cpu {
 				has_battery = false;
 			}
 		}
-		return {percent, -1, seconds, status};
+
+		//? Read battery power draw from SMC (PSTR key, Apple Silicon)
+		try {
+			SMCConnection smcCon;
+			float pwr = smcCon.getBatteryPower();
+			if (std::isfinite(pwr) and pwr >= 0.0f) {
+				watts = pwr;
+			}
+		} catch (std::runtime_error &e) {
+			Logger::debug("SMC battery power unavailable: {}", e.what());
+		}
+
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {

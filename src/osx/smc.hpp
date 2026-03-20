@@ -41,6 +41,7 @@ tab-size = 4
 #define DATATYPE_UINT16 "ui16"
 #define DATATYPE_UINT32 "ui32"
 #define DATATYPE_SP78 "sp78"
+#define DATATYPE_FLT  "flt "
 
 // key values
 #define SMC_KEY_CPU_TEMP "TC0P" // proximity temp?
@@ -49,6 +50,7 @@ tab-size = 4
 #define SMC_KEY_CPU1_TEMP "TC1C"
 #define SMC_KEY_CPU2_TEMP "TC2C"  // etc
 #define SMC_KEY_FAN0_RPM_CUR "F0Ac"
+#define SMC_KEY_BATTERY_POWER "PSTR" // system total power draw (watts, Apple Silicon)
 
 typedef struct {
 	char major;
@@ -102,10 +104,12 @@ namespace Cpu {
 		virtual ~SMCConnection();
 
 		long long getTemp(int core);
+		float getBatteryPower();
 
 	   private:
 		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);
 		long long getSMCTemp(char *key);
+		float getSMCFloat(char *key);
 		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure);
 
 		io_connect_t conn;

@@ -107,6 +107,24 @@ namespace Cpu {
 		return result;
 	}
 
+	float SMCConnection::getSMCFloat(char *key) {
+		SMCVal_t val;
+		kern_return_t result = SMCReadKey(key, &val);
+		if (result == kIOReturnSuccess && val.dataSize > 0) {
+			if (strcmp(val.dataType, DATATYPE_FLT) == 0 && val.dataSize == 4) {
+				float f;
+				memcpy(&f, val.bytes, 4);
+				return f;
+			}
+		}
+		return -1.0f;
+	}
+
+	float SMCConnection::getBatteryPower() {
+		char key[] = SMC_KEY_BATTERY_POWER;
+		return getSMCFloat(key);
+	}
+
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
 		kern_return_t result;
 		SMCKeyData_t inputStructure;
