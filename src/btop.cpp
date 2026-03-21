@@ -1200,7 +1200,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		}
 	}
 	catch (const std::exception& e) {
-		Global::exit_error_msg = fmt::format("Exception in main loop -> ", e.what());
+		Global::exit_error_msg = fmt::format("Exception in main loop -> {}", e.what());
 		clean_quit(1);
 	}
 	return 0;
