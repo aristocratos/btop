@@ -981,10 +981,14 @@ namespace Menu {
 	};
 
 	static int signalChoose(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static int s_pid{};
 		static int x{};
 		static int y{};
 		static int selected_signal = -1;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) selected_signal = -1;
 		auto& out = Global::overlay;
@@ -998,7 +1002,7 @@ namespace Menu {
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.starts_with("button_")) {
 			if (int new_select = stoi(key.substr(7)); new_select == selected_signal)
@@ -1017,7 +1021,7 @@ namespace Menu {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and isdigit(key.at(0)) and selected_signal < 10) {
 			selected_signal = std::min(std::stoi((selected_signal < 1 ? key : to_string(selected_signal) + key)), 64);
@@ -1086,6 +1090,10 @@ namespace Menu {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid = 0;
+			return Closed;
 	}
 
 	static int sizeError(const string& key) {
@@ -1111,8 +1119,12 @@ namespace Menu {
 	}
 
 	static int signalSend(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-		if (s_pid == 0) return Closed;
+		static int s_pid{};
+
+		if (s_pid == 0) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
+
 		if (redraw) {
 			atomic_wait(Runner::active);
 			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
@@ -1134,11 +1146,11 @@ namespace Menu {
 				menuMask.set(SignalReturn);
 			}
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::No_Esc) {
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::Select) {
 			Global::overlay = messageBox();
@@ -1148,6 +1160,10 @@ namespace Menu {
 			return Changed;
 		}
 		return NoChange;
+
+		MenuClosing:
+			s_pid = 0;
+			return Closed;
 	}
 
 	static int signalReturn(const string& key) {
@@ -1709,11 +1725,15 @@ static int optionsMenu(const string& key) {
 	}
 
 	static int reniceMenu(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static int s_pid{};
 		static int x{};
 		static int y{};
 		static int selected_nice = 0;
 		static string nice_edit;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) {
 			selected_nice = 0;
@@ -1730,7 +1750,7 @@ static int optionsMenu(const string& key) {
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 15) + ")", 48);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (is_in(key, "enter", "space")) {
 			if (s_pid > 0) {
@@ -1744,7 +1764,7 @@ static int optionsMenu(const string& key) {
 					// TODO: show error message
 				}
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and (isdigit(key.at(0)) or (key.at(0) == '-' and nice_edit.empty()))) {
 			nice_edit += key;
@@ -1794,6 +1814,10 @@ static int optionsMenu(const string& key) {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid = 0;
+			return Closed;
 	}
 
 	//* Add menus here and update enum Menus in header
