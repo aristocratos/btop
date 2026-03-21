@@ -1577,8 +1577,10 @@ namespace Proc {
 	int scroll_pos;
 	string selected_name;
 	std::unordered_map<size_t, Draw::Graph> p_graphs;
+	std::unordered_map<size_t, Draw::Graph> p_graphs_gpu;
 	std::unordered_map<size_t, bool> p_wide_cmd;
 	std::unordered_map<size_t, int> p_counters;
+	std::unordered_map<size_t, int> p_counters_gpu;
 	int counter = 0;
 	Draw::TextEdit filter;
 	Draw::Graph detailed_cpu_graph;
@@ -1681,7 +1683,15 @@ namespace Proc {
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto mem_bytes = Config::getB("proc_mem_bytes");
 		auto vim_keys = Config::getB("vim_keys");
-		auto show_graphs = Config::getB("proc_cpu_graphs");
+		auto show_cpu_graphs = Config::getB("proc_cpu_graphs");
+		auto show_gpu_graphs = Config::getB("proc_gpu_graphs");
+		#if defined(__linux__)
+			const bool show_gpu = width >= ((show_cpu_graphs or show_gpu_graphs) ? 70 : 65);
+			const bool show_gpu_mem = width >= ((show_cpu_graphs or show_gpu_graphs) ? 78 : 73);
+		#else
+			const bool show_gpu = false;
+			const bool show_gpu_mem = false;
+		#endif
 		const auto pause_proc_list = Config::getB("pause_proc_list");
 		auto follow_process = Config::getB("follow_process"); 
 		int followed_pid = Config::getI("followed_pid");
@@ -1772,10 +1782,14 @@ namespace Proc {
 			//? Adapt sizes of text fields
 			user_size = (width < 75 ? 5 : 10);
 			thread_size = (width < 75 ? - 1 : 4);
-			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - 33));
-			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - 33 : -1);
-			tree_size = width - user_size - thread_size - 23;
-			if (not show_graphs) {
+			const int gpu_cols = (show_gpu_mem ? 6 : 0) + (show_gpu ? 6 : 0);
+			const int gpu_graph_cols = (show_gpu and show_gpu_graphs ? 5 : 0);
+			const int proc_fixed = 33 + gpu_cols + gpu_graph_cols;
+			const int tree_fixed = 23 + gpu_cols + gpu_graph_cols;
+			prog_size = (width > 70 ? 16 : ( width > 55 ? 8 : width - user_size - thread_size - proc_fixed));
+			cmd_size = (width > 55 ? width - prog_size - user_size - thread_size - proc_fixed : -1);
+			tree_size = width - user_size - thread_size - tree_fixed;
+			if (not show_cpu_graphs) {
 				cmd_size += 5;
 				tree_size += 5;
 			}
@@ -1880,15 +1894,24 @@ namespace Proc {
 
 			//? pause, per-core, reverse, tree and sorting
 			const auto& sorting = Config::getS("proc_sorting");
+			const auto gpu_only = Config::getB("proc_gpu_only");
 			const int sort_len = sorting.size();
 			const int sort_pos = x + width - sort_len - 8;
 
+			if (width > 70 + sort_len) {
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+					Mv::to(y, sort_pos - 43), title_left, gpu_only ? Fx::b : "",
+					Theme::c("hi_fg"), 'g', Theme::c("title"), "pu-",
+					Theme::c("title"), "only",
+					Fx::ub, title_right);
+				Input::mouse_mappings["g"] = {y, sort_pos - 42, 1, 8};
+			}
 			if (width > 60 + sort_len) {
-			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 32), title_left, pause_proc_list ? Fx::b : "",
 					Theme::c("title"), "pa", Theme::c("hi_fg"), 'u', Theme::c("title"), "se",
-			    	Fx::ub, title_right);
-			    Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
+					Fx::ub, title_right);
+				Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
 			}
 			if (width > 55 + sort_len) {
 				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
@@ -1958,7 +1981,10 @@ namespace Proc {
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
-					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
+					+ rjust("Cpu%", (show_cpu_graphs ? 10 : 5))
+					+ (show_gpu_mem ? string{" "} + rjust("GMem", 5) : "")
+					+ (show_gpu ? string{" "} + rjust("Gpu%", (show_gpu_graphs ? 10 : 5)) : "")
+					+ Fx::ub;
 		}
 		//* End of redraw block
 
@@ -2021,9 +2047,9 @@ namespace Proc {
 				selected_depth = p.depth;
 			}
 
-			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
-			bool has_graph = show_graphs ? p_counters.contains(p.pid) : false;
-			if (show_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
+			//? Update cpu graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
+			bool has_graph = show_cpu_graphs ? p_counters.contains(p.pid) : false;
+			if (show_cpu_graphs and ((p.cpu_p > 0 and not has_graph) or (not data_same and has_graph))) {
 				if (not has_graph) {
 					p_graphs[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
 					p_counters[p.pid] = 0;
@@ -2034,6 +2060,21 @@ namespace Proc {
 				}
 				else
 					p_counters[p.pid] = 0;
+			}
+
+			//? Update gpu graphs for processes with above 0.0% gpu usage, delete if below 0.1% 10x times
+			bool has_gpu_graph = (show_gpu and show_gpu_graphs) ? p_counters_gpu.contains(p.pid) : false;
+			if ((show_gpu and show_gpu_graphs) and ((p.gpu_p > 0 and not has_gpu_graph) or (not data_same and has_gpu_graph))) {
+				if (not has_gpu_graph) {
+					p_graphs_gpu[p.pid] = Draw::Graph{5, 1, "", {}, graph_symbol};
+					p_counters_gpu[p.pid] = 0;
+				}
+				else if (p.gpu_p < 0.1 and ++p_counters_gpu[p.pid] >= 10) {
+					if (p_graphs_gpu.contains(p.pid)) p_graphs_gpu.erase(p.pid);
+					p_counters_gpu.erase(p.pid);
+				}
+				else
+					p_counters_gpu[p.pid] = 0;
 			}
 
 			out += Fx::reset;
@@ -2110,6 +2151,18 @@ namespace Proc {
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
+			string gpu_str;
+			if (show_gpu) {
+				if (p.gpu_p <= 0.0 and p.gpu_m == 0) {
+					gpu_str = "-";
+				}
+				else {
+					gpu_str = fmt::format("{:.1f}", clamp(p.gpu_p, 0.0, 100.0));
+					if (gpu_str.size() > 4) gpu_str.resize(4);
+					if (gpu_str.ends_with('.')) gpu_str.pop_back();
+				}
+			}
+			const string gpu_mem_str = show_gpu_mem ? (p.gpu_m == 0 ? "-" : floating_humanizer(p.gpu_m, true)) : "";
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
@@ -2131,9 +2184,13 @@ namespace Proc {
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
-				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
+				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_cpu_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
-				+ c_color + rjust(cpu_str, 4) + "  " + end;
+				+ c_color + rjust(cpu_str, 4) + ' ' + end
+				+ (show_gpu_mem ? c_color + rjust(gpu_mem_str, 5) + ' ' + end : "")
+				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + ((show_gpu and show_gpu_graphs) ? graph_bg * 5 : "")
+				+ (p_graphs_gpu.contains(p.pid) ? Mv::l(5) + c_color + p_graphs_gpu.at(p.pid)({(p.gpu_p >= 0.1 and p.gpu_p < 5 ? 5ll : (long long)round(p.gpu_p))}, data_same) : "") + end
+				+ (show_gpu ? c_color + rjust(gpu_str, 5) + ' ' + end : "");
 			if (lc++ > height - 5) break;
 			else if (lc > height - 5 and proc_banner_shown) break;
 		}
@@ -2179,6 +2236,14 @@ namespace Proc {
 			});
 
 			std::erase_if(p_counters, [&](const auto& pair) {
+				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			});
+
+			std::erase_if(p_graphs_gpu, [&](const auto& pair) {
+				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
+			});
+
+			std::erase_if(p_counters_gpu, [&](const auto& pair) {
 				return rng::find(plist, pair.first, &proc_info::pid) == plist.end();
 			});
 
@@ -2230,7 +2295,9 @@ namespace Draw {
 		Runner::redraw = true;
 		if (not (Proc::resized or Global::resized)) {
 			Proc::p_counters.clear();
+			Proc::p_counters_gpu.clear();
 			Proc::p_graphs.clear();
+			Proc::p_graphs_gpu.clear();
 		}
 		if (Menu::active) Menu::redraw = true;
 
