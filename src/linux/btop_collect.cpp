@@ -1997,12 +1997,6 @@ namespace Gpu {
 				uint64_t total_other = 0;
 				uint64_t total_vcs = 0;
 				uint64_t total_vecs = 0;
-				uint64_t capacity_rcs = 1;
-				uint64_t capacity_ccs = 1;
-				uint64_t capacity_bcs = 1;
-				uint64_t capacity_other = 1;
-				uint64_t capacity_vcs = 1;
-				uint64_t capacity_vecs = 1;
 
 				[[nodiscard]] bool has_main() const {
 					return rcs > 0 or ccs > 0 or bcs > 0 or other > 0
@@ -2033,8 +2027,8 @@ namespace Gpu {
 			};
 
 			// Collect GPU cycles from all processes' fdinfo with client-id deduplication.
-			// Xe reports per-client run ticks, so we merge duplicated FDs by client id and
-			// normalize totals with per-class engine capacity when available.
+			// Keep raw per-class totals so the resulting utilization matches the semantics
+			// used by existing DRM tools such as nvtop.
 			static FdinfoCycles collect_fdinfo_cycles(const string& pci_slot) {
 				FdinfoCycles result;
 				std::unordered_map<uint64_t, FdinfoEngineCycles> clients;
@@ -2141,36 +2135,6 @@ namespace Gpu {
 												fd_cycles.total_vecs = static_cast<uint64_t>(stoull(line.substr(22)));
 											} catch (...) {}
 										}
-										else if (line.rfind("drm-engine-capacity-rcs:", 0) == 0) {
-											try {
-												fd_cycles.capacity_rcs = std::max<uint64_t>(1, stoull(line.substr(24)));
-											} catch (...) {}
-										}
-										else if (line.rfind("drm-engine-capacity-ccs:", 0) == 0) {
-											try {
-												fd_cycles.capacity_ccs = std::max<uint64_t>(1, stoull(line.substr(24)));
-											} catch (...) {}
-										}
-										else if (line.rfind("drm-engine-capacity-bcs:", 0) == 0) {
-											try {
-												fd_cycles.capacity_bcs = std::max<uint64_t>(1, stoull(line.substr(24)));
-											} catch (...) {}
-										}
-										else if (line.rfind("drm-engine-capacity-other:", 0) == 0) {
-											try {
-												fd_cycles.capacity_other = std::max<uint64_t>(1, stoull(line.substr(26)));
-											} catch (...) {}
-										}
-										else if (line.rfind("drm-engine-capacity-vcs:", 0) == 0) {
-											try {
-												fd_cycles.capacity_vcs = std::max<uint64_t>(1, stoull(line.substr(24)));
-											} catch (...) {}
-										}
-										else if (line.rfind("drm-engine-capacity-vecs:", 0) == 0) {
-											try {
-												fd_cycles.capacity_vecs = std::max<uint64_t>(1, stoull(line.substr(25)));
-											} catch (...) {}
-										}
 									}
 								}
 
@@ -2187,18 +2151,12 @@ namespace Gpu {
 									merged.total_ccs = max(merged.total_ccs, fd_cycles.total_ccs);
 									merged.total_bcs = max(merged.total_bcs, fd_cycles.total_bcs);
 									merged.total_other = max(merged.total_other, fd_cycles.total_other);
-									merged.capacity_rcs = max(merged.capacity_rcs, fd_cycles.capacity_rcs);
-									merged.capacity_ccs = max(merged.capacity_ccs, fd_cycles.capacity_ccs);
-									merged.capacity_bcs = max(merged.capacity_bcs, fd_cycles.capacity_bcs);
-									merged.capacity_other = max(merged.capacity_other, fd_cycles.capacity_other);
 								}
 								if (fd_cycles.has_media()) {
 									merged.vcs = max(merged.vcs, fd_cycles.vcs);
 									merged.vecs = max(merged.vecs, fd_cycles.vecs);
 									merged.total_vcs = max(merged.total_vcs, fd_cycles.total_vcs);
 									merged.total_vecs = max(merged.total_vecs, fd_cycles.total_vecs);
-									merged.capacity_vcs = max(merged.capacity_vcs, fd_cycles.capacity_vcs);
-									merged.capacity_vecs = max(merged.capacity_vecs, fd_cycles.capacity_vecs);
 								}
 							}
 						} catch (...) {}
@@ -2211,12 +2169,6 @@ namespace Gpu {
 				uint64_t max_total_other = 0;
 				uint64_t max_total_vcs = 0;
 				uint64_t max_total_vecs = 0;
-				uint64_t max_capacity_rcs = 1;
-				uint64_t max_capacity_ccs = 1;
-				uint64_t max_capacity_bcs = 1;
-				uint64_t max_capacity_other = 1;
-				uint64_t max_capacity_vcs = 1;
-				uint64_t max_capacity_vecs = 1;
 
 				for (const auto& [client_id, merged] : clients) {
 					(void)client_id;
@@ -2226,28 +2178,18 @@ namespace Gpu {
 						max_total_ccs = max(max_total_ccs, merged.total_ccs);
 						max_total_bcs = max(max_total_bcs, merged.total_bcs);
 						max_total_other = max(max_total_other, merged.total_other);
-						max_capacity_rcs = max(max_capacity_rcs, merged.capacity_rcs);
-						max_capacity_ccs = max(max_capacity_ccs, merged.capacity_ccs);
-						max_capacity_bcs = max(max_capacity_bcs, merged.capacity_bcs);
-						max_capacity_other = max(max_capacity_other, merged.capacity_other);
 						result.has_main = true;
 					}
 					if (merged.has_media()) {
 						result.media_cycles += merged.media_cycles();
 						max_total_vcs = max(max_total_vcs, merged.total_vcs);
 						max_total_vecs = max(max_total_vecs, merged.total_vecs);
-						max_capacity_vcs = max(max_capacity_vcs, merged.capacity_vcs);
-						max_capacity_vecs = max(max_capacity_vecs, merged.capacity_vecs);
 						result.has_media = true;
 					}
 				}
 
-				result.main_total_cycles = max_total_rcs * max_capacity_rcs
-					+ max_total_ccs * max_capacity_ccs
-					+ max_total_bcs * max_capacity_bcs
-					+ max_total_other * max_capacity_other;
-				result.media_total_cycles = max_total_vcs * max_capacity_vcs
-					+ max_total_vecs * max_capacity_vecs;
+				result.main_total_cycles = max_total_rcs + max_total_ccs + max_total_bcs + max_total_other;
+				result.media_total_cycles = max_total_vcs + max_total_vecs;
 
 				return result;
 			}
