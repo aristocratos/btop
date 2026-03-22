@@ -2027,8 +2027,8 @@ namespace Gpu {
 			};
 
 			// Collect GPU cycles from all processes' fdinfo with client-id deduplication.
-			// Keep raw per-class totals so the resulting utilization matches the semantics
-			// used by existing DRM tools such as nvtop.
+			// Xe exports drm-total-cycles-* as a shared GPU timestamp per class, so use
+			// the max timestamp for each group instead of summing identical totals.
 			static FdinfoCycles collect_fdinfo_cycles(const string& pci_slot) {
 				FdinfoCycles result;
 				std::unordered_map<uint64_t, FdinfoEngineCycles> clients;
@@ -2188,8 +2188,8 @@ namespace Gpu {
 					}
 				}
 
-				result.main_total_cycles = max_total_rcs + max_total_ccs + max_total_bcs + max_total_other;
-				result.media_total_cycles = max_total_vcs + max_total_vecs;
+				result.main_total_cycles = max(max(max_total_rcs, max_total_ccs), max(max_total_bcs, max_total_other));
+				result.media_total_cycles = max(max_total_vcs, max_total_vecs);
 
 				return result;
 			}
