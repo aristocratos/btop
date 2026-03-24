@@ -1200,10 +1200,19 @@ namespace Mem {
 
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
+		vm_size_t vm_page_size;
+		host_page_size(mach_host_self(), &vm_page_size);
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
-			mem.stats.at("free") = p.free_count * Shared::pageSize;
-			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
+			mem.stats.at("free") = p.free_count * vm_page_size;
+			mem.stats.at("cached") = p.external_page_count * vm_page_size;
+			int64_t used = (static_cast<int64_t>(p.active_count)
+				+ static_cast<int64_t>(p.inactive_count)
+				+ static_cast<int64_t>(p.wire_count)
+				+ static_cast<int64_t>(p.speculative_count)
+				+ static_cast<int64_t>(p.compressor_page_count)
+				- static_cast<int64_t>(p.purgeable_count)
+				- static_cast<int64_t>(p.external_page_count)) * static_cast<int64_t>(vm_page_size);
+			mem.stats.at("used") = max(0ll, used);
 			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 		}
 
