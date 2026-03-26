@@ -35,6 +35,9 @@ jobs:
   build-freebsd:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.compiler }}
+      cancel-in-progress: true
     strategy:
       matrix:
         compiler: ["clang++", "g++"]

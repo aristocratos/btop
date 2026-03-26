@@ -33,6 +33,10 @@ on:
 
 jobs:
   build-macos:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os.runner }}
+      cancel-in-progress: true
+    continue-on-error: true
     strategy:
       matrix:
         os:
