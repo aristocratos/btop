@@ -57,7 +57,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: btop-x86_64-netbsd-9.3
+          name: btop-x86_64-netbsd-10.1
           path: 'bin/*'
           if-no-files-found: error
 
