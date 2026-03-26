@@ -1,5 +1,7 @@
 name: macOS CMake
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:

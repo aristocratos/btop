@@ -1,5 +1,7 @@
 name: Continuous Build Linux
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:

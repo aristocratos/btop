@@ -1,5 +1,7 @@
 name: NetBSD CMake
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:

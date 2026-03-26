@@ -1,5 +1,7 @@
 name: Continuous Build FreeBSD
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:

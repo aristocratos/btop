@@ -1,5 +1,7 @@
 name: Linux CMake
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:

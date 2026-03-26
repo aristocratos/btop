@@ -1,4 +1,7 @@
 name: 🧪 Test snap can be built on x86_64
+
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
