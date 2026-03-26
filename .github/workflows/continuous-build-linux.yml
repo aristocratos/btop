@@ -62,7 +62,7 @@ jobs:
           - x86_64-unknown-linux-musl
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install cross toolchain
         run: |
@@ -83,7 +83,7 @@ jobs:
           mv bin/btop bin/$FILENAME
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: btop-${{ matrix.toolchain }}
           path: '${{ github.workspace }}/bin/*'
