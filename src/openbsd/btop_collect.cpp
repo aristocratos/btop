@@ -395,10 +395,10 @@ namespace Cpu {
 		auto cp_time = std::unique_ptr<struct cpustats[]>{
 			new struct cpustats[Shared::coreCount]
 		};
-		size_t size = Shared::coreCount * sizeof(struct cpustats);
+		size_t size = sizeof(struct cpustats);
 		static int cpustats_mib[] = {CTL_KERN, KERN_CPUSTATS, /*fillme*/0};
 		for (int i = 0; i < Shared::coreCount; i++) {
-			cpustats_mib[2] = i / 2;
+			cpustats_mib[2] = i;
 			if (sysctl(cpustats_mib, 3, &cp_time[i], &size, NULL, 0) == -1) {
 				Logger::error("sysctl kern.cpustats failed");
 			}
