@@ -68,4 +68,3 @@ jobs:
           name: btop-x86_64-netbsd-10.1
           path: 'bin/*'
           if-no-files-found: error
-

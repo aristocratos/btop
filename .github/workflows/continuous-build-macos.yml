@@ -40,9 +40,10 @@ jobs:
     strategy:
       matrix:
         os:
-         # - {runner: 'macos-13', version: 'Ventura'}
-          - {runner: 'macos-14', version: 'Sonoma'}
-          - {runner: 'macos-15', version: 'Sequoia'}
+          - runner: macos-14
+            version: Sonoma
+          - runner: macos-15
+            version: Sequoia
     runs-on: ${{ matrix.os.runner }}
     steps:
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
