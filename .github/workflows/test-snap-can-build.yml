@@ -5,10 +5,10 @@ permissions: {}
 on:
   workflow_dispatch:
   push:
-   branches: [ main ]
-   tags-ignore:
+    branches: [main]
+    tags-ignore:
       - '*.*'
-   paths:
+    paths:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
@@ -19,8 +19,8 @@ on:
       - '.github/workflows/test-snap-can-build.yml'
       - 'snap/snapcraft.yaml'
   pull_request:
-   branches: [ main ]
-   paths:
+    branches: [main]
+    paths:
       - 'src/**'
       - '!src/osx/**'
       - '!src/freebsd/**'
