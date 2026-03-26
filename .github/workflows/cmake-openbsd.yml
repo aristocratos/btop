@@ -36,10 +36,10 @@ jobs:
         arch: ['aarch64', 'x86_64']
         version: ['7.8']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Compile
-        uses: vmactions/openbsd-vm@v1
+        uses: vmactions/openbsd-vm@3fafb45f2e2e696249c583835939323fe1c3448c # v1.3.7
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}

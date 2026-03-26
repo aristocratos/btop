@@ -39,10 +39,10 @@ jobs:
       matrix:
         compiler: ["clang++", "g++"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Compile
-        uses: vmactions/freebsd-vm@v1
+        uses: vmactions/freebsd-vm@4807432c7cab1c3f97688665332c0b932062d31f # v1.4.3
         with:
           release: '15.0'
           usesh: true
@@ -62,7 +62,7 @@ jobs:
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: btop-x86_64-freebsd-15-${{ matrix.compiler }}
           path: 'bin/*'

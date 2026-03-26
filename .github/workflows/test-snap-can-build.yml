@@ -39,12 +39,12 @@ jobs:
         node-version: [20.x]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: snapcore/action-build@v1
+      - uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1.3.0
         id: build
 
-      - uses: diddlesnaps/snapcraft-review-action@v1
+      - uses: diddlesnaps/snapcraft-review-action@40554b42331cf84dab19ef98c382620427f13482 # v1.3.1
         with:
           snap: ${{ steps.build.outputs.snap }}
           isClassic: 'false'
