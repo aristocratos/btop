@@ -31,6 +31,10 @@ on:
       - '.github/workflows/test-snap-can-build.yml'
       - 'snap/snapcraft.yaml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04

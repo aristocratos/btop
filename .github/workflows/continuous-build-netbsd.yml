@@ -31,6 +31,10 @@ on:
       - 'Makefile'
       - '.github/workflows/continuous-build-netbsd.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-netbsd:
     runs-on: ubuntu-24.04
