@@ -37,6 +37,8 @@ jobs:
         version: ['7.8']
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Compile
         uses: vmactions/openbsd-vm@3fafb45f2e2e696249c583835939323fe1c3448c # v1.3.7
