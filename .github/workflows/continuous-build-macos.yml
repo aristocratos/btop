@@ -56,10 +56,13 @@ jobs:
           brew install --force --overwrite gcc@15 lowdown
 
       - name: Compile
+        env:
+          RUNNER: "${{ matrix.os.runner }}"
+          VERSION: "${{ matrix.os.version }}"
         run: |
           make CXX=$(brew --prefix)/bin/g++-15
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
+          mv bin/btop bin/btop-arm64-${RUNNER}-${VERSION}-$GIT_HASH
           ls -alh bin
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
