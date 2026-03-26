@@ -1,5 +1,7 @@
 name: Continuous Build NetBSD
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
