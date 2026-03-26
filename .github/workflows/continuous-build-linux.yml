@@ -60,6 +60,8 @@ jobs:
           - riscv64-unknown-linux-musl
           - s390x-ibm-linux-musl
           - x86_64-unknown-linux-musl
+    env:
+      TOOLCHAIN: "${{ matrix.toolchain }}"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -68,19 +70,20 @@ jobs:
 
       - name: Install cross toolchain
         run: |
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${{ matrix.toolchain }}.tar.xz
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${{ matrix.toolchain }}.tar.xz.sha256
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz.sha256
           echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
           mkdir -p /opt/x-tools/
-          tar -xf /tmp/${{ matrix.toolchain }}.tar.xz -C /opt/x-tools
+          tar -xf /tmp/${TOOLCHAIN}.tar.xz -C /opt/x-tools
 
       - name: Compile
-        run: CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=true STRIP=true
+        run: CXX=/opt/x-tools/${TOOLCHAIN}/bin/${TOOLCHAIN}-g++ make STATIC=true STRIP=true
 
       - name: Create binary artifacts
+        env:
+          GITHUB_SHA: "${{ github.sha }}"
         run: |
-          TOOLCHAIN=${{ matrix.toolchain }}
-          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
+          GIT_HASH=$(git rev-parse --short "${GITHUB_SHA}")
           FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
           mv bin/btop bin/$FILENAME
 
