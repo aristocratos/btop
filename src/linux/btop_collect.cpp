@@ -1359,23 +1359,12 @@ namespace Gpu {
 					gpus_slice[i].pcie_rx = -1;
 				}
 
-				// DebugTimer nvTimer("Nv utilization");
-				//? GPU & memory utilization
-				if (gpus_slice[i].supported_functions.gpu_utilization) {
-					nvmlUtilization_t utilization;
-					result = nvmlDeviceGetUtilizationRates(devices[i], &utilization);
-    				if (result != NVML_SUCCESS) {
-						Logger::warning("NVML: Failed to get GPU utilization: {}", nvmlErrorString(result));
-						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
-						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
-    				} else {
-						gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization.gpu);
-						gpus_slice[i].mem_utilization_percent.push_back((long long)utilization.memory);
-    				}
-				}
-
 				// nvTimer.stop_rename_reset("Nv clock");
 				//? Clock speeds
+				//? NOTE: Clock and power queries are placed before utilization intentionally.
+				//? On WSL2, the NVML shim requires a preceding call to nvmlDeviceGetClockInfo
+				//? or nvmlDeviceGetPowerUsage in the same session for nvmlDeviceGetUtilizationRates
+				//? to succeed; otherwise it returns NVML_ERROR_UNKNOWN on every call after the first.
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					unsigned int gpu_clock;
 					result = nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_GRAPHICS, &gpu_clock);
@@ -1418,6 +1407,21 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
     				} else gpus_slice[i].pwr_state = static_cast<int>(pState);
     			}
+
+				// DebugTimer nvTimer("Nv utilization");
+				//? GPU & memory utilization
+				if (gpus_slice[i].supported_functions.gpu_utilization) {
+					nvmlUtilization_t utilization;
+					result = nvmlDeviceGetUtilizationRates(devices[i], &utilization);
+    				if (result != NVML_SUCCESS) {
+						Logger::warning("NVML: Failed to get GPU utilization: {}", nvmlErrorString(result));
+						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
+    				} else {
+						gpus_slice[i].gpu_percent.at("gpu-totals").push_back((long long)utilization.gpu);
+						gpus_slice[i].mem_utilization_percent.push_back((long long)utilization.memory);
+    				}
+				}
 
 				// nvTimer.stop_rename_reset("Nv temp");
     			//? GPU temperature
