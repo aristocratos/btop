@@ -886,13 +886,15 @@ namespace Cpu {
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
 
+		#ifdef __linux__
 			if (show_freq and not cpu.core_hz.empty() and n < static_cast<int>(cpu.core_hz.size())) {
 				double hz = cpu.core_hz.at(n);
-				string hz_str;
-				if (hz > 999) hz_str = fmt::format("{:.1f}G", hz / 1000);
-				else hz_str = to_string((int)hz) + 'M';
-				out += Theme::c("inactive_fg") + rjust(hz_str, 5) + ' ';
+				if (hz > 999)
+					fmt::format_to(std::back_inserter(out), "{}{:>4.1f}G ", Theme::c("inactive_fg"), hz / 1000.0);
+				else
+					fmt::format_to(std::back_inserter(out), "{}{:>4.0f}M ", Theme::c("inactive_fg"), hz);
 			}
+		#endif
 
 			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
