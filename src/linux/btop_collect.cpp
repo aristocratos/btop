@@ -1047,12 +1047,31 @@ namespace Cpu {
                std::views::join | std::ranges::to<std::vector<std::int32_t>>();
     }
 
+	void update_core_hz() {
+		current_cpu.core_hz.clear();
+		for (const auto& path : core_freq) {
+			if (path.empty()) {
+				current_cpu.core_hz.push_back(0);
+				continue;
+			}
+			try {
+				current_cpu.core_hz.push_back(stoll(readfile(path, "0")) / 1000);
+			}
+			catch (const std::exception& e) {
+				Logger::debug("Cpu::update_core_hz() : {}", e.what());
+				current_cpu.core_hz.push_back(0);
+			}
+		}
+	}
+
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
 
-		if (Config::getB("show_cpu_freq"))
+		if (Config::getB("show_cpu_freq")) {
 			cpuHz = get_cpuHz();
+			update_core_hz();
+		}
 
 		if (getloadavg(cpu.load_avg.data(), cpu.load_avg.size()) < 0) {
 			Logger::error("failed to get load averages");

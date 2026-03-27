@@ -548,6 +548,7 @@ namespace Cpu {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
+		bool show_freq = Config::getB("show_cpu_freq");
 		bool show_watts = (Config::getB("show_cpu_watts") and supports_watts);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
@@ -834,7 +835,7 @@ namespace Cpu {
 		#endif
 
 			//? Cpu clock and cpu meter
-			if (Config::getB("show_cpu_freq") and not cpuHz.empty())
+			if (show_freq and not cpuHz.empty())
 				out += Mv::to(b_y, b_x + b_width - (freq_range ? 20 : 10)) + Fx::ub + Theme::c("div_line")
 					+ Symbols::h_line * ((freq_range ? 17 : 7) - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
@@ -884,6 +885,14 @@ namespace Cpu {
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
+
+			if (show_freq and not cpu.core_hz.empty() and n < static_cast<int>(cpu.core_hz.size())) {
+				double hz = cpu.core_hz.at(n);
+				string hz_str;
+				if (hz > 999) hz_str = fmt::format("{:.1f}G", hz / 1000);
+				else hz_str = to_string((int)hz) + 'M';
+				out += Theme::c("inactive_fg") + rjust(hz_str, 5) + ' ';
+			}
 
 			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
 			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
@@ -2299,23 +2308,26 @@ namespace Draw {
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
-			if (b_columns * (21 + 12 * show_temp) < width - (width / 3)) {
+			const bool show_freq = Config::getB("show_cpu_freq");
+			const int freq_w = (show_freq ? 6 : 0);
+
+			if (b_columns * (21 + freq_w + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
-				b_width =  max(29, (21 + 12 * show_temp) * b_columns - (b_columns - 1));
+				b_width =  max(29, (21 + freq_w + 12 * show_temp) * b_columns - (b_columns - 1));
 			}
-			else if (b_columns * (15 + 6 * show_temp) < width - (width / 3)) {
+			else if (b_columns * (15 + freq_w + 6 * show_temp) < width - (width / 3)) {
 				b_column_size = 1;
-				b_width = (15 + 6 * show_temp) * b_columns - (b_columns - 1);
+				b_width = (15 + freq_w + 6 * show_temp) * b_columns - (b_columns - 1);
 			}
-			else if (b_columns * (8 + 6 * show_temp) < width - (width / 3)) {
+			else if (b_columns * (8 + freq_w + 6 * show_temp) < width - (width / 3)) {
 				b_column_size = 0;
 			}
 			else {
-				b_columns = (width - width / 3) / (8 + 6 * show_temp);
+				b_columns = (width - width / 3) / (8 + freq_w + 6 * show_temp);
 				b_column_size = 0;
 			}
 
-			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
+			if (b_column_size == 0) b_width = (8 + freq_w + 6 * show_temp) * b_columns + 1;
 		#ifdef GPU_SUPPORT
 			//gpus_extra_height = max(0, gpus_extra_height - 1);
 			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
@@ -2337,7 +2349,7 @@ namespace Draw {
 		#endif
 			const string cpu_title = uresize(
 					(custom.empty() ? Cpu::cpuName : custom),
-					b_width - (Config::getB("show_cpu_freq") and hasCpuHz ? (freq_range ? 24 : 14) : 5)
+					b_width - (show_freq and hasCpuHz ? (freq_range ? 24 : 14) : 5)
 			);
 			box += createBox(b_x, b_y, b_width, b_height, "", false, cpu_title);
 		}

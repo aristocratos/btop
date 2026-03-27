@@ -227,6 +227,7 @@ namespace Cpu {
 		long long temp_max = 0;
 		array<double, 3> load_avg;
 		float usage_watts = 0;
+		vector<long long> core_hz;
 		std::optional<std::vector<std::int32_t>> active_cpus;
 	};
 
