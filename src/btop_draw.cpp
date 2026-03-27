@@ -2310,8 +2310,12 @@ namespace Draw {
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
+		#ifdef __linux__
 			const bool show_freq = Config::getB("show_cpu_freq");
 			const int freq_w = (show_freq ? 6 : 0);
+		#else
+			const int freq_w = 0;
+		#endif
 
 			if (b_columns * (21 + freq_w + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
