@@ -548,7 +548,11 @@ namespace Cpu {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		bool show_temps = (Config::getB("check_temp") and got_sensors);
-		bool show_freq = Config::getB("show_cpu_freq");
+		#ifdef __linux__
+			bool show_freq = Config::getB("show_cpu_freq");
+		#else
+			bool show_freq = false;
+		#endif
 		bool show_watts = (Config::getB("show_cpu_watts") and supports_watts);
 		auto single_graph = Config::getB("cpu_single_graph");
 		bool hide_cores = show_temps and (cpu_temp_only or not Config::getB("show_coretemp"));
@@ -2312,10 +2316,10 @@ namespace Draw {
 		#endif
 		#ifdef __linux__
 			const bool show_freq = Config::getB("show_cpu_freq");
-			const int freq_w = (show_freq ? 6 : 0);
 		#else
-			const int freq_w = 0;
+			const bool show_freq = false;
 		#endif
+			const int freq_w = (show_freq ? 6 : 0);
 
 			if (b_columns * (21 + freq_w + 12 * show_temp) < width - (width / 3)) {
 				b_column_size = 2;
