@@ -25,6 +25,7 @@ tab-size = 4
 #include <signal.h>
 #include <sys/select.h>
 #include <utility>
+#include <cmath>
 
 #include "btop_input.hpp"
 #include "btop_tools.hpp"
@@ -85,6 +86,7 @@ namespace Input {
 	std::atomic<bool> polling (false);
 	array<int, 2> mouse_pos;
 	std::unordered_map<string, Mouse_loc> mouse_mappings;
+	bool dragging_scroll;
 
 	deque<string> history(50, "");
 	string old_filter;
@@ -125,7 +127,8 @@ namespace Input {
 			if (key.length() > 1 and key.at(0) == Fx::e.at(0)) {
 				key.erase(0, 1);
 			}
-			//? Detect if input is an mouse event
+			
+			//? Detect if input is a mouse event.
 			if (key.starts_with("[<")) {
 				std::string_view key_view = key;
 				string mouse_event;
@@ -133,10 +136,14 @@ namespace Input {
 					mouse_event = "mouse_click";
 					key_view.remove_prefix(4);
 				}
-				// else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
-				// 	mouse_event = "mouse_release";
-				// 	key_view.remove_prefix(4);
-				// }
+				else if (key_view.starts_with("[<32;")) {
+					mouse_event = "mouse_drag";
+					key_view.remove_prefix(5);
+				}
+				else if (key_view.starts_with("[<0;") and key_view.ends_with('m')) {
+					mouse_event = "mouse_release";
+					key_view.remove_prefix(4);
+				}
 				else if (key_view.starts_with("[<64;")) {
 					mouse_event = "mouse_scroll_up";
 					key_view.remove_prefix(5);
@@ -165,7 +172,7 @@ namespace Input {
 
 					key = mouse_event;
 
-					if (key == "mouse_click") {
+					if (key == "mouse_click" or key == "mouse_drag") {
 						const auto& [col, line] = mouse_pos;
 
 						for (const auto& [mapped_key, pos] : (Menu::active ? Menu::mouse_mappings : mouse_mappings)) {
@@ -246,31 +253,40 @@ namespace Input {
 						Menu::show(Menu::Menus::SizeError);
 						return;
 					}
-					Config::current_preset = -1;
+					Config::current_preset.reset();
 					Draw::calcSizes();
+					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
 				}
-				else if (is_in(key, "p", "P") and Config::preset_list.size() > 1) {
+				else if (is_in(key, "p", "P") and Config::getS("disable_presets") != "All") {
+					if (Config::getS("disable_presets") == "Default" and Config::preset_list.size() <= 1) return;
 					const auto old_preset = Config::current_preset;
-					if (key == "p") {
-						if (++Config::current_preset >= (int)Config::preset_list.size()) Config::current_preset = 0;
+					const int first_preset = (Config::getS("disable_presets") == "Default") ? 1 : 0;
+					if (Config::getS("disable_presets") == "Custom") Config::current_preset = 0;
+					else if (Config::current_preset.has_value()) {
+						if (key == "p") {
+							if(++(*Config::current_preset) >= static_cast<int>(Config::preset_list.size())) Config::current_preset = first_preset;
+						}
+						else if (--(*Config::current_preset) < first_preset) Config::current_preset = Config::preset_list.size() - 1;
 					}
-					else {
-						if (--Config::current_preset < 0) Config::current_preset = Config::preset_list.size() - 1;
-					}
+					else Config::current_preset = (key == "p") ? first_preset : Config::preset_list.size() - 1;
+					if (Config::current_preset == old_preset) return;
 					atomic_wait(Runner::active);
-					if (not Config::apply_preset(Config::preset_list.at(Config::current_preset))) {
+					if (not Config::apply_preset(Config::preset_list.at(Config::current_preset.value()))) {
 						Menu::show(Menu::Menus::SizeError);
 						Config::current_preset = old_preset;
 						return;
 					}
 					Draw::calcSizes();
+					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
 				} else if (is_in(key, "ctrl_r")) {
 					kill(getpid(), SIGUSR2);
 					return;
+				} else if (key == "mouse_release") {
+					dragging_scroll = false;
 				} else
 					keep_going = true;
 
@@ -311,12 +327,14 @@ namespace Input {
 					if (--cur_i < 0)
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
 					if (std::cmp_greater(++cur_i, Proc::sort_vector.size() - 1))
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
+					Config::set("update_following", true);
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
@@ -326,14 +344,36 @@ namespace Input {
 				else if (key == "e") {
 					Config::flip("proc_tree");
 					no_update = false;
+					Config::set("update_following", true);
+				}
+				else if (is_in(key, "u")) {
+					Config::flip("pause_proc_list");
 				}
 				else if (is_in(key, "F")) {
-					Config::flip("pause_proc_list");
-					redraw = true;
+					if (Config::getI("proc_selected") != 0 and Config::getI("followed_pid") != Config::getI("selected_pid")) {
+						Config::set("follow_process", true);
+						Config::set("followed_pid", Config::getI("selected_pid"));
+						Config::set("update_following", true);
+					}
+					else if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Config::getI("followed_pid") != Config::getI("detailed_pid")) {
+						Config::set("follow_process", true);
+						Config::set("followed_pid", Config::getI("detailed_pid"));
+						Config::set("update_following", true);
+					}
+					else if (Config::getB("follow_process")) {
+						Config::flip("follow_process");
+						if (Config::getB("should_selection_return_to_followed"))
+							Config::set("proc_selected", Config::getI("proc_followed"));
+						else if (Config::getB("show_detailed") and Config::getI("followed_pid") == Config::getI("detailed_pid"))
+							Config::set("restore_detailed_pid", Config::getI("detailed_pid"));
+						Config::set("followed_pid", 0);
+						Config::set("proc_followed", 0);
+					}
 				}
-				else if (key == "r")
+				else if (key == "r") {
 					Config::flip("proc_reversed");
-
+					Config::set("update_following", true);
+				}
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
@@ -348,8 +388,9 @@ namespace Input {
 					const auto& [col, line] = mouse_pos;
 					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
 					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
-					if (col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1) {
-						if (key == "mouse_click") {
+					const auto in_proc_box = col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1;
+					if (key == "mouse_click") {
+						if (in_proc_box) {
 							if (col < Proc::x + Proc::width - 2) {
 								const auto& current_selection = Config::getI("proc_selected");
 								if (current_selection == line - y - 1) {
@@ -365,8 +406,18 @@ namespace Input {
 									process("enter");
 									return;
 								}
+								else if (Config::getB("proc_banner_shown") and line == y + height - 2)
+									return;
 								else if (current_selection == 0 or line - y - 1 == 0)
 									redraw = true;
+
+								if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
+									Config::flip("follow_process");
+									Config::set("followed_pid", 0);
+									Config::set("proc_followed", 0);
+									redraw = true;
+								}
+
 								Config::set("proc_selected", line - y - 1);
 							}
 							else if (line == y + 1) {
@@ -375,20 +426,32 @@ namespace Input {
 							else if (line == y + height - 2) {
 								if (Proc::selection("page_down") == -1) return;
 							}
+							else if (line == y + 2 + Proc::scroll_pos) {
+								dragging_scroll = true;
+							}
 							else if (Proc::selection("mousey" + to_string(line - y - 2)) == -1)
 								return;
 						}
-						else
-							goto proc_mouse_scroll;
+						else if (Config::getI("proc_selected") > 0){
+							Config::set("proc_selected", 0);
+							if (Config::getB("follow_process") and not Config::getB("pause_proc_list")) {
+								Config::flip("follow_process");
+								Config::set("followed_pid", 0);
+								Config::set("proc_followed", 0);
+							}
+							redraw = true;
+						}
 					}
-					else if (key == "mouse_click" and Config::getI("proc_selected") > 0) {
-						Config::set("proc_selected", 0);
-						redraw = true;
+					else if (key.starts_with("mouse_scroll_") and in_proc_box) {
+						goto proc_mouse_scroll;
+					}
+					else if (key == "mouse_drag" and dragging_scroll) {
+						Proc::selection("mousey" + to_string(line - y - 2));
 					}
 					else
 						keep_going = true;
 				}
-				else if (key == "enter") {
+				else if (is_in(key, "enter", "info_enter")) {
 					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
 						return;
 					}
@@ -396,22 +459,38 @@ namespace Input {
 						Config::set("detailed_pid", Config::getI("selected_pid"));
 						Config::set("proc_last_selected", Config::getI("proc_selected"));
 						Config::set("proc_selected", 0);
+						if (Config::getB("proc_follow_detailed")) {
+							Config::set("follow_process", true);
+							Config::set("followed_pid", Config::getI("selected_pid"));
+						}
 						Config::set("show_detailed", true);
 					}
 					else if (Config::getB("show_detailed")) {
-						if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
+						if (Config::getB("proc_follow_detailed")) {
+							Config::set("restore_detailed_pid", Config::getI("detailed_pid"));
+							if (Config::getB("follow_process") and Config::getI("followed_pid") == Config::getI("detailed_pid")) {
+								Config::flip("follow_process");
+								Config::set("followed_pid", 0);
+								Config::set("proc_followed", 0);
+							}
+						}
+						else if (Config::getI("proc_last_selected") > 0) Config::set("proc_selected", Config::getI("proc_last_selected"));
 						Config::set("proc_last_selected", 0);
 						Config::set("detailed_pid", 0);
 						Config::set("show_detailed", false);
 					}
+					Config::set("update_following", true);
 				}
-				else if (is_in(key, "+", "-", "space", "u") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
-					atomic_wait(Runner::active);
-					auto& pid = Config::getI("selected_pid");
-					if (key == "+" or key == "space") Proc::expand = pid;
-					if (key == "-" or key == "space") Proc::collapse = pid;
-					if (key == "u")	Proc::toggle_children = pid;
-					no_update = false;
+				else if (is_in(key, "+", "-", "space", "C") and Config::getB("proc_tree")) {
+					const bool is_following_detailed = Config::getB("follow_process") and Config::getI("followed_pid") == Config::getI("detailed_pid");
+					if (Config::getI("proc_selected") > 0 or is_following_detailed) {
+						atomic_wait(Runner::active);
+						auto& pid = is_following_detailed and Config::getI("proc_selected") == 0 ? Config::getI("followed_pid") : Config::getI("selected_pid");
+						if (key == "+" or key == "space") Proc::expand = pid;
+						if (key == "-" or key == "space") Proc::collapse = pid;
+						if (key == "C")	Proc::toggle_children = pid;
+						no_update = false;
+					}
 				}
 				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
@@ -425,7 +504,7 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
-			    else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+				else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
 				    if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
 				    Menu::show(Menu::Menus::Renice);

@@ -40,6 +40,9 @@ tab-size = 4
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include <fmt/format.h>
+#include <fmt/std.h>
+
 #if defined(RSMI_STATIC)
 	#include <rocm_smi/rocm_smi.h>
 #endif
@@ -48,16 +51,29 @@ tab-size = 4
 	#include <pwd.h>
 #endif
 
-#include "../btop_shared.hpp"
 #include "../btop_config.hpp"
+#include "../btop_log.hpp"
+#include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
 #if defined(GPU_SUPPORT)
+	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
+	// since the C library uses "class" as a struct member and keywords are not allowed to be used
+	// as identifiers in C++.
+	#if defined(__clang__)
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wkeyword-macro"
+	#endif // __clang__
+
 	#define class class_
 extern "C" {
-	#include "./intel_gpu_top/intel_gpu_top.h"
+	#include "intel_gpu_top/intel_gpu_top.h"
 }
 	#undef class
+
+	#if defined(__clang__)
+		#pragma clang diagnostic pop
+	#endif // __clang__
 #endif
 
 using std::abs;
@@ -128,9 +144,10 @@ namespace Cpu {
 	std::unordered_map<int, int> core_mapping;
 }
 
+#if defined(GPU_SUPPORT)
+
 namespace Gpu {
 	vector<gpu_info> gpus;
-#ifdef GPU_SUPPORT
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -250,8 +267,9 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
-#endif
 }
+
+#endif // GPU_SUPPORT
 
 namespace Mem {
 	double old_uptime;
@@ -510,11 +528,11 @@ namespace Cpu {
 
 					int64_t high = 0;
 					int64_t crit = 0;
-					for (int ii = 0; fs::exists(basepath / string("trip_point_" + to_string(ii) + "_temp")); ii++) {
-						const string trip_type = readfile(basepath / string("trip_point_" + to_string(ii) + "_type"));
+					for (int ii = 0; fs::exists(basepath / fmt::format("trip_point_{}_temp", ii)); ii++) {
+						const string trip_type = readfile(basepath / fmt::format("trip_point_{}_type", ii));
 						if (not is_in(trip_type, "high", "critical")) continue;
 						auto& val = (trip_type == "high" ? high : crit);
-						val = stol(readfile(basepath / string("trip_point_" + to_string(ii) + "_temp"), "0")) / 1000;
+						val = stol(readfile(basepath / fmt::format("trip_point_{}_temp", ii), "0")) / 1000;
 					}
 					if (high < 1) high = 80;
 					if (crit < 1) crit = 95;
@@ -680,7 +698,7 @@ namespace Cpu {
 			if (++failed < 5)
 				return ""s;
 			else {
-				Logger::warning("get_cpuHZ() : " + string{e.what()});
+				Logger::warning("get_cpuHZ() : {}", e.what());
 				return ""s;
 			}
 		}
@@ -1147,7 +1165,7 @@ namespace Cpu {
 
 			//? Notify main thread to redraw screen if we found more cores than previously detected
 			if (cmp_greater(cpu.core_percent.size(), Shared::coreCount)) {
-				Logger::debug("Changing CPU max corecount from " + to_string(Shared::coreCount) + " to " + to_string(cpu.core_percent.size()) + ".");
+				Logger::debug("Changing CPU max corecount from {} to {}.", Shared::coreCount, cpu.core_percent.size());
 				Runner::coreNum_reset = true;
 				Shared::coreCount = cpu.core_percent.size();
 				while (cmp_less(current_cpu.temp.size(), cpu.core_percent.size() + 1)) current_cpu.temp.push_back({0});
@@ -1155,9 +1173,9 @@ namespace Cpu {
 
 		}
 		catch (const std::exception& e) {
-			Logger::debug("Cpu::collect() : " + string{e.what()});
+			Logger::debug("Cpu::collect() : {}", e.what());
 			if (cread.bad()) throw std::runtime_error("Failed to read /proc/stat");
-			else throw std::runtime_error("Cpu::collect() : " + string{e.what()});
+			else throw std::runtime_error(fmt::format("Cpu::collect() : {}", e.what()));
 		}
 
 		if (Config::getB("check_temp") and got_sensors)
@@ -1196,7 +1214,7 @@ namespace Gpu {
 				}
 			}
  			if (!nvml_dl_handle) {
-				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: "s + dlerror());
+				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: {}", dlerror());
  				return false;
  			}
 
@@ -1204,7 +1222,7 @@ namespace Gpu {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
 				auto err = dlerror();
 				if (err != nullptr) {
-					Logger::error(string("NVML: Couldn't find function ") + sym_name + ": " + err);
+					Logger::error("NVML: Couldn't find function {}: {}", sym_name, err);
 					return (void*)nullptr;
 				} else return sym;
 			};
@@ -1234,14 +1252,14 @@ namespace Gpu {
 			//? Function calls
 			nvmlReturn_t result = nvmlInit();
     		if (result != NVML_SUCCESS) {
-    			Logger::debug(std::string("Failed to initialize NVML, NVIDIA GPUs will not be detected: ") + nvmlErrorString(result));
+    			Logger::debug("Failed to initialize NVML, NVIDIA GPUs will not be detected: {}", nvmlErrorString(result));
     			return false;
     		}
 
 			//? Device count
 			result = nvmlDeviceGetCount(&device_count);
     		if (result != NVML_SUCCESS) {
-    			Logger::warning(std::string("NVML: Failed to get device count: ") + nvmlErrorString(result));
+    			Logger::warning("NVML: Failed to get device count: {}", nvmlErrorString(result));
     			return false;
     		}
 
@@ -1265,7 +1283,7 @@ namespace Gpu {
 			if (NVML_SUCCESS == result) {
 				initialized = false;
 				dlclose(nvml_dl_handle);
-			} else Logger::warning(std::string("Failed to shutdown NVML: ") + nvmlErrorString(result));
+			} else Logger::warning("Failed to shutdown NVML: {}", nvmlErrorString(result));
 
 			return !initialized;
 		}
@@ -1282,7 +1300,7 @@ namespace Gpu {
 					//? Device Handle
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
-    					Logger::warning(std::string("NVML: Failed to get device handle: ") + nvmlErrorString(result));
+    					Logger::warning("NVML: Failed to get device handle: {}", nvmlErrorString(result));
 						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
     					continue;
         			}
@@ -1291,7 +1309,7 @@ namespace Gpu {
 					char name[NVML_DEVICE_NAME_BUFFER_SIZE];
     				result = nvmlDeviceGetName(devices[i], name, NVML_DEVICE_NAME_BUFFER_SIZE);
         			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get device name: ") + nvmlErrorString(result));
+    					Logger::warning("NVML: Failed to get device name: {}", nvmlErrorString(result));
         			else {
         				gpu_names[i] = string(name);
         				for (const auto& brand : {"NVIDIA", "Nvidia", "(R)", "(TM)"}) {
@@ -1304,7 +1322,7 @@ namespace Gpu {
     				unsigned int max_power;
     				result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
     				if (result != NVML_SUCCESS)
-						Logger::warning(std::string("NVML: Failed to get maximum GPU power draw, defaulting to 225W: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get maximum GPU power draw, defaulting to 225W: {}", nvmlErrorString(result));
 					else {
 						gpus[i].pwr_max_usage = max_power; // RSMI reports power in microWatts
 						gpu_pwr_total_max += max_power;
@@ -1314,7 +1332,7 @@ namespace Gpu {
 					unsigned int temp_max;
     				result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
         			if (result != NVML_SUCCESS)
-    					Logger::warning(std::string("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: ") + nvmlErrorString(result));
+    					Logger::warning("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: {}", nvmlErrorString(result));
     				else gpus[i].temp_max = (long long)temp_max;
 				}
 
@@ -1324,7 +1342,7 @@ namespace Gpu {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
     					if (result != NVML_SUCCESS) {
-							Logger::warning(std::string("NVML: Failed to get PCIe TX throughput: ") + nvmlErrorString(result));
+							Logger::warning("NVML: Failed to get PCIe TX throughput: {}", nvmlErrorString(result));
 							if constexpr(is_init) gpus_slice[i].supported_functions.pcie_txrx = false;
 						} else gpus_slice[i].pcie_tx = (long long)tx;
 					});
@@ -1333,9 +1351,12 @@ namespace Gpu {
 						unsigned int rx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
     					if (result != NVML_SUCCESS) {
-							Logger::warning(std::string("NVML: Failed to get PCIe RX throughput: ") + nvmlErrorString(result));
+							Logger::warning("NVML: Failed to get PCIe RX throughput: {}", nvmlErrorString(result));
 						} else gpus_slice[i].pcie_rx = (long long)rx;
 					});
+				} else {
+					gpus_slice[i].pcie_tx = -1;
+					gpus_slice[i].pcie_rx = -1;
 				}
 
 				// DebugTimer nvTimer("Nv utilization");
@@ -1344,7 +1365,7 @@ namespace Gpu {
 					nvmlUtilization_t utilization;
 					result = nvmlDeviceGetUtilizationRates(devices[i], &utilization);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get GPU utilization: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get GPU utilization: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_utilization = false;
     				} else {
@@ -1359,7 +1380,7 @@ namespace Gpu {
 					unsigned int gpu_clock;
 					result = nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_GRAPHICS, &gpu_clock);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get GPU clock speed: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get GPU clock speed: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
 					} else gpus_slice[i].gpu_clock_speed = (long long)gpu_clock;
 				}
@@ -1368,7 +1389,7 @@ namespace Gpu {
 					unsigned int mem_clock;
 					result = nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_MEM, &mem_clock);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get VRAM clock speed: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get VRAM clock speed: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
 					} else gpus_slice[i].mem_clock_speed = (long long)mem_clock;
 				}
@@ -1379,7 +1400,7 @@ namespace Gpu {
     				unsigned int power;
     				result = nvmlDeviceGetPowerUsage(devices[i], &power);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get GPU power usage: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get GPU power usage: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
     				} else {
     					gpus_slice[i].pwr_usage = (long long)power;
@@ -1393,7 +1414,7 @@ namespace Gpu {
 					nvmlPstates_t pState;
     				result = nvmlDeviceGetPowerState(devices[i], &pState);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get GPU power state: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get GPU power state: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
     				} else gpus_slice[i].pwr_state = static_cast<int>(pState);
     			}
@@ -1405,7 +1426,7 @@ namespace Gpu {
 						unsigned int temp;
 						nvmlReturn_t result = nvmlDeviceGetTemperature(devices[i], NVML_TEMPERATURE_GPU, &temp);
     					if (result != NVML_SUCCESS) {
-							Logger::warning(std::string("NVML: Failed to get GPU temperature: ") + nvmlErrorString(result));
+							Logger::warning("NVML: Failed to get GPU temperature: {}", nvmlErrorString(result));
 							if constexpr(is_init) gpus_slice[i].supported_functions.temp_info = false;
     					} else gpus_slice[i].temp.push_back((long long)temp);
 					}
@@ -1417,7 +1438,7 @@ namespace Gpu {
 					nvmlMemory_t memory;
 					result = nvmlDeviceGetMemoryInfo(devices[i], &memory);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get VRAM info: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get VRAM info: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
 					} else {
@@ -1437,7 +1458,7 @@ namespace Gpu {
 					unsigned int samplingPeriodUs;
 					result = nvmlDeviceGetEncoderUtilization(devices[i], &utilization, &samplingPeriodUs);
 					if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get encoder utilization: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get encoder utilization: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.encoder_utilization = false;
 					} else gpus_slice[i].encoder_utilization = (long long)utilization;
 				}
@@ -1449,7 +1470,7 @@ namespace Gpu {
 					unsigned int samplingPeriodUs;
 					result = nvmlDeviceGetDecoderUtilization(devices[i], &utilization, &samplingPeriodUs);
 					if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get decoder utilization: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get decoder utilization: {}", nvmlErrorString(result));
 						if constexpr(is_init) gpus_slice[i].supported_functions.decoder_utilization = false;
 					} else gpus_slice[i].decoder_utilization = (long long)utilization;
 				}
@@ -1459,7 +1480,7 @@ namespace Gpu {
     				nvmlProcessInfo_t* proc_info = 0;
     				result = nvmlDeviceGetComputeRunningProcesses_v3(device, &proc_info_len, proc_info);
     				if (result != NVML_SUCCESS) {
-						Logger::warning(std::string("NVML: Failed to get compute processes: ") + nvmlErrorString(result));
+						Logger::warning("NVML: Failed to get compute processes: {}", nvmlErrorString(result));
     				} else {
     					for (unsigned int i = 0; i < proc_info_len; ++i)
     						gpus_slice[i].graphics_processes.push_back({proc_info[i].pid, proc_info[i].usedGpuMemory});
@@ -1505,7 +1526,7 @@ namespace Gpu {
  			}
 
 			if (!rsmi_dl_handle) {
-				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: "s + dlerror());
+				Logger::info("Failed to load librocm_smi64.so, AMD GPUs will not be detected: {}", dlerror());
 				return false;
 			}
 
@@ -1513,7 +1534,7 @@ namespace Gpu {
 				auto sym = dlsym(rsmi_dl_handle, sym_name);
 				auto err = dlerror();
 				if (err != nullptr) {
-					Logger::error(string("ROCm SMI: Couldn't find function ") + sym_name + ": " + err);
+					Logger::error("ROCm SMI: Couldn't find function {}: {}", sym_name, err);
 					return (void*)nullptr;
 				} else return sym;
 			};
@@ -1555,7 +1576,8 @@ namespace Gpu {
 				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			// In the release tarballs of rocm 6.0.0 and 6.0.2 the version queried with rsmi_version_get is 7.0.0.0
-			} else if (version.major == 6 || version.major == 7) {
+			// In rocm 7.2 the version is 1.0.0.0
+			} else if (version.major == 1 || version.major == 6 || version.major == 7) {
 				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			} else {
@@ -1765,7 +1787,7 @@ namespace Gpu {
 				}
 
 				//? PCIe link speeds
-				if (gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) {
+				if ((gpus_slice[i].supported_functions.pcie_txrx and Config::getB("rsmi_measure_pcie_speeds")) or is_init) {
 					uint64_t tx, rx;
 					result = rsmi_dev_pci_throughput_get(i, &tx, &rx, nullptr);
     				if (result != RSMI_STATUS_SUCCESS) {
@@ -1775,6 +1797,9 @@ namespace Gpu {
 						gpus_slice[i].pcie_tx = (long long)tx;
 						gpus_slice[i].pcie_rx = (long long)rx;
 					}
+				} else {
+					gpus_slice[i].pcie_tx = -1;
+					gpus_slice[i].pcie_rx = -1;
 				}
     		}
 
@@ -2215,17 +2240,19 @@ namespace Mem {
 								string devname = disks.at(mountpoint).dev.filename();
 								int c = 0;
 								while (devname.size() >= 2) {
-									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
-										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
-											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+									const auto stat = fmt::format("/sys/block/{}/stat", devname);
+									if (fs::exists(stat, ec) and access(stat.c_str(), R_OK) == 0) {
+										const auto mount_stat = fmt::format("/sys/block/{}/{}/stat", devname, disks.at(mountpoint).dev.filename());
+										if (c > 0 and fs::exists(mount_stat, ec))
+											disks.at(mountpoint).stat = std::move(mount_stat);
 										else
-											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+											disks.at(mountpoint).stat = std::move(stat);
 										break;
 									//? Set ZFS stat filepath
 									} else if (fstype == "zfs") {
 										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 										if (disks.at(mountpoint).stat.empty()) {
-											Logger::debug("Failed to get ZFS stat file for device " + dev);
+											Logger::debug("Failed to get ZFS stat file for device {}", dev);
 										}
 										break;
 									}
@@ -2239,7 +2266,7 @@ namespace Mem {
 								|| (!zfs_hide_datasets && is_directory(disks.at(mountpoint).stat)))) {
 								disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
 								if (disks.at(mountpoint).stat.empty()) {
-									Logger::debug("Failed to get ZFS stat file for device " + dev);
+									Logger::debug("Failed to get ZFS stat file for device {}", dev);
 								}
 							}
 						}
@@ -2277,7 +2304,7 @@ namespace Mem {
 						auto promise_res = promises_it->second.get();
 						if(promise_res.second != -1){
 							ignore_list.push_back(mountpoint);
-							Logger::warning("Failed to get disk/partition stats for mount \""+ mountpoint + "\" with statvfs error code: " + to_string(promise_res.second) + ". Ignoring...");
+							Logger::warning("Failed to get disk/partition stats for mount \"{}\" with statvfs error code: {}. Ignoring...", mountpoint, promise_res.second);
 							it = disks.erase(it);
 							continue;
 						}
@@ -2412,14 +2439,14 @@ namespace Mem {
 							while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 						}
 					} else {
-						Logger::debug("Error in Mem::collect() : when opening " + string{disk.stat});
+						Logger::debug("Error in Mem::collect() : when opening {}", disk.stat);
 					}
 					diskread.close();
 				}
 				old_uptime = uptime;
 			}
 			catch (const std::exception& e) {
-				Logger::warning("Error in Mem::collect() : " + string{e.what()});
+				Logger::warning("Error in Mem::collect() : {}", e.what());
 			}
 		}
 
@@ -2433,7 +2460,7 @@ namespace Mem {
 			if (access(zfs_pool_stat_path.c_str(), R_OK) == 0) {
 				return zfs_pool_stat_path;
 			} else {
-				Logger::debug("Can't access folder: " + zfs_pool_stat_path.string());
+				Logger::debug("Can't access folder: {}", zfs_pool_stat_path);
 				return "";
 			}
 		}
@@ -2465,7 +2492,7 @@ namespace Mem {
 							if (access(file.path().c_str(), R_OK) == 0) {
 								return file.path();
 							} else {
-								Logger::debug("Can't access file: " + file.path().string());
+								Logger::debug("Can't access file: {}", file.path());
 								return "";
 							}
 						}
@@ -2476,7 +2503,7 @@ namespace Mem {
 		}
 		catch (fs::filesystem_error& e) {}
 
-		Logger::debug("Could not read directory: " + zfs_pool_stat_path.string());
+		Logger::debug("Could not read directory: {}", zfs_pool_stat_path);
 		return "";
 	}
 
@@ -2525,7 +2552,7 @@ namespace Mem {
 					// increment read objects counter if no errors were encountered
 					objects_read++;
 				} else {
-					Logger::debug("Could not read file: " + file.path().string());
+					Logger::debug("Could not read file: {}", file.path());
 				}
 				diskread.close();
 			}
@@ -2584,7 +2611,7 @@ namespace Net {
 			IfAddrsPtr if_addrs {};
 			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
+				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_addrs.get_status());
 				redraw = true;
 				return empty_net;
 			}
@@ -2621,7 +2648,7 @@ namespace Net {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}
@@ -2632,7 +2659,7 @@ namespace Net {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				} //else, ignoring family==AF_PACKET (see man 3 getifaddrs) which is the first one in the `for` loop.
@@ -3165,13 +3192,14 @@ namespace Proc {
 			}
 			//? Set correct state of dead processes if paused
 			else {
+				const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 				for (auto& r : current_procs) {
 					if (rng::find(found, r.pid) == found.end()) {
 						if (r.state != 'X') r.death_time = round(uptime) - (r.cpu_s / Shared::clkTck);
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
 						//? Reset cpu usage for dead processes if paused and option is set
-						if (!Config::getB("keep_dead_proc_usage")) {
+						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
 						}
@@ -3309,6 +3337,6 @@ namespace Tools {
 			catch (const std::invalid_argument&) {}
 			catch (const std::out_of_range&) {}
 		}
-        throw std::runtime_error("Failed to get uptime from " + string{Shared::procPath} + "/uptime");
+        throw std::runtime_error(fmt::format("Failed to get uptime from {}", Shared::procPath / "uptime"));
 	}
 }

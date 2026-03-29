@@ -59,8 +59,11 @@ namespace Config {
     const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
+	const vector<string> disable_preset_options = { "Off", "Default", "Custom", "All" };
 	extern vector<string> available_batteries;
-	extern int current_preset;
+	extern std::optional<int> current_preset;
+
+	extern bool write_new;
 
 	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 
@@ -132,4 +135,7 @@ namespace Config {
 	void write();
 
 	auto get_log_file() -> std::optional<std::filesystem::path>;
+
+	// Write default config to an in-memory buffer
+	[[nodiscard]] auto current_config() -> std::string;
 }

@@ -8,9 +8,9 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 # SYNOPSIS
 
-**btop** [**-c**] [**-d**] [**-l**] [**-t**] [**-p** _id_] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
+**btop** [**-c** _file_] [**-d**] [**-f** _filter_] [**-l**] [**-p** _id_] [**-t**] [**-u** _ms_] [**\-\-force-utf**] [**\-\-themes-dir** _dir_]
 
-**btop** [{**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
+**btop** [**\-\-default-config** | {**-h** | **\-\-help**} | {**-V** | **\-\-version**}]
 
 # DESCRIPTION
 
@@ -39,10 +39,10 @@ starting with two dashes ('-'). A summary of options is included below.
 **-p**, **\-\-preset _id_**
 :   Start with a preset (0-9).
 
-**-t**, **\-\-tty-on**
+**-t**, **\-\-tty**
 :   Force tty mode with ANSI graph symbols and 16 colors only.
 
-**\-\-tty-off**
+**\-\-no-tty**
 :   Force disable tty mode.
 
 **\-\-themes-dir _dir_**
@@ -50,6 +50,9 @@ starting with two dashes ('-'). A summary of options is included below.
 
 **-u**, **\-\-update _ms_**
 :   Set an initial update rate in milliseconds.
+
+**\-\-default-config**
+:   Print default config to standard output.
 
 **-h**, **\-\-help**
 :   Show summary of options.

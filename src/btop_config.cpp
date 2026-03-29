@@ -19,17 +19,21 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <fmt/format.h>
 #include <fstream>
+#include <iterator>
 #include <locale>
 #include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
 
+#include <fmt/base.h>
 #include <fmt/core.h>
 #include <sys/statvfs.h>
 
 #include "btop_config.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 
@@ -61,6 +65,12 @@ namespace Config {
 		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
+		{"disable_presets",		"#* Option to disable presets. Either the default preset, custom presets, or all presets.\n"
+								"#* \"Off\" All presets are enabled.\n"
+								"#* \"Default\" preset is disabled."
+								"#* \"Custom\" presets are disabled."
+								"#* \"All\" presets are disabled."},
+
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
 								"#* Use whitespace \" \" as separator between different presets.\n"
@@ -69,6 +79,7 @@ namespace Config {
 		{"vim_keys",			"#* Set to True to enable \"h,j,k,l,g,G\" keys for directional control in lists.\n"
 								"#* Conflicting keys for h:\"help\" and k:\"kill\" is accessible while holding shift."},
 
+		{"disable_mouse", "#* Disable all mouse events."},
 		{"rounded_corners",		"#* Rounded corners on boxes, is ignored if TTY mode is ON."},
 
 		{"terminal_sync", 		"#* Use terminal synchronized output sequences to reduce flickering on supported terminals."},
@@ -115,6 +126,8 @@ namespace Config {
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+
+		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
 
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
 
@@ -196,6 +209,8 @@ namespace Config {
 		{"io_graph_speeds", 	"#* Set the top speed for the io graphs in MiB/s (100 by default), use format \"mountpoint:speed\" separate disks with whitespace \" \".\n"
 								"#* Example: \"/mnt/media:100 /:20 /boot:1\"."},
 
+		{"swap_upload_download", "#* Swap the positions of the upload and download speed graphs. When true, upload will be on top."},
+
 		{"net_download", 		"#* Set fixed values for network graphs in Mebibits. Is only used if net_auto is also set to False."},
 
 		{"net_upload", ""},
@@ -214,8 +229,9 @@ namespace Config {
 
 		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
 
-		{"log_level", 			"#* Set loglevel for \"~/.config/btop/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
+		{"log_level", 			"#* Set loglevel for \"~/.local/state/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
+		{"save_config_on_exit",  "#* Automatically save current settings to config file on exit."},
 	#ifdef GPU_SUPPORT
 
 		{"nvml_measure_pcie_speeds",
@@ -223,7 +239,7 @@ namespace Config {
 		{"rsmi_measure_pcie_speeds",
 								"#* Measure PCIe throughput on AMD cards, may impact performance on certain cards."},
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
-		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel\""},
+		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel apple\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
 		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
@@ -237,6 +253,7 @@ namespace Config {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
+		{"disable_presets", "Off"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
 		{"graph_symbol_gpu", "default"},
@@ -271,7 +288,7 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 		{"show_gpu_info", "Auto"},
-		{"shown_gpus", "nvidia amd intel"}
+		{"shown_gpus", "nvidia amd intel apple"}
 	#endif
 	};
 	std::unordered_map<std::string_view, string> stringsTmp;
@@ -310,6 +327,7 @@ namespace Config {
 		{"zfs_hide_datasets", false},
 		{"show_io_stat", true},
 		{"io_mode", false},
+		{"swap_upload_download", false},
 		{"base_10_sizes", false},
 		{"io_graph_combined", false},
 		{"net_auto", true},
@@ -326,12 +344,19 @@ namespace Config {
 		{"proc_aggregate", false},
 		{"pause_proc_list", false},
 		{"keep_dead_proc_usage", false},
+		{"proc_banner_shown", false},
+		{"proc_follow_detailed", true},
+		{"follow_process", false},
+		{"update_following", false},
+		{"should_selection_return_to_followed", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
 		{"rsmi_measure_pcie_speeds", true},
 		{"gpu_mirror_graph", true},
 	#endif
-		{"terminal_sync", true}
+		{"terminal_sync", true},
+		{"save_config_on_exit", true},
+		{"disable_mouse", false},
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 
@@ -340,11 +365,14 @@ namespace Config {
 		{"net_download", 100},
 		{"net_upload", 100},
 		{"detailed_pid", 0},
+		{"restore_detailed_pid", 0},
 		{"selected_pid", 0},
+		{"followed_pid", 0},
 		{"selected_depth", 0},
 		{"proc_start", 0},
 		{"proc_selected", 0},
-		{"proc_last_selected", 0}
+		{"proc_last_selected", 0},
+		{"proc_followed", 0},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
@@ -421,7 +449,7 @@ namespace Config {
 
 	vector<string> current_boxes;
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
-	int current_preset = -1;
+	std::optional<int> current_preset;
 
 	bool presetsValid(const string& presets) {
 		vector<string> new_presets = {preset_list.at(0)};
@@ -658,7 +686,7 @@ namespace Config {
 			boolsTmp.clear();
 		}
 		catch (const std::exception& e) {
-			Global::exit_error_msg = "Exception during Config::unlock() : " + string{e.what()};
+			Global::exit_error_msg = fmt::format("Exception during Config::unlock() : {}", e.what());
 			clean_quit(1);
 		}
 
@@ -782,20 +810,9 @@ namespace Config {
 		Logger::debug("Writing new config file");
 		if (geteuid() != Global::real_uid and seteuid(Global::real_uid) != 0) return;
 		std::ofstream cwrite(conf_file, std::ios::trunc);
-		cwrite.imbue(std::locale::classic());
+		// TODO: Report error when stream is in a bad state.
 		if (cwrite.good()) {
-			cwrite << "#? Config file for btop v. " << Global::Version << "\n";
-			for (const auto& [name, description] : descriptions) {
-				cwrite << "\n" << (description.empty() ? "" : description + "\n")
-						<< name << " = ";
-				if (strings.contains(name))
-					cwrite << "\"" << strings.at(name) << "\"";
-				else if (ints.contains(name))
-					cwrite << ints.at(name);
-				else if (bools.contains(name))
-					cwrite << (bools.at(name) ? "True" : "False");
-				cwrite << "\n";
-			}
+			cwrite << current_config();
 		}
 	}
 
@@ -827,5 +844,30 @@ namespace Config {
 
 	auto get_log_file() -> std::optional<fs::path> {
 		return get_xdg_state_dir().transform([](auto&& state_home) -> auto { return state_home / "btop.log"; });
+	}
+
+	auto current_config() -> std::string {
+		auto buffer = std::string {};
+		fmt::format_to(std::back_inserter(buffer), "#? Config file for btop v.{}\n", Global::Version);
+
+		for (const auto& [name, description] : descriptions) {
+			// Write a description comment if available.
+			fmt::format_to(std::back_inserter(buffer), "\n");
+			if (!description.empty()) {
+				fmt::format_to(std::back_inserter(buffer), "{}\n", description);
+			}
+
+			fmt::format_to(std::back_inserter(buffer), "{} = ", name);
+			// Lookup default value by name and write it out.
+			if (strings.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), R"("{}")", strings[name]);
+			} else if (ints.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), std::locale::classic(), "{:L}", ints[name]);
+			} else if (bools.contains(name)) {
+				fmt::format_to(std::back_inserter(buffer), "{}", bools[name] ? "true" : "false");
+			}
+			fmt::format_to(std::back_inserter(buffer), "\n");
+		}
+		return buffer;
 	}
 }

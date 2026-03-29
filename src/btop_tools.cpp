@@ -17,17 +17,15 @@ tab-size = 4
 */
 
 #include <cmath>
-#include <codecvt>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <optional>
-#include <ranges>
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <cstdlib>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -35,6 +33,7 @@ tab-size = 4
 #include <unistd.h>
 
 #include "widechar_width.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -49,7 +48,6 @@ using std::to_string;
 using namespace std::literals; // to use operator""s
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -167,7 +165,8 @@ namespace Term {
 				linebuffered(false);
 				refresh();
 
-				cout << alt_screen << hide_cursor << mouse_on << flush;
+				const auto is_mouse_enabled = !Config::getB("disable_mouse");
+				cout << alt_screen << hide_cursor << (is_mouse_enabled ? mouse_on : mouse_off) << flush;
 				Global::resized = false;
 			}
 		}
@@ -212,28 +211,53 @@ namespace Term {
 
 namespace Tools {
 
-	size_t wide_ulen(const std::string_view str) {
-		unsigned int chars = 0;
-		try {
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
-
-			for (auto c : w_str) {
-				chars += utf8::wcwidth(c);
-			}
+	string replace_ascii_control(string str, const char replacement) {
+		if (str.empty())
+			return str;
+		const char* str_data = &str.data()[0];
+		size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)	{
+			std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+			return str;
 		}
-		catch (...) {
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+		for (size_t i = 0; i < w_str.size(); i++) {
+			if (widechar_wcwidth(w_str[i]) > 1)
+				continue;
+			if (w_str[i] < 0x20)
+				w_str[i] = replacement;
+		}
+		str.resize(w_str.size());
+		std::wcstombs(&str[0], &w_str[0], w_str.size());
+
+		return str;
+	}
+
+	size_t wide_ulen(const std::string_view str) {
+		if (str.empty())
+			return 0;
+		unsigned int chars = 0;
+
+		const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)
 			return ulen(str);
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+
+		for (auto c : w_str) {
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
 	}
 
-	size_t wide_ulen(const std::wstring_view w_str) {
+	size_t wide_ulen(const vector<wchar_t> w_str) {
 		unsigned int chars = 0;
 
 		for (auto c : w_str) {
-			chars += utf8::wcwidth(c);
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
@@ -244,17 +268,20 @@ namespace Tools {
 			return "";
 
 		if (wide) {
-			try {
-				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
-				while (wide_ulen(w_str) > len)
-					w_str.pop_back();
-				string n_str = conv.to_bytes(w_str);
-				return n_str;
-			}
-			catch (...) {
+			const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+			if (w_len <= 1)
 				return uresize(str, len, false);
-			}
+			vector<wchar_t> w_str(w_len);
+			std::mbstowcs(&w_str[0], str_data, w_len);
+
+			while (wide_ulen(w_str) > len) w_str.pop_back();
+
+			string n_str;
+			n_str.resize(w_str.size());
+			std::wcstombs(&n_str[0], &w_str[0], w_str.size());
+
+			return n_str;
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {
@@ -436,20 +463,12 @@ namespace Tools {
 		if (mega) {
 			while (value >= 100000) {
 				value /= 1000;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
 		else {
 			while (value >= 102400) {
 				value >>= 10;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
@@ -471,16 +490,20 @@ namespace Tools {
 		}
 
 		if (shorten) {
-			auto f_pos = out.find(".");
-			if (f_pos == 1 and out.size() > 3) {
+			auto has_sep = out.find(".") != string::npos;
+			if (has_sep) {
 				out = fmt::format("{:.1f}", stod(out));
 			}
-			else if (f_pos != string::npos) {
-				out = fmt::format("{:.0f}", stod(out));
-			}
 			if (out.size() > 3) {
-				out = fmt::format("{:d}.0", out[0] - '0');
-				start++;
+				// if out is of the form xy.z
+				if (has_sep) {
+					out = fmt::format("{:.0f}", stod(out));
+				}
+				// if out is of the form xyzw (only when not using base 10)
+				else {
+					out = fmt::format("{:d}.0", out[0] - '0');
+					start++;
+				}
 			}
 			out.push_back(units[start][0]);
 		}
@@ -516,7 +539,7 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
+		atom.wait(old, std::memory_order_relaxed);
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
@@ -527,10 +550,12 @@ namespace Tools {
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
 		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
 		else this->atom.store(true);
+		this->atom.notify_all();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
+		this->atom.notify_all();
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
@@ -541,7 +566,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
+			Logger::error("readfile() : Exception when reading {} : {}", path, e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -622,13 +647,13 @@ namespace Tools {
 		if (delayed_report)
 			report_buffer.emplace_back(report_line);
 		else
-			Logger::log_write(log_level, report_line);
+			Logger::debug("{}", report_line);
 	}
 
 	void DebugTimer::force_report() {
 		if (report_buffer.empty()) return;
 		for (const auto& line : report_buffer)
-			Logger::log_write(log_level, line);
+			Logger::debug("{}", line);
 		report_buffer.clear();
 	}
 
@@ -640,75 +665,5 @@ namespace Tools {
 
 	bool DebugTimer::is_running() {
 		return running;
-	}
-}
-
-namespace Logger {
-	using namespace Tools;
-	std::atomic<bool> busy (false);
-	bool first = true;
-	const string tdf = "%Y/%m/%d (%T) | ";
-
-	size_t loglevel;
-	std::optional<std::filesystem::path> logfile;
-
-	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
-	class lose_priv {
-		int status = -1;
-	public:
-		lose_priv() {
-			if (geteuid() != Global::real_uid) {
-				this->status = seteuid(Global::real_uid);
-			}
-		}
-		~lose_priv() noexcept {
-			if (status == 0) {
-				status = seteuid(Global::set_uid);
-			}
-		}
-		lose_priv(const lose_priv& other) = delete;
-		lose_priv& operator=(const lose_priv& other) = delete;
-		lose_priv(lose_priv&& other) = delete;
-		lose_priv& operator=(lose_priv&& other) = delete;
-	};
-
-	void set(const string& level) {
-		loglevel = v_index(log_levels, level);
-	}
-
-	void log_write(const Level level, const std::string_view msg) {
-		if (loglevel < level or !logfile.has_value()) {
-			return;
-		}
-		auto& log_file = logfile.value();
-		atomic_lock lck(busy, true);
-		lose_priv neutered{};
-		std::error_code ec;
-		try {
-			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
-			if (fs::exists(log_file) and fs::file_size(log_file, ec) > 1024 << 10 and not ec) {
-				auto old_log = log_file;
-				old_log += ".1";
-
-				if (fs::exists(old_log))
-					fs::remove(old_log, ec);
-
-				if (not ec)
-					fs::rename(log_file, old_log, ec);
-			}
-			if (not ec) {
-				std::ofstream lwrite(log_file, std::ios::app);
-				if (first) {
-					first = false;
-					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
-				}
-				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
-			}
-			else log_file.clear();
-		}
-		catch (const std::exception& e) {
-			log_file.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
-		}
 	}
 }

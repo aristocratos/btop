@@ -1,6 +1,7 @@
 [*.{cpp,h,hpp,sh,md,cfg,sample}]
 indent_style = tab
 indent_size = 4
+brace_style = same_line
 
 [*.{yml,yaml}]
 indent_style = space

@@ -1,3 +1,46 @@
+## v1.4.6
+
+References | Description | Author(s)
+--- | --- | ---
+#1272 | Skip 'H' and 'HX' suffix in AMD cpu name trimming | @ramdomPTM
+#1268 | feature: add process renice functionality | @goddamnparticle
+#1285 | Revert "Use /sys/dev/block/MAJOR:MINOR instead of /sys/block/NAME for disk I/O" #1270 | @deckstose
+#1277 | feat: Introduce cpu frequency display modes | @emiliopedrollo
+#1282 | Fix CPU frequency detection for LoongArch CPUs | @Twopic2
+#1275 | fix arrow keys that send 'O' instead of '[' | @vandabbin
+#1251 | OpenBSD: battery: add support for watthour and watts sensors | @shtrophic
+#1208 | Add Gotham theme | @jrebs
+#1291 | Fix macOS deadlocks and race conditions in collector threads #1292 | @kuzmeech
+#1296 | fix: btop crash on arm cpu | @emiliopedrollo @zenofile
+#984 | Added ability to set which gpu vendors to enable | @thedustinmiller
+#1274 | added tree toggle of expand/collapse for children of process | @irabrine
+#1300 | Use right key codes to match f1 and f2 keys | @vandabbin
+#1305 | Handle missing SMC gracefully on macOS | @achille
+#1309 | Fix redraw in proc list when changing sort order | @vandabbin
+#1304 | Fix load average and GPU watts leaking past box border | @vandabbin
+#1220 | feat: respect effective cpus from cgroup | @deckstose
+#1218 | feat: display container engine | @deckstose
+#1315 | feat: raise cpp standard to c++23 | @deckstose
+d0cbaf7 | Add configuration toggle for terminal synchronization | @aristocratos
+#1306 | Implement feat Process list pausing | @vandabbin
+#1322 | flip name, command, and user sorting | @vandabbin
+#1334 | fix tty theme for pause banner | @vandabbin
+#1325 | test: add test harness with ctest | @deckstose
+#1339 | fix: skip first argument of argv | @AlvaroParker
+#1357 | feat: add --themes-dir flag | @adeci
+#1359 | fix: don't over-/underflow when parsing --update argument | @yinghao-w
+#1362 | fix segfault on musl systems | @v1cont
+#1363 | Pass only static duration strings to Config::set in Config::apply_preset | @yinghao-w
+#1366 | fix: cpu per-thread totals not reaching 100% | @Tom94
+#1367 | Fix: Align boxes when Cpu bottom and Gpu on | @yinghao-w
+#1372 | Minor fixes and improvements for NetBSD | @fraggerfox
+#1377 | Fixed GPU rendering | @TheSovietPancakes
+#1379 | Fix: Always collect GPU data when cpu_graph_lower = "Auto" | @yinghao-w
+#1393 | Fix: humanized units shortening | @yinghao-w
+#1401 | Feat: add mouse dragging of scrollbar | @yinghao-w
+#1399 | feat: add cli option to dump default config | @deckstose
+e969f43 | Added "save_config_on_exit" option to configuration | @aristocratos
+
 ## v1.4.5
 
 References | Description | Author(s)

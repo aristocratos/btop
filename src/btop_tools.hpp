@@ -29,7 +29,6 @@ tab-size = 4
 #include <cstdint>
 #include <filesystem>
 #include <limits.h>
-#include <pthread.h>
 #include <ranges>
 #include <regex>
 #include <string>
@@ -49,8 +48,10 @@ tab-size = 4
 	#endif
 #endif
 
-#include "fmt/core.h"
-#include "fmt/format.h"
+#include <fmt/core.h>
+#include <fmt/format.h>
+
+#include "btop_log.hpp"
 
 using std::array;
 using std::atomic;
@@ -155,47 +156,6 @@ namespace Term {
 	void restore();
 }
 
-//* Simple logging implementation
-namespace Logger {
-	const vector<string> log_levels = {
-		"DISABLED",
-		"ERROR",
-		"WARNING",
-		"INFO",
-		"DEBUG",
-	};
-	extern std::optional<std::filesystem::path> logfile;
-
-	enum Level : std::uint8_t {
-		DISABLED = 0,
-		ERROR = 1,
-		WARNING = 2,
-		INFO = 3,
-		DEBUG = 4,
-	};
-
-	//* Set log level, valid arguments: "DISABLED", "ERROR", "WARNING", "INFO" and "DEBUG"
-	void set(const string& level);
-
-	void log_write(const Level level, const std::string_view msg);
-
-	inline void error(const std::string_view msg) {
-		log_write(ERROR, msg);
-	}
-
-	inline void warning(const std::string_view msg) {
-		log_write(WARNING, msg);
-	}
-
-	inline void info(const std::string_view msg) {
-		log_write(INFO, msg);
-	}
-
-	inline void debug(const std::string_view msg) {
-		log_write(DEBUG, msg);
-	}
-}
-
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
 
 namespace Tools {
@@ -208,7 +168,7 @@ namespace Tools {
 	};
 
 	size_t wide_ulen(const std::string_view str);
-	size_t wide_ulen(const std::wstring_view w_str);
+	size_t wide_ulen(const vector<wchar_t> w_str);
 
 	//* Return number of UTF8 characters in a string (wide=true for column size needed on terminal)
 	inline size_t ulen(const std::string_view str, bool wide = false) {
@@ -225,10 +185,7 @@ namespace Tools {
 	string s_replace(const string& str, const string& from, const string& to);
 
 	//* Replace ascii control characters with <replacement> in <str> and return new string
-	inline string replace_ascii_control(string str, const char replacement = ' ') {
-		std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
-		return str;
-	}
+	string replace_ascii_control(string str, const char replacement = ' ');
 
 	//* Capitalize <str>
 	inline string capitalize(string str) {
@@ -349,9 +306,9 @@ namespace Tools {
 	string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
 
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
-	//* bit=True or defaults to bytes
+	//* bit=true or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
-	//* short=True always returns 0 decimals and shortens unit to 1 character
+	//* shorten=true shortens value to at most 3 characters and shortens unit to 1 character
 	string floating_humanizer(uint64_t value, bool shorten = false, size_t start = 0, bool bit = false, bool per_second = false);
 
 	//* Add std::string operator * : Repeat string <str> <n> number of times
@@ -363,7 +320,7 @@ namespace Tools {
 		if (auto it = map.find(key); it != map.end()) {
 			return it->second;
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line()));
+			Logger::error("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line());
 			return fallback;
 		}
 	};
@@ -372,7 +329,7 @@ namespace Tools {
 		if (auto it = map.find(key); it != map.end()) {
 			return it->second;
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key));
+			Logger::error("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key);
 			return fallback;
 		}
 	};
@@ -384,7 +341,7 @@ namespace Tools {
 		if (index < vec.size()) {
 			return vec[index];
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line()));
+			Logger::error("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line());
 			return fallback;
 		}
 	};
@@ -393,7 +350,7 @@ namespace Tools {
 		if (index < vec.size()) {
 			return vec[index];
 		} else {
-			Logger::error(fmt::format("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index));
+			Logger::error("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index);
 			return fallback;
 		}
 	};
@@ -406,18 +363,6 @@ namespace Tools {
 
 	string hostname();
 	string username();
-
-	static inline void busy_wait (void) {
-	#if defined __i386__ || defined __x86_64__
-		__builtin_ia32_pause();
-	#elif defined __ia64__
-		__asm volatile("hint @pause" : : : "memory");
-	#elif defined __sparc__ && (defined __arch64__ || defined __sparc_v9__)
-		__asm volatile("membar #LoadLoad" : : : "memory");
-	#else
-		__asm volatile("" : : : "memory");
-	#endif
-	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
 
@@ -457,7 +402,6 @@ namespace Tools {
 		vector<string> report_buffer{};
 		string name{};
 		bool delayed_report{};
-		Logger::Level log_level = Logger::DEBUG;
 	public:
 		DebugTimer() = default;
 		explicit DebugTimer(string name, bool start = true, bool delayed_report = true);
