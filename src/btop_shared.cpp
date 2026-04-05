@@ -167,7 +167,7 @@ bool set_priority(pid_t pid, int priority) {
 		for (auto& r : proc_vec) {
 			r.entry.get().tree_index = (collapsed or r.entry.get().filtered ? index_max : c_index++);
 			if (not r.children.empty()) {
-				tree_sort(r.children, sorting, reverse, paused, c_index, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == (size_t)index_max));
+				tree_sort(r.children, sorting, reverse, paused, c_index, index_max, (collapsed or r.entry.get().collapsed or r.entry.get().tree_index == (size_t)index_max));
 			}
 		}
 	}

@@ -221,7 +221,11 @@ void clean_quit(int sig) {
 		}
 	#else
 		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
-		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
+		#ifdef __QNX__
+				if (pthread_timedjoin(Runner::runner_id, nullptr, &ts) != 0) {
+#else
+				if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
+#endif
 			Logger::warning("Failed to join _runner thread on exit!");
 			pthread_cancel(Runner::runner_id);
 		}
@@ -1005,6 +1009,13 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 			else {
 				Logger::warning("Failed to set macos locale, continuing anyway.");
 			}
+		}
+	#elif defined(__QNX__)
+		// QNX typically ships without locale database files, so setlocale() for
+		// UTF-8 locales will fail even on terminals that are fully UTF-8 capable.
+		// Treat QNX the same as --force-utf: warn but continue.
+		if (found.empty()) {
+			Logger::warning("QNX: no UTF-8 locale detected, continuing anyway (terminal assumed UTF-8 capable).");
 		}
 	#else
 		if (found.empty() and cli.force_utf) {
