@@ -232,6 +232,7 @@ namespace Config {
 		{"log_level", 			"#* Set loglevel for \"~/.local/state/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 		{"save_config_on_exit",  "#* Automatically save current settings to config file on exit."},
+		{"show_user_and_command", "#* Show user and command columns in the proc box"},
 	#ifdef GPU_SUPPORT
 
 		{"nvml_measure_pcie_speeds",
@@ -357,6 +358,7 @@ namespace Config {
 		{"terminal_sync", true},
 		{"save_config_on_exit", true},
 		{"disable_mouse", false},
+		{"show_user_and_command", true},
 	};
 	std::unordered_map<std::string_view, bool> boolsTmp;
 
