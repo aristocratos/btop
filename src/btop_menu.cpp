@@ -886,6 +886,11 @@ namespace Menu {
 				"followed in the list. Pressing enter",
 				"again will close the detailed view",
 				"and stop following the process."},
+			{"hide_user_and_command",
+				"hide username and command columns",
+				"",
+				"Setting this option to true may be help-",
+				"ful if you prefer to keep usernames hidden"}
 		}
 	};
 
