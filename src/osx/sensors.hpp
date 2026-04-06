@@ -16,12 +16,16 @@ indent = tab
 tab-size = 4
 */
 
+#include <vector>
+
 #include <Availability.h>
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+
 namespace Cpu {
 	class ThermalSensors {
 	   public:
 		long long getSensors();
+		long long getSensors(std::vector<long long>& core_temps);
 	};
 }  // namespace Cpu
 #endif
