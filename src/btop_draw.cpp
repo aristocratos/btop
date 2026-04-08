@@ -625,7 +625,7 @@ namespace Cpu {
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
 						const int gpu_draw_count = gpu_always ? Gpu::count : Gpu::count - Gpu::shown;
-						graph_width = gpu_draw_count <= 0 ? graph_default_width : graph_default_width/gpu_draw_count - gpu_draw_count + 1 + graph_default_width%gpu_draw_count;
+						graph_width = gpu_draw_count <= 0 ? graph_default_width : max(1, graph_default_width/gpu_draw_count - gpu_draw_count + 1 + graph_default_width%gpu_draw_count);
 						for (size_t i = 0; i < gpus.size(); i++) {
 							if (gpu_auto and v_contains(Gpu::shown_panels, i))
 								continue;
@@ -638,7 +638,7 @@ namespace Cpu {
 								}
 								else {
 									graph = Draw::Graph{
-										graph_width + graph_default_width%graph_width - (int)gpus.size() + 1,
+										max(1, graph_width + graph_default_width%graph_width - (int)gpus.size() + 1),
 										graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true
 									};
 								}
@@ -793,8 +793,8 @@ namespace Cpu {
 							}
 							if (Gpu::count - (gpu_auto ? Gpu::shown : 0) > 1) {
 								auto i_str = to_string(i);
-								out += Mv::l(graph_width-1) + Mv::u(graph_height/2) + (graph_width > 5 ? "GPU" : "") + i_str
-									+ Mv::d(graph_height/2) + Mv::r(graph_width - 1 - (graph_width > 5)*3 - i_str.size());
+								out += Mv::l(max(0, graph_width-1)) + Mv::u(graph_height/2) + (graph_width > 5 ? "GPU" : "") + i_str
+									+ Mv::d(graph_height/2) + Mv::r(max(0, (int)(graph_width - 1 - (graph_width > 5)*3 - i_str.size())));
 							}
 
 							if (++gpu_drawn < Gpu::count - (gpu_auto ? Gpu::shown : 0))
