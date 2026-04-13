@@ -2989,12 +2989,13 @@ namespace Proc {
 				pread.close();
 			}
 
-			//? Get cpu total times from /proc/stat
+			//? Get cpu total times from /proc/stat up to the guest field
 			cputimes = 0;
 			pread.open(Shared::procPath / "stat");
 			if (pread.good()) {
 				pread.ignore(SSmax, ' ');
-				for (uint64_t times; pread >> times; cputimes += times);
+				int i = 0;
+				for (uint64_t times; i < 8 and pread >> times; cputimes += times, i++);
 			}
 			else throw std::runtime_error("Failure to read /proc/stat");
 			pread.close();
