@@ -1892,9 +1892,9 @@ namespace Gpu {
 		static int get_pmu_type(const string& pmu_device) {
 			string path = "/sys/bus/event_source/devices/" + pmu_device + "/type";
 			ifstream file(path);
-			if (!file) return -1;
+			if (not file) return -1;
 			int type = -1;
-			if (!(file >> type) || type < 0) {
+			if (not (file >> type) or type < 0) {
 				return -1;
 			}
 			return type;
@@ -1903,7 +1903,7 @@ namespace Gpu {
 		static uint64_t read_event_config(const string& pmu_device, const string& event_name) {
 			string path = "/sys/bus/event_source/devices/" + pmu_device + "/events/" + event_name;
 			ifstream file(path);
-			if (!file) return 0;
+			if (not file) return 0;
 			string line;
 			getline(file, line);
 			size_t pos = line.find("event=");
@@ -2856,20 +2856,20 @@ namespace Gpu {
 
 			for (const auto& path : pci_ids_paths) {
 				ifstream file(path);
-				if (!file) continue;
+				if (not file) continue;
 
 				string line;
 				bool in_vendor = false;
 				while (getline(file, line)) {
-					if (line.empty() || line[0] == '#') continue;
+					if (line.empty() or line[0] == '#') continue;
 
-					if (!in_vendor) {
-						if (line[0] != '\t' && line.rfind(vendor_id, 0) == 0) {
+					if (not in_vendor) {
+						if (line[0] != '\t' and line.rfind(vendor_id, 0) == 0) {
 							in_vendor = true;
 						}
 					} else {
 						if (line[0] != '\t') break;
-						if (line[0] == '\t' && line[1] != '\t') {
+						if (line[0] == '\t' and line[1] != '\t') {
 							if (line.find(device_id) == 1) {
 								size_t name_start = line.find_first_not_of(" \t", 1 + device_id.size());
 								if (name_start != string::npos) {
@@ -2886,7 +2886,7 @@ namespace Gpu {
 		static string get_device_id_from_sysfs(const string& gpu_path) {
 			fs::path device_path = fs::path(gpu_path) / "device" / "device";
 			ifstream file(device_path);
-			if (!file) return "";
+			if (not file) return "";
 			string device_id;
 			file >> device_id;
 			if (device_id.rfind("0x", 0) == 0) {
