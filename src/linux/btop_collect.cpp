@@ -273,6 +273,8 @@ namespace Gpu {
 			int xe_state_index = -1;
 		};
 
+		static int gpu_panel_height_offset(const gpu_info& gpu);
+
 		vector<GpuInstance> gpu_instances;
 		bool initialized = false;
 		bool init();
@@ -433,11 +435,7 @@ namespace Shared {
 			count = gpus.size();
 			gpu_b_height_offsets.resize(gpus.size());
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
-				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
-					   + gpus[i].supported_functions.pwr_usage
-					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
-					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
-						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
+				gpu_b_height_offsets[i] = Gpu::Intel::gpu_panel_height_offset(gpus[i]);
 		}
 	#endif
 
@@ -2737,6 +2735,14 @@ namespace Gpu {
 	}
 
 	namespace Intel {
+		static int gpu_panel_height_offset(const gpu_info& gpu) {
+			return gpu.supported_functions.gpu_utilization
+				+ gpu.supported_functions.pwr_usage
+				+ (gpu.supported_functions.encoder_utilization or gpu.supported_functions.decoder_utilization)
+				+ (gpu.supported_functions.mem_total or gpu.supported_functions.mem_used)
+					* (1 + 2*(gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) + 2*gpu.supported_functions.mem_utilization);
+		}
+
 		static bool has_pmu_permissions() {
 			struct perf_event_attr attr = {};
 			attr.type = PERF_TYPE_SOFTWARE;
