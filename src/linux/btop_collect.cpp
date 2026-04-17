@@ -2048,12 +2048,30 @@ namespace Gpu {
 						string pid_str = proc_entry.path().filename().string();
 						if (pid_str.empty() or not std::isdigit(static_cast<unsigned char>(pid_str[0]))) continue;
 
+						// Prefilter on /proc/<pid>/fd/ symlinks so we only open
+						// fdinfo entries for fds that point at a DRM node. On a
+						// typical desktop this cuts the fdinfo file opens from
+						// "all fds on the system" down to "drm fds only".
+						fs::path fd_dir = proc_entry.path() / "fd";
 						fs::path fdinfo_dir = proc_entry.path() / "fdinfo";
-						if (not fs::exists(fdinfo_dir)) continue;
+						vector<string> drm_fd_names;
+						try {
+							for (const auto& fd_entry : fs::directory_iterator(fd_dir)) {
+								char target[256];
+								ssize_t n = readlink(fd_entry.path().c_str(), target, sizeof(target) - 1);
+								if (n <= 0) continue;
+								target[n] = '\0';
+								if (string_view(target, static_cast<size_t>(n)).find("/dri/") == string_view::npos) continue;
+								drm_fd_names.emplace_back(fd_entry.path().filename().string());
+							}
+						} catch (...) {
+							continue;
+						}
+						if (drm_fd_names.empty()) continue;
 
 						try {
-							for (const auto& fd_entry : fs::directory_iterator(fdinfo_dir)) {
-								ifstream file(fd_entry.path());
+							for (const auto& fd_name : drm_fd_names) {
+								ifstream file(fdinfo_dir / fd_name);
 								if (not file) continue;
 
 								string line;
