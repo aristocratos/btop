@@ -324,7 +324,12 @@ namespace Gpu {
 				double smoothed_media_util = 0.0;
 				bool prev_main_valid = false;
 				bool prev_media_valid = false;
-				bool fdinfo_available = false;
+				// fdinfo_probe_enabled: should we keep polling /proc/*/fdinfo?
+				// fdinfo_split_available: have we actually received split main/media
+				// data yet? This is what gates the RC/MC UI, independent of whether
+				// we're still probing.
+				bool fdinfo_probe_enabled = false;
+				bool fdinfo_split_available = false;
 				uint64_t fdinfo_next_probe_ns = 0;
 			};
 
@@ -2358,7 +2363,7 @@ namespace Gpu {
 			// Test fdinfo availability
 			if (not st.pci_slot.empty()) {
 				FdinfoCycles test_cycles = collect_fdinfo_cycles(st.pci_slot);
-				st.fdinfo_available = true;
+				st.fdinfo_probe_enabled = true;
 				st.fdinfo_next_probe_ns = 0;
 				if (test_cycles.has_main and test_cycles.main_total_cycles > 0) {
 					st.prev_main_cycles = test_cycles.main_cycles;
@@ -2370,6 +2375,7 @@ namespace Gpu {
 					st.prev_media_total_cycles = test_cycles.media_total_cycles;
 					st.prev_media_valid = true;
 				}
+				st.fdinfo_split_available = st.prev_main_valid or st.prev_media_valid;
 				if (st.prev_main_valid or st.prev_media_valid) {
 					Logger::debug("Xe: Using fdinfo for GPU utilization (PCI: {})", st.pci_slot);
 				} else {
@@ -2479,7 +2485,8 @@ namespace Gpu {
 			st.smoothed_media_util = 0.0;
 			st.prev_main_valid = false;
 			st.prev_media_valid = false;
-			st.fdinfo_available = false;
+			st.fdinfo_probe_enabled = false;
+			st.fdinfo_split_available = false;
 			st.fdinfo_next_probe_ns = 0;
 			initialized_states[gpu_index] = false;
 			return true;
@@ -2502,9 +2509,9 @@ namespace Gpu {
 						has_main_gt = true;
 					}
 				}
-				bool split_gt = st.fdinfo_available or (has_main_gt and has_media_gt);
+				bool split_gt = st.fdinfo_split_available or (has_main_gt and has_media_gt);
 				gpus_slice->supported_functions = {
-					.gpu_utilization = (st.fdinfo_available or not st.gt_idle.empty() or not st.engines.empty()),
+					.gpu_utilization = (st.fdinfo_probe_enabled or not st.gt_idle.empty() or not st.engines.empty()),
 					.mem_utilization = false,
 					.gpu_clock = not st.freq_sysfs_path.empty(),
 					.mem_clock = false,
@@ -2573,7 +2580,7 @@ namespace Gpu {
 			};
 
 			// Use fdinfo for accurate utilization if available
-			if (st.fdinfo_available and now_ns >= st.fdinfo_next_probe_ns) {
+			if (st.fdinfo_probe_enabled and now_ns >= st.fdinfo_next_probe_ns) {
 				constexpr double EMA_ALPHA = 0.3;
 				FdinfoCycles current = collect_fdinfo_cycles(st.pci_slot);
 				if (current.has_main or current.has_media) {
@@ -2626,13 +2633,14 @@ namespace Gpu {
 					st.smoothed_media_util = 0.0;
 					st.prev_media_valid = false;
 				}
+				st.fdinfo_split_available = st.prev_main_valid or st.prev_media_valid;
 				if (used_fdinfo) {
 					main_util = current.has_main ? st.smoothed_main_util : 0.0;
 					media_util = current.has_media ? st.smoothed_media_util : 0.0;
 					max_util = std::max(main_util, media_util);
 					push_gt_utilization();
 				}
-			} else if (st.fdinfo_available and (st.prev_main_valid or st.prev_media_valid)) {
+			} else if (st.fdinfo_split_available and (st.prev_main_valid or st.prev_media_valid)) {
 				used_fdinfo = true;
 				main_util = st.prev_main_valid ? st.smoothed_main_util : 0.0;
 				media_util = st.prev_media_valid ? st.smoothed_media_util : 0.0;
