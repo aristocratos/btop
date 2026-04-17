@@ -1885,6 +1885,11 @@ namespace Gpu {
 		constexpr double MAX_GPU_CLOCK_MHZ = 10000.0;
 		constexpr uint64_t FDINFO_SAMPLE_MIN_NS = 500ULL * 1000ULL * 1000ULL;
 		constexpr uint64_t FDINFO_RETRY_NS = 2ULL * 1000000000ULL;
+		// idle_residency_ms is updated by a kernel worker on a coarse cadence.
+		// On ticks shorter than this, a zero delta is ambiguous between "busy"
+		// and "counter not yet advanced", so we skip the sample instead of
+		// emitting a false 100 %.
+		constexpr double MIN_GTIDLE_GRAIN_MS = 50.0;
 
 		static long perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
 			return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
@@ -2691,18 +2696,26 @@ namespace Gpu {
 						gt.prev_idle_ms = idle_ms;
 					} else {
 						uint64_t delta_idle = idle_ms - gt.prev_idle_ms;
-						gt.prev_idle_ms = idle_ms;
-
-						double raw_util;
-						// Counter stall + power gated = truly idle, not false 100%
+						double raw_util = 0.0;
+						bool update_sample = true;
 						if (delta_idle == 0 and is_power_gated) {
+							// Counter stall while power-gated: truly idle.
 							raw_util = 0.0;
+						} else if (delta_idle == 0 and dt_ms < MIN_GTIDLE_GRAIN_MS) {
+							// Short tick + counter stall: kernel counter hasn't
+							// advanced yet. Leave prev_idle_ms and smoothed_util
+							// untouched so the next tick resolves against the
+							// same baseline, avoiding a false 100 %.
+							update_sample = false;
 						} else {
 							double idle_ratio = (double)delta_idle / dt_ms;
 							if (idle_ratio > 1.0) idle_ratio = 1.0;
 							raw_util = 100.0 * (1.0 - idle_ratio);
 						}
-						gt.smoothed_util = EMA_ALPHA * raw_util + (1.0 - EMA_ALPHA) * gt.smoothed_util;
+						if (update_sample) {
+							gt.prev_idle_ms = idle_ms;
+							gt.smoothed_util = EMA_ALPHA * raw_util + (1.0 - EMA_ALPHA) * gt.smoothed_util;
+						}
 					}
 					double util = gt.smoothed_util;
 					if (gt.is_media) {
