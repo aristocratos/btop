@@ -125,15 +125,13 @@ namespace Shared {
 
 	void init() {
 		//? Shared global variables init
-		int mib[2];
-		mib[0] = CTL_HW;
-		mib[1] = HW_NCPUONLINE;
-		int ncpu;
-		size_t len = sizeof(ncpu);
-		if (sysctl(mib, 2, &ncpu, &len, nullptr, 0) == -1) {
+		int mib[] = {CTL_HW, HW_NCPUONLINE};
+		int ncpu_online;
+		size_t len = sizeof(ncpu_online);
+		if (sysctl(mib, 2, &ncpu_online, &len, nullptr, 0) == -1) {
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
 		} else {
-			coreCount = ncpu;
+			coreCount = ncpu_online;
 		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
