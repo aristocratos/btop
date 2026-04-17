@@ -78,7 +78,6 @@ extern "C" {
 	#include <sys/syscall.h>
 	#include <sys/ioctl.h>
 	#include <fcntl.h>
-	#include <dirent.h>
 	#include "xe_drm.h"
 #endif
 
@@ -303,7 +302,6 @@ namespace Gpu {
 			};
 
 			struct XeState {
-				string pmu_device;
 				string pci_slot;  // e.g., "0000:00:02.0"
 				string freq_sysfs_path;
 				int pmu_type = -1;
@@ -332,9 +330,6 @@ namespace Gpu {
 				bool fdinfo_split_available = false;
 				uint64_t fdinfo_next_probe_ns = 0;
 			};
-
-			XeState state;
-			bool initialized = false;
 
 			bool init(int gpu_index, const string& card_path, const string& pmu_device);
 			bool shutdown(int gpu_index);
@@ -1882,7 +1877,6 @@ namespace Gpu {
 	namespace Xe {
 		constexpr uint32_t MAX_QUERY_SIZE = 64 * 1024;
 		constexpr double MIN_DT_SECONDS = 1e-6;
-		constexpr double MAX_GPU_CLOCK_MHZ = 10000.0;
 		constexpr uint64_t FDINFO_SAMPLE_MIN_NS = 500ULL * 1000ULL * 1000ULL;
 		constexpr uint64_t FDINFO_RETRY_NS = 2ULL * 1000000000ULL;
 		// idle_residency_ms is updated by a kernel worker on a coarse cadence.
@@ -2336,7 +2330,6 @@ namespace Gpu {
 			if (initialized_states[gpu_index]) return false;
 
 			XeState& st = states[gpu_index];
-			st.pmu_device = pmu_dev;
 			st.pmu_type = get_pmu_type(pmu_dev);
 
 			// Extract PCI slot from PMU device name (e.g., "xe_0000_00_02.0" -> "0000:00:02.0")
