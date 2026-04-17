@@ -2578,6 +2578,24 @@ namespace Gpu {
 				gpus_slice->gpu_percent.at("gpu-rc-totals").push_back(main_bucket_util);
 				gpus_slice->gpu_percent.at("gpu-mc-totals").push_back(media_bucket_util);
 			};
+			// Flip supported_functions on and backfill rc/mc deques so their
+			// length tracks gpu-totals when fdinfo only becomes available
+			// some ticks after init (e.g. the compositor opens the device
+			// after btop starts).
+			auto enable_split_ui = [&]() {
+				if (gpus_slice->supported_functions.gt_utilization) return;
+				gpus_slice->supported_functions.encoder_utilization = true;
+				gpus_slice->supported_functions.decoder_utilization = true;
+				gpus_slice->supported_functions.gt_utilization = true;
+				if (static_cast<size_t>(gpu_index) < gpu_b_height_offsets.size())
+					gpu_b_height_offsets[gpu_index] = Intel::gpu_panel_height_offset(*gpus_slice);
+				auto& totals = gpus_slice->gpu_percent.at("gpu-totals");
+				auto& rc = gpus_slice->gpu_percent.at("gpu-rc-totals");
+				auto& mc = gpus_slice->gpu_percent.at("gpu-mc-totals");
+				while (rc.size() < totals.size()) rc.push_back(0);
+				while (mc.size() < totals.size()) mc.push_back(0);
+				Global::resized = true;
+			};
 
 			// Use fdinfo for accurate utilization if available
 			if (st.fdinfo_probe_enabled and now_ns >= st.fdinfo_next_probe_ns) {
@@ -2635,6 +2653,7 @@ namespace Gpu {
 				}
 				st.fdinfo_split_available = st.prev_main_valid or st.prev_media_valid;
 				if (used_fdinfo) {
+					enable_split_ui();
 					main_util = current.has_main ? st.smoothed_main_util : 0.0;
 					media_util = current.has_media ? st.smoothed_media_util : 0.0;
 					max_util = std::max(main_util, media_util);
@@ -2642,6 +2661,7 @@ namespace Gpu {
 				}
 			} else if (st.fdinfo_split_available and (st.prev_main_valid or st.prev_media_valid)) {
 				used_fdinfo = true;
+				enable_split_ui();
 				main_util = st.prev_main_valid ? st.smoothed_main_util : 0.0;
 				media_util = st.prev_media_valid ? st.smoothed_media_util : 0.0;
 				max_util = std::max(main_util, media_util);
