@@ -468,6 +468,11 @@ namespace Draw {
 				 bool invert, bool no_zero, long long max_value, long long offset)
 	: width(width), height(height), color_gradient(color_gradient),
 	  invert(invert), no_zero(no_zero), offset(offset) {
+		//? Guard against non-positive widths: callers (e.g. init_graphs when
+		//? many GPUs are squeezed into a narrow CPU panel) can compute a
+		//? negative graph_width, which previously caused out-of-bounds deque
+		//? access in _create() via unsigned wrap-around of `data.size() - data_offset`.
+		if (width <= 0) { this->width = 0; return; }
 		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
 		else this->symbol = Config::getS("graph_symbol");
@@ -492,6 +497,7 @@ namespace Draw {
 	}
 
 	string& Graph::operator()(const deque<long long>& data, bool data_same) {
+		if (width <= 0) return out;
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
