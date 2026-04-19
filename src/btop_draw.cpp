@@ -843,7 +843,7 @@ namespace Cpu {
 			+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
 		if (show_temps) {
 			const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
-			const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll));
+			const auto temp_color = (cpu.temp_max > 0) ? Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::g("temp").at(0ll);
 			if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
 				out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
 					+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
@@ -895,7 +895,7 @@ namespace Cpu {
 					// something like `std::nullopt`.
 					const auto last_temp = core_temps.back();
 					const auto [temp, unit] = celsius_to(last_temp, temp_scale);
-					const auto temp_color = enabled ? Theme::g("temp").at(clamp(last_temp * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
+					const auto temp_color = enabled ? ((cpu.temp_max > 0) ? Theme::g("temp").at(clamp(last_temp * 100 / cpu.temp_max, 0ll, 100ll)) : Theme::g("temp").at(0ll)) : Theme::c("inactive_fg");
 					if (b_column_size > 1 and std::cmp_greater_equal(temp_graphs.size(), n)) {
 						fmt::format_to(
 							std::back_inserter(out),
