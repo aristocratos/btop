@@ -948,6 +948,15 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Logger::info("Using custom themes directory: {}", Theme::custom_theme_dir.string());
 	}
 
+	//? Detect if true color is supported and adjust settings for better compatibility
+	{
+		const char* color_term = std::getenv("COLORTERM");
+		if (color_term == nullptr || std::string(color_term) != "truecolor" || std::string(color_term) != "24bit") {
+			cli.low_color = true;
+			Logger::info("no true-color support detected: disabling true-color for better compatibility");
+		}
+	}
+
 	//? Config init
 	init_config(cli.low_color, cli.filter);
 
