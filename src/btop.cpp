@@ -833,11 +833,16 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Logger::debug("TTY mode set via config");
 	}
 
-#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__QNX__)
 	else if (Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::debug("Auto detect real TTY");
 	}
+#elif defined(__QNX__)
+	// QNX pseudo terminals commonly live under /dev/tty*, so the generic
+	// prefix check misclassifies normal terminal sessions as a real TTY and
+	// forces tty_mode, which switches graphs away from braille dot glyphs.
+	Logger::debug("Skipping auto real TTY detection on QNX");
 #endif
 
 	Logger::debug("TTY mode enabled: {}", Config::getB("tty_mode"));
