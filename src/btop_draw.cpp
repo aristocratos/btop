@@ -476,7 +476,7 @@ namespace Draw {
 		if (max_value == 0 and offset > 0) max_value = 100;
 		this->max_value = max_value;
 		const int value_width = (tty_mode ? data.size() : ceil((double)data.size() / 2));
-		int data_offset = (value_width > width) ? data.size() - width * (tty_mode ? 1 : 2) : 0;
+		int data_offset = (width > 0 and value_width > width) ? data.size() - width * (tty_mode ? 1 : 2) : 0;
 
 		if (not tty_mode and (data.size() - data_offset) % 2 != 0) {
 			data_offset--;
@@ -624,7 +624,10 @@ namespace Cpu {
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
 						const int gpu_draw_count = gpu_always ? Gpu::count : Gpu::count - Gpu::shown;
-						graph_width = gpu_draw_count <= 0 ? graph_default_width : graph_default_width/gpu_draw_count - gpu_draw_count + 1 + graph_default_width%gpu_draw_count;
+						// Fairly distribute graph_default_width across gpu_draw_count GPUs, leaving 1 col per separator.
+						// Clamp to >=1 to avoid degenerate/negative widths reaching Draw::Graph::_create (upstream #1118).
+						const int gpu_drawable_width = graph_default_width - max(0, gpu_draw_count - 1);
+						graph_width = gpu_draw_count <= 0 ? graph_default_width : max(1, gpu_drawable_width / gpu_draw_count);
 						for (size_t i = 0; i < gpus.size(); i++) {
 							if (gpu_auto and v_contains(Gpu::shown_panels, i))
 								continue;
@@ -637,7 +640,7 @@ namespace Cpu {
 								}
 								else {
 									graph = Draw::Graph{
-										graph_width + graph_default_width%graph_width - (int)gpus.size() + 1,
+										max(1, graph_width + (gpu_draw_count > 0 ? gpu_drawable_width % gpu_draw_count : 0)),
 										graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true
 									};
 								}
