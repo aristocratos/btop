@@ -501,7 +501,8 @@ namespace Cpu {
 						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
 						const string sensor_name = pname + "/" + label;
 						const int64_t temp = stol(readfile(fs::path(basepath + "input"), "0")) / 1000;
-						const int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
+						int64_t crit = stol(readfile(fs::path(basepath + "crit"), "95000")) / 1000;
+						if (crit < 1) crit = 95; // <1000 m°C rounds to 0; avoid 0 in temp_max (SIGFPE in draw)
 
 						found_sensors[sensor_name] = Sensor { fs::path(basepath + "input"), temp, crit };
 
