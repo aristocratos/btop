@@ -625,7 +625,10 @@ namespace Cpu {
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
 						const int gpu_draw_count = gpu_always ? Gpu::count : Gpu::count - Gpu::shown;
-						graph_width = gpu_draw_count <= 0 ? graph_default_width : max(1, graph_default_width/gpu_draw_count - gpu_draw_count + 1 + graph_default_width%gpu_draw_count);
+                                                // Fairly distribute graph_default_width across gpu_draw_count GPUs, leaving 1 col per separator.
+                                                // Clamp to >=1 to avoid degenerate/negative widths reaching Draw::Graph::_create (#1118, #1017).
+                                                const int gpu_drawable_width = graph_default_width - max(0, gpu_draw_count - 1);
+                                                graph_width = gpu_draw_count <= 0 ? graph_default_width : max(1, gpu_drawable_width / gpu_draw_count);
 						for (size_t i = 0; i < gpus.size(); i++) {
 							if (gpu_auto and v_contains(Gpu::shown_panels, i))
 								continue;
