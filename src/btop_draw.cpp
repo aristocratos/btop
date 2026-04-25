@@ -641,7 +641,7 @@ namespace Cpu {
 								}
 								else {
 									graph = Draw::Graph{
-										max(1, graph_width + graph_default_width%graph_width - (int)gpus.size() + 1),
+                                                                                max(1, graph_width + (gpu_draw_count > 0 ? gpu_drawable_width % gpu_draw_count : 0)),
 										graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true
 									};
 								}
