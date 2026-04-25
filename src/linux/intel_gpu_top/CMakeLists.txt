@@ -7,6 +7,8 @@ add_library(igt OBJECT
   intel_name_lookup_shim.c
 )
 
+target_compile_definitions(igt PRIVATE _GNU_SOURCE)
+
 if(BTOP_LTO)
   # We have checked LTO support already and it's supported :)
   set_target_properties(igt PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
