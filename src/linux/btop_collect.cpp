@@ -2103,6 +2103,14 @@ namespace Gpu {
 					else if (std::filesystem::exists(inst)) d.power = inst;
 				}
 
+				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
+				//? or driver states where nothing useful is exposed yet. Otherwise btop would
+				//? render an empty GPU entry every tick.
+				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
+					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
+					continue;
+				}
+
 				devices.push_back(std::move(d));
 			}
 
