@@ -294,6 +294,31 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+
+	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
+	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
+	//? Reads only standard amdgpu DRM sysfs nodes; no library dependency.
+	namespace Asysfs {
+		struct device_paths {
+			std::filesystem::path device;
+			std::filesystem::path hwmon;
+			uint32_t pci_device_id;
+			bool has_temp;
+			bool has_power;
+			bool has_freq;
+			bool has_busy;
+			bool has_vram;
+			bool has_mem_clock;
+			long long mem_clock_max_mhz;
+		};
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+		vector<device_paths> devices;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -375,6 +400,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
+			//? Fall back to amdgpu sysfs (consumer iGPU / dGPU) if rocm-smi found nothing.
+			if (Gpu::Rsmi::device_count == 0) {
+				Gpu::Asysfs::init();
+			}
 		}
 
 		if (shown_gpus.contains("intel")) {
@@ -1925,15 +1954,15 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "Intel GPU";
 			}
 
 			free(gpu_device_name);
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
 
 			return true;
 		}
@@ -1997,6 +2026,220 @@ namespace Gpu {
 		}
 	}
 
+	namespace Asysfs {
+		//? Parse "0: 600Mhz \n1: 657Mhz *\n2: 2900Mhz" — return max MHz across all DPM levels.
+		static long long parse_dpm_max_mhz(const std::filesystem::path& path) {
+			std::ifstream file(path);
+			if (not file.is_open()) return 0;
+			long long max_mhz = 0;
+			for (string line; std::getline(file, line);) {
+				//? Format: "<idx>: <value>Mhz [*]"
+				const auto colon = line.find(':');
+				if (colon == string::npos) continue;
+				const auto mhz_pos = line.find("Mhz", colon);
+				if (mhz_pos == string::npos) continue;
+				try {
+					const long long val = std::stoll(line.substr(colon + 1, mhz_pos - colon - 1));
+					if (val > max_mhz) max_mhz = val;
+				} catch (const std::exception&) {
+					//? skip malformed line
+				}
+			}
+			return max_mhz;
+		}
+
+		//? PCI ID → friendly name. Best-effort; falls back to vendor:device hex if unknown.
+		//? Kept tiny on purpose — full pci.ids parsing isn't worth it for a fallback backend.
+		static string pci_name_from_id(uint32_t id) {
+			//? Phoenix1 / Phoenix2 / Hawk Point / Strix / Strix Halo / Krackan iGPUs
+			switch (id) {
+				case 0x150e: return "AMD Radeon (Strix-class iGPU)";
+				case 0x15bf: return "AMD Radeon 780M (Phoenix1)";
+				case 0x15c8: return "AMD Radeon 760M (Phoenix2)";
+				case 0x1900: return "AMD Radeon (Strix Halo iGPU)";
+				default:     return fmt::format("AMD GPU (1002:{:04x})", id);
+			}
+		}
+
+		bool init() {
+			if (initialized) return false;
+			devices.clear();
+
+			const std::filesystem::path drm_root("/sys/class/drm");
+			if (not std::filesystem::exists(drm_root)) {
+				Logger::debug("amdgpu sysfs: /sys/class/drm not present");
+				return false;
+			}
+
+			for (const auto& entry : std::filesystem::directory_iterator(drm_root)) {
+				const string fname = entry.path().filename().string();
+				//? card[0-9]+ only, skip render nodes and connector children (card1-DP-1).
+				if (not fname.starts_with("card")) continue;
+				if (fname.find('-') != string::npos) continue;
+				bool digits_only = fname.size() > 4;
+				for (size_t i = 4; i < fname.size() and digits_only; ++i)
+					digits_only = (fname[i] >= '0' and fname[i] <= '9');
+				if (not digits_only) continue;
+
+				const auto device_link = entry.path() / "device";
+				if (not std::filesystem::exists(device_link)) continue;
+
+				//? Vendor 0x1002 = AMD.
+				const string vendor = readfile(device_link / "vendor", "");
+				if (vendor.find("0x1002") == string::npos) continue;
+
+				//? Driver must be amdgpu.
+				std::error_code ec;
+				const auto driver_link = std::filesystem::read_symlink(device_link / "driver", ec);
+				if (ec or driver_link.filename().string() != "amdgpu") continue;
+
+				device_paths d{};
+				d.device = device_link;
+
+				//? Parse device id (hex).
+				const string dev_str = readfile(device_link / "device", "0x0");
+				try {
+					d.pci_device_id = (uint32_t)std::stoul(dev_str, nullptr, 16);
+				} catch (const std::exception&) {
+					d.pci_device_id = 0;
+				}
+
+				//? Find first hwmon directory.
+				const auto hwmon_dir = device_link / "hwmon";
+				if (std::filesystem::exists(hwmon_dir)) {
+					for (const auto& h : std::filesystem::directory_iterator(hwmon_dir)) {
+						if (h.is_directory()) {
+							d.hwmon = h.path();
+							break;
+						}
+					}
+				}
+
+				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
+				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
+
+				if (not d.hwmon.empty()) {
+					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
+					d.has_freq = std::filesystem::exists(d.hwmon / "freq1_input");
+					//? Prefer power1_average (filtered) over power1_input (instant).
+					d.has_power = std::filesystem::exists(d.hwmon / "power1_average")
+								or std::filesystem::exists(d.hwmon / "power1_input");
+				}
+
+				const auto mclk_path = device_link / "pp_dpm_mclk";
+				d.mem_clock_max_mhz = parse_dpm_max_mhz(mclk_path);
+				d.has_mem_clock = (d.mem_clock_max_mhz > 0);
+
+				devices.push_back(std::move(d));
+			}
+
+			device_count = (uint32_t)devices.size();
+			if (device_count == 0) {
+				Logger::debug("amdgpu sysfs: no AMD cards found in /sys/class/drm");
+				return false;
+			}
+
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size());
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_names[Nvml::device_count + Rsmi::device_count + i] = pci_name_from_id(devices[i].pci_device_id);
+			}
+
+			initialized = true;
+			Logger::info("Using amdgpu sysfs for {} AMD GPU(s) (consumer/iGPU fallback)", device_count);
+			Asysfs::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			devices.clear();
+			device_count = 0;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_info& gpu = gpus_slice[i];
+				const device_paths& d = devices[i];
+
+				if constexpr (is_init) {
+					gpu.supported_functions = {
+						.gpu_utilization = d.has_busy,
+						.mem_utilization = false, //? amdgpu sysfs has no VRAM-bus utilization counter
+						.gpu_clock = d.has_freq,
+						.mem_clock = false, //? only DPM levels available, not current — surfaced as max via pwr_state below if needed
+						.pwr_usage = d.has_power,
+						.pwr_state = false,
+						.temp_info = d.has_temp,
+						.mem_total = d.has_vram,
+						.mem_used = d.has_vram,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false,
+					};
+					gpu.pwr_max_usage = 65'000; //? 65 W default ceiling for consumer iGPU/dGPU; raised dynamically below
+					if (d.has_mem_clock) gpu.mem_clock_speed = d.mem_clock_max_mhz;
+				}
+
+				if (d.has_busy) {
+					try {
+						const long long util = std::stoll(readfile(d.device / "gpu_busy_percent", "0"));
+						gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(util, 0ll, 100ll));
+					} catch (const std::exception&) {
+						gpu.gpu_percent.at("gpu-totals").push_back(0);
+					}
+				}
+
+				if (d.has_temp) {
+					try {
+						const long long mC = std::stoll(readfile(d.hwmon / "temp1_input", "0"));
+						gpu.temp.push_back(mC / 1000);
+					} catch (const std::exception&) {}
+				}
+
+				if (d.has_power) {
+					try {
+						//? power1_average preferred; fall back to power1_input.
+						const auto avg_path = d.hwmon / "power1_average";
+						const auto pwr_path = std::filesystem::exists(avg_path) ? avg_path : d.hwmon / "power1_input";
+						const long long uW = std::stoll(readfile(pwr_path, "0"));
+						gpu.pwr_usage = uW / 1000; //? mW
+						if (gpu.pwr_usage > gpu.pwr_max_usage) gpu.pwr_max_usage = gpu.pwr_usage;
+						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+							std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0ll, 100ll));
+					} catch (const std::exception&) {}
+				}
+
+				if (d.has_freq) {
+					try {
+						const long long hz = std::stoll(readfile(d.hwmon / "freq1_input", "0"));
+						gpu.gpu_clock_speed = (unsigned int)(hz / 1'000'000); //? Hz → MHz
+					} catch (const std::exception&) {}
+				}
+
+				if (d.has_vram) {
+					try {
+						gpu.mem_total = std::stoll(readfile(d.device / "mem_info_vram_total", "0"));
+						gpu.mem_used = std::stoll(readfile(d.device / "mem_info_vram_used", "0"));
+						if (gpu.mem_total > 0) {
+							gpu.gpu_percent.at("gpu-vram-totals").push_back(
+								std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0ll, 100ll));
+						}
+					} catch (const std::exception&) {}
+				}
+			}
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2006,7 +2249,8 @@ namespace Gpu {
 		//* Collect data
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
-		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
+		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
