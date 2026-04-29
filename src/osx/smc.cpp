@@ -101,7 +101,7 @@ namespace Cpu {
 		long long result = getSMCTemp(key);
 		if (result == -1) {
 			// try again with C
-			snprintf(key, 5, "TC%1dC", KeyIndexes[core]);
+			snprintf(key, 5, "TC%1cC", KeyIndexes[core]);
 			result = getSMCTemp(key);
 		}
 		return result;
