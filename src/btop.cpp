@@ -1156,9 +1156,6 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 				Config::unlock();
 				init_config(cli.low_color, cli.filter);
 				Theme::updateThemes();
-				if (cli.theme.has_value() and Theme::find_theme(cli.theme.value())) {
-					Config::set("color_theme", cli.theme.value());
-				}
 				Theme::setTheme();
 				Draw::banner_gen(0, 0, false, true);
 				Global::resized = true;
