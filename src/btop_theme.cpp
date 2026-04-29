@@ -442,6 +442,14 @@ namespace Theme {
 
 	}
 
+	std::optional<string> find_theme(const string& name) {
+		for (const string& entry : themes) {
+			const fs::path p = entry;
+			if (p == name or p.stem() == name or p.filename() == name) return entry;
+		}
+		return std::nullopt;
+	}
+
 	void setTheme() {
 		const auto& theme = Config::getS("color_theme");
 		fs::path theme_path;

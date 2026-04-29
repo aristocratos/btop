@@ -20,6 +20,7 @@ tab-size = 4
 
 #include <array>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -53,6 +54,11 @@ namespace Theme {
 
 	//* Set current theme from current "color_theme" value in config
 	void setTheme();
+
+	//* Returns the canonical entry from the available themes list that matches <name>
+	//* by full path, stem, or filename. Empty optional if no match.
+	//* Must be called after updateThemes().
+	std::optional<string> find_theme(const string& name);
 
 	extern std::unordered_map<string, string> colors;
 	extern std::unordered_map<string, array<int, 3>> rgbs;

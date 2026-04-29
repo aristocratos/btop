@@ -30,6 +30,8 @@ namespace Cli {
 		std::optional<std::uint32_t> preset;
 		// Path to a custom themes directory
 		std::optional<stdfs::path> themes_dir;
+		// Initial theme name (overrides "color_theme" in config file)
+		std::optional<std::string> theme;
 		// The initial refresh rate
 		std::optional<std::uint32_t> updates;
 	};

@@ -171,6 +171,21 @@ namespace Cli {
 				cli.themes_dir = std::make_optional(themes_dir);
 				continue;
 			}
+			if (arg == "--theme") {
+				// This flag requires an argument.
+				if (++it == args.end()) {
+					error("Theme requires an argument");
+					return std::unexpected { 1 };
+				}
+
+				auto arg = *it;
+				if (arg.empty()) {
+					error("Theme name cannot be empty");
+					return std::unexpected { 1 };
+				}
+				cli.theme = std::make_optional(std::string { arg });
+				continue;
+			}
 			if (arg == "-u" || arg == "--update") {
 				// This flag requires an argument.
 				if (++it == args.end()) {
@@ -257,6 +272,7 @@ namespace Cli {
 			"  {2}-p, --preset{1} <id>       Start with a preset (0-9)\n"
 			"  {2}-t, --tty{1}               Force tty mode with ANSI graph symbols and 16 colors only\n"
 			"  {2}    --themes-dir{1} <dir>  Path to a custom themes directory\n"
+			"  {2}    --theme{1} <name>      Set initial theme by name (overrides config)\n"
 			"  {2}    --no-tty{1}            Force disable tty mode\n"
 			"  {2}-u, --update{1} <ms>       Set an initial update rate in milliseconds\n"
 			"  {2}    --default-config{1}    Print default config to standard output\n"
