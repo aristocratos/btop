@@ -1512,7 +1512,10 @@ static int optionsMenu(const string& key) {
 			}
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				int i = v_index(optList,
+					(option == "color_theme"
+						? Theme::find_theme(Config::getS(option)).value_or(Config::getS(option))
+						: Config::getS(option)));
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
