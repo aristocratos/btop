@@ -552,6 +552,10 @@ namespace Mem {
 				reinterpret_cast<struct diskstats*>(malloc(size)),
 				free
 			};
+			if (not p) {
+				Logger::error("malloc failed for diskstats");
+				return;
+			}
 			if (sysctl(mib, 2, p.get(), &size, NULL, 0) == -1) {
 				Logger::error("failed to get disk stats");
 				return;

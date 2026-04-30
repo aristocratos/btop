@@ -683,6 +683,11 @@ namespace Mem {
 			free
 		};
 
+		if (not drives) {
+			Logger::error("malloc failed for io_sysctl");
+			return;
+		}
+
 		if (sysctl(mib, 3, drives.get(), &size, NULL, 0) == -1) {
 			Logger::error("sysctl hw.iostats failed");
 		}
