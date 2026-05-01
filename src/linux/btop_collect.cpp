@@ -2273,10 +2273,14 @@ namespace Mem {
 				if (diskread.good()) {
 					vector<string> found;
 					found.reserve(last_found.size());
-					string dev, mountpoint, fstype;
+					const bool skip_ro_disks = Config::getB("skip_ro_disks");
+					string dev;
+					string mountpoint;
+					string fstype;
+					string flags;
 					while (not diskread.eof()) {
 						std::error_code ec;
-						diskread >> dev >> mountpoint >> fstype;
+						diskread >> dev >> mountpoint >> fstype >> flags;
 						diskread.ignore(SSmax, '\n');
 
 						// A mountpoint can ascii escape codes, which will not work with `statvfs`.
@@ -2289,6 +2293,16 @@ namespace Mem {
 							bool match = v_contains(filter, mountpoint);
 							if ((filter_exclude and match) or (not filter_exclude and not match))
 								continue;
+						}
+
+						// Skip composefs (read-only overlayfs alike)
+						if (fstype == "overlay" && dev == "composefs") {
+							continue;
+						}
+
+						// Skip read-only filesystems
+						if (skip_ro_disks && (flags == "ro" || flags.starts_with("ro,"))) {
+							continue;
 						}
 
 						//? Skip ZFS datasets if zfs_hide_datasets option is enabled
