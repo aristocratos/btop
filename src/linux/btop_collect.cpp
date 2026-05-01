@@ -1002,7 +1002,7 @@ namespace Cpu {
 		return {percent, watts, seconds, status};
 	}
 
-	long long get_cpuConsumptionUJoules()
+	static long long get_cpuConsumptionUJoules()
 	{
 		long long consumption = -1;
 		const auto rapl_power_usage_path = "/sys/class/powercap/intel-rapl:0/energy_uj";
@@ -1014,7 +1014,7 @@ namespace Cpu {
 		return consumption;
 	}
 
-	float get_cpuConsumptionWatts()
+	static float get_cpuConsumptionWatts()
 	{
 		static long long previous_usage = 0;
 		static long long previous_timestamp = 0;
@@ -2692,7 +2692,6 @@ namespace Net {
 			enum { IPBUFFER_MAXSIZE = INET6_ADDRSTRLEN }; // manually using the known biggest value, guarded by the above static_assert
 			char ip[IPBUFFER_MAXSIZE];
 			interfaces.clear();
-			string ipv4, ipv6;
 
 			//? Iteration over all items in getifaddrs() list
 			for (auto* ifa = if_addrs.get(); ifa != nullptr; ifa = ifa->ifa_next) {
