@@ -2879,7 +2879,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1, toggle_children = -1;
+	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes{};
 	atomic<int> numpids{};
 	int filter_found{};
@@ -3337,7 +3337,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
@@ -3354,6 +3354,13 @@ namespace Proc {
 				}
 				collapse = expand = -1;
 			}
+
+			if (collapse_all != -1) {
+				toggle_tree_collapse(current_procs);
+				collapse_all = -1;
+				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+			}
+
 			if (should_filter or not filter.empty()) filter_found = 0;
 
 			vector<tree_proc> tree_procs;
