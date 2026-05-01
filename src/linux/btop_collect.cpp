@@ -1054,10 +1054,10 @@ namespace Cpu {
         auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
 
         if (buf.empty()) {
-            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+            std::vector<std::int32_t> _v; for(int _i=0; _i<(int)Shared::coreCount; ++_i) _v.push_back(_i); return _v;
         }
 
-        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
+        auto _rv = buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
                    auto view = std::string_view { range };
                    auto dash = view.find('-');
 
@@ -1070,8 +1070,7 @@ namespace Cpu {
                    auto start = to_int(view.substr(0, dash));
                    auto end = to_int(view.substr(dash + 1));
                    return std::views::iota(start, end + 1);
-               }) |
-               std::views::join | std::ranges::to<std::vector<std::int32_t>>();
+               }) | std::views::join; std::vector<std::int32_t> _v; for(auto _i : _rv) _v.push_back(_i); return _v;
     }
 
 	auto collect(bool no_update) -> cpu_info& {
@@ -1470,11 +1469,27 @@ namespace Gpu {
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
 					} else {
-						gpus_slice[i].mem_total = memory.total;
+						// Detect coherent UMA (e.g. GB10 Grace Blackwell):
+						// nvmlDeviceGetMemoryInfo returns NVML_SUCCESS with total == system MemTotal (~121GB).
+						// If total >= 90% of system RAM, treat as UMA and use MemAvailable instead.
+						unsigned long long sys_mem_total = 0, sys_mem_available = 0;
+						{
+							std::ifstream mf("/proc/meminfo");
+							std::string lbl; unsigned long long val;
+							while (mf >> lbl >> val) {
+								if (lbl == "MemTotal:") sys_mem_total = val * 1024;
+								else if (lbl == "MemAvailable:") sys_mem_available = val * 1024;
+								if (sys_mem_total > 0 && sys_mem_available > 0) break;
+							}
+						}
+						if (sys_mem_total > 0 && memory.total >= sys_mem_total * 9 / 10)
+							gpus_slice[i].mem_total = sys_mem_available;
+						else
+							gpus_slice[i].mem_total = memory.total;
 						gpus_slice[i].mem_used = memory.used;
 						//gpu.mem_free = memory.free;
 
-						auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
+						auto used_percent = (long long)round((double)gpus_slice[i].mem_used * 100.0 / (double)gpus_slice[i].mem_total);
 						gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(used_percent);
 					}
 				}

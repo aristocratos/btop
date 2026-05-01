@@ -8,5 +8,5 @@
 #include <vector>
 
 auto main(int argc, const char* argv[]) -> int {
-	return btop_main(std::views::counted(std::next(argv), argc - 1) | std::ranges::to<std::vector<std::string_view>>());
+	auto _args = std::views::counted(std::next(argv), argc - 1); return btop_main(std::vector<std::string_view>(_args.begin(), _args.end()));
 }
