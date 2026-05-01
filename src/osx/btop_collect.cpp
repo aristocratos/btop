@@ -373,8 +373,13 @@ namespace Gpu {
 				char buf[200];
 				CFStringGetCString(name, buf, 200, kCFStringEncodingASCII);
 				string n(buf);
-				//? "GPU MTR Temp Sensor" is the standard Apple Silicon GPU temp sensor name
-				if (n.find("GPU") != string::npos) {
+				//? Legacy Apple Silicon uses "GPU MTR Temp Sensor*" names.
+				//? On newer Apple Silicon we can see PMU TP*g sensors for GPU temperatures.
+				bool is_gpu_sensor = n.find("GPU") != string::npos;
+				if (not is_gpu_sensor and n.rfind("PMU TP", 0) == 0 and not n.empty() and n.back() == 'g') {
+					is_gpu_sensor = true;
+				}
+				if (is_gpu_sensor) {
 					CFRef<IOHIDEventRef> event(IOHIDServiceClientCopyEvent(sc, kIOHIDEventTypeTemperature, 0, 0));
 					if (event.get()) {
 						double temp = IOHIDEventGetFloatValue(event, kIOHIDEventTypeTemperature << 16);
@@ -771,10 +776,11 @@ namespace Cpu {
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 			ThermalSensors sensors;
-			if (sensors.getSensors() > 0) {
+			std::vector<long long> core_temps;
+			if (sensors.getSensors(core_temps) > 0) {
 				Logger::debug("M1 sensors found");
 				got_sensors = true;
-				cpu_temp_only = true;
+				cpu_temp_only = core_temps.empty();
 				macM1 = true;
 			} else {
 #endif
@@ -817,9 +823,23 @@ namespace Cpu {
 			if (macM1) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
-				current_cpu.temp.at(0).push_back(sensors.getSensors());
+				std::vector<long long> core_temps;
+				current_cpu.temp.at(0).push_back(sensors.getSensors(core_temps));
 				if (current_cpu.temp.at(0).size() > 20)
 					current_cpu.temp.at(0).pop_front();
+				cpu_temp_only = core_temps.empty();
+
+				if (Config::getB("show_coretemp") and not core_temps.empty()) {
+					for (int core = 0; core < Shared::coreCount; core++) {
+						size_t sensor_index = static_cast<size_t>(core) * core_temps.size() / Shared::coreCount;
+						long long temp = core_temps.at(sensor_index);
+						if (cmp_less(core + 1, current_cpu.temp.size())) {
+							current_cpu.temp.at(core + 1).push_back(temp);
+							if (current_cpu.temp.at(core + 1).size() > 20)
+								current_cpu.temp.at(core + 1).pop_front();
+						}
+					}
+				}
 #endif
 			} else {
 				SMCConnection smcCon;

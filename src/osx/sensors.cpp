@@ -24,7 +24,10 @@ tab-size = 4
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 
 #include <string>
+#include <algorithm>
+#include <cctype>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 extern "C" {
@@ -74,14 +77,42 @@ double getValue(IOHIDServiceClientRef sc) {
 
 }  // extern C
 
+namespace {
+	int parse_sensor_index(const std::string& name, const std::string& prefix) {
+		if (name.rfind(prefix, 0) != 0) return -1;
+		size_t pos = prefix.size();
+		if (pos >= name.size() or not std::isdigit(static_cast<unsigned char>(name.at(pos)))) return -1;
+		int value = 0;
+		while (pos < name.size() and std::isdigit(static_cast<unsigned char>(name.at(pos)))) {
+			value = (value * 10) + (name.at(pos) - '0');
+			pos++;
+		}
+		return value;
+	}
+
+	long long avg_to_long(const std::vector<double>& temps) {
+		if (temps.empty()) return 0ll;
+		return round(std::accumulate(temps.begin(), temps.end(), 0ll) / temps.size());
+	}
+}
+
 long long Cpu::ThermalSensors::getSensors() {
+	std::vector<long long> unused_core_temps;
+	return getSensors(unused_core_temps);
+}
+
+long long Cpu::ThermalSensors::getSensors(std::vector<long long>& core_temps) {
 	CFDictionaryRef thermalSensors = matching(0xff00, 5);  // 65280_10 = FF00_16
-														   // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
-														   // can be checked by ioreg -lfx
+	                                                       // thermalSensors's PrimaryUsagePage should be 0xff00 for M1 chip, instead of 0xff05
+	                                                       // can be checked by ioreg -lfx
 	IOHIDEventSystemClientRef system = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
 	IOHIDEventSystemClientSetMatching(system, thermalSensors);
 	CFArrayRef matchingsrvs = IOHIDEventSystemClientCopyServices(system);
-	std::vector<double> temps;
+	std::vector<double> acc_temps;
+	std::vector<double> tdie_temps;
+	std::vector<double> soc_temps;
+	std::unordered_map<std::string, std::vector<double> > acc_named_temps;
+	std::unordered_map<int, std::vector<double> > tdie_indexed_temps;
 	if (matchingsrvs) {
 		long count = CFArrayGetCount(matchingsrvs);
 		for (int i = 0; i < count; i++) {
@@ -97,8 +128,18 @@ long long Cpu::ThermalSensors::getSensors() {
 					// there is also PMU tdev1-8 but it has negative values??
 					// there is also eACC for efficiency package but it only has 2 entries
 					// and pACC for performance but it has 7 entries (2 - 9) WTF
-					if (n.starts_with("eACC") or n.starts_with("pACC")) {
-						temps.push_back(getValue(sc));
+					double temp = getValue(sc);
+					if (temp > 0 and temp < 150) {
+						if (n.rfind("eACC", 0) == 0 or n.rfind("pACC", 0) == 0) {
+							acc_temps.push_back(temp);
+							acc_named_temps[n].push_back(temp);
+						} else if (n.rfind("PMU tdie", 0) == 0) {
+							tdie_temps.push_back(temp);
+							int index = parse_sensor_index(n, "PMU tdie");
+							if (index >= 0) tdie_indexed_temps[index].push_back(temp);
+						} else if (n.rfind("SOC MTR Temp Sensor", 0) == 0) {
+							soc_temps.push_back(temp);
+						}
 					}
 					CFRelease(name);
 				}
@@ -108,7 +149,32 @@ long long Cpu::ThermalSensors::getSensors() {
 	}
 	CFRelease(system);
 	CFRelease(thermalSensors);
-	if (temps.empty()) return 0ll;
-	return round(std::accumulate(temps.begin(), temps.end(), 0ll) / temps.size());
+	core_temps.clear();
+	if (not tdie_indexed_temps.empty()) {
+		std::vector<int> indexes;
+		indexes.reserve(tdie_indexed_temps.size());
+		for (const auto& indexed_temp : tdie_indexed_temps) {
+			indexes.push_back(indexed_temp.first);
+		}
+		std::sort(indexes.begin(), indexes.end());
+		for (const auto& index : indexes) {
+			auto avg = avg_to_long(tdie_indexed_temps.at(index));
+			if (avg > 0) core_temps.push_back(avg);
+		}
+	} else if (not acc_named_temps.empty()) {
+		std::vector<std::string> names;
+		names.reserve(acc_named_temps.size());
+		for (const auto& named_temp : acc_named_temps) {
+			names.push_back(named_temp.first);
+		}
+		std::sort(names.begin(), names.end());
+		for (const auto& name : names) {
+			auto avg = avg_to_long(acc_named_temps.at(name));
+			if (avg > 0) core_temps.push_back(avg);
+		}
+	}
+
+	const auto &temps = not acc_temps.empty() ? acc_temps : (not tdie_temps.empty() ? tdie_temps : soc_temps);
+	return avg_to_long(temps);
 }
 #endif
