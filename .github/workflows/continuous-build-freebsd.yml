@@ -42,7 +42,7 @@ jobs:
       - name: Compile
         uses: vmactions/freebsd-vm@v1
         with:
-          release: '14.3'
+          release: '15.0'
           usesh: true
           prepare: |
             pkg install -y gmake gcc15 coreutils git lowdown
@@ -62,6 +62,6 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: btop-x86_64-freebsd-14-${{ matrix.compiler }}
+          name: btop-x86_64-freebsd-15-${{ matrix.compiler }}
           path: 'bin/*'
           if-no-files-found: error

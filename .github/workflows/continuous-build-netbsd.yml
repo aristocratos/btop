@@ -50,14 +50,14 @@ jobs:
             pkgin -y install gmake gcc14 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=/usr/pkg/gcc14/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
+            gmake CXX=/usr/pkg/gcc14/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc14/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
 
       - uses: actions/upload-artifact@v7
         with:
-          name: btop-x86_64-netbsd-9.3
+          name: btop-x86_64-netbsd-10.1
           path: 'bin/*'
           if-no-files-found: error
 
