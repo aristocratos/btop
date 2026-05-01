@@ -468,6 +468,8 @@ namespace Draw {
 				 bool invert, bool no_zero, long long max_value, long long offset)
 	: width(width), height(height), color_gradient(color_gradient),
 	  invert(invert), no_zero(no_zero), offset(offset) {
+		//? Non-positive widths would underflow _create()'s unsigned data_offset arithmetic
+		if (width <= 0) return;
 		if (Config::getB("tty_mode") or symbol == "tty") this->symbol = "tty";
 		else if (symbol != "default") this->symbol = symbol;
 		else this->symbol = Config::getS("graph_symbol");
@@ -492,6 +494,7 @@ namespace Draw {
 	}
 
 	string& Graph::operator()(const deque<long long>& data, bool data_same) {
+		if (width <= 0) return out;
 		if (data_same) return out;
 
 		//? Make room for new characters on graph
@@ -624,7 +627,13 @@ namespace Cpu {
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
 						const int gpu_draw_count = gpu_always ? Gpu::count : Gpu::count - Gpu::shown;
-						graph_width = gpu_draw_count <= 0 ? graph_default_width : graph_default_width/gpu_draw_count - gpu_draw_count + 1 + graph_default_width%gpu_draw_count;
+						//? Divide the graph area evenly between <gpu_draw_count> sub-graphs and their dividers
+						if (gpu_draw_count > 0) {
+							const int avail = graph_default_width - (gpu_draw_count - 1);
+							graph_width = avail / gpu_draw_count;
+						} else {
+							graph_width = graph_default_width;
+						}
 						for (size_t i = 0; i < gpus.size(); i++) {
 							if (gpu_auto and v_contains(Gpu::shown_panels, i))
 								continue;
@@ -632,15 +641,7 @@ namespace Cpu {
 
 							//? GPU graphs
 							if (gpu.supported_functions.gpu_utilization) {
-								if (i + 1 < gpus.size()) {
-									graph = Draw::Graph{graph_width, graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true};
-								}
-								else {
-									graph = Draw::Graph{
-										graph_width + graph_default_width%graph_width - (int)gpus.size() + 1,
-										graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true
-									};
-								}
+								graph = Draw::Graph{graph_width, graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true};
 							}
 						}
 					} else {
