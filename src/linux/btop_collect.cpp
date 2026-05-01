@@ -737,12 +737,15 @@ namespace Cpu {
 		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
+		const int num_sensors = core_sensors.size();
+
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
 			int cpu{};
 			int core{};
-			int n{};
+			int max_core{};
+			std::unordered_map<int, int> cpu_to_core;
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -751,30 +754,30 @@ namespace Cpu {
 				else if (instr.starts_with("core")) {
 					cpuinfo.ignore(SSmax, ':');
 					cpuinfo >> core;
-					if (std::cmp_greater_equal(core, core_sensors.size())) {
-						if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-						core_map[cpu] = n++;
-					}
-					else
-						core_map[cpu] = core;
+					cpu_to_core[cpu] = core;
+					max_core = std::max(max_core, core);
 				}
 				cpuinfo.ignore(SSmax, '\n');
 			}
+			if (not cpu_to_core.empty())
+				//? Divide core ID space evenly across sensors (handles AMD multi-CCD, e.g. 5950x: IDs 0-7 -> Tccd1, 8-15 -> Tccd2)
+				for (const auto& [cpu_id, core_id] : cpu_to_core) {
+					core_map[cpu_id] = core_id * num_sensors / (max_core + 1);
+				}
 		}
 
 		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
-				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
-					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-					core_map[Shared::coreCount / 2 + i] = n++;
+				//? SMT siblings mirror their first half of cores.
+				for (int i = 0; i < Shared::coreCount / 2; i++) {
+					core_map[Shared::coreCount / 2 + i] = core_map.count(i) ? core_map.at(i) : (i % num_sensors);
 				}
 			}
 			else {
 				core_map.clear();
-				for (int i = 0, n = 0; i < Shared::coreCount; i++) {
-					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-					core_map[i] = n++;
+				for (int i = 0; i < Shared::coreCount; i++) {
+					core_map[i] = (i * num_sensors) / Shared::coreCount;
 				}
 			}
 		}
@@ -788,7 +791,7 @@ namespace Cpu {
 					if (vals.size() != 2) continue;
 					int change_id = std::stoi(vals.at(0));
 					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+					if (not core_map.contains(change_id) or cmp_greater(new_id, num_sensors)) continue;
 					core_map.at(change_id) = new_id;
 				}
 			}
