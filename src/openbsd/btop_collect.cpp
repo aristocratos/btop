@@ -125,15 +125,13 @@ namespace Shared {
 
 	void init() {
 		//? Shared global variables init
-		int mib[2];
-		mib[0] = CTL_HW;
-		mib[1] = HW_NCPUONLINE;
-		int ncpu;
-		size_t len = sizeof(ncpu);
-		if (sysctl(mib, 2, &ncpu, &len, nullptr, 0) == -1) {
+		int mib[] = {CTL_HW, HW_NCPUONLINE};
+		int ncpu_online;
+		size_t len = sizeof(ncpu_online);
+		if (sysctl(mib, 2, &ncpu_online, &len, nullptr, 0) == -1) {
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
 		} else {
-			coreCount = ncpu;
+			coreCount = ncpu_online;
 		}
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
@@ -399,6 +397,21 @@ namespace Cpu {
 			int mib[] = {CTL_HW, HW_NCPU};
 			size_t len = sizeof(ncpu_total);
 			sysctl(mib, 2, &ncpu_total, &len, nullptr, 0);
+		}
+
+		//? Re-query online CPU count in case it changed at runtime (e.g. hw.smt toggled).
+		{
+			int mib[] = {CTL_HW, HW_NCPUONLINE};
+			int ncpu_online = Shared::coreCount;
+			size_t len = sizeof(ncpu_online);
+			if (sysctl(mib, 2, &ncpu_online, &len, nullptr, 0) != -1 and ncpu_online != Shared::coreCount) {
+				Shared::coreCount = ncpu_online;
+				core_old_totals.resize(Shared::coreCount, 0);
+				core_old_idles.resize(Shared::coreCount, 0);
+				cpu.core_percent.resize(Shared::coreCount);
+				cpu.temp.resize(Shared::coreCount + 1);
+				Runner::coreNum_reset = true;
+			}
 		}
 
 		auto cp_time = std::unique_ptr<struct cpustats[]>{
