@@ -630,7 +630,7 @@ namespace Mem {
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
-			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)}; 
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)};
    			struct kvm_swap swap[16];
    			int nswap = kvm_getswapinfo(kd.get(), swap, 16, 0);
 			int totalSwap = 0, usedSwap = 0;
@@ -1045,7 +1045,7 @@ namespace Proc {
 		struct timeval currentTime;
 		gettimeofday(&currentTime, nullptr);
 		// only interested in second granularity, so ignoring tc_usec
-		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); 
+		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s);
 		else detailed.elapsed = sec_to_dhms(detailed.entry.death_time);
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
@@ -1284,7 +1284,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
@@ -1303,23 +1303,7 @@ namespace Proc {
 			}
 
 			if (collapse_all != -1) {
-				//? Build sets of all pids and parent pids to identify root processes
-				std::unordered_set<size_t> pid_set, parent_pids;
-				for (const auto& p : current_procs) {
-					pid_set.insert(p.pid);
-					parent_pids.insert(static_cast<size_t>(p.ppid));
-				}
-				//? If any non-root parent is expanded, collapse; otherwise expand
-				const bool do_collapse = rng::any_of(current_procs, [&parent_pids, &pid_set](const proc_info& p) {
-					return parent_pids.contains(p.pid)
-						and pid_set.contains(static_cast<size_t>(p.ppid))
-						and not p.collapsed;
-				});
-				//? Root processes (parent not in tracked list) are never touched
-				for (auto& p : current_procs) {
-					if (not pid_set.contains(static_cast<size_t>(p.ppid))) continue;
-					p.collapsed = do_collapse;
-				}
+				toggle_tree_collapse(current_procs);
 				collapse_all = -1;
 				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
 			}

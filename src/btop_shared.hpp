@@ -464,6 +464,9 @@ namespace Proc {
 
 	//* Build prefixes for tree view
 	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
+
+	//* Toggle collapse/expand of all tree entries
+	void toggle_tree_collapse(std::vector<proc_info>& current_procs);
 }
 
 /// Detect container engine.
