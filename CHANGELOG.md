@@ -1,3 +1,40 @@
+## v1.4.7
+
+References | Description | Author(s)
+--- | --- | ---
+#1326 | Feat: Process following and following mode improvements | @vandabbin
+#1541 | feat: Add Apple Silicon GPU support via IOReport API | @gneitzke
+#1602 | feat: add Kanagawa Dragon theme | @Marcus441
+#1443 | Add twilight theme | @hastinbe
+#1433 | Add Swap upload/download speed graph option, Fix network graphs overlap | @TheSovietPancakes
+#1522 | Add Flexoki dark and light themes | @nsyout
+#1493 | Menu option to disable presets | @vandabbin
+#1492 | Create orange.theme | @neocerambyx
+#1564 | Add E hotkey to collapse/expand all processes in tree mode | @sardonyx001
+#1601 | fix: restore Apple Silicon temp reporting on M2 Pro | @RockBacon9922
+#1427 | fix regression from a switch to kIOMainPortDefault | @barracuda156
+#1429 | Fix hide and info buttons | @vandabbin
+#1452 | Fix mouse mapping for process kill buttons with vim keys enabled | @vandabbin
+#1454 | Fix kill buttons | @vandabbin
+#1456 | following mode fixes | @vandabbin
+#1458 | Fixes and Improvements for Pause and Follow modes | @vandabbin
+#1409 | fix: remove unused asprintf implementation function | @deckstose
+#1445 | fix: remove busy waiting when checking runner thread state | @deckstose
+#1491 | Update clock with preset change or show/hide box | @vandabbin
+#1521 | Tweaked RX/TX collection and drawing, Fix -Wparentheses warning | @TheSovietPancakes
+#1518 | fix: mem bottom border when net is not shown | @vandabbin
+#1515 | fix: force_tty menu option sets TTY mode on start | @vandabbin
+#1539 | fix: accumulate pwr_usage into pwr_total instead of mem_total in Gpu::collect() | @alephpiece
+#1622 | fix: read GPU/VRAM clocks when ROCm SMI reports version 1.x | @theRealWardo
+#1598 | fix: render a non-ascii chars in proc list | @deniskhud
+#1619 | fix CPU mib queries for OpenBSD, only display online CPUs in output | @busterb
+#1583 | fix: correctly map amd zen cpu core temps | @sola-contrib
+#1628 | fix: restore Intel Mac CPU temperature fallback | @seanniu93
+#1560 | fix: Use SVG features compatible with Qt SVG Tiny 1.1 | @ratijas
+ea977a0 | Update widechar detection and fix replace_ascii_control() removing wide characters | @aristocratos
+7657384 | Fix cpu watt overflow in cpu box + division by zero fix for cpu.temp_max | @aristocratos
+b36357b | Fixed missing CPU package temperature color (numeric value) | @aristocratos
+
 ## v1.4.6
 
 References | Description | Author(s)

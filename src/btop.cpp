@@ -94,7 +94,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.6";
+	const string Version = "1.4.7";
 
 	int coreCount;
 	string overlay;
@@ -468,7 +468,7 @@ namespace Runner {
 		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
-		// TODO: On first glance it looks redudant with `Runner::active`. 
+		// TODO: On first glance it looks redudant with `Runner::active`.
 		std::lock_guard lock {mtx};
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
