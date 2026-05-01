@@ -582,9 +582,7 @@ namespace Cpu {
 		if (safeVal(cpu.cpu_percent, "total"s).empty()
 			or safeVal(cpu.core_percent, 0).empty()
 			or (show_temps and safeVal(cpu.temp, 0).empty())) return "";
-		if (safeVal(cpu.cpu_percent, "total"s).empty()
-			or safeVal(cpu.core_percent, 0).empty()
-			or (show_temps and safeVal(cpu.temp, 0).empty())) return "";
+
 		string out;
 		out.reserve(width * height);
 
