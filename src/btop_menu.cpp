@@ -1512,7 +1512,10 @@ static int optionsMenu(const string& key) {
 			}
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				int i = v_index(optList,
+					(option == "color_theme"
+						? Theme::find_theme(Config::getS(option)).value_or(Config::getS(option))
+						: Config::getS(option)));
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
@@ -1615,7 +1618,10 @@ static int optionsMenu(const string& key) {
 				out += Mv::to(cy++, x + 1) + (c-1 == selected ? Theme::c("selected_bg") + Theme::c("selected_fg") : Theme::c("title"))
 					+ Fx::b + cjust(capitalize(s_replace(option, "_", " "))
 						+ (c-1 == selected and selPred.test(isBrowsable)
-							? ' ' + to_string(v_index(optionsList.at(option).get(), (option == "color_theme" ? Config::getS("color_theme") : value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
+							? ' ' + to_string(v_index(optionsList.at(option).get(),
+									(option == "color_theme"
+										? Theme::find_theme(Config::getS("color_theme")).value_or(Config::getS("color_theme"))
+										: value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
 							: ""), 29);
 				out	+= Mv::to(cy++, x + 1) + (c-1 == selected ? "" : Theme::c("main_fg")) + Fx::ub + "  "
 					+ (c-1 == selected and editing ? cjust(editor(24), 34, true) : cjust(value, 25, true)) + "  ";

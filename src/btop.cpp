@@ -1058,8 +1058,21 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		Config::set("shown_boxes", "cpu mem net proc"s);
 	}
 
-	//? Update list of available themes and generate the selected theme
+	//? Update list of available themes
 	Theme::updateThemes();
+
+	//? Apply theme override from --theme CLI flag if provided.
+	//? On miss we deliberately do NOT touch color_theme so the value from the
+	//? config file is preserved (and not later persisted to disk as "Default").
+	if (cli.theme.has_value()) {
+		if (Theme::find_theme(cli.theme.value())) {
+			Config::set("color_theme", cli.theme.value());
+		} else {
+			Logger::warning("Theme '{}' from --theme flag not found, keeping color_theme from config", cli.theme.value());
+		}
+	}
+
+	//? Generate the selected theme
 	Theme::setTheme();
 
 	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
