@@ -522,6 +522,7 @@ namespace Cpu {
 	int b_columns, b_column_size;
 	int b_x, b_y, b_width, b_height;
 	float max_observed_pwr = 1.0f;
+	float last_valid_cpu_watts = 0.0f;
 
 	int graph_up_height, graph_low_height;
 	int graph_up_width, graph_low_width;
@@ -851,11 +852,16 @@ namespace Cpu {
 		}
 
 		if (show_watts) {
-			string cwatts = fmt::format(" {:>4.{}f}", cpu.usage_watts, cpu.usage_watts < 10.0f ? 2 : cpu.usage_watts < 100.0f ? 1 : 0);
-			string cwatts_post = "W";
-
-			max_observed_pwr = max(max_observed_pwr, cpu.usage_watts);
-			out += Theme::g("cached").at(clamp(cpu.usage_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post; 
+			// Check for good cpu watts reading. It is rare but there has been at least one system
+			// that has given a bad reading for one collect cycle every once in while.
+			const auto watts_error = cpu.usage_watts < 0.0f or cpu.usage_watts > 9'999.0f;
+			if (not watts_error) last_valid_cpu_watts = cpu.usage_watts;
+			max_observed_pwr = max(max_observed_pwr, last_valid_cpu_watts);
+			fmt::format_to(std::back_inserter(out), " {watts_color}{cwatts:>4.{precision}f}{main_fg}W",
+				"watts_color"_a = Theme::g("cached").at(clamp(last_valid_cpu_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)),
+				"cwatts"_a = last_valid_cpu_watts,
+				"precision"_a = last_valid_cpu_watts < 9.995f ? 2 : last_valid_cpu_watts < 99.95f ? 1 : 0,
+				"main_fg"_a = Theme::c("main_fg"));
 		}
 
 			out += Theme::c("div_line") + Symbols::v_line;
@@ -977,8 +983,11 @@ namespace Cpu {
 					out += rjust(to_string(temp), 3) + Theme::c("main_fg") + unit;
 				}
 				if (gpus[i].supported_functions.pwr_usage) {
-					out += ' ' + Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
-						+ fmt::format("{:>4.{}f}", gpus[i].pwr_usage / 1000.0, gpus[i].pwr_usage < 10'000 ? 2 : gpus[i].pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
+					fmt::format_to(std::back_inserter(out), " {watts_color}{gpu_watts:>4.{precision}f}{main_fg}W",
+						"watts_color"_a = Theme::g("cached").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll)),
+						"gpu_watts"_a = gpus[i].pwr_usage / 1000.0,
+						"precision"_a = gpus[i].pwr_usage < 9'995 ? 2 : gpus[i].pwr_usage < 99'950 ? 1 : 0,
+						"main_fg"_a = Theme::c("main_fg"));
 				}
 
 				if (cy > b_height - 1) break;
@@ -1104,9 +1113,12 @@ namespace Gpu {
 
 		//? Power usage meter, power state
 		if (gpu.supported_functions.pwr_usage) {
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back())
-				+ Theme::g("cached").at(clamp(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
-				+ fmt::format("{:>5.{}f}", gpu.pwr_usage / 1000.0, gpu.pwr_usage < 10'000 ? 2 : gpu.pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
+			fmt::format_to(std::back_inserter(out), "{move}{main_fg}{bold}PWR {pwr_meter}{watts_color}{gpu_watts:>5.{precision}f}{main_fg}W",
+				"move"_a = Mv::to(b_y + rows_used, b_x + 1), "bold"_a = Fx::b, "main_fg"_a = Theme::c("main_fg"),
+				"pwr_meter"_a = pwr_meter(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back()),
+				"watts_color"_a = Theme::g("cached").at(clamp(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll)),
+				"gpu_watts"_a = gpu.pwr_usage / 1000.0,
+				"precision"_a = gpu.pwr_usage < 9'995 ? 2 : gpu.pwr_usage < 99'950 ? 1 : 0);
 			if (gpu.supported_functions.pwr_state and gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
 				out += std::string(" P-state: ") + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(clamp(gpu.pwr_state, 0ll, 100ll)) + to_string(gpu.pwr_state);
 			rows_used++;
