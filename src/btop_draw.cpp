@@ -851,7 +851,7 @@ namespace Cpu {
 				if ((b_column_size > 1 or b_columns > 1) and temp_graphs.size() >= 1ll)
 					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + temp_color
 						+ temp_graphs.at(0)(safeVal(cpu.temp, 0), data_same or redraw);
-				out += rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+				out += temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
 			}
 
 			if (show_watts) {
