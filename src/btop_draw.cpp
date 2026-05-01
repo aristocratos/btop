@@ -1586,7 +1586,6 @@ namespace Proc {
 	int user_size, thread_size, prog_size, cmd_size, tree_size;
 	int dgraph_x, dgraph_width, d_width, d_x, d_y;
 	bool previous_proc_banner_state = false;
-	atomic<bool> resized (false);
 
 	string box;
 
@@ -2211,7 +2210,7 @@ namespace Proc {
 }
 
 namespace Draw {
-	void calcSizes() {
+	void calcSizes(const bool clear_proc_graphs) {
 		atomic_wait(Runner::active);
 		Config::unlock();
 		auto boxes = Config::getS("shown_boxes");
@@ -2228,7 +2227,7 @@ namespace Draw {
 		Global::overlay.clear();
 		Runner::pause_output = false;
 		Runner::redraw = true;
-		if (not (Proc::resized or Global::resized)) {
+		if (clear_proc_graphs) {
 			Proc::p_counters.clear();
 			Proc::p_graphs.clear();
 		}
@@ -2400,7 +2399,8 @@ namespace Draw {
 			auto swap_disk = Config::getB("swap_disk");
 			auto mem_graphs = Config::getB("mem_graphs");
 
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			const int new_width = std::round(static_cast<double>(Term::width) * (100 - Config::getI("proc_box_width_percent")) / 100);
+			width = Proc::shown ? std::clamp(new_width, min_width, Term::width - Proc::min_width) : static_cast<int>(Term::width);
 		#ifdef GPU_SUPPORT
 			height = floor(static_cast<double>(Term::height) * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
 		#else
@@ -2464,7 +2464,8 @@ namespace Draw {
 		//* Calculate and draw net box outlines
 		if (Net::shown) {
 			using namespace Net;
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			const int new_width = std::round(static_cast<double>(Term::width) * (100 - Config::getI("proc_box_width_percent")) / 100);
+			width = Proc::shown ? std::clamp(new_width, min_width, Term::width - Proc::min_width) : static_cast<int>(Term::width);
 		#ifdef GPU_SUPPORT
 			height = Term::height - Cpu::height - Gpu::total_height - Mem::height;
 		#else
