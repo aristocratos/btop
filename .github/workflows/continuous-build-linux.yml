@@ -64,8 +64,8 @@ jobs:
 
       - name: Install cross toolchain
         run: |
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz.sha256
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${{ matrix.toolchain }}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${{ matrix.toolchain }}.tar.xz.sha256
           echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
           mkdir -p /opt/x-tools/
           tar -xf /tmp/${{ matrix.toolchain }}.tar.xz -C /opt/x-tools
