@@ -1,0 +1,11 @@
+[project]
+name = "website"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "mike",
+    "zensical>=0.0.39",
+]
+
+[tool.uv.sources]
+mike = { git = "https://github.com/squidfunk/mike.git" }
