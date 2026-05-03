@@ -1691,6 +1691,7 @@ namespace Proc {
 		int followed = Config::getI("proc_followed");
 		bool should_selection_return_to_followed = Config::getB("should_selection_return_to_followed");
 		auto proc_banner_shown = pause_proc_list or follow_process;
+		bool show_user_and_command = Config::getB("show_user_and_command");
 		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
@@ -2083,7 +2084,7 @@ namespace Proc {
 				out += Mv::to(y+2+lc, x+1)
 					+ g_color + rjust(to_string(p.pid), 8) + ' '
 					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
-					+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
+					+ (cmd_size > 0 ? g_color + ljust((show_user_and_command ? san_cmd : "*****"), cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
 			}
 			//? Tree view line
 			else {
@@ -2132,7 +2133,7 @@ namespace Proc {
 			}();
 
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
-				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
+				+ g_color + ljust((show_user_and_command ? (cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user) : "***"), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
