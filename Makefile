@@ -43,7 +43,7 @@ ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
 		INTEL_GPU_SUPPORT := true
 	endif
 endif
-ifeq ($(PLATFORM_LC),macos)
+ifeq ($(PLATFORM_LC)$(ARCH),macosarm64)
 	GPU_SUPPORT := true
 endif
 ifneq ($(GPU_SUPPORT),true)
@@ -118,8 +118,11 @@ else ifeq ($(PLATFORM_LC),$(filter $(PLATFORM_LC),freebsd midnightbsd))
 else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
-	override ADDFLAGS += -framework IOKit -framework CoreFoundation -lIOReport -Wno-format-truncation
 	SU_GROUP := wheel
+	override ADDFLAGS += -Wno-format-truncation
+	ifeq ($(ARCH),arm64)
+	  override ADDFLAGS += -framework IOKit -framework CoreFoundation -lIOReport
+	endif
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
