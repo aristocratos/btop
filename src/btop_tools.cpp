@@ -542,22 +542,22 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		atom.wait(old, std::memory_order_relaxed);
+		atom.wait(old, std::memory_order_acquire);
 	}
 
 	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
 		const uint64_t start_time = time_ms();
-		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
+		while (atom.load(std::memory_order_acquire) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
-		else this->atom.store(true);
+		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true, std::memory_order_acquire)) this->not_true = false;
+		else this->atom.store(true, std::memory_order_release);
 		this->atom.notify_all();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
-		this->atom.store(false);
+		this->atom.store(false, std::memory_order_release);
 		this->atom.notify_all();
 	}
 
