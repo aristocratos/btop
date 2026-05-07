@@ -47,6 +47,11 @@ tab-size = 4
 #include <unistd.h>
 #include <stdexcept>
 #include <utility>
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#include "sensors.hpp"
+#endif
+#include "smc.hpp"
 #endif
 
 #include <cmath>
@@ -64,13 +69,6 @@ tab-size = 4
 #include "../btop_log.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
-
-#ifdef __APPLE__
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
-#include "sensors.hpp"
-#endif
-#include "smc.hpp"
-#endif
 
 #if defined(GPU_SUPPORT) && defined(__APPLE__) && defined(__arm64__)
 #include <dlfcn.h>
