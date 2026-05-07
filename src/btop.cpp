@@ -735,10 +735,17 @@ namespace Runner {
 
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			const bool term_sync = Config::getB("terminal_sync");
+			// Disable cancellation so pthread_cancel() cannot interrupt between
+			// sync_start and sync_end — an incomplete synchronized frame leaves
+			// the terminal holding a stale
+			// image indefinitely (observed on macOS Terminal.app).
+			int old_cancel_state = PTHREAD_CANCEL_ENABLE;
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancel_state);
 			cout << (term_sync ? Term::sync_start : "") << (conf.overlay.empty()
 					? output
 					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
 				<< (term_sync ? Term::sync_end : "") << flush;
+			pthread_setcancelstate(old_cancel_state, nullptr);
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		return {};
