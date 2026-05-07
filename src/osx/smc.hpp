@@ -18,7 +18,7 @@ tab-size = 4
 
 #pragma once
 
-#ifdef __APPLE_
+#ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/ps/IOPSKeys.h>
