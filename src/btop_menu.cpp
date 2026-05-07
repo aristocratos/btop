@@ -1373,6 +1373,7 @@ static int optionsMenu(const string& key) {
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
+						atomic_wait(Runner::active);
 						Config::current_preset.reset();
 					}
 					else if (option == "clock_format") {
@@ -1530,8 +1531,10 @@ static int optionsMenu(const string& key) {
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
-				else if (option == "disable_presets" and optList.at(i) != "Off")
+				else if (option == "disable_presets" and optList.at(i) != "Off") {
+					atomic_wait(Runner::active);
 					Config::current_preset.reset();
+				}
 			}
 			else
 				retval = NoChange;
