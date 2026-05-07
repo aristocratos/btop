@@ -292,14 +292,9 @@ static void _crash_handler(const int sig) {
 static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
-			if (Runner::active) {
-				Global::should_quit = true;
-				Runner::stopping = true;
-				Input::interrupt();
-			}
-			else {
-				clean_quit(0);
-			}
+			Global::should_quit = true;
+			if (Runner::active) Runner::stopping = true;
+			Input::interrupt();
 			break;
 		case SIGTSTP:
 			if (Runner::active) {
@@ -365,7 +360,7 @@ namespace Runner {
 	atomic<bool> coreNum_reset (false);
 
 	static inline auto set_active(bool value) noexcept {
-		active.store(value, std::memory_order_relaxed);
+		active.store(value, std::memory_order_release);
 		active.notify_all();
 	}
 
