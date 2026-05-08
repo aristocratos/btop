@@ -222,14 +222,17 @@ namespace Tools {
 		}
 		vector<wchar_t> w_str(w_len);
 		std::mbstowcs(&w_str[0], str_data, w_len);
-		for (size_t i = 0; i < w_str.size(); i++) {
+		for (size_t i = 0; i < w_str.size() - 1; i++) {
 			if (widechar_wcwidth(w_str[i]) > 1)
 				continue;
 			if (w_str[i] < 0x20)
 				w_str[i] = replacement;
 		}
-		str.resize(w_str.size());
-		std::wcstombs(&str[0], &w_str[0], w_str.size());
+		size_t bytes = std::wcstombs(nullptr, w_str.data(), 0);
+		if (bytes == static_cast<size_t>(-1))
+			return str;
+		str.resize(bytes);
+		std::wcstombs(&str[0], &w_str[0], bytes);
 
 		return str;
 	}

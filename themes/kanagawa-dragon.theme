@@ -1,0 +1,86 @@
+# Bashtop Kanagawa-dragon (https://github.com/rebelot/kanagawa.nvim) theme
+# By: Marcus441
+
+# Main bg
+theme[main_bg]="#181616"
+
+# Main text color
+theme[main_fg]="#c5c9c5"
+
+# Title color for boxes
+theme[title]="#c5c9c5"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#c4746e"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#282727"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#c4b28a"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#7a8382"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#8ea4a2"
+
+# Cpu box outline color
+theme[cpu_box]="#7a8382"
+
+# Memory/disks box outline color
+theme[mem_box]="#7a8382"
+
+# Net up/down box outline color
+theme[net_box]="#7a8382"
+
+# Processes box outline color
+theme[proc_box]="#7a8382"
+
+# Box divider line and small boxes line color
+theme[div_line]="#7a8382"
+
+# Temperature graph colors
+theme[temp_start]="#8a9a7b"
+theme[temp_mid]="#b6927b"
+theme[temp_end]="#c4746e"
+
+# CPU graph colors
+theme[cpu_start]="#87a987"
+theme[cpu_mid]="#c4b28a"
+theme[cpu_end]="#c4746e"
+
+# Mem/Disk free meter
+theme[free_start]="#c4746e"
+theme[free_mid]="#a292a3"
+theme[free_end]="#c4746e"
+
+# Mem/Disk cached meter
+theme[cached_start]="#8a9a7b"
+theme[cached_mid]="#b6927b"
+theme[cached_end]="#b6927b"
+
+# Mem/Disk available meter
+theme[available_start]="#8992a7"
+theme[available_mid]="#949fb5"
+theme[available_end]="#8ba4b0"
+
+# Mem/Disk used meter
+theme[used_start]="#8ba4b0"
+theme[used_mid]="#949fb5"
+theme[used_end]="#8ea4a2"
+
+# Download graph colors
+theme[download_start]="#949fb5"
+theme[download_mid]="#8992a7"
+theme[download_end]="#a292a3"
+
+# Upload graph colors
+theme[upload_start]="#b6927b"
+theme[upload_mid]="#c4b28a"
+theme[upload_end]="#c4746e"
+
+# Process box color gradient for threads, mem and cpu usage
+theme[process_start]="#87a987"
+theme[process_mid]="#c4b28a"
+theme[process_end]="#c4746e"

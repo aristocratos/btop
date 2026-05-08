@@ -198,11 +198,22 @@ if(BTOP_STATIC)
   target_link_options(libbtop PUBLIC -static LINKER:--fatal-warnings)
 endif()
 
+# Enable GPU support on Apple Silicon
+if(APPLE AND BTOP_GPU)
+  target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+endif()
+
 # Other platform dependent flags
 if(APPLE)
   target_link_libraries(libbtop
     $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
+  if(BTOP_GPU)
+    find_library(IOREPORT_LIB IOReport)
+    if(IOREPORT_LIB)
+      target_link_libraries(libbtop ${IOREPORT_LIB})
+    endif()
+  endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")
   # Avoid version mismatch for libstdc++ when a specific version of GCC is installed and not the
   # default one since all use the default ones RPATH

@@ -1,5 +1,7 @@
 name: Linux CMake
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -12,6 +14,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
+      - 'tests/**'
   pull_request:
     branches: main
     paths:
@@ -21,6 +24,7 @@ on:
       - 'include/**'
       - 'src/*pp'
       - 'src/linux/*pp'
+      - 'tests/**'
 
 jobs:
   build:
@@ -38,25 +42,32 @@ jobs:
             version: 20
           - compiler: clang
             version: 21
+          - compiler: clang
+            version: 22
           - compiler: gcc
             version: 14
+    env:
+      COMPILER: "${{ matrix.compiler }}"
+      VERSION: "${{ matrix.version }}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}
-        run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ matrix.version }} all
+        run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${VERSION} all
 
       - name: Configure
         run: |
-          if [[ "${{ matrix.compiler }}" == "clang" ]]; then
-            export CC=clang-${{ matrix.version }}
-            export CXX=clang++-${{ matrix.version }}
+          if [[ "${COMPILER}" == "clang" ]]; then
+            export CC=clang-${VERSION}
+            export CXX=clang++-${VERSION}
             export CXXFLAGS="-stdlib=libc++"
             export LDFLAGS="-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind"
           else
-            export CC=gcc-${{ matrix.version }}
-            export CXX=g++-${{ matrix.version }}
+            export CC=gcc-${VERSION}
+            export CXX=g++-${VERSION}
           fi
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 

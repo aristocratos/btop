@@ -253,22 +253,27 @@ namespace Input {
 						Menu::show(Menu::Menus::SizeError);
 						return;
 					}
-					Config::current_preset = -1;
+					Config::current_preset.reset();
 					Draw::calcSizes();
 					Draw::update_clock(true);
 					Runner::run("all", false, true);
 					return;
 				}
-				else if (is_in(key, "p", "P") and Config::preset_list.size() > 1) {
+				else if (is_in(key, "p", "P") and Config::getS("disable_presets") != "All") {
+					if (Config::getS("disable_presets") == "Default" and Config::preset_list.size() <= 1) return;
 					const auto old_preset = Config::current_preset;
-					if (key == "p") {
-						if (++Config::current_preset >= (int)Config::preset_list.size()) Config::current_preset = 0;
+					const int first_preset = (Config::getS("disable_presets") == "Default") ? 1 : 0;
+					if (Config::getS("disable_presets") == "Custom") Config::current_preset = 0;
+					else if (Config::current_preset.has_value()) {
+						if (key == "p") {
+							if(++(*Config::current_preset) >= static_cast<int>(Config::preset_list.size())) Config::current_preset = first_preset;
+						}
+						else if (--(*Config::current_preset) < first_preset) Config::current_preset = Config::preset_list.size() - 1;
 					}
-					else {
-						if (--Config::current_preset < 0) Config::current_preset = Config::preset_list.size() - 1;
-					}
+					else Config::current_preset = (key == "p") ? first_preset : Config::preset_list.size() - 1;
+					if (Config::current_preset == old_preset) return;
 					atomic_wait(Runner::active);
-					if (not Config::apply_preset(Config::preset_list.at(Config::current_preset))) {
+					if (not Config::apply_preset(Config::preset_list.at(Config::current_preset.value()))) {
 						Menu::show(Menu::Menus::SizeError);
 						Config::current_preset = old_preset;
 						return;
@@ -323,6 +328,7 @@ namespace Input {
 						cur_i = Proc::sort_vector.size() - 1;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 					Config::set("update_following", true);
+					if (Config::getB("proc_tree")) no_update = false;
 				}
 				else if (key == "right" or (vim_keys and key == "l")) {
 					int cur_i = v_index(Proc::sort_vector, Config::getS("proc_sorting"));
@@ -330,6 +336,7 @@ namespace Input {
 						cur_i = 0;
 					Config::set("proc_sorting", Proc::sort_vector.at(cur_i));
 					Config::set("update_following", true);
+					if (Config::getB("proc_tree")) no_update = false;
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
@@ -340,6 +347,11 @@ namespace Input {
 					Config::flip("proc_tree");
 					no_update = false;
 					Config::set("update_following", true);
+				}
+				else if (key == "E" and Config::getB("proc_tree")) {
+					atomic_wait(Runner::active);
+					Proc::collapse_all = 1;
+					no_update = false;
 				}
 				else if (is_in(key, "u")) {
 					Config::flip("pause_proc_list");

@@ -205,6 +205,7 @@ namespace Menu {
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
 		{"e", "Toggle processes tree view."},
+		{"E", "Collapse/expand all processes in tree view."},
 		{"%", "Toggles memory display mode in processes box."},
 		{"Selected +, -", "Expand/collapse the selected process in tree view."},
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
@@ -263,6 +264,16 @@ namespace Menu {
 				"is accessible while holding shift."},
 			{"disable_mouse",
 				"Disable all mouse events."},
+			{"disable_presets",
+				"Disable the presets.",
+				"",
+				"\"Off\" All presets are enabled.",
+				"",
+				"\"Default\" preset is disabled.",
+				"",
+				"\"Custom\" presets are disabled.",
+				"",
+				"\"All\" presets are disabled."},
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -588,7 +599,8 @@ namespace Menu {
 				"Manually set which gpu vendors to show.",
 				"",
 				"Available values are",
-				"\"nvidia\", \"amd\", and \"intel\".",
+				"\"nvidia\", \"amd\", \"intel\",",
+				"and \"apple\".",
 				"Separate values with whitespace.",
 				"",
 				"A restart is required to apply changes."},
@@ -970,10 +982,14 @@ namespace Menu {
 	};
 
 	static int signalChoose(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static std::optional<int> s_pid;
 		static int x{};
 		static int y{};
 		static int selected_signal = -1;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) selected_signal = -1;
 		auto& out = Global::overlay;
@@ -983,11 +999,11 @@ namespace Menu {
 			x = Term::width/2 - 40;
 			y = Term::height/2 - 9;
 			bg = Draw::createBox(x + 2, y, 78, 19, Theme::c("hi_fg"), true, "signals");
-			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid) + " ("
+			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid.value()) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.starts_with("button_")) {
 			if (int new_select = stoi(key.substr(7)); new_select == selected_signal)
@@ -1002,11 +1018,11 @@ namespace Menu {
 				signalKillRet = ESRCH;
 				menuMask.set(SignalReturn);
 			}
-			else if (kill(s_pid, selected_signal) != 0) {
+			else if (kill(s_pid.value(), selected_signal) != 0) {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and isdigit(key.at(0)) and selected_signal < 10) {
 			selected_signal = std::min(std::stoi((selected_signal < 1 ? key : to_string(selected_signal) + key)), 64);
@@ -1075,6 +1091,10 @@ namespace Menu {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	static int sizeError(const string& key) {
@@ -1100,8 +1120,12 @@ namespace Menu {
 	}
 
 	static int signalSend(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-		if (s_pid == 0) return Closed;
+		static std::optional<int> s_pid;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
+
 		if (redraw) {
 			atomic_wait(Runner::active);
 			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
@@ -1109,7 +1133,7 @@ namespace Menu {
 				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend)
 				+ (signalToSend > 0 and signalToSend <= 32 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')' : ""),
 
-				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid) + Theme::c("main_fg") + " ("
+				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid.value()) + Theme::c("main_fg") + " ("
 				+ uresize(p_name, 16) + ')' + Fx::reset,
 			};
 			messageBox = Menu::msgBox{50, 1, cont_vec, (signalToSend > 1 and signalToSend <= 32 and signalToSend != 17 ? P_Signals.at(signalToSend) : "signal")};
@@ -1118,16 +1142,16 @@ namespace Menu {
 		auto ret = messageBox.input(key);
 		if (ret == msgBox::Ok_Yes) {
 			signalKillRet = 0;
-			if (kill(s_pid, signalToSend) != 0) {
+			if (kill(s_pid.value(), signalToSend) != 0) {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);
 			}
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::No_Esc) {
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::Select) {
 			Global::overlay = messageBox();
@@ -1137,6 +1161,10 @@ namespace Menu {
 			return Changed;
 		}
 		return NoChange;
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	static int signalReturn(const string& key) {
@@ -1285,6 +1313,7 @@ static int optionsMenu(const string& key) {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 	        {"base_10_bitrate", std::cref(Config::base_10_bitrate_values)},
+			{"disable_presets", std::cref(Config::disable_preset_options)},
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
@@ -1344,7 +1373,7 @@ static int optionsMenu(const string& key) {
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 					}
 					else if (option == "clock_format") {
 						Draw::update_clock(true);
@@ -1455,9 +1484,13 @@ static int optionsMenu(const string& key) {
 					theme_refresh = true;
 					Config::flip("lowcolor");
 				}
+			#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+				else if (option == "force_tty" and not Term::current_tty.starts_with("/dev/tty")) {
+			#else
 				else if (option == "force_tty") {
+			#endif
 					theme_refresh = true;
-					Config::flip("tty_mode");
+					Config::set("tty_mode", Config::getB("force_tty"));
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;
@@ -1497,6 +1530,8 @@ static int optionsMenu(const string& key) {
 				}
 				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 					screen_redraw = true;
+				else if (option == "disable_presets" and optList.at(i) != "Off")
+					Config::current_preset.reset();
 			}
 			else
 				retval = NoChange;
@@ -1519,25 +1554,23 @@ static int optionsMenu(const string& key) {
 			}
 
 			//? Get variable properties for currently selected option
-			if (selPred.none() or last_sel != (selected_cat << 8) + selected) {
-				selPred.reset();
-				last_sel = (selected_cat << 8) + selected;
-				const auto& selOption = categories[selected_cat][item_height * page + selected][0];
-				if (Config::ints.contains(selOption))
-					selPred.set(isInt);
-				else if (Config::bools.contains(selOption))
-					selPred.set(isBool);
-				else
-					selPred.set(isString);
+			selPred.reset();
+			last_sel = (selected_cat << 8) + selected;
+			const auto& selOption = categories[selected_cat][item_height * page + selected][0];
+			if (Config::ints.contains(selOption))
+				selPred.set(isInt);
+			else if (Config::bools.contains(selOption))
+				selPred.set(isBool);
+			else
+				selPred.set(isString);
 
-				if (not selPred.test(isString))
-					selPred.set(is2D);
-				else if (optionsList.contains(selOption)) {
-					selPred.set(isBrowsable);
-				}
-				if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
-					selPred.set(isEditable);
+			if (not selPred.test(isString))
+				selPred.set(is2D);
+			else if (optionsList.contains(selOption)) {
+				selPred.set(isBrowsable);
 			}
+			if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
+				selPred.set(isEditable);
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
@@ -1693,11 +1726,15 @@ static int optionsMenu(const string& key) {
 	}
 
 	static int reniceMenu(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static std::optional<int> s_pid;
 		static int x{};
 		static int y{};
 		static int selected_nice = 0;
 		static string nice_edit;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) {
 			selected_nice = 0;
@@ -1710,11 +1747,11 @@ static int optionsMenu(const string& key) {
 			x = Term::width/2 - 25;
 			y = Term::height/2 - 6;
 			bg = Draw::createBox(x + 2, y, 50, 13, Theme::c("hi_fg"), true, "renice");
-			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Renice PID " + to_string(s_pid) + " ("
+			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Renice PID " + to_string(s_pid.value()) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 15) + ")", 48);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (is_in(key, "enter", "space")) {
 			if (s_pid > 0) {
@@ -1724,11 +1761,11 @@ static int optionsMenu(const string& key) {
 					}
 					catch (...) { selected_nice = 0; }
 				}
-				if (not Proc::set_priority(s_pid, selected_nice)) {
+				if (not Proc::set_priority(s_pid.value(), selected_nice)) {
 					// TODO: show error message
 				}
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and (isdigit(key.at(0)) or (key.at(0) == '-' and nice_edit.empty()))) {
 			nice_edit += key;
@@ -1778,6 +1815,10 @@ static int optionsMenu(const string& key) {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	//* Add menus here and update enum Menus in header

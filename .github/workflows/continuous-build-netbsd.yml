@@ -1,5 +1,7 @@
 name: Continuous Build NetBSD
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -29,15 +31,21 @@ on:
       - 'Makefile'
       - '.github/workflows/continuous-build-netbsd.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-netbsd:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Compile
-        uses: vmactions/netbsd-vm@v1
+        uses: vmactions/netbsd-vm@eb3ba840926911ccf17dc9de235335cb27a02ba0 # v1.3.8
 
         with:
           release: '10.1'
@@ -50,14 +58,13 @@ jobs:
             pkgin -y install gmake gcc14 coreutils git
             git config --global --add safe.directory /home/runner/work/btop/btop
           run: |
-            gmake CXX=/usr/pkg/gcc14/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc10/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
+            gmake CXX=/usr/pkg/gcc14/bin/g++ CXXFLAGS='-DNDEBUG -I/usr/pkg/gcc14/include -I/usr/include -I/usr/pkg/include' STATIC=true STRIP=true
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-GCC10-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: btop-x86_64-netbsd-9.3
+          name: btop-x86_64-netbsd-10.1
           path: 'bin/*'
           if-no-files-found: error
-

@@ -104,9 +104,9 @@ namespace Shared {
 #endif
 }
 
+#if defined(GPU_SUPPORT)
 
 namespace Gpu {
-#ifdef GPU_SUPPORT
 	extern vector<string> box;
 	extern int width, total_height, min_width, min_height;
 	extern vector<int> x_vec, y_vec;
@@ -183,18 +183,20 @@ namespace Gpu {
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+	#ifdef __APPLE__
+	namespace AppleSilicon {
+		extern bool shutdown();
+	}
+	#endif
 
 	//* Collect gpu stats and temperatures
     auto collect(bool no_update = false) -> vector<gpu_info>&;
 
 	//* Draw contents of gpu box using <gpus> as source
   	string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same);
-#else
-	struct gpu_info {
-		bool supported = false;
-	};
-#endif
 }
+
+#endif // GPU_SUPPORT
 
 namespace Cpu {
 	extern string box;
@@ -232,7 +234,14 @@ namespace Cpu {
 	auto collect(bool no_update = false) -> cpu_info&;
 
 	//* Draw contents of cpu box using <cpu> as source
-    string draw(const cpu_info& cpu, const vector<Gpu::gpu_info>& gpu, bool force_redraw = false, bool data_same = false);
+    string draw(
+		const cpu_info& cpu,
+#if defined(GPU_SUPPORT)
+		const vector<Gpu::gpu_info>& gpu,
+#endif
+		bool force_redraw = false,
+		bool data_same = false
+	);
 
 	//* Parse /proc/cpu info for mapping of core ids
 	auto get_core_mapping() -> std::unordered_map<int, int>;
@@ -351,7 +360,7 @@ namespace Proc {
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
-	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth, toggle_children;
+	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth, toggle_children, collapse_all;
 	extern int scroll_pos;
 	extern string selected_name;
 	extern atomic<bool> resized;
@@ -455,6 +464,9 @@ namespace Proc {
 
 	//* Build prefixes for tree view
 	void _collect_prefixes(tree_proc& t, bool is_last, const string &header = "");
+
+	//* Toggle collapse/expand of all tree entries
+	void toggle_tree_collapse(std::vector<proc_info>& current_procs);
 }
 
 /// Detect container engine.
