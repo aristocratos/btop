@@ -551,7 +551,7 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true, std::memory_order_acquire)) this->not_true = false;
+		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true, std::memory_order_acquire, std::memory_order_relaxed)) this->not_true = false;
 		else this->atom.store(true, std::memory_order_release);
 		this->atom.notify_all();
 	}
