@@ -545,11 +545,6 @@ namespace Tools {
 		atom.wait(old, std::memory_order_acquire);
 	}
 
-	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
-		const uint64_t start_time = time_ms();
-		while (atom.load(std::memory_order_acquire) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
-	}
-
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
 		if (wait) {
 			bool expected = false;
@@ -562,6 +557,62 @@ namespace Tools {
 	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false, std::memory_order_release);
 		this->atom.notify_one();
+	}
+
+	void atomic_waiting_lock::store(bool new_value) noexcept {
+		{
+			std::lock_guard lock {mtx};
+			value = new_value;
+		}
+		cv.notify_all();
+	}
+
+	void atomic_waiting_lock::wait(bool old) const noexcept {
+		std::unique_lock lock {mtx};
+		cv.wait(lock, [this, old] { return value != old; });
+	}
+
+	void atomic_waiting_lock::wait_for(bool old, uint64_t wait_ms) const noexcept {
+		std::unique_lock lock {mtx};
+		cv.wait_for(lock, std::chrono::milliseconds(wait_ms), [this, old] { return value != old; });
+	}
+
+	atomic_waiting_lock::guard atomic_waiting_lock::lock(bool wait) {
+		return guard(*this, wait);
+	}
+
+	atomic_waiting_lock::operator bool() const noexcept {
+		std::lock_guard lock {mtx};
+		return value;
+	}
+
+	atomic_waiting_lock::guard::guard(atomic_waiting_lock& atom, bool wait) : atom(atom) {
+		if (wait) {
+			std::unique_lock lock {this->atom.mtx};
+			this->atom.cv.wait(lock, [this] { return not this->atom.value; });
+			this->atom.value = true;
+		}
+		else {
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = true;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	atomic_waiting_lock::guard::~guard() noexcept {
+		{
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = false;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	void atomic_wait(const atomic_waiting_lock& atom, bool old) noexcept {
+		atom.wait(old);
+	}
+
+	void atomic_wait_for(const atomic_waiting_lock& atom, bool old, const uint64_t wait_ms) {
+		atom.wait_for(old, wait_ms);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {

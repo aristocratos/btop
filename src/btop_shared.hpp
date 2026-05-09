@@ -51,6 +51,10 @@ using std::vector;
 
 using namespace std::literals; // for operator""s
 
+namespace Tools {
+	class atomic_waiting_lock;
+}
+
 void term_resize(bool force=false);
 void banner_gen();
 
@@ -71,7 +75,7 @@ namespace Global {
 }
 
 namespace Runner {
-	extern atomic<bool> active;
+	extern Tools::atomic_waiting_lock active;
 	extern atomic<bool> reading;
 	extern atomic<bool> stopping;
 	extern atomic<bool> redraw;
