@@ -1546,7 +1546,8 @@ namespace Gpu {
 				"librocm_smi64.so",
 				"librocm_smi64.so.5", // fedora
 				"librocm_smi64.so.1.0", // debian
-				"librocm_smi64.so.6"
+				"librocm_smi64.so.6",
+				"librocm_smi64.so.7" // rocm 7 support / Ubuntu 26.04
 			};
 
 			for (const auto& l : libRocAlts) {
