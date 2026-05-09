@@ -551,14 +551,17 @@ namespace Tools {
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true, std::memory_order_acquire, std::memory_order_relaxed)) this->not_true = false;
+		if (wait) {
+			bool expected = false;
+			while (not this->atom.compare_exchange_strong(expected, true, std::memory_order_acquire, std::memory_order_relaxed)) expected = false;
+		}
 		else this->atom.store(true, std::memory_order_release);
-		this->atom.notify_all();
+		this->atom.notify_one();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false, std::memory_order_release);
-		this->atom.notify_all();
+		this->atom.notify_one();
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
