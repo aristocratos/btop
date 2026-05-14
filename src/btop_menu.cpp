@@ -603,7 +603,7 @@ namespace Menu {
 				"",
 				"Available values are",
 				"\"nvidia\", \"amd\", \"intel\",",
-				"and \"apple\".",
+				"\"adreno\", and \"apple\".",
 				"Separate values with whitespace.",
 				"",
 				"A restart is required to apply changes."},

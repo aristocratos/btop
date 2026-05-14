@@ -202,6 +202,8 @@ namespace Gpu {
 	//? Stub shutdown for backends not available on macOS
 	namespace Nvml { bool shutdown() { return false; } }
 	namespace Rsmi { bool shutdown() { return false; } }
+	namespace Intel { bool shutdown() { return false; } }
+	namespace Adreno { bool shutdown() { return false; } }
 
 	//? Apple Silicon GPU data collection via IOReport
 	namespace AppleSilicon {
