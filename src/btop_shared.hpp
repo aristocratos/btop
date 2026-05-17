@@ -183,6 +183,9 @@ namespace Gpu {
 	namespace Rsmi {
 		extern bool shutdown();
 	}
+	namespace Asysfs {
+		extern bool shutdown();
+	}
 	#ifdef __APPLE__
 	namespace AppleSilicon {
 		extern bool shutdown();
