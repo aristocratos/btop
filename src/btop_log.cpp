@@ -134,7 +134,7 @@ namespace Logger {
 			auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
 			fmt::format_to(
 				std::back_inserter(buffer),
-				"{:%F (%T)} | {}: {}\n",
+				"{:%FT%T}Z | {}: {}\n",
 				seconds,
 				log_levels.at(std::to_underlying(level)),
 				msg
