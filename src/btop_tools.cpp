@@ -574,7 +574,13 @@ namespace Tools {
 
 	void atomic_waiting_lock::wait_for(bool old, uint64_t wait_ms) const noexcept {
 		std::unique_lock lock {mtx};
-		cv.wait_for(lock, std::chrono::milliseconds(wait_ms), [this, old] { return value != old; });
+		const auto start = uptime_micros();
+		const auto wait_us = wait_ms * 1'000ULL;
+		while (value == old) {
+			const auto elapsed = uptime_micros() - start;
+			if (elapsed >= wait_us) break;
+			cv.wait_for(lock, std::chrono::microseconds(wait_us - elapsed), [this, old] { return value != old; });
+		}
 	}
 
 	atomic_waiting_lock::guard atomic_waiting_lock::lock(bool wait) {
