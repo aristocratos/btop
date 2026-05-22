@@ -1376,6 +1376,7 @@ static int optionsMenu(const string& key) {
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
+						atomic_wait(Runner::active);
 						Config::current_preset.reset();
 					}
 					else if (option == "clock_format") {
@@ -1535,7 +1536,7 @@ static int optionsMenu(const string& key) {
 				if (option == "color_theme") {
 					const auto theme_path = fs::path(optList.at(i));
 					const auto theme_filename = theme_path.filename().string();
-					
+
 					//? Check if the selected theme is the first one that matches this filename (handling shadowing)
 					const auto first_match = std::ranges::find_if(optList, [&](const string& p) {
 						return fs::path(p).filename().string() == theme_filename;
@@ -1545,7 +1546,7 @@ static int optionsMenu(const string& key) {
 						Config::set(option, theme_filename);
 					else
 						Config::set(option, theme_path.string());
-					
+
 					theme_refresh = true;
 				}
 				else {
@@ -1560,8 +1561,10 @@ static int optionsMenu(const string& key) {
 					}
 					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 						screen_redraw = true;
-					else if (option == "disable_presets" and optList.at(i) != "Off")
+					else if (option == "disable_presets" and optList.at(i) != "Off") {
+						atomic_wait(Runner::active);
 						Config::current_preset.reset();
+					}
 				}
 			}
 			else
@@ -1654,8 +1657,8 @@ static int optionsMenu(const string& key) {
 						const auto it = std::ranges::find_if(optList, [&](const string& p) {
 							const auto p_path = fs::path(p);
 							//? Match against full path, filename, stem or legacy absolute path
-							return p == current_theme 
-								or p_path.filename() == current_theme 
+							return p == current_theme
+								or p_path.filename() == current_theme
 								or p_path.stem() == current_theme
 								or (current_theme_path.is_absolute() and current_theme_path.filename() == p_path.filename());
 						});

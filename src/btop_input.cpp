@@ -261,6 +261,7 @@ namespace Input {
 				}
 				else if (is_in(key, "p", "P") and Config::getS("disable_presets") != "All") {
 					if (Config::getS("disable_presets") == "Default" and Config::preset_list.size() <= 1) return;
+					atomic_wait(Runner::active);
 					const auto old_preset = Config::current_preset;
 					const int first_preset = (Config::getS("disable_presets") == "Default") ? 1 : 0;
 					if (Config::getS("disable_presets") == "Custom") Config::current_preset = 0;
@@ -272,7 +273,6 @@ namespace Input {
 					}
 					else Config::current_preset = (key == "p") ? first_preset : Config::preset_list.size() - 1;
 					if (Config::current_preset == old_preset) return;
-					atomic_wait(Runner::active);
 					if (not Config::apply_preset(Config::preset_list.at(Config::current_preset.value()))) {
 						Menu::show(Menu::Menus::SizeError);
 						Config::current_preset = old_preset;

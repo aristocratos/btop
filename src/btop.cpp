@@ -292,14 +292,9 @@ static void _crash_handler(const int sig) {
 static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
-			if (Runner::active) {
-				Global::should_quit = true;
-				Runner::stopping = true;
-				Input::interrupt();
-			}
-			else {
-				clean_quit(0);
-			}
+			Global::should_quit = true;
+			if (Runner::active) Runner::stopping = true;
+			Input::interrupt();
 			break;
 		case SIGTSTP:
 			if (Runner::active) {
@@ -358,15 +353,14 @@ void init_config(bool low_color, std::optional<std::string>& filter) {
 
 //* Manages secondary thread for collection and drawing of boxes
 namespace Runner {
-	atomic<bool> active (false);
+	atomic_waiting_lock active;
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
 
 	static inline auto set_active(bool value) noexcept {
-		active.store(value, std::memory_order_relaxed);
-		active.notify_all();
+		active.store(value);
 	}
 
 	//* Setup semaphore for triggering thread to do work
@@ -487,7 +481,7 @@ namespace Runner {
 			}
 
 			//? Atomic lock used for blocking non thread-safe actions in main thread
-			atomic_lock lck(active);
+			auto lck = active.lock();
 
 			//? Set effective user if SUID bit is set
 			gain_priv powers{};

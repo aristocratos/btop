@@ -1908,12 +1908,16 @@ namespace Gpu {
 			engines = discover_engines(device);
 			if (!engines) {
 				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
+				free(gpu_device_name);
 				return false;
 			}
 
 			int ret = pmu_init(engines);
 			if (ret) {
 				Logger::warning("Intel GPU: Failed to initialize PMU");
+				free(gpu_device_name);
+				free_engines(engines);
+				engines = nullptr;
 				return false;
 			}
 
