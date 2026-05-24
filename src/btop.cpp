@@ -310,7 +310,8 @@ static void _signal_handler(const int sig) {
 			_resume();
 			break;
 		case SIGWINCH:
-			term_resize();
+			Global::resized = true;
+			Input::interrupt();
 			break;
 		case SIGUSR1:
 			// Input::poll interrupt
