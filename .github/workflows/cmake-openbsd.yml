@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile
-        uses: vmactions/openbsd-vm@d7d892b7b9ba97ed2747b0fc201be65037d64c3e # v1.4.0
+        uses: vmactions/openbsd-vm@1df8c6f390b62ccae89df1bba2d2c78d374993d8 # v1.4.1
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
