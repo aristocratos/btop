@@ -297,29 +297,33 @@ Also necessary is a UTF8 locale and a font that includes:
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
-### **Optional Dependencies (Needed for GPU monitoring) (Only Linux)**
+### **Optional Dependencies (Needed for GPU monitoring)**
 
-GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
+GPU monitoring requires a btop binary built with GPU support. `GPU_SUPPORT` is enabled by default on **Linux x86_64** and **macOS** (see [GPU compatibility](#gpu-compatibility)).
 
-See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
-
- * **NVIDIA**
+ * **Linux — NVIDIA**
 
    If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
 
    In addition to that you must also have the nvidia-ml dynamic library installed, which should be included with the driver package of your distribution.
 
- * **AMD**
+ * **Linux — AMD**
 
    If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packaged for your distribution.
 
- * **INTEL**
+ * **Linux — Intel**
 
    Requires a working C compiler if compiling from source.
 
    Also requires the user to have permission to read from SYSFS.
 
    Can be set with `make setcap` (preferred) or `make setuid` or by running btop with `sudo` or equivalent.
+
+ * **macOS (Apple Silicon)**
+
+   GPU metrics use the IOReport API. When compiling from source, the Makefile links `-framework IOKit`, `-framework CoreFoundation`, and `-lIOReport` automatically.
+
+   To build without GPU support: `gmake GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=OFF` with CMake).
 
 ### **Notice (Text rendering issues)**
 
@@ -453,7 +457,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    The Makefile also needs GNU `coreutils` and `sed` (should already be installed on any modern distribution).
 
-   ### GPU compatibility
+   ### GPU compatibility (Linux)
 
    Btop++ supports Nvidia and AMD GPUs and Intel IGPUs out of the box on Linux x86_64, provided you have the correct drivers and libraries.
 
@@ -514,7 +518,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (enabled by default on Linux x86_64 and macOS) |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
@@ -656,6 +660,14 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Install and use Homebrew or MacPorts package managers for easy dependency installation
 
+   ### GPU compatibility (macOS)
+
+   On macOS, `GPU_SUPPORT` is **enabled by default**. Apple Silicon GPU metrics are collected via the IOReport API; the build links `-framework IOKit`, `-framework CoreFoundation`, and `-lIOReport` automatically.
+
+   To compile without GPU monitoring:
+
+   `gmake GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=OFF` with CMake)
+
 <details>
 <summary>
 
@@ -690,6 +702,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (enabled by default on macOS)                |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
