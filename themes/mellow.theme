@@ -1,85 +1,82 @@
 # Btop++ Mellow theme
 # Based on the Mellow color palette by kvrohit
 # https://github.com/mellow-theme/mellow.nvim
-# A soothing dark color scheme
 
-# Colors in 6-character hexadecimal: "#RRGGBB"
-
-# Main background — mellow bg (#161617)
+# Main background
 theme[main_bg]="#161617"
 
-# Main text color — mellow fg (#c9c7cd)
+# Main text color
 theme[main_fg]="#c9c7cd"
 
-# Title color for boxes — brighter foreground (gray8 / #c1c0d4)
+# Title color for boxes
 theme[title]="#c1c0d4"
 
-# Highlight color for keyboard shortcuts — mellow purple (#aca1cf)
+# Highlight color for keyboard shortcuts
 theme[hi_fg]="#aca1cf"
 
-# Background color of selected item in processes box — mellow purple dark
+# Background color of selected item in processes box
 theme[selected_bg]="#3e3e43"
 
 # Foreground color of selected item in processes box
 theme[selected_fg]="#ecaad6"
 
-# Color of inactive/disabled text — gray5 (#57575f)
+# Color of inactive/disabled text
 theme[inactive_fg]="#57575f"
 
-# Misc colors for processes box — mellow pink (#ea83a5)
+# Misc colors for processes box
 theme[proc_misc]="#ea83a5"
 
-# Cpu box outline color — mellow purple (#aca1cf)
+# Cpu box outline color
 theme[cpu_box]="#aca1cf"
 
-# Memory/disks box outline color — mellow teal (#90b99f)
+# Memory/disks box outline color
 theme[mem_box]="#90b99f"
 
-# Net up/down box outline color — mellow peach (#e6b99d)
+# Net up/down box outline color
 theme[net_box]="#e6b99d"
 
-# Processes box outline color — mellow pink (#e29eca)
+# Processes box outline color
 theme[proc_box]="#e29eca"
 
-# Box divider line and small boxes line color — gray4 (#3e3e43)
+# Box divider line and small boxes line color
 theme[div_line]="#3e3e43"
 
-# Temperature graph colors — teal → yellow/peach → red/pink
+# Temperature graph colors
 theme[temp_start]="#90b99f"
 theme[temp_mid]="#e6b99d"
 theme[temp_end]="#f5a191"
 
-# CPU graph colors — purple → pink → salmon
+# CPU graph colors
 theme[cpu_start]="#aca1cf"
 theme[cpu_mid]="#e29eca"
 theme[cpu_end]="#f5a191"
 
-# Mem/Disk free meter — teal tones
+# Mem/Disk free meter
 theme[free_start]="#9dc6ac"
 theme[free_mid]="#90b99f"
 theme[free_end]="#6d9e7e"
 
-# Mem/Disk cached meter — purple tones
+# Mem/Disk cached meter
 theme[cached_start]="#b9aeda"
 theme[cached_mid]="#aca1cf"
 theme[cached_end]="#7d72a0"
 
-# Mem/Disk available meter — pink tones
+# Mem/Disk available meter
 theme[available_start]="#ecaad6"
 theme[available_mid]="#e29eca"
 theme[available_end]="#b87aa8"
 
-# Mem/Disk used meter — salmon/red tones
+# Mem/Disk used meter
 theme[used_start]="#ffae9f"
 theme[used_mid]="#f5a191"
 theme[used_end]="#d07060"
 
-# Download graph colors — teal → purple → pink
+# Download graph colors
 theme[download_start]="#90b99f"
 theme[download_mid]="#aca1cf"
 theme[download_end]="#ea83a5"
 
-# Upload graph colors — peach → pink → salmon
+# Upload graph colors
 theme[upload_start]="#e6b99d"
 theme[upload_mid]="#e29eca"
 theme[upload_end]="#f5a191"
