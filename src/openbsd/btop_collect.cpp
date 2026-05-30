@@ -1286,6 +1286,9 @@ namespace Proc {
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
 
+			//? Auto-collapse processes with many children when entering tree mode
+			_auto_collapse_oversized(current_procs, tree_mode_change);
+
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
 				_tree_gen(p, current_procs, tree_procs, 0, false, filter, false, no_update, should_filter);
