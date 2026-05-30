@@ -41,14 +41,14 @@ B_WHITE   = $(BLD)$(WHITE)
 
 cecho = printf "%b" "$(1)"
 
-# line-based colors (with newline)
-red     = $(call cecho,$(B_RED)$(1)$(RST)$(2)\n)
-green   = $(call cecho,$(B_GREEN)$(1)$(RST)$(2)\n)
-yellow  = $(call cecho,$(B_YELLOW)$(1)$(RST)$(2)\n)
-blue    = $(call cecho,$(B_BLUE)$(1)$(RST)$(2)\n)
-magenta = $(call cecho,$(B_MAGENTA)$(1)$(RST)$(2)\n)
-cyan    = $(call cecho,$(B_CYAN)$(1)$(RST)$(2)\n)
-white   = $(call cecho,$(B_WHITE)$(1)$(RST)$(2)\n)
+# line-based colors (with newline) - $(3) is for optional prefix like \n that would brake color if used in $(1)
+red     = $(call cecho,$(3)$(B_RED)$(1)$(RST)$(2)\n)
+green   = $(call cecho,$(3)$(B_GREEN)$(1)$(RST)$(2)\n)
+yellow  = $(call cecho,$(3)$(B_YELLOW)$(1)$(RST)$(2)\n)
+blue    = $(call cecho,$(3)$(B_BLUE)$(1)$(RST)$(2)\n)
+magenta = $(call cecho,$(3)$(B_MAGENTA)$(1)$(RST)$(2)\n)
+cyan    = $(call cecho,$(3)$(B_CYAN)$(1)$(RST)$(2)\n)
+white   = $(call cecho,$(3)$(B_WHITE)$(1)$(RST)$(2)\n)
 # inline colors (no newline)
 red_i = $(call cecho,$(B_RED)$(1)$(RST)$(2))
 
@@ -306,7 +306,7 @@ info:
 endif
 
 info-quiet: | info rocm_smi
-	@$(call green,\nBuilding btop++ $(RED)($(WHITE)v$(BTOP_VERSION)$(RED)) $(YELLOW)$(PLATFORM) $(CYAN)$(ARCH))
+	@$(call green,Building btop++ $(RED)($(WHITE)v$(BTOP_VERSION)$(RED)) $(YELLOW)$(PLATFORM) $(CYAN)$(ARCH),,\n)
 
 help:
 	@printf " $(BANNER)\n"
@@ -339,10 +339,10 @@ $(BUILDDIR)/config.h: $(SRCDIR)/config.h.in | directories
 #? Man page
 btop.1: manpage.md | directories
 ifeq ($(shell command -v lowdown >/dev/null; echo $$?),0)
-	@$(call green,\nGenerating man page $@,...)
+	@$(call green,Generating man page $@,...,\n)
 	lowdown -s -Tman -o $@ $<
 else
-	@$(call yellow,\nCommand 'lowdown' not found: skipping generating man page $@)
+	@$(call yellow,Command 'lowdown' not found: skipping generating man page $@,,\n)
 endif
 
 #? Clean only Objects
@@ -426,7 +426,7 @@ ifeq ($(GPU_SUPPORT)$(RSMI_STATIC),truetrue)
 	endif
 .ONESHELL:
 rocm_smi:
-	@$(call green,\nBuilding ROCm SMI static library,...)
+	@$(call green,Building ROCm SMI static library,...,\n)
 	@$(QUIET) || $(call white,Running CMake,...)
 	CXX=$(CXX) cmake -S $(ROCM_DIR) -B $(ROCM_BUILD_DIR) \
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
@@ -434,7 +434,7 @@ rocm_smi:
 		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
 		-DBUILD_SHARED_LIBS=OFF $(SUPPRESS) || \
 		{ $(call red,CMake failed$(COMMA) continuing build without statically linking ROCm SMI,...); exit 0; }
-	@$(QUIET) || $(call white,\nBuilding and linking,...)
+	@$(QUIET) || $(call white,Building and linking,...,\n)
 	@cmake --build $(ROCM_BUILD_DIR) -j -t rocm_smi64 $(SUPPRESS) || \
 		{ $(call red,Make failed$(COMMA) continuing build without statically linking ROCm SMI,...); exit 0; }
 	@$(call green,100% -> $(call file_with_size,$(ROCM_BUILD_DIR)/rocm_smi/librocm_smi64.a))
@@ -451,11 +451,11 @@ endif
 btop: $(OBJECTS) | rocm_smi directories
 	@sleep 0.2 2>/dev/null || true
 	@TSTAMP=$$(date +%s 2>/dev/null || echo "0")
-	@$(QUIET) || $(call green,\nLinking and optimizing binary,...)
+	@$(QUIET) || $(call green,Linking and optimizing binary,...,\n)
 	@$(VERBOSE) || printf "$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS)\n"
 	@$(CXX) -o $(TARGETDIR)/btop $^ $(LDFLAGS) || exit 1
 	@$(call green,100% -> $(call file_with_size,$(TARGETDIR)/btop,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
-	@$(call green,\nBuild complete in $(GREEN)($(WHITE)$(call step_duration,$(TIMESTAMP))$(GREEN)))
+	@$(call green,Build complete in $(GREEN)($(WHITE)$(call step_duration,$(TIMESTAMP))$(GREEN)),,\n)
 
 #? Compile
 .ONESHELL:
