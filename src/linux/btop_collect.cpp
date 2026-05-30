@@ -294,6 +294,17 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+
+	//? Qualcomm Adreno data collection (via KGSL sysfs)
+	namespace Adreno {
+		const fs::path kgsl_path = "/sys/class/kgsl/kgsl-3d0";
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -379,6 +390,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+		}
+
+		if (shown_gpus.contains("adreno")) {
+			Gpu::Adreno::init();
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -2002,6 +2017,169 @@ namespace Gpu {
 		}
 	}
 
+	//? Qualcomm Adreno GPU data collection via sysfs/devfreq
+	namespace Adreno {
+		static fs::path devfreq_path;
+		static fs::path power_path;
+		static fs::path thermal_path;
+		static long long prev_active = 0, prev_suspended = 0;
+
+		static long long read_sysfs_ll(const fs::path& path) {
+			ifstream f(path);
+			long long val = 0;
+			if (f.good()) f >> val;
+			return val;
+		}
+
+		static string find_gpu_devfreq() {
+			const fs::path devfreq_dir = "/sys/class/devfreq";
+			if (!fs::exists(devfreq_dir)) return "";
+			for (const auto& entry : fs::directory_iterator(devfreq_dir)) {
+				if (entry.path().filename().string().find("gpu") == string::npos) continue;
+				// Verify it's an Adreno device via compatible string
+				fs::path compat_path = entry.path() / "device" / "of_node" / "compatible";
+				ifstream f(compat_path);
+				string compat;
+				if (f.good() and getline(f, compat) and compat.find("adreno") != string::npos) {
+					return entry.path().string();
+				}
+			}
+			return "";
+		}
+
+		static string find_gpu_thermal() {
+			const fs::path thermal_dir = "/sys/class/thermal";
+			if (!fs::exists(thermal_dir)) return "";
+			for (const auto& entry : fs::directory_iterator(thermal_dir)) {
+				ifstream type_f(entry.path() / "type");
+				string type;
+				if (type_f.good() and getline(type_f, type) and type.find("gpu") != string::npos) {
+					return entry.path().string();
+				}
+			}
+			return "";
+		}
+
+		static string get_gpu_name() {
+			ifstream f(devfreq_path / "device" / "of_node" / "compatible");
+			string compat;
+			if (f.good() and getline(f, compat)) {
+				auto pos = compat.find("adreno-");
+				if (pos != string::npos) {
+					string ver = compat.substr(pos + 7);
+					auto end = ver.find_first_not_of("0123456789");
+					if (end != string::npos) ver = ver.substr(0, end);
+					return "Adreno " + ver;
+				}
+			}
+			return "Adreno GPU";
+		}
+
+		bool init() {
+			if (initialized) return false;
+
+			string df = find_gpu_devfreq();
+			if (df.empty()) {
+				Logger::debug("Adreno: No GPU devfreq device found");
+				return false;
+			}
+			devfreq_path = df;
+
+			// The devfreq device has a "device" symlink to the platform device
+			fs::path dev_link = fs::path(df) / "device";
+			if (fs::exists(dev_link / "power" / "runtime_active_time")) {
+				power_path = fs::canonical(dev_link) / "power";
+			}
+
+			string th = find_gpu_thermal();
+			if (!th.empty()) thermal_path = th;
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size());
+			gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count] = get_gpu_name();
+
+			initialized = true;
+
+			// Seed runtime PM counters
+			if (!power_path.empty()) {
+				prev_active = read_sysfs_ll(power_path / "runtime_active_time");
+				prev_suspended = read_sysfs_ll(power_path / "runtime_suspended_time");
+			}
+
+			Adreno::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Intel::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			if constexpr(is_init) {
+				gpus_slice->supported_functions = {
+					.gpu_utilization = !power_path.empty(),
+					.mem_utilization = false,
+					.gpu_clock = true,
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = !thermal_path.empty(),
+					.mem_total = false,
+					.mem_used = false,
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
+				};
+			}
+
+			//? GPU clock from devfreq (Hz -> MHz)
+			if (gpus_slice->supported_functions.gpu_clock) {
+				long long cur_freq = read_sysfs_ll(devfreq_path / "cur_freq");
+				if (cur_freq <= 0) {
+					if constexpr(is_init) {
+						Logger::warning("Adreno: Failed to read GPU clock frequency");
+						gpus_slice->supported_functions.gpu_clock = false;
+					}
+				} else {
+					gpus_slice->gpu_clock_speed = (unsigned int)(cur_freq / 1'000'000);
+				}
+			}
+
+			//? GPU utilization from runtime PM active/suspended time delta
+			if (gpus_slice->supported_functions.gpu_utilization) {
+				long long active = read_sysfs_ll(power_path / "runtime_active_time");
+				long long suspended = read_sysfs_ll(power_path / "runtime_suspended_time");
+				long long d_active = active - prev_active;
+				long long d_suspended = suspended - prev_suspended;
+				long long total = d_active + d_suspended;
+				long long util = (total > 0) ? clamp(d_active * 100 / total, 0ll, 100ll) : 0ll;
+				gpus_slice->gpu_percent.at("gpu-totals").push_back(util);
+				prev_active = active;
+				prev_suspended = suspended;
+			}
+
+			//? Temperature
+			if (gpus_slice->supported_functions.temp_info) {
+				long long temp = read_sysfs_ll(fs::path(thermal_path) / "temp");
+				if (temp <= 0) {
+					if constexpr(is_init) {
+						Logger::warning("Adreno: Failed to read GPU temperature");
+						gpus_slice->supported_functions.temp_info = false;
+					}
+				} else {
+					gpus_slice->temp.push_back(temp / 1000); // millidegrees -> degrees
+				}
+			}
+
+			return true;
+		}
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2012,6 +2190,7 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		Adreno::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Intel::device_count); // size = Adreno::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
