@@ -1298,7 +1298,7 @@ namespace Mem {
 			}
 
 			struct statfs *stfs;
-			int count = getmntinfo(&stfs, MNT_WAIT);
+			int count = getmntinfo(&stfs, MNT_NOWAIT);
 			vector<string> found;
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
@@ -1348,25 +1348,48 @@ namespace Mem {
 			if (found.size() != last_found.size()) redraw = true;
 			last_found = std::move(found);
 
-			//? Get disk/partition stats
-			for (auto &[mountpoint, disk] : disks) {
-				if (std::error_code ec; not fs::exists(mountpoint, ec))
-					continue;
-				struct statvfs vfs;
-				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
-					continue;
+			//? Get disk/partition stats asynchronously to avoid blocking on unresponsive network mounts (e.g. SMB/NFS during backup)
+			static std::unordered_map<string, std::future<std::pair<disk_info, int>>> disks_stats_promises;
+			for (auto it = disks.begin(); it != disks.end(); ) {
+				auto &[mountpoint, disk] = *it;
+				if (auto promises_it = disks_stats_promises.find(mountpoint); promises_it != disks_stats_promises.end()) {
+					auto& promise = promises_it->second;
+					if (promise.valid() && promise.wait_for(std::chrono::seconds(0)) == std::future_status::timeout) {
+						++it;
+						continue;
+					}
+					auto promise_res = promises_it->second.get();
+					if (promise_res.second != -1) {
+						Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
+						++it;
+						continue;
+					}
+					auto &updated_stats = promise_res.first;
+					disk.total = updated_stats.total;
+					disk.free = updated_stats.free;
+					disk.used = updated_stats.used;
+					disk.used_percent = updated_stats.used_percent;
+					disk.free_percent = updated_stats.free_percent;
 				}
-				disk.total = vfs.f_blocks * vfs.f_frsize;
-				disk.free = vfs.f_bfree * vfs.f_frsize;
-				disk.used = disk.total - disk.free;
-				if (disk.total != 0) {
-					disk.used_percent = round((double)disk.used * 100 / disk.total);
-					disk.free_percent = 100 - disk.used_percent;
-				} else {
-					disk.used_percent = 0;
-					disk.free_percent = 0;
-				}
+				disks_stats_promises[mountpoint] = std::async(std::launch::async, [mountpoint]() -> std::pair<disk_info, int> {
+					struct statvfs vfs;
+					disk_info disk;
+					if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+						return {disk, errno};
+					}
+					disk.total = vfs.f_blocks * vfs.f_frsize;
+					disk.free = vfs.f_bfree * vfs.f_frsize;
+					disk.used = disk.total - disk.free;
+					if (disk.total != 0) {
+						disk.used_percent = round((double)disk.used * 100 / disk.total);
+						disk.free_percent = 100 - disk.used_percent;
+					} else {
+						disk.used_percent = 0;
+						disk.free_percent = 0;
+					}
+					return {disk, -1};
+				});
+				++it;
 			}
 
 			//? Setup disks order in UI and add swap if enabled
