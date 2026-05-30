@@ -33,7 +33,9 @@ tab-size = 4
 #include <unistd.h>
 
 // From `man 3 getifaddrs`: <net/if.h> must be included before <ifaddrs.h>
+// Some platforms also require <sys/socket.h> to be included before <net/if.h>.
 // clang-format off
+#include <sys/socket.h>
 #include <net/if.h>
 #include <ifaddrs.h>
 // clang-format on
