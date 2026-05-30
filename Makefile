@@ -1,11 +1,13 @@
-#* Btop++ makefile v1.6
+#* Btop++ makefile
 
-BANNER_FILE := ansi_banner.utf8
-BANNER = $(shell cat "$(BANNER_FILE)")
+MAKEFILE_VERSION = 1.6
 
 E = \033[
 RST = $(E)0m
 BLD = $(E)1m
+
+BANNER_FILE := ansi_banner.utf8
+BANNER = $(shell cat "$(BANNER_FILE)")       $(E)1;3;38;5;240mMakefile v$(MAKEFILE_VERSION)$(RST)
 
 CUR_LEFT = $(E)$(1)D
 CUR_RIGHT = $(E)$(1)C
