@@ -28,6 +28,7 @@ tab-size = 4
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <ctime>
 #include <filesystem>
 #include <limits.h>
 #include <mutex>
@@ -248,6 +249,19 @@ namespace Tools {
 	//* Return current time since epoch in microseconds
 	inline uint64_t time_micros() {
 		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
+
+	//* Return uptime in microseconds, excluding time spent in system suspend
+	inline uint64_t uptime_micros() {
+		struct timespec ts{};
+#ifdef __APPLE__
+		if (clock_gettime(CLOCK_UPTIME_RAW, &ts) != 0) return 0;
+#elif defined(__FreeBSD__)
+		if (clock_gettime(CLOCK_UPTIME, &ts) != 0) return 0;
+#else
+		if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+#endif
+		return static_cast<uint64_t>(ts.tv_sec) * 1'000'000 + static_cast<uint64_t>(ts.tv_nsec) / 1000;
 	}
 
 	//* Check if a string is a valid bool value

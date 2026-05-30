@@ -217,13 +217,11 @@ void clean_quit(int sig) {
 	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
 		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
-			pthread_cancel(Runner::runner_id);
 		}
 	#else
 		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
 		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
-			pthread_cancel(Runner::runner_id);
 		}
 	#endif
 	}
@@ -468,9 +466,9 @@ namespace Runner {
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
 			thread_wait();
-			atomic_wait_for(active, true, 5000);
+			atomic_wait_for(active, true, 30'000);
 			if (active) {
-				Global::exit_error_msg = "Runner thread failed to get active lock!";
+				Global::exit_error_msg = "Runner thread failed to get active lock (30s)!";
 				Global::thread_exception = true;
 				Input::interrupt();
 				stopping = true;
@@ -731,24 +729,14 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
-		atomic_wait_for(active, true, 5000);
+		atomic_wait_for(active, true, 10'000);
 		if (active) {
-			Logger::error("Stall in Runner thread, restarting!");
-			set_active(false);
-			// exit(1);
-			pthread_cancel(Runner::runner_id);
-
-			// Wait for the thread to actually terminate before creating a new one
-			void* thread_result;
-			int join_result = pthread_join(Runner::runner_id, &thread_result);
-			if (join_result != 0) {
-				Logger::warning("Failed to join cancelled thread: {}", strerror(join_result));
-			}
-
-			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
-				Global::exit_error_msg = "Failed to re-create _runner thread!";
-				clean_quit(1);
-			}
+			Logger::warning("Runner thread slow (>10s), waiting up to 30s...");
+			atomic_wait_for(active, true, 20'000);
+		}
+		if (active) {
+			Global::exit_error_msg = "Runner thread stalled for 30s, exiting.";
+			clean_quit(1);
 		}
 		if (stopping or Global::resized) return;
 
@@ -793,14 +781,14 @@ namespace Runner {
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
 			clean_quit(1);
 		} else if (is_runner_busy) {
-			atomic_wait_for(active, true, 5000);
+			atomic_wait_for(active, true, 30'000);
 			if (active) {
 				set_active(false);
 				if (Global::quitting) {
 					return;
 				}
 				else {
-					Global::exit_error_msg = "No response from Runner thread, quitting!";
+					Global::exit_error_msg = "No response from Runner thread (30s), quitting!";
 					clean_quit(1);
 				}
 			}

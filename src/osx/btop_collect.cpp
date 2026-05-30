@@ -49,6 +49,7 @@ tab-size = 4
 
 #include <cmath>
 #include <fstream>
+#include <future>
 #include <mutex>
 #include <numeric>
 #include <ranges>
@@ -817,38 +818,64 @@ namespace Cpu {
 		return got_sensors;
 	}
 
-	void update_sensors() {
-		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
+	struct SensorResult {
+		long long package_temp{};
+		std::vector<long long> core_temps;
+		bool valid{false};
+	};
+
+	static SensorResult collect_sensors() {
+		SensorResult result;
 		try {
 			if (macM1) {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 				ThermalSensors sensors;
-				std::vector<long long> core_temps;
-				current_cpu.temp.at(0).push_back(sensors.getSensors(core_temps));
-				if (current_cpu.temp.at(0).size() > 20)
-					current_cpu.temp.at(0).pop_front();
-				cpu_temp_only = core_temps.empty();
-
-				if (Config::getB("show_coretemp") and not core_temps.empty()) {
-					for (int core = 0; core < Shared::coreCount; core++) {
-						size_t sensor_index = static_cast<size_t>(core) * core_temps.size() / Shared::coreCount;
-						long long temp = core_temps.at(sensor_index);
-						if (cmp_less(core + 1, current_cpu.temp.size())) {
-							current_cpu.temp.at(core + 1).push_back(temp);
-							if (current_cpu.temp.at(core + 1).size() > 20)
-								current_cpu.temp.at(core + 1).pop_front();
-						}
-					}
-				}
+				result.package_temp = sensors.getSensors(result.core_temps);
+				result.valid = true;
 #endif
 			} else {
 				SMCConnection smcCon;
 				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
-				long long packageT = smcCon.getTemp(-1); // -1 returns package T
-				current_cpu.temp.at(0).push_back(packageT);
-
+				result.package_temp = smcCon.getTemp(-1);
 				for (int core = 0; core < Shared::coreCount; core++) {
-					long long temp = smcCon.getTemp((core / threadsPerCore) + core_offset); // same temp for all threads of same physical core
+					result.core_temps.push_back(smcCon.getTemp((core / threadsPerCore) + core_offset));
+				}
+				result.valid = true;
+			}
+		} catch (std::runtime_error &e) {
+			Logger::error("failed getting CPU temp: {}", e.what());
+		}
+		return result;
+	}
+
+	void update_sensors() {
+		static std::future<SensorResult> sensor_future;
+		static SensorResult last_result{};
+
+		current_cpu.temp_max = 95;  // we have no idea how to get the critical temp
+
+		if (sensor_future.valid() and
+		    sensor_future.wait_for(std::chrono::seconds(0)) != std::future_status::timeout) {
+			last_result = sensor_future.get();
+			if (not last_result.valid) {
+				got_sensors = false;
+			}
+		}
+
+		if (last_result.valid) {
+			current_cpu.temp.at(0).push_back(last_result.package_temp);
+			if (current_cpu.temp.at(0).size() > 20)
+				current_cpu.temp.at(0).pop_front();
+
+			if (macM1) {
+				cpu_temp_only = last_result.core_temps.empty();
+			}
+
+			bool show_coretemp = macM1 ? Config::getB("show_coretemp") : true;
+			if (show_coretemp and not last_result.core_temps.empty()) {
+				for (int core = 0; core < Shared::coreCount; core++) {
+					size_t sensor_index = static_cast<size_t>(core) * last_result.core_temps.size() / Shared::coreCount;
+					long long temp = last_result.core_temps.at(sensor_index);
 					if (cmp_less(core + 1, current_cpu.temp.size())) {
 						current_cpu.temp.at(core + 1).push_back(temp);
 						if (current_cpu.temp.at(core + 1).size() > 20)
@@ -856,10 +883,9 @@ namespace Cpu {
 					}
 				}
 			}
-		} catch (std::runtime_error &e) {
-			got_sensors = false;
-			Logger::error("failed getting CPU temp");
 		}
+
+		sensor_future = std::async(std::launch::async, collect_sensors);
 	}
 
 	string get_cpuHz() {
