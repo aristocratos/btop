@@ -131,6 +131,9 @@ namespace Config {
 
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
 
+		{"proc_tree_auto_collapse", "#* In tree-view, auto-collapse processes with this many or more direct children when\n"
+									"#* entering tree mode. 0 to disable. Useful for collapsing multi-process apps like browsers."},
+
 		{"keep_dead_proc_usage", "#* Should cpu and memory usage display be preserved for dead processes when paused."},
 
 		{"cpu_graph_upper", 	"#* Sets the CPU stat shown in upper half of the CPU graph, \"total\" is always available.\n"
@@ -364,6 +367,7 @@ namespace Config {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
+		{"proc_tree_auto_collapse", 0},
 		{"detailed_pid", 0},
 		{"restore_detailed_pid", 0},
 		{"selected_pid", 0},
@@ -557,6 +561,12 @@ namespace Config {
 
 		else if (name == "update_ms" and i_value > ONE_DAY_MILLIS)
 			validError = fmt::format("Config value update_ms set too high (>{}).", ONE_DAY_MILLIS);
+
+		else if (name == "proc_tree_auto_collapse" and i_value < 0)
+			validError = "Config value proc_tree_auto_collapse must be >= 0.";
+
+		else if (name == "proc_tree_auto_collapse" and i_value > 10000)
+			validError = "Config value proc_tree_auto_collapse set too high (>10000).";
 
 		else
 			return true;

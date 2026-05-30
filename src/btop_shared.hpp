@@ -474,6 +474,9 @@ namespace Proc {
 
 	//* Toggle collapse/expand of all tree entries
 	void toggle_tree_collapse(std::vector<proc_info>& current_procs);
+
+	//* Auto-collapse processes with many direct children when entering tree mode
+	void _auto_collapse_oversized(std::vector<proc_info>& current_procs, const bool tree_mode_change);
 }
 
 /// Detect container engine.

@@ -290,6 +290,24 @@ bool set_priority(pid_t pid, int priority) {
 			p.collapsed = do_collapse;
 		}
 	}
+
+	void _auto_collapse_oversized(std::vector<proc_info>& current_procs, const bool tree_mode_change) {
+		//? Only act when the user just switched into tree view
+		const int threshold = Config::getI("proc_tree_auto_collapse");
+		if (threshold <= 0 or not tree_mode_change) return;
+		//? Never collapse the root process or its direct children, only deeper busy parents
+		const size_t root_ppid = static_cast<size_t>(current_procs.at(0).ppid);
+		std::unordered_set<size_t> root_pids;
+		for (const auto& p : current_procs) {
+			if (static_cast<size_t>(p.ppid) == root_ppid) root_pids.insert(p.pid);
+		}
+		for (auto& p : current_procs) {
+			if (static_cast<size_t>(p.ppid) == root_ppid or root_pids.contains(static_cast<size_t>(p.ppid))) continue;
+			if (rng::count(current_procs, p.pid, &proc_info::ppid) >= threshold) {
+				p.collapsed = true;
+			}
+		}
+	}
 }
 
 auto detect_container() -> std::optional<std::string> {

@@ -1427,6 +1427,10 @@ proc_follow_detailed = true
 #* In tree-view, always accumulate child process resources in the parent process.
 proc_aggregate = false
 
+#* In tree-view, auto-collapse processes with this many or more direct children when
+#* entering tree mode. 0 to disable. Useful for collapsing multi-process apps like browsers.
+proc_tree_auto_collapse = 0
+
 #* Should cpu and memory usage display be preserved for dead processes when paused.
 keep_dead_proc_usage = false
 
