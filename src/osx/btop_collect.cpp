@@ -16,6 +16,7 @@ indent = tab
 tab-size = 4
 */
 
+#ifdef __APPLE__
 #include <Availability.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
@@ -47,6 +48,12 @@ tab-size = 4
 #include <stdexcept>
 #include <utility>
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
+#include "sensors.hpp"
+#endif
+#include "smc.hpp"
+#endif
+
 #include <cmath>
 #include <fstream>
 #include <future>
@@ -64,12 +71,7 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
-#include "sensors.hpp"
-#endif
-#include "smc.hpp"
-
-#if defined(GPU_SUPPORT)
+#if defined(GPU_SUPPORT) && defined(__APPLE__) && defined(__arm64__)
 #include <dlfcn.h>
 #include <mach/mach_time.h>
 
