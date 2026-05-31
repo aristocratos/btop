@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile
-        uses: vmactions/freebsd-vm@d1e65811565151536c0c894fff74f06351ed26e6 # v1.4.5
+        uses: vmactions/freebsd-vm@a6de9343ef5747433d9c25784c90e84998b9d69a # v1.4.6
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
