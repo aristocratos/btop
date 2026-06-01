@@ -1198,9 +1198,8 @@ namespace Mem {
 							string mountpoint = mapping.at(device);
 							if (disks.contains(mountpoint)) {
 								auto& disk = disks.at(mountpoint);
-								CFDictionaryRef properties;
-								IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0);
-								if (properties) {
+								CFDictionaryRef properties = nullptr;
+								if (IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0) == KERN_SUCCESS and properties != nullptr) {
 									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
 									if (statistics) {
 										disk_ios++;
@@ -1227,8 +1226,8 @@ namespace Mem {
 											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
 										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 									}
+									CFRelease(properties);
 								}
-								CFRelease(properties);
 							}
 						}
 					}
@@ -1353,6 +1352,10 @@ namespace Mem {
 			static std::unordered_map<string, std::future<std::pair<disk_info, int>>> disks_stats_promises;
 			for (auto it = disks.begin(); it != disks.end(); ) {
 				auto &[mountpoint, disk] = *it;
+				if (mountpoint == "swap") {
+					++it;
+					continue;
+				}
 				if (auto promises_it = disks_stats_promises.find(mountpoint); promises_it != disks_stats_promises.end()) {
 					auto& promise = promises_it->second;
 					if (promise.valid() && promise.wait_for(std::chrono::seconds(0)) == std::future_status::timeout) {
@@ -1360,6 +1363,7 @@ namespace Mem {
 						continue;
 					}
 					auto promise_res = promises_it->second.get();
+					disks_stats_promises.erase(promises_it);
 					if (promise_res.second != -1) {
 						Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 						++it;
