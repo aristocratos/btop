@@ -648,6 +648,43 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 </details>
 
+<details>
+<summary>
+
+### With Docker (NVIDIA GPU Support)
+</summary>
+
+If your host system has an older version of GCC/Clang (btop++ requires at least GCC 14 or Clang 19) or you prefer an isolated build environment, you can build and run btop++ with NVIDIA GPU monitoring support using Docker.
+
+#### 1. Build and export the native binary to host (Recommended)
+This compiles `btop` inside a compiler container and extracts the native binary to the `./bin` directory on your host machine. This way, you can run the binary natively without container namespace limitations or performance overhead:
+
+```bash
+./docker-build.sh export
+```
+Then run natively on your host:
+```bash
+./bin/btop
+```
+
+#### 2. Build the Docker image
+To build a Docker image named `btop-nvidia` for running `btop` completely containerized:
+
+```bash
+./docker-build.sh build
+```
+
+#### 3. Run inside the container
+To run the containerized `btop` with full access to host stats and NVIDIA GPU metrics (automatically cleans up the container using `--rm` upon exit):
+
+```bash
+./docker-build.sh run
+```
+
+*(Note: Running inside a container requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) to be installed on your host. If you run the exported binary natively on the host, you only need standard NVIDIA drivers).*
+
+</details>
+
 ## Compilation macOS OSX
 
    Requires at least GCC 14 or Clang 19.
