@@ -175,9 +175,9 @@ else ifeq ($(PLATFORM_LC),macos)
 	PLATFORM_DIR := osx
 	THREADS	:= $(shell sysctl -n hw.ncpu || echo 1)
 	SU_GROUP := wheel
-	override ADDFLAGS += -Wno-format-truncation
-	ifeq ($(ARCH),arm64)
-	  override ADDFLAGS += -framework IOKit -framework CoreFoundation -lIOReport
+	override ADDFLAGS += -Wno-format-truncation -framework IOKit -framework CoreFoundation 
+	ifeq ($(ARCH)$(GPU_SUPPORT),arm64true)
+	  override ADDFLAGS += -lIOReport
 	endif
 else ifeq ($(PLATFORM_LC),openbsd)
 	PLATFORM_DIR := openbsd
