@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile
-        uses: vmactions/openbsd-vm@6fac4962055fe9952d29930942445739e509fecd # v1.4.2
+        uses: vmactions/openbsd-vm@fcf799d7ce9c305ad89eabef1fb2fa5c1c42d0ee # v1.4.3
         with:
           release: '7.8'
           usesh: true
