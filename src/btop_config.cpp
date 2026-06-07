@@ -183,6 +183,9 @@ namespace Config {
 		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
 									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
 
+		{"disks_order", 		"#* Optional custom display order for disks, full mountpoint paths separated by whitespace \" \". Use \"swap\" to position the swap entry.\n"
+									"#* Listed disks are shown first in the given order, any remaining disks follow in their default order. Example: disks_order=\"/ swap /home\""},
+
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
@@ -276,6 +279,7 @@ namespace Config {
 		{"clock_format", "%X"},
 		{"custom_cpu_name", ""},
 		{"disks_filter", ""},
+		{"disks_order", ""},
 		{"io_graph_speeds", ""},
 		{"net_iface", ""},
 		{"base_10_bitrate", "Auto"},
