@@ -310,6 +310,30 @@ bool set_priority(pid_t pid, int priority) {
 	}
 }
 
+namespace Mem {
+	void apply_disks_order(mem_info& mem) {
+		const string& order = Config::getS("disks_order");
+		if (order.empty() or mem.disks_order.size() < 2)
+			return;
+
+		vector<string> new_order;
+		new_order.reserve(mem.disks_order.size());
+
+		//? Place the disks named in the config option first, in the requested order
+		for (const auto& mountpoint : ssplit(order)) {
+			if (v_contains(mem.disks_order, mountpoint) and not v_contains(new_order, mountpoint))
+				new_order.push_back(mountpoint);
+		}
+		//? Append any remaining disks, preserving their default order
+		for (const auto& mountpoint : mem.disks_order) {
+			if (not v_contains(new_order, mountpoint))
+				new_order.push_back(mountpoint);
+		}
+
+		mem.disks_order = std::move(new_order);
+	}
+}
+
 auto detect_container() -> std::optional<std::string> {
     std::error_code err;
 
