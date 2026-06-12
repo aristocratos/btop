@@ -190,6 +190,11 @@ namespace Gpu {
 	namespace Asysfs {
 		extern bool shutdown();
 	}
+	namespace Drm {
+		extern bool init();
+		extern bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+	}
 	#ifdef __APPLE__
 	namespace AppleSilicon {
 		extern bool shutdown();

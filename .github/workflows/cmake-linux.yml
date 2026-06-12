@@ -54,6 +54,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdrm-dev ninja-build
+
       - name: Install clang ${{ matrix.version }}
         if: ${{ matrix.compiler == 'clang' }}
         run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${VERSION} all
