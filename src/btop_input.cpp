@@ -498,6 +498,8 @@ namespace Input {
 						if (key == "C")	Proc::toggle_children = pid;
 						no_update = false;
 					}
+					else
+						keep_going = true;
 				}
 				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
 					atomic_wait(Runner::active);
