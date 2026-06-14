@@ -347,6 +347,7 @@ namespace Input {
 					Config::flip("proc_tree");
 					no_update = false;
 					Config::set("update_following", true);
+					Runner::run("cpu", no_update, redraw);
 				}
 				else if (key == "E" and Config::getB("proc_tree")) {
 					atomic_wait(Runner::active);
