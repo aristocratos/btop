@@ -533,6 +533,7 @@ namespace Input {
 
 				if (not keep_going) {
 					Runner::run("proc", no_update, redraw);
+					Runner::run("cpu", no_update, redraw);
 					return;
 				}
 			}
