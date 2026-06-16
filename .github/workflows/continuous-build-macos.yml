@@ -1,5 +1,7 @@
 name: Continuous Build MacOS
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -31,19 +33,26 @@ on:
 
 jobs:
   build-macos:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os.runner }}
+      cancel-in-progress: true
+    continue-on-error: true
     strategy:
       matrix:
         os:
-         # - {runner: 'macos-13', version: 'Ventura'}
-          - {runner: 'macos-14', version: 'Sonoma'}
-          - {runner: 'macos-15', version: 'Sequoia'}
+          - runner: macos-14
+            version: Sonoma
+          - runner: macos-15
+            version: Sequoia
     runs-on: ${{ matrix.os.runner }}
     steps:
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Install build tools
         run: |
@@ -52,13 +61,16 @@ jobs:
           brew install --force --overwrite gcc@15 lowdown
 
       - name: Compile
+        env:
+          RUNNER: "${{ matrix.os.runner }}"
+          VERSION: "${{ matrix.os.version }}"
         run: |
           make CXX=$(brew --prefix)/bin/g++-15
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
+          mv bin/btop bin/btop-arm64-${RUNNER}-${VERSION}-$GIT_HASH
           ls -alh bin
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}
           path: 'bin/*'

@@ -1,5 +1,7 @@
 name: Continuous Build OpenBSD
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -29,15 +31,21 @@ on:
       - 'Makefile'
       - '.github/workflows/continuous-build-openbsd.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-openbsd:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Compile
-        uses: vmactions/openbsd-vm@v1
+        uses: vmactions/openbsd-vm@fcf799d7ce9c305ad89eabef1fb2fa5c1c42d0ee # v1.4.3
         with:
           release: '7.8'
           usesh: true
@@ -49,7 +57,7 @@ jobs:
             GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
             mv bin/btop bin/btop-"$GIT_HASH"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: btop-x86_64-openbsd-7.8
           path: 'bin/*'

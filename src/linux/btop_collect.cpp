@@ -110,6 +110,33 @@ long long get_monotonicTimeUSec()
 	return time.tv_sec * 1000000 + time.tv_nsec / 1000;
 }
 
+// Wrapper with join behavior of std::jthread to avoid -fexperimental-library
+// flag usage for Clang 19, ideally replace once flag is no longer needed.
+struct join_thread
+{
+	std::thread t;
+
+	join_thread() noexcept = default;
+
+	template<typename... Args>
+	explicit join_thread(Args&&... args) : t(std::forward<Args>(args)...) {}
+
+	~join_thread() { if (t.joinable()) t.join(); }
+
+	join_thread(join_thread&&) noexcept = default;
+
+	join_thread& operator=(join_thread&& other) noexcept {
+		if (t.joinable()) t.join();
+		t = std::move(other.t);
+		return *this;
+	}
+
+	void join() {
+		t.join();
+	}
+
+};
+
 }
 
 namespace Cpu {
@@ -144,9 +171,10 @@ namespace Cpu {
 	std::unordered_map<int, int> core_mapping;
 }
 
+#if defined(GPU_SUPPORT)
+
 namespace Gpu {
 	vector<gpu_info> gpus;
-#ifdef GPU_SUPPORT
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -278,8 +306,32 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
-#endif
+
+	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
+	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
+	//? Reads only standard amdgpu DRM sysfs nodes; no library dependency.
+	namespace Asysfs {
+		struct device_paths {
+			std::filesystem::path device;
+			std::filesystem::path hwmon;
+			std::filesystem::path power;            //? empty if no power sensor
+			uint32_t pci_device_id;
+			bool has_temp;
+			bool has_freq;
+			bool has_busy;
+			bool has_vram;
+		};
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+		vector<device_paths> devices;
+	}
 }
+
+#endif // GPU_SUPPORT
 
 namespace Mem {
 	double old_uptime;
@@ -358,6 +410,7 @@ namespace Shared {
 
 		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
+			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
 		}
 
 		if (shown_gpus.contains("intel")) {
@@ -734,12 +787,15 @@ namespace Cpu {
 		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
 
+		const int num_sensors = core_sensors.size();
+
 		//? Try to get core mapping from /proc/cpuinfo
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
 		if (cpuinfo.good()) {
 			int cpu{};
 			int core{};
-			int n{};
+			int max_core{};
+			std::unordered_map<int, int> cpu_to_core;
 			for (string instr; cpuinfo >> instr;) {
 				if (instr == "processor") {
 					cpuinfo.ignore(SSmax, ':');
@@ -748,30 +804,30 @@ namespace Cpu {
 				else if (instr.starts_with("core")) {
 					cpuinfo.ignore(SSmax, ':');
 					cpuinfo >> core;
-					if (std::cmp_greater_equal(core, core_sensors.size())) {
-						if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-						core_map[cpu] = n++;
-					}
-					else
-						core_map[cpu] = core;
+					cpu_to_core[cpu] = core;
+					max_core = std::max(max_core, core);
 				}
 				cpuinfo.ignore(SSmax, '\n');
 			}
+			if (not cpu_to_core.empty())
+				//? Divide core ID space evenly across sensors (handles AMD multi-CCD, e.g. 5950x: IDs 0-7 -> Tccd1, 8-15 -> Tccd2)
+				for (const auto& [cpu_id, core_id] : cpu_to_core) {
+					core_map[cpu_id] = core_id * num_sensors / (max_core + 1);
+				}
 		}
 
 		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
 		if (cmp_less(core_map.size(), Shared::coreCount)) {
 			if (Shared::coreCount % 2 == 0 and (long)core_map.size() == Shared::coreCount / 2) {
-				for (int i = 0, n = 0; i < Shared::coreCount / 2; i++) {
-					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-					core_map[Shared::coreCount / 2 + i] = n++;
+				//? SMT siblings mirror their first half of cores.
+				for (int i = 0; i < Shared::coreCount / 2; i++) {
+					core_map[Shared::coreCount / 2 + i] = core_map.count(i) ? core_map.at(i) : (i % num_sensors);
 				}
 			}
 			else {
 				core_map.clear();
-				for (int i = 0, n = 0; i < Shared::coreCount; i++) {
-					if (std::cmp_greater_equal(n, core_sensors.size())) n = 0;
-					core_map[i] = n++;
+				for (int i = 0; i < Shared::coreCount; i++) {
+					core_map[i] = (i * num_sensors) / Shared::coreCount;
 				}
 			}
 		}
@@ -785,7 +841,7 @@ namespace Cpu {
 					if (vals.size() != 2) continue;
 					int change_id = std::stoi(vals.at(0));
 					int new_id = std::stoi(vals.at(1));
-					if (not core_map.contains(change_id) or cmp_greater(new_id, core_sensors.size())) continue;
+					if (not core_map.contains(change_id) or cmp_greater(new_id, num_sensors)) continue;
 					core_map.at(change_id) = new_id;
 				}
 			}
@@ -1317,7 +1373,8 @@ namespace Gpu {
 			if (!initialized) return false;
 
 			nvmlReturn_t result;
-			std::thread pcie_tx_thread, pcie_rx_thread;
+			join_thread pcie_tx_thread;
+			join_thread pcie_rx_thread;
 			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
@@ -1362,7 +1419,7 @@ namespace Gpu {
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
 				if (gpus_slice[i].supported_functions.pcie_txrx and (Config::getB("nvml_measure_pcie_speeds") or is_init)) {
-					pcie_tx_thread = std::thread([gpus_slice, i]() {
+					pcie_tx_thread = join_thread([gpus_slice, i]() {
 						unsigned int tx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_TX_BYTES, &tx);
     					if (result != NVML_SUCCESS) {
@@ -1371,7 +1428,7 @@ namespace Gpu {
 						} else gpus_slice[i].pcie_tx = (long long)tx;
 					});
 
-					pcie_rx_thread = std::thread([gpus_slice, i]() {
+					pcie_rx_thread = join_thread([gpus_slice, i]() {
 						unsigned int rx;
 						nvmlReturn_t result = nvmlDeviceGetPcieThroughput(devices[i], NVML_PCIE_UTIL_RX_BYTES, &rx);
     					if (result != NVML_SUCCESS) {
@@ -1539,7 +1596,8 @@ namespace Gpu {
 				"librocm_smi64.so",
 				"librocm_smi64.so.5", // fedora
 				"librocm_smi64.so.1.0", // debian
-				"librocm_smi64.so.6"
+				"librocm_smi64.so.6",
+				"librocm_smi64.so.7" // rocm 7 support / Ubuntu 26.04
 			};
 
 			for (const auto& l : libRocAlts) {
@@ -1596,18 +1654,34 @@ namespace Gpu {
 			if (result != RSMI_STATUS_SUCCESS) {
 				Logger::warning("ROCm SMI: Failed to get version");
 				return false;
-			} else if (version.major == 5) {
+			}
+
+			// Two distinct real-world libraries report version.major == 1:
+			//   - ROCm 7.2 ships the v6 ABI (see upstream PR #1566).
+			//   - Debian/Ubuntu's librocm-smi64 is built from 5.x sources but
+			//     rocm_smi64Config.h reports version 1.0.0, so the ABI is v5.
+			// Probe a 6.x-only symbol to disambiguate instead of guessing.
+			uint32_t effective_major = version.major;
+			if (version.major == 1) {
+				bool has_v6_symbol = (dlsym(rsmi_dl_handle, "rsmi_dev_activity_metric_get") != nullptr);
+				(void)dlerror(); // clear error state from the probe
+				effective_major = has_v6_symbol ? 6 : 5;
+				Logger::warning("ROCm SMI: library reports version 1.x; assuming {}.x ABI based on symbol probe",
+					has_v6_symbol ? "6" : "5");
+			}
+
+			if (effective_major == 5) {
 				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			// In the release tarballs of rocm 6.0.0 and 6.0.2 the version queried with rsmi_version_get is 7.0.0.0
-			} else if (version.major == 6 || version.major == 7) {
+			} else if (effective_major == 6 || effective_major == 7) {
 				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
 			} else {
 				Logger::warning("ROCm SMI: Dynamic loading only supported for version 5 and 6");
 				return false;
 			}
-			version_major = version.major;
+			version_major = effective_major;
 		#endif
 
 			//? Device count
@@ -1701,20 +1775,31 @@ namespace Gpu {
 				}
 			#if !defined(RSMI_STATIC)
 				//? Clock speeds
+				// Some AMD devices (e.g. integrated GPUs with the Debian 5.7.0 rocm_smi package) return
+				// RSMI_STATUS_SUCCESS from rsmi_dev_gpu_clk_freq_get but leave frequencies.current
+				// uninitialized, which crashes when used as an array index. Bound-check before indexing.
 				if (gpus_slice[i].supported_functions.gpu_clock) {
 					if (version_major == 5) {
-						rsmi_frequencies_t_v5 frequencies;
+						rsmi_frequencies_t_v5 frequencies{};
 						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_SYS, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
 							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
 							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+								|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES_V5) {
+							Logger::warning("ROCm SMI: GPU clock speed unsupported on this device");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
 						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
 					else if (version_major == 6 || version_major == 7) {
-						rsmi_frequencies_t_v6 frequencies;
+						rsmi_frequencies_t_v6 frequencies{};
 						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_SYS, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
 							Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+						} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+								|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES_V6) {
+							Logger::warning("ROCm SMI: GPU clock speed unsupported on this device");
 							if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
 						} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
@@ -1722,43 +1807,61 @@ namespace Gpu {
 
 				if (gpus_slice[i].supported_functions.mem_clock) {
 					if (version_major == 5) {
-						rsmi_frequencies_t_v5 frequencies;
+						rsmi_frequencies_t_v5 frequencies{};
 						result = rsmi_dev_gpu_clk_freq_get_v5(i, RSMI_CLK_TYPE_MEM, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
 							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
 							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+								|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES_V5) {
+							Logger::warning("ROCm SMI: VRAM clock speed unsupported on this device");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
 						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
 					else if (version_major == 6 || version_major == 7) {
-						rsmi_frequencies_t_v6 frequencies;
+						rsmi_frequencies_t_v6 frequencies{};
 						result = rsmi_dev_gpu_clk_freq_get_v6(i, RSMI_CLK_TYPE_MEM, &frequencies);
 						if (result != RSMI_STATUS_SUCCESS) {
 							Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
+							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+						} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+								|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES_V6) {
+							Logger::warning("ROCm SMI: VRAM clock speed unsupported on this device");
 							if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
 						} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 					}
 				}
 			#else
 				//? Clock speeds
+				// Same defensive pattern as the dynamic path above: bound-check the reported
+				// frequencies before indexing, in case the driver returns SUCCESS without
+				// populating the struct.
 				if (gpus_slice[i].supported_functions.gpu_clock) {
-					rsmi_frequencies_t frequencies;
+					rsmi_frequencies_t frequencies{};
 					result = rsmi_dev_gpu_clk_freq_get(i, RSMI_CLK_TYPE_SYS, &frequencies);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU clock speed: ");
+						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
+					} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+							|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES) {
+						Logger::warning("ROCm SMI: GPU clock speed unsupported on this device");
 						if constexpr(is_init) gpus_slice[i].supported_functions.gpu_clock = false;
     				} else gpus_slice[i].gpu_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
 
 				if (gpus_slice[i].supported_functions.mem_clock) {
-					rsmi_frequencies_t frequencies;
+					rsmi_frequencies_t frequencies{};
 					result = rsmi_dev_gpu_clk_freq_get(i, RSMI_CLK_TYPE_MEM, &frequencies);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM clock speed: ");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
+					} else if (frequencies.num_supported == 0 || frequencies.current >= frequencies.num_supported
+							|| frequencies.num_supported > RSMI_MAX_NUM_FREQUENCIES) {
+						Logger::warning("ROCm SMI: VRAM clock speed unsupported on this device");
+						if constexpr(is_init) gpus_slice[i].supported_functions.mem_clock = false;
     				} else gpus_slice[i].mem_clock_speed = (long long)frequencies.frequency[frequencies.current]/1000000; // Hz to MHz
 				}
 			#endif
-
     			//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
     				uint64_t power;
@@ -2165,12 +2268,16 @@ namespace Gpu {
 			engines = discover_engines(device);
 			if (!engines) {
 				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
+				free(gpu_device_name);
 				return false;
 			}
 
 			int ret = pmu_init(engines);
 			if (ret) {
 				Logger::warning("Intel GPU: Failed to initialize PMU");
+				free(gpu_device_name);
+				free_engines(engines);
+				engines = nullptr;
 				return false;
 			}
 
@@ -2182,15 +2289,15 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = string(gpu_device_name);
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count] = "Intel GPU";
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "Intel GPU";
 			}
 
 			free(gpu_device_name);
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
 
 			return true;
 		}
@@ -2254,6 +2361,191 @@ namespace Gpu {
 		}
 	}
 
+	namespace Asysfs {
+		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
+		static long long read_ll(const std::filesystem::path& path, long long fallback = 0) {
+			try {
+				return std::stoll(readfile(path, std::to_string(fallback)));
+			} catch (const std::exception&) {
+				return fallback;
+			}
+		}
+
+		//? Match /sys/class/drm/cardN (no '-', all digits after "card"). Skips card1-DP-1, renderD*, etc.
+		static bool is_card_node(const string& fname) {
+			if (not fname.starts_with("card") or fname.size() <= 4) return false;
+			return std::ranges::all_of(fname.begin() + 4, fname.end(),
+				[](char c) { return c >= '0' and c <= '9'; });
+		}
+
+		//? Pick the first hwmon* subdirectory under <device>/hwmon, or empty path if none.
+		static std::filesystem::path find_hwmon(const std::filesystem::path& device) {
+			const auto hwmon_dir = device / "hwmon";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(hwmon_dir, ec)) return {};
+			for (const auto& h : std::filesystem::directory_iterator(hwmon_dir, ec)) {
+				if (h.is_directory()) return h.path();
+			}
+			return {};
+		}
+
+		bool init() {
+			if (initialized) return false;
+			//? Self-skip when rocm-smi already enumerated AMD devices — avoids double-counting on
+			//? systems where both backends would succeed.
+			if (Rsmi::device_count > 0) return false;
+			devices.clear();
+
+			const std::filesystem::path drm_root("/sys/class/drm");
+			std::error_code ec;
+			if (not std::filesystem::is_directory(drm_root, ec)) {
+				Logger::debug("amdgpu sysfs: /sys/class/drm not present");
+				return false;
+			}
+
+			for (const auto& entry : std::filesystem::directory_iterator(drm_root, ec)) {
+				if (not is_card_node(entry.path().filename().string())) continue;
+
+				const auto device_link = entry.path() / "device";
+				if (not std::filesystem::exists(device_link)) continue;
+
+				//? Vendor must be exactly 0x1002 (AMD). The sysfs node ends with a newline,
+				//? so trim before comparing.
+				string vendor = readfile(device_link / "vendor", "");
+				while (not vendor.empty() and (vendor.back() == '\n' or vendor.back() == ' ')) vendor.pop_back();
+				if (vendor != "0x1002") continue;
+
+				//? Driver must be amdgpu (rules out radeon-driver-only legacy GPUs which use a
+				//? different sysfs layout).
+				const auto driver_link = std::filesystem::read_symlink(device_link / "driver", ec);
+				if (ec or driver_link.filename().string() != "amdgpu") continue;
+
+				device_paths d{};
+				d.device = device_link;
+				try {
+					//? "device" file holds e.g. "0x150e\n" — base 0 lets stoul autodetect the 0x prefix.
+					d.pci_device_id = (uint32_t)std::stoul(readfile(device_link / "device", "0"), nullptr, 0);
+				} catch (const std::exception&) {
+					d.pci_device_id = 0;
+				}
+				d.hwmon = find_hwmon(device_link);
+
+				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
+				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
+
+				if (not d.hwmon.empty()) {
+					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
+					d.has_freq = std::filesystem::exists(d.hwmon / "freq1_input");
+					//? Prefer power1_average (filtered, EMA) over power1_input (instantaneous).
+					const auto avg = d.hwmon / "power1_average";
+					const auto inst = d.hwmon / "power1_input";
+					if (std::filesystem::exists(avg)) d.power = avg;
+					else if (std::filesystem::exists(inst)) d.power = inst;
+				}
+
+				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
+				//? or driver states where nothing useful is exposed yet. Otherwise btop would
+				//? render an empty GPU entry every tick.
+				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
+					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
+					continue;
+				}
+
+				devices.push_back(std::move(d));
+			}
+
+			device_count = (uint32_t)devices.size();
+			if (device_count == 0) {
+				Logger::debug("amdgpu sysfs: no AMD cards found in /sys/class/drm");
+				return false;
+			}
+
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(Nvml::device_count + Rsmi::device_count + device_count);
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_names[Nvml::device_count + Rsmi::device_count + i] =
+					fmt::format("AMD GPU (1002:{:04x})", devices[i].pci_device_id);
+			}
+
+			initialized = true;
+			Logger::info("Using amdgpu sysfs for {} AMD GPU(s)", device_count);
+			Asysfs::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			devices.clear();
+			device_count = 0;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_info& gpu = gpus_slice[i];
+				const device_paths& d = devices[i];
+
+				if constexpr (is_init) {
+					gpu.supported_functions = {
+						.gpu_utilization = d.has_busy,
+						.mem_utilization = false,
+						.gpu_clock = d.has_freq,
+						.mem_clock = false, //? only DPM table is exposed via pp_dpm_mclk, not the current frequency
+						.pwr_usage = not d.power.empty(),
+						.pwr_state = false,
+						.temp_info = d.has_temp,
+						.mem_total = d.has_vram,
+						.mem_used = d.has_vram,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false,
+					};
+					//? Start at zero and let the observed peak set the scale, like Intel does (line 1958-ish).
+					gpu.pwr_max_usage = 0;
+				}
+
+				if (d.has_busy) {
+					gpu.gpu_percent.at("gpu-totals").push_back(
+						std::clamp(read_ll(d.device / "gpu_busy_percent"), 0LL, 100LL));
+				}
+
+				if (d.has_temp) {
+					gpu.temp.push_back(read_ll(d.hwmon / "temp1_input") / 1000); //? millidegrees → degrees
+				}
+
+				if (not d.power.empty()) {
+					gpu.pwr_usage = read_ll(d.power) / 1000; //? microwatts → milliwatts
+					gpu.pwr_max_usage = std::max(gpu.pwr_max_usage, gpu.pwr_usage);
+					if (gpu.pwr_max_usage > 0) {
+						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+							std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL));
+					}
+				}
+
+				if (d.has_freq) {
+					gpu.gpu_clock_speed = (unsigned int)(read_ll(d.hwmon / "freq1_input") / 1'000'000); //? Hz → MHz
+				}
+
+				if (d.has_vram) {
+					gpu.mem_total = read_ll(d.device / "mem_info_vram_total");
+					gpu.mem_used = read_ll(d.device / "mem_info_vram_used");
+					if (gpu.mem_total > 0) {
+						gpu.gpu_percent.at("gpu-vram-totals").push_back(
+							std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
+					}
+				}
+			}
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2263,7 +2555,8 @@ namespace Gpu {
 		//* Collect data
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
-		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Intel::device_count
+		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
+		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
@@ -2278,7 +2571,7 @@ namespace Gpu {
 			if (gpu.supported_functions.mem_total)
 				mem_total += gpu.mem_total;
 			if (gpu.supported_functions.pwr_usage)
-				mem_total += gpu.pwr_usage;
+				pwr_total += gpu.pwr_usage;
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
@@ -2298,9 +2591,9 @@ namespace Gpu {
 
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
 		if (mem_total != 0)
-			shared_gpu_percent.at("gpu-vram-total").push_back(mem_usage_total / mem_total);
+			shared_gpu_percent.at("gpu-vram-total").push_back(static_cast<long long>(round(mem_usage_total * 100.0 / mem_total)));
 		if (gpu_pwr_total_max != 0)
-			shared_gpu_percent.at("gpu-pwr-total").push_back(pwr_total / gpu_pwr_total_max);
+			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp(static_cast<long long>(round(pwr_total * 100.0 / gpu_pwr_total_max)), 0ll, 100ll));
 
 		if (width != 0) {
 			while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
@@ -3138,7 +3431,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1, toggle_children = -1;
+	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes{};
 	atomic<int> numpids{};
 	int filter_found{};
@@ -3323,12 +3616,13 @@ namespace Proc {
 				pread.close();
 			}
 
-			//? Get cpu total times from /proc/stat
+			//? Get cpu total times from /proc/stat up to the guest field
 			cputimes = 0;
 			pread.open(Shared::procPath / "stat");
 			if (pread.good()) {
 				pread.ignore(SSmax, ' ');
-				for (uint64_t times; pread >> times; cputimes += times);
+				int i = 0;
+				for (uint64_t times; i < 8 and pread >> times; cputimes += times, i++);
 			}
 			else throw std::runtime_error("Failure to read /proc/stat");
 			pread.close();
@@ -3595,7 +3889,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
@@ -3612,6 +3906,13 @@ namespace Proc {
 				}
 				collapse = expand = -1;
 			}
+
+			if (collapse_all != -1) {
+				toggle_tree_collapse(current_procs);
+				collapse_all = -1;
+				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+			}
+
 			if (should_filter or not filter.empty()) filter_found = 0;
 
 			vector<tree_proc> tree_procs;
@@ -3625,6 +3926,9 @@ namespace Proc {
 
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
+
+			//? Auto-collapse processes with many children when entering tree mode
+			_auto_collapse_oversized(current_procs, tree_mode_change);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {

@@ -24,6 +24,7 @@ tab-size = 4
 #include <clocale>
 #include <filesystem>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <pthread.h>
 #include <span>
@@ -93,7 +94,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.6";
+	const string Version = "1.4.7";
 
 	int coreCount;
 	string overlay;
@@ -191,7 +192,7 @@ void term_resize(bool force) {
 					if (intKey > 0 and intKey < 5) {
 				#endif
 						const auto& box = all_boxes.at(intKey);
-						Config::current_preset = -1;
+						Config::current_preset.reset();
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
 					}
@@ -216,13 +217,11 @@ void clean_quit(int sig) {
 	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
 		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
-			pthread_cancel(Runner::runner_id);
 		}
 	#else
 		constexpr struct timespec ts { .tv_sec = 5, .tv_nsec = 0 };
 		if (pthread_timedjoin_np(Runner::runner_id, nullptr, &ts) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
-			pthread_cancel(Runner::runner_id);
 		}
 	#endif
 	}
@@ -230,6 +229,10 @@ void clean_quit(int sig) {
 #ifdef GPU_SUPPORT
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
+	Gpu::Asysfs::shutdown();
+	#ifdef __APPLE__
+	Gpu::AppleSilicon::shutdown();
+	#endif
 #endif
 
 
@@ -288,14 +291,9 @@ static void _crash_handler(const int sig) {
 static void _signal_handler(const int sig) {
 	switch (sig) {
 		case SIGINT:
-			if (Runner::active) {
-				Global::should_quit = true;
-				Runner::stopping = true;
-				Input::interrupt();
-			}
-			else {
-				clean_quit(0);
-			}
+			Global::should_quit = true;
+			if (Runner::active) Runner::stopping = true;
+			Input::interrupt();
 			break;
 		case SIGTSTP:
 			if (Runner::active) {
@@ -311,7 +309,8 @@ static void _signal_handler(const int sig) {
 			_resume();
 			break;
 		case SIGWINCH:
-			term_resize();
+			Global::resized = true;
+			Input::interrupt();
 			break;
 		case SIGUSR1:
 			// Input::poll interrupt
@@ -354,15 +353,14 @@ void init_config(bool low_color, std::optional<std::string>& filter) {
 
 //* Manages secondary thread for collection and drawing of boxes
 namespace Runner {
-	atomic<bool> active (false);
+	atomic_waiting_lock active;
 	atomic<bool> stopping (false);
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
 
 	static inline auto set_active(bool value) noexcept {
-		active.store(value, std::memory_order_relaxed);
-		active.notify_all();
+		active.store(value);
 	}
 
 	//* Setup semaphore for triggering thread to do work
@@ -370,25 +368,6 @@ namespace Runner {
 	std::binary_semaphore do_work { 0 };
 	inline void thread_wait() { do_work.acquire(); }
 	inline void thread_trigger() { do_work.release(); }
-
-	//* RAII wrapper for pthread_mutex locking
-	class thread_lock {
-		pthread_mutex_t& pt_mutex;
-	public:
-		int status;
-		explicit thread_lock(pthread_mutex_t& mtx) : pt_mutex(mtx) {
-			pthread_mutex_init(&pt_mutex, nullptr);
-			status = pthread_mutex_lock(&pt_mutex);
-		}
-		~thread_lock() noexcept {
-			if (status == 0)
-				pthread_mutex_unlock(&pt_mutex);
-		}
-		thread_lock(const thread_lock& other) = delete;
-		thread_lock& operator=(const thread_lock& other) = delete;
-		thread_lock(thread_lock&& other) = delete;
-		thread_lock& operator=(thread_lock&& other) = delete;
-	};
 
 	//* Wrapper for raising privileges when using SUID bit
 	class gain_priv {
@@ -412,7 +391,7 @@ namespace Runner {
 	string empty_bg;
 	bool pause_output{};
 	sigset_t mask;
-	pthread_mutex_t mtx;
+	std::mutex mtx;
 
 	enum debug_actions {
 		collect_begin,
@@ -483,21 +462,15 @@ namespace Runner {
 		sigaddset(&mask, SIGTERM);
 		pthread_sigmask(SIG_BLOCK, &mask, nullptr);
 
-		//? pthread_mutex_lock to lock thread and monitor health from main thread
-		thread_lock pt_lck(mtx);
-		if (pt_lck.status != 0) {
-			Global::exit_error_msg = "Exception in runner thread -> pthread_mutex_lock error id: " + to_string(pt_lck.status);
-			Global::thread_exception = true;
-			Input::interrupt();
-			stopping = true;
-		}
+		// TODO: On first glance it looks redudant with `Runner::active`.
+		std::lock_guard lock {mtx};
 
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		while (not Global::quitting) {
 			thread_wait();
-			atomic_wait_for(active, true, 5000);
+			atomic_wait_for(active, true, 30'000);
 			if (active) {
-				Global::exit_error_msg = "Runner thread failed to get active lock!";
+				Global::exit_error_msg = "Runner thread failed to get active lock (30s)!";
 				Global::thread_exception = true;
 				Input::interrupt();
 				stopping = true;
@@ -508,7 +481,7 @@ namespace Runner {
 			}
 
 			//? Atomic lock used for blocking non thread-safe actions in main thread
-			atomic_lock lck(active);
+			auto lck = active.lock();
 
 			//? Set effective user if SUID bit is set
 			gain_priv powers{};
@@ -534,7 +507,7 @@ namespace Runner {
 
 			//* Run collection and draw functions for all boxes
 			try {
-			#ifdef GPU_SUPPORT
+#if defined(GPU_SUPPORT)
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
 					Config::getS("cpu_graph_lower").starts_with("gpu-")
@@ -555,9 +528,7 @@ namespace Runner {
 					if (Global::debug) debug_timer("gpu", collect_done);
 				}
 				auto& gpus_ref = gpus;
-			#else
-				vector<Gpu::gpu_info> gpus_ref{};
-			#endif
+#endif // GPU_SUPPORT
 
 				//? CPU
 				if (v_contains(conf.boxes, "cpu")) {
@@ -578,7 +549,16 @@ namespace Runner {
 						if (Global::debug) debug_timer("cpu", draw_begin);
 
 						//? Draw box
-						if (not pause_output) output += Cpu::draw(cpu, gpus_ref, conf.force_redraw, conf.no_update);
+						if (not pause_output) {
+							output += Cpu::draw(
+								cpu,
+#if defined(GPU_SUPPORT)
+								gpus_ref,
+#endif // GPU_SUPPORT
+								conf.force_redraw,
+								conf.no_update
+							);
+						}
 
 						if (Global::debug) debug_timer("cpu", draw_done);
 					}
@@ -751,24 +731,14 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
-		atomic_wait_for(active, true, 5000);
+		atomic_wait_for(active, true, 10'000);
 		if (active) {
-			Logger::error("Stall in Runner thread, restarting!");
-			set_active(false);
-			// exit(1);
-			pthread_cancel(Runner::runner_id);
-
-			// Wait for the thread to actually terminate before creating a new one
-			void* thread_result;
-			int join_result = pthread_join(Runner::runner_id, &thread_result);
-			if (join_result != 0) {
-				Logger::warning("Failed to join cancelled thread: {}", strerror(join_result));
-			}
-
-			if (pthread_create(&Runner::runner_id, nullptr, &Runner::_runner, nullptr) != 0) {
-				Global::exit_error_msg = "Failed to re-create _runner thread!";
-				clean_quit(1);
-			}
+			Logger::warning("Runner thread slow (>10s), waiting up to 30s...");
+			atomic_wait_for(active, true, 20'000);
+		}
+		if (active) {
+			Global::exit_error_msg = "Runner thread stalled for 30s, exiting.";
+			clean_quit(1);
 		}
 		if (stopping or Global::resized) return;
 
@@ -804,23 +774,23 @@ namespace Runner {
 	//* Stops any work being done in runner thread and checks for thread errors
 	void stop() {
 		stopping = true;
-		int ret = pthread_mutex_trylock(&mtx);
-		if (ret != EBUSY and not Global::quitting) {
+		auto lock = std::unique_lock {mtx, std::defer_lock};
+		const auto is_runner_busy = !lock.try_lock();
+		if (!is_runner_busy and not Global::quitting) {
 			if (active) {
 				set_active(false);
 			}
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
 			clean_quit(1);
-		}
-		else if (ret == EBUSY) {
-			atomic_wait_for(active, true, 5000);
+		} else if (is_runner_busy) {
+			atomic_wait_for(active, true, 30'000);
 			if (active) {
 				set_active(false);
 				if (Global::quitting) {
 					return;
 				}
 				else {
-					Global::exit_error_msg = "No response from Runner thread, quitting!";
+					Global::exit_error_msg = "No response from Runner thread (30s), quitting!";
 					clean_quit(1);
 				}
 			}
@@ -837,13 +807,17 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	if (force_tty.has_value()) {
 		Config::set("tty_mode", force_tty.value());
 		Logger::debug("TTY mode set via command line");
-  	}
+	}
+	else if (Config::getB("force_tty")) {
+		Config::set("tty_mode", true);
+		Logger::debug("TTY mode set via config");
+	}
 
 #if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 	else if (Term::current_tty.starts_with("/dev/tty")) {
 		Config::set("tty_mode", true);
 		Logger::debug("Auto detect real TTY");
-  	}
+	}
 #endif
 
 	Logger::debug("TTY mode enabled: {}", Config::getB("tty_mode"));
@@ -1104,7 +1078,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	Config::presetsValid(Config::getS("presets"));
 	if (cli.preset.has_value()) {
 		Config::current_preset = min(static_cast<std::int32_t>(cli.preset.value()), static_cast<std::int32_t>(Config::preset_list.size() - 1));
-		Config::apply_preset(Config::preset_list.at(Config::current_preset));
+		Config::apply_preset(Config::preset_list.at(Config::current_preset.value()));
 	}
 
 	{
@@ -1210,7 +1184,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		}
 	}
 	catch (const std::exception& e) {
-		Global::exit_error_msg = fmt::format("Exception in main loop -> ", e.what());
+		Global::exit_error_msg = fmt::format("Exception in main loop -> {}", e.what());
 		clean_quit(1);
 	}
 	return 0;

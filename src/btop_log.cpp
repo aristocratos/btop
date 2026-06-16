@@ -78,7 +78,10 @@ namespace Logger {
 			~DropPrivilegeGuard() noexcept {
 				if (saved_euid != geteuid()) {
 					// Silently drop error status.
+					#pragma GCC diagnostic push
+					#pragma GCC diagnostic ignored "-Wunused-result"
 					seteuid(saved_euid);
+					#pragma GCC diagnostic pop
 				}
 			}
 
@@ -131,7 +134,7 @@ namespace Logger {
 			auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
 			fmt::format_to(
 				std::back_inserter(buffer),
-				"{:%F (%T)} | {}: {}\n",
+				"{:%FT%T}Z | {}: {}\n",
 				seconds,
 				log_levels.at(std::to_underlying(level)),
 				msg

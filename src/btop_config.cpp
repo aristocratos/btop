@@ -65,6 +65,12 @@ namespace Config {
 		{"force_tty", 			"#* Set to true to force tty mode regardless if a real tty has been detected or not.\n"
 								"#* Will force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols."},
 
+		{"disable_presets",		"#* Option to disable presets. Either the default preset, custom presets, or all presets.\n"
+								"#* \"Off\" All presets are enabled.\n"
+								"#* \"Default\" preset is disabled."
+								"#* \"Custom\" presets are disabled."
+								"#* \"All\" presets are disabled."},
+
 		{"presets",				"#* Define presets for the layout of the boxes. Preset 0 is always all boxes shown with default settings. Max 9 presets.\n"
 								"#* Format: \"box_name:P:G,box_name:P:G\" P=(0 or 1) for alternate positions, G=graph symbol to use for box.\n"
 								"#* Use whitespace \" \" as separator between different presets.\n"
@@ -124,6 +130,9 @@ namespace Config {
 		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
 
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
+
+		{"proc_tree_auto_collapse", "#* In tree-view, auto-collapse processes with this many or more direct children when\n"
+									"#* entering tree mode. 0 to disable. Useful for collapsing multi-process apps like browsers."},
 
 		{"keep_dead_proc_usage", "#* Should cpu and memory usage display be preserved for dead processes when paused."},
 
@@ -240,7 +249,7 @@ namespace Config {
 								"#* Select from a list of detected attributes from the options menu."},
 		{"gpu_graph_field",	"#* [Deprecated] Use gpu_graph_upper instead. Sets the stat shown in the GPU graph. \"Auto\" for device defaults.\n"
 								"#* Select from a list of detected attributes from the options menu."},
-		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel\""},
+		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel apple\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
 		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
@@ -254,6 +263,7 @@ namespace Config {
 		{"color_theme", "Default"},
 		{"shown_boxes", "cpu mem net proc"},
 		{"graph_symbol", "braille"},
+		{"disable_presets", "Off"},
 		{"presets", "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"},
 		{"graph_symbol_cpu", "default"},
 		{"graph_symbol_gpu", "default"},
@@ -293,7 +303,7 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 		{"show_gpu_info", "Auto"},
-		{"shown_gpus", "nvidia amd intel"}
+		{"shown_gpus", "nvidia amd intel apple"}
 	#endif
 	};
 	std::unordered_map<std::string_view, string> stringsTmp;
@@ -369,6 +379,7 @@ namespace Config {
 		{"update_ms", 2000},
 		{"net_download", 100},
 		{"net_upload", 100},
+		{"proc_tree_auto_collapse", 0},
 		{"detailed_pid", 0},
 		{"restore_detailed_pid", 0},
 		{"selected_pid", 0},
@@ -454,7 +465,7 @@ namespace Config {
 
 	vector<string> current_boxes;
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
-	int current_preset = -1;
+	std::optional<int> current_preset;
 
 	bool presetsValid(const string& presets) {
 		vector<string> new_presets = {preset_list.at(0)};
@@ -562,6 +573,12 @@ namespace Config {
 
 		else if (name == "update_ms" and i_value > ONE_DAY_MILLIS)
 			validError = fmt::format("Config value update_ms set too high (>{}).", ONE_DAY_MILLIS);
+
+		else if (name == "proc_tree_auto_collapse" and i_value < 0)
+			validError = "Config value proc_tree_auto_collapse must be >= 0.";
+
+		else if (name == "proc_tree_auto_collapse" and i_value > 10000)
+			validError = "Config value proc_tree_auto_collapse set too high (>10000).";
 
 		else
 			return true;

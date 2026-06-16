@@ -222,14 +222,17 @@ namespace Tools {
 		}
 		vector<wchar_t> w_str(w_len);
 		std::mbstowcs(&w_str[0], str_data, w_len);
-		for (size_t i = 0; i < w_str.size(); i++) {
+		for (size_t i = 0; i < w_str.size() - 1; i++) {
 			if (widechar_wcwidth(w_str[i]) > 1)
 				continue;
 			if (w_str[i] < 0x20)
 				w_str[i] = replacement;
 		}
-		str.resize(w_str.size());
-		std::wcstombs(&str[0], &w_str[0], w_str.size());
+		size_t bytes = std::wcstombs(nullptr, w_str.data(), 0);
+		if (bytes == static_cast<size_t>(-1))
+			return str;
+		str.resize(bytes);
+		std::wcstombs(&str[0], &w_str[0], bytes);
 
 		return str;
 	}
@@ -436,25 +439,25 @@ namespace Tools {
 			"bit"s, "Kib"s, "Mib"s,
 			"Gib"s, "Tib"s, "Pib"s,
 			"Eib"s, "Zib"s, "Yib"s,
-			"Bib"s, "GEb"s
+			"Rib"s, "Qib"s
 		};
 		static const array mebiUnits_byte {
 			"Byte"s, "KiB"s, "MiB"s,
 			"GiB"s, "TiB"s, "PiB"s,
 			"EiB"s, "ZiB"s, "YiB"s,
-			"BiB"s, "GEB"s
+			"RiB"s, "QiB"s
 		};
 		static const array megaUnits_bit {
-			"bit"s, "Kb"s, "Mb"s,
+			"bit"s, "kb"s, "Mb"s,
 			"Gb"s, "Tb"s, "Pb"s,
 			"Eb"s, "Zb"s, "Yb"s,
-			"Bb"s, "Gb"s
+			"Rb"s, "Qb"s
 		};
 		static const array megaUnits_byte {
-			"Byte"s, "KB"s, "MB"s,
+			"Byte"s, "kB"s, "MB"s,
 			"GB"s, "TB"s, "PB"s,
 			"EB"s, "ZB"s, "YB"s,
-			"BB"s, "GB"s
+			"RB"s, "QB"s
 		};
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
@@ -539,23 +542,83 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		atom.wait(old, std::memory_order_relaxed);
-	}
-
-	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
-		const uint64_t start_time = time_ms();
-		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
+		atom.wait(old, std::memory_order_acquire);
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
-		else this->atom.store(true);
-		this->atom.notify_all();
+		if (wait) {
+			bool expected = false;
+			while (not this->atom.compare_exchange_strong(expected, true, std::memory_order_acquire, std::memory_order_relaxed)) expected = false;
+		}
+		else this->atom.store(true, std::memory_order_release);
+		this->atom.notify_one();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
-		this->atom.store(false);
-		this->atom.notify_all();
+		this->atom.store(false, std::memory_order_release);
+		this->atom.notify_one();
+	}
+
+	void atomic_waiting_lock::store(bool new_value) noexcept {
+		{
+			std::lock_guard lock {mtx};
+			value = new_value;
+		}
+		cv.notify_all();
+	}
+
+	void atomic_waiting_lock::wait(bool old) const noexcept {
+		std::unique_lock lock {mtx};
+		cv.wait(lock, [this, old] { return value != old; });
+	}
+
+	void atomic_waiting_lock::wait_for(bool old, uint64_t wait_ms) const noexcept {
+		std::unique_lock lock {mtx};
+		const auto start = uptime_micros();
+		const auto wait_us = wait_ms * 1'000ULL;
+		while (value == old) {
+			const auto elapsed = uptime_micros() - start;
+			if (elapsed >= wait_us) break;
+			cv.wait_for(lock, std::chrono::microseconds(wait_us - elapsed), [this, old] { return value != old; });
+		}
+	}
+
+	atomic_waiting_lock::guard atomic_waiting_lock::lock(bool wait) {
+		return guard(*this, wait);
+	}
+
+	atomic_waiting_lock::operator bool() const noexcept {
+		std::lock_guard lock {mtx};
+		return value;
+	}
+
+	atomic_waiting_lock::guard::guard(atomic_waiting_lock& atom, bool wait) : atom(atom) {
+		if (wait) {
+			std::unique_lock lock {this->atom.mtx};
+			this->atom.cv.wait(lock, [this] { return not this->atom.value; });
+			this->atom.value = true;
+		}
+		else {
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = true;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	atomic_waiting_lock::guard::~guard() noexcept {
+		{
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = false;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	void atomic_wait(const atomic_waiting_lock& atom, bool old) noexcept {
+		atom.wait(old);
+	}
+
+	void atomic_wait_for(const atomic_waiting_lock& atom, bool old, const uint64_t wait_ms) {
+		atom.wait_for(old, wait_ms);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {

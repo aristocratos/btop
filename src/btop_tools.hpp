@@ -26,9 +26,12 @@ tab-size = 4
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <ctime>
 #include <filesystem>
 #include <limits.h>
+#include <mutex>
 #include <ranges>
 #include <regex>
 #include <string>
@@ -248,6 +251,19 @@ namespace Tools {
 		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
+	//* Return uptime in microseconds, excluding time spent in system suspend
+	inline uint64_t uptime_micros() {
+		struct timespec ts{};
+#ifdef __APPLE__
+		if (clock_gettime(CLOCK_UPTIME_RAW, &ts) != 0) return 0;
+#elif defined(__FreeBSD__)
+		if (clock_gettime(CLOCK_UPTIME, &ts) != 0) return 0;
+#else
+		if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+#endif
+		return static_cast<uint64_t>(ts.tv_sec) * 1'000'000 + static_cast<uint64_t>(ts.tv_nsec) / 1000;
+	}
+
 	//* Check if a string is a valid bool value
 	inline bool isbool(const std::string_view str) {
 		return is_in(str, "true", "false", "True", "False");
@@ -366,12 +382,9 @@ namespace Tools {
 
 	void atomic_wait(const atomic<bool>& atom, bool old = true) noexcept;
 
-	void atomic_wait_for(const atomic<bool>& atom, bool old = true, const uint64_t wait_ms = 0) noexcept;
-
 	//* Sets atomic<bool> to true on construct, sets to false on destruct
 	class atomic_lock {
 		atomic<bool>& atom;
-		bool not_true{};
 	public:
 		explicit atomic_lock(atomic<bool>& atom, bool wait = false);
 		~atomic_lock() noexcept;
@@ -380,6 +393,34 @@ namespace Tools {
 		atomic_lock(atomic_lock&& other) = delete;
 		atomic_lock& operator=(atomic_lock&& other) = delete;
 	};
+
+	class atomic_waiting_lock {
+		bool value{};
+		mutable std::mutex mtx;
+		mutable std::condition_variable cv;
+
+	public:
+		class guard {
+			atomic_waiting_lock& atom;
+		public:
+			explicit guard(atomic_waiting_lock& atom, bool wait = false);
+			~guard() noexcept;
+			guard(const guard& other) = delete;
+			guard& operator=(const guard& other) = delete;
+			guard(guard&& other) = delete;
+			guard& operator=(guard&& other) = delete;
+		};
+
+		void store(bool value) noexcept;
+		void wait(bool old = true) const noexcept;
+		void wait_for(bool old, uint64_t wait_ms) const noexcept;
+		[[nodiscard]] guard lock(bool wait = false);
+		explicit operator bool() const noexcept;
+	};
+
+	void atomic_wait(const atomic_waiting_lock& atom, bool old = true) noexcept;
+
+	void atomic_wait_for(const atomic_waiting_lock& atom, bool old = true, const uint64_t wait_ms = 0);
 
 	//* Read a complete file and return as a string
 	string readfile(const std::filesystem::path& path, const string& fallback = "");

@@ -1,5 +1,7 @@
 name: Continuous Build FreeBSD
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -33,16 +35,21 @@ jobs:
   build-freebsd:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.compiler }}
+      cancel-in-progress: true
     strategy:
       matrix:
         compiler: ["clang++", "g++"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Compile
-        uses: vmactions/freebsd-vm@v1
+        uses: vmactions/freebsd-vm@a6de9343ef5747433d9c25784c90e84998b9d69a # v1.4.6
         with:
-          release: '14.3'
+          release: '15.0'
           usesh: true
           prepare: |
             pkg install -y gmake gcc15 coreutils git lowdown
@@ -60,8 +67,8 @@ jobs:
             mv bin/btop bin/btop-"$COMPILER"-"$GIT_HASH"
             ls -alh bin
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: btop-x86_64-freebsd-14-${{ matrix.compiler }}
+          name: btop-x86_64-freebsd-15-${{ matrix.compiler }}
           path: 'bin/*'
           if-no-files-found: error
