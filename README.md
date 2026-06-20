@@ -297,29 +297,33 @@ Also necessary is a UTF8 locale and a font that includes:
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
-### **Optional Dependencies (Needed for GPU monitoring) (Only Linux)**
+### **Optional Dependencies (Needed for GPU monitoring)**
 
-GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
+GPU monitoring requires a btop binary built with GPU support. The `GPU_SUPPORT` flag is enabled by default on Linux x86_64 and on macOS for Apple Silicon (`arm64`); see [GPU compatibility](#gpu-compatibility) for how to compile with or without it.
 
-See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
-
- * **NVIDIA**
+ * **Linux — NVIDIA**
 
    If you have an NVIDIA GPU you must use an official NVIDIA driver, both the closed-source and open-source ones have been verified to work.
 
    In addition to that you must also have the nvidia-ml dynamic library installed, which should be included with the driver package of your distribution.
 
- * **AMD**
+ * **Linux — AMD**
 
    If you have an AMD GPU `rocm_smi_lib` is required, which may or may not be packaged for your distribution.
 
- * **INTEL**
+ * **Linux — INTEL**
 
    Requires a working C compiler if compiling from source.
 
    Also requires the user to have permission to read from SYSFS.
 
    Can be set with `make setcap` (preferred) or `make setuid` or by running btop with `sudo` or equivalent.
+
+ * **macOS (Apple Silicon)**
+
+   GPU metrics are collected via Apple's IOReport API. When building from source, the Makefile and CMake automatically link the required frameworks (`IOKit`, `CoreFoundation`) and the `IOReport` library, so no extra setup is needed.
+
+   GPU support is enabled by default on Apple Silicon. To build without it, see [GPU compatibility (macOS)](#gpu-compatibility-macos).
 
 ### **Notice (Text rendering issues)**
 
@@ -656,6 +660,14 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Install and use Homebrew or MacPorts package managers for easy dependency installation
 
+   ### GPU compatibility (macOS)
+
+   On macOS, GPU monitoring is **enabled by default** on Apple Silicon (`arm64`). GPU metrics are collected via Apple's IOReport API; the Makefile and CMake link the required frameworks (`IOKit`, `CoreFoundation`) and the `IOReport` library automatically when GPU support is on.
+
+   To build without GPU monitoring, set the flag to false:
+
+   `gmake GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=OFF` with CMake)
+
 <details>
 <summary>
 
@@ -690,6 +702,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (enabled by default on Apple Silicon)        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
 
@@ -783,8 +796,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable/disable GPU support (ON by default; Apple Silicon only)          |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    To force any specific compiler, run `CXX=<compiler> cmake -B build -G Ninja`
