@@ -1275,7 +1275,7 @@ namespace Mem {
 
 						if (io_mode) {
 							//? Create one combined graph for IO read/write if enabled
-							long long speed = (custom_speeds.contains(name) ? custom_speeds.at(name) : 100) << 20;
+							long long speed = static_cast<long long>(custom_speeds.contains(name) ? custom_speeds.at(name) : 100) << 20;
 							if (io_graph_combined) {
 								deque<long long> combined(disk.io_read.size(), 0);
 								rng::transform(disk.io_read, disk.io_write, combined.begin(), std::plus<long long>());
