@@ -2303,6 +2303,7 @@ static auto convert_ascii_escapes(const std::string& input) -> std::string {
 
 namespace Mem {
 	bool has_swap{};
+	bool has_zswap{};
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
 	int disk_ios{};
@@ -2391,6 +2392,7 @@ namespace Mem {
 				else if (label == "Zswapped:") {
 					meminfo >> mem.stats.at("swap_zswapped");
 					mem.stats.at("swap_zswapped") <<= 10;
+					has_zswap = true;
 					break;
 				}
 				meminfo.ignore(SSmax, '\n');
@@ -2427,6 +2429,10 @@ namespace Mem {
 		}
 		else
 			has_swap = false;
+
+		if (show_zswap and not has_swap) {
+			Logger::warning("zswap support not present in kernel, but show_zswap is enabled.");
+		}
 
 		//? Get disks stats
 		if (show_disks) {

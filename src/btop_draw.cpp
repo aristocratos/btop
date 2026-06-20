@@ -1345,7 +1345,7 @@ namespace Mem {
 				title = show_zswap ? "Disk" : "Used";
 			}
 			else if (name == "swap_zswapped") {
-				if (!show_zswap) {
+				if (not show_zswap) {
 					continue;
 				}
 				title = "Zswapped";
