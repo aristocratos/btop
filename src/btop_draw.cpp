@@ -1207,6 +1207,11 @@ namespace Mem {
 		if (Runner::stopping) return "";
 		if (force_redraw) redraw = true;
 		auto show_swap = Config::getB("show_swap");
+		#ifdef __linux__
+		auto show_zswap = Config::getB("show_zswap");
+		#else
+		auto show_zswap = false;
+		#endif
 		auto swap_disk = Config::getB("swap_disk");
 		auto show_disks = Config::getB("show_disks");
 		auto show_io_stat = Config::getB("show_io_stat");
@@ -1239,10 +1244,14 @@ namespace Mem {
 			}
 			if (show_swap and has_swap) {
 				for (const auto& name : swap_names) {
+					auto color_gradient = name.substr(5);
+					if (color_gradient == "zswapped") {
+						color_gradient = "used";
+					}
 					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), safeVal(mem.percent, name), graph_symbol};
+						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, color_gradient, safeVal(mem.percent, name), graph_symbol};
 					else
-						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
+						mem_meters[name] = Draw::Meter{mem_meter, color_gradient};
 				}
 			}
 
@@ -1333,7 +1342,13 @@ namespace Mem {
 				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
 					+ Theme::c("main_fg") + Fx::ub;
 				cy += 1;
-				title = "Used";
+				title = show_zswap ? "Disk" : "Used";
+			}
+			else if (name == "swap_zswapped") {
+				if (!show_zswap) {
+					continue;
+				}
+				title = "Zswapped";
 			}
 			else if (name == "swap_free")
 				title = "Free";

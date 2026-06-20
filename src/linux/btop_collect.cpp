@@ -2333,6 +2333,7 @@ namespace Mem {
 	auto collect(bool no_update) -> mem_info& {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty())) return current_mem;
 		auto show_swap = Config::getB("show_swap");
+		auto show_zswap = Config::getB("show_zswap");
 		auto swap_disk = Config::getB("swap_disk");
 		auto show_disks = Config::getB("show_disks");
 		auto zfs_arc_cached = Config::getB("zfs_arc_cached");
@@ -2385,6 +2386,11 @@ namespace Mem {
 				else if (label == "SwapFree:") {
 					meminfo >> mem.stats.at("swap_free");
 					mem.stats.at("swap_free") <<= 10;
+					if (not show_zswap) break;
+				}
+				else if (label == "Zswapped:") {
+					meminfo >> mem.stats.at("swap_zswapped");
+					mem.stats.at("swap_zswapped") <<= 10;
 					break;
 				}
 				meminfo.ignore(SSmax, '\n');
@@ -2399,6 +2405,7 @@ namespace Mem {
 			mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
 
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
+			if (show_zswap and mem.stats.at("swap_zswapped") > 0) mem.stats.at("swap_used") -= mem.stats.at("swap_zswapped");
 		}
 		else
 			throw std::runtime_error("Failed to read /proc/meminfo");

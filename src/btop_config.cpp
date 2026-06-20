@@ -190,7 +190,9 @@ namespace Config {
 		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
 
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
-
+	#ifdef __linux__
+		{"show_zswap", 			"#* If zswap usage should be shown in memory box."},
+	#endif
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
 
 		{"show_disks", 			"#* If mem box should be split to also show disks info."},
@@ -323,6 +325,9 @@ namespace Config {
 		{"mem_below_net", false},
 		{"zfs_arc_cached", true},
 		{"show_swap", true},
+	#ifdef __linux__
+		{"show_zswap", true},
+	#endif
 		{"swap_disk", true},
 		{"show_disks", true},
 		{"only_physical", true},
