@@ -67,7 +67,10 @@ namespace Config {
 
 	constexpr int ONE_DAY_MILLIS = 1000 * 60 * 60 * 24;
 
-	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir() noexcept;
+	//* Locate (and if needed create) the user config directory.
+	//* When <quiet> is true, warnings about a missing/unwritable config dir are suppressed
+	//* (used when a config file is explicitly passed on the command line).
+	[[nodiscard]] std::optional<std::filesystem::path> get_config_dir(bool quiet = false) noexcept;
 
 	//* Check if string only contains space separated valid names for boxes and set current_boxes
 	bool set_boxes(const string& boxes);
