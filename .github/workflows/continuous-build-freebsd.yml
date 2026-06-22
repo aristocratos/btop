@@ -49,7 +49,7 @@ jobs:
       - name: Compile
         uses: vmactions/freebsd-vm@b84ab5559b5a1bb4b8ee2737d2506a16e1737636 # v1.4.8
         with:
-          release: '15.0'
+          release: '15.1'
           usesh: true
           prepare: |
             pkg install -y gmake gcc15 coreutils git lowdown
