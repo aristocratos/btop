@@ -944,7 +944,26 @@ namespace Cpu {
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
 				if (gpu_auto and v_contains(Gpu::shown_panels, i))
 					continue;
-				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
+				// Display GPU name above the GPU info line
+				string gpu_name = "GPU";
+				if (i < Gpu::gpu_names.size() && !Gpu::gpu_names[i].empty()) {
+					gpu_name = Gpu::gpu_names[i];
+				} else {
+					// Try to get custom GPU name from config
+					string config_key = std::string("custom_gpu_name") + (char)(i + '0');
+					string custom_name = Config::getS(config_key);
+					if (!custom_name.empty()) {
+						gpu_name = custom_name;
+					}
+				}
+				
+				// Display GPU name (truncate if too long)
+				string display_name = gpu_name.substr(0, 12); // Limit to 12 characters
+				out += Mv::to(b_y + cy, b_x + 3) + Theme::c("title") + Fx::b + display_name + Fx::ub;
+				
+				// Move to next line for GPU info
+				cy++;
+				out += Mv::to(b_y + cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
 				if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
 				if (gpus[i].supported_functions.gpu_utilization) {
 					out += ' ';
@@ -2256,6 +2275,15 @@ namespace Draw {
 			}
 		}
 		Gpu::shown = Gpu::shown_panels.size();
+		Logger::debug("GPU: shown_panels size: {}, values: {}", Gpu::shown_panels.size(), 
+			[&]() -> std::string {
+				std::string result;
+				for (size_t j = 0; j < Gpu::shown_panels.size(); ++j) {
+					if (j > 0) result += ", ";
+					result += std::to_string(Gpu::shown_panels[j]);
+				}
+				return result;
+			}());
 
 		// Calculate the minimum possible GPU height, store in total_height
 		// The actual total_height value will of course be overwritten later
@@ -2376,7 +2404,23 @@ namespace Draw {
 				height += (height+Cpu::height == Term::height-1);
 				height = max(height, b_height_vec[i] + 2);
 				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
-				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
+				// Get GPU name for title
+				string config_key = std::string("custom_gpu_name") + (char)(shown_panels[i]+'0');
+				string gpu_title = Config::getS(config_key);
+				// Debug: Log the config key and value
+				Logger::debug("GPU[{}]: config key: {}, value: '{}', gpu_names.size: {}", i, config_key, gpu_title, gpu_names.size());
+				
+				if (gpu_title.empty() && shown_panels[i] < gpu_names.size()) {
+					gpu_title = gpu_names[shown_panels[i]];
+					Logger::debug("GPU[{}]: title from gpu_names[{}]: '{}'", i, shown_panels[i], gpu_title);
+				}
+				if (gpu_title.empty()) {
+					gpu_title = std::string("gpu") + (char)(shown_panels[i]+'0');
+					Logger::debug("GPU[{}]: title default: '{}'", i, gpu_title);
+				}
+				Logger::debug("GPU[{}]: Final title: '{}'", i, gpu_title);
+				
+				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, gpu_title, "", (shown_panels[i]+5)%10); // TODO gpu_box
 				b_width = clamp(width/2, min_width, 65);
 				total_height += height;
 
@@ -2384,10 +2428,15 @@ namespace Draw {
 				b_x_vec[i] = x_vec[i] + width - b_width - 1;
 				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2 - b_height_vec[i]) / 2) + 1;
 
-				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
-				if (name.empty()) name = gpu_names[shown_panels[i]];
-
-				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
+				// GPU name is now displayed in the title, remove the inner box for name
+				// string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
+				// if (name.empty() && shown_panels[i] < gpu_names.size()) {
+				// 	name = gpu_names[shown_panels[i]];
+				// }
+				// if (name.empty()) {
+				// 	name = "GPU";
+				// }
+				// box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
 				b_height_vec[i] = height - 2;
 			}
 		}

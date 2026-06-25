@@ -3,7 +3,7 @@
 # CMake configuration for btop
 #
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.22)
 
 # Disable in-source builds since they would override the Makefile
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
@@ -74,7 +74,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_sources(libbtop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
-elseif(LINUX)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
   if(BTOP_GPU)
     add_subdirectory(src/linux/intel_gpu_top)
@@ -161,7 +161,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(libbtop Threads::Threads)
 
 # Enable GPU support
-if(LINUX AND BTOP_GPU)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND BTOP_GPU)
   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
 
   if(BTOP_RSMI_STATIC)
@@ -277,6 +277,7 @@ install(FILES "Img/icon.png" DESTINATION "share/icons/hicolor/48x48/apps" RENAME
 install(FILES "Img/icon.svg" DESTINATION "share/icons/hicolor/scalable/apps" RENAME "btop.svg")
 install(DIRECTORY "themes" DESTINATION "share/btop")
 
+option(BUILD_TESTING "Build tests" OFF)
 include(CTest)
 if(BUILD_TESTING)
   add_subdirectory(tests)

@@ -402,7 +402,10 @@ namespace Shared {
 		}
 
 		if (shown_gpus.contains("mtt")) {
+			Logger::debug("Initializing MTT GPU support");
 			Gpu::Mtml::init();
+		} else {
+			Logger::debug("MTT GPU not in shown_gpus: '{}'", shown_gpus);
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -1925,7 +1928,11 @@ namespace Gpu {
 		}
 
 		template <bool is_init> bool collect(gpu_info* gpus_slice) {
-			if (!initialized) return false;
+			if (!initialized) {
+				Logger::debug("MTML: Not initialized, skipping collection");
+				return false;
+			}
+			Logger::debug("MTML: Starting GPU collection, device_count = {}", device_count);
 
 			if constexpr(is_init) {
 				gpus_slice->supported_functions = {
@@ -1987,6 +1994,8 @@ namespace Gpu {
 			if (!mtml_dl_handle) {
 				Logger::info("Failed to load libmtml.so, MTT GPUs will not be detected: {}", dlerror());
 				return false;
+			} else {
+				Logger::debug("MTML: Successfully loaded libmtml.so");
 			}
 
 			auto load_mtml_sym = [&](const char sym_name[]) {
@@ -2126,11 +2135,14 @@ namespace Gpu {
 					//? Device name
 					char name[MTML_DEVICE_NAME_BUFFER_SIZE];
 					MtmlReturn result = mtmlDeviceGetName(mtml_devices[i], name, MTML_DEVICE_NAME_BUFFER_SIZE);
+					size_t name_index = Nvml::device_count + Rsmi::device_count + Intel::device_count + i;
 					if (result != MTML_SUCCESS) {
 						Logger::warning("MTML: Failed to get device name for device {}: {}", i, result);
-						gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count + i] = fmt::format("MTT GPU {}", i);
+						gpu_names[name_index] = fmt::format("MTT GPU {}", i);
+						Logger::debug("MTML: Set default name at index {}: '{}'", name_index, gpu_names[name_index]);
 					} else {
-						gpu_names[Nvml::device_count + Rsmi::device_count + Intel::device_count + i] = string(name);
+						Logger::debug("MTML: Got device name for device {} at index {}: '{}'", i, name_index, string(name));
+						gpu_names[name_index] = string(name);
 					}
 
 					// Initialize supported functions

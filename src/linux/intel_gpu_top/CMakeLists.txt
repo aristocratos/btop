@@ -14,6 +14,7 @@ endif()
 
 # Disable all warnings
 target_compile_options(igt PRIVATE -w)
+target_compile_definitions(igt PRIVATE _GNU_SOURCE)
 
 # Link igt into btop
 target_link_libraries(libbtop $<TARGET_OBJECTS:igt>)
