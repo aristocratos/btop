@@ -452,10 +452,15 @@ namespace Config {
 	vector<string> available_batteries = {"Auto"};
 
 	vector<string> current_boxes;
+#ifdef GPU_SUPPORT
+	vector<size_t> current_gpu_panel_slots;
+#endif
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
 	std::optional<int> current_preset;
 
 #ifdef GPU_SUPPORT
+	static constexpr array<int, max_gpu_panels> gpu_panel_keys = {5, 6, 7, 8, 9, 0};
+
 	std::optional<size_t> gpu_box_index(std::string_view box) {
 		if (not box.starts_with("gpu") or box.size() <= 3) return {};
 
@@ -474,11 +479,77 @@ namespace Config {
 		return "gpu" + to_string(gpu_index);
 	}
 
+	std::optional<size_t> gpu_panel_slot_from_key(int key) {
+		for (size_t slot = 0; slot < gpu_panel_keys.size(); ++slot) {
+			if (gpu_panel_keys[slot] == key) return slot;
+		}
+		return {};
+	}
+
+	int gpu_panel_key(size_t panel_slot) {
+		return gpu_panel_keys.at(panel_slot);
+	}
+
+	std::optional<size_t> gpu_panel_slot(size_t panel_index) {
+		if (panel_index >= current_gpu_panel_slots.size()) return {};
+		return current_gpu_panel_slots[panel_index];
+	}
+
+	bool gpu_panel_slot_active(size_t panel_slot) {
+		return v_contains(current_gpu_panel_slots, panel_slot);
+	}
+
 	bool valid_box_name(const string& box, bool check_gpu_count = true) {
 		if (v_contains(valid_boxes, box)) return true;
 
 		const auto gpu_index = gpu_box_index(box);
 		return gpu_index.has_value() and (not check_gpu_count or std::cmp_less(*gpu_index, Gpu::count));
+	}
+
+	static void normalize_gpu_panel_order() {
+		vector<size_t> gpu_positions;
+		vector<string> gpu_boxes;
+		for (size_t i = 0; i < current_boxes.size(); ++i) {
+			if (gpu_box_index(current_boxes[i]).has_value()) {
+				gpu_positions.push_back(i);
+				gpu_boxes.push_back(current_boxes[i]);
+			}
+		}
+
+		auto slots_valid = [&]() {
+			if (current_gpu_panel_slots.size() != gpu_boxes.size()) return false;
+			vector<bool> used_slots(max_gpu_panels, false);
+			for (const size_t slot : current_gpu_panel_slots) {
+				if (slot >= max_gpu_panels or used_slots[slot]) return false;
+				used_slots[slot] = true;
+			}
+			return true;
+		};
+
+		if (not slots_valid()) {
+			current_gpu_panel_slots.clear();
+			for (size_t slot = 0; slot < gpu_boxes.size(); ++slot) {
+				current_gpu_panel_slots.push_back(slot);
+			}
+		}
+
+		vector<string> sorted_boxes;
+		vector<size_t> sorted_slots;
+		sorted_boxes.reserve(gpu_boxes.size());
+		sorted_slots.reserve(current_gpu_panel_slots.size());
+		for (size_t slot = 0; slot < max_gpu_panels; ++slot) {
+			for (size_t i = 0; i < current_gpu_panel_slots.size(); ++i) {
+				if (current_gpu_panel_slots[i] == slot) {
+					sorted_boxes.push_back(gpu_boxes[i]);
+					sorted_slots.push_back(slot);
+				}
+			}
+		}
+
+		for (size_t i = 0; i < gpu_positions.size(); ++i) {
+			current_boxes[gpu_positions[i]] = sorted_boxes[i];
+		}
+		current_gpu_panel_slots = std::move(sorted_slots);
 	}
 #else
 	bool valid_box_name(const string& box, bool check_gpu_count = true) {
@@ -759,23 +830,96 @@ namespace Config {
 			if (gpu_box_index(box).has_value() and ++gpu_panels > max_gpu_panels) {
 				return false;
 			}
-		#endif
+	#endif
 		}
 		current_boxes = std::move(new_boxes);
+	#ifdef GPU_SUPPORT
+		current_gpu_panel_slots.clear();
+		normalize_gpu_panel_order();
+	#endif
 		return true;
 	}
 
 #ifdef GPU_SUPPORT
-	bool switch_gpu_box(size_t panel_slot, int direction) {
+	static bool apply_current_boxes(const vector<string>& old_boxes, const vector<size_t>& old_slots) {
+		normalize_gpu_panel_order();
+
+		string new_boxes;
+		if (not current_boxes.empty()) {
+			for (const auto& b : current_boxes) new_boxes += b + ' ';
+			new_boxes.pop_back();
+		}
+
+		auto min_size = Term::get_min_size(new_boxes);
+		if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
+			current_boxes = old_boxes;
+			current_gpu_panel_slots = old_slots;
+			return false;
+		}
+
+		Config::set("shown_boxes", new_boxes);
+		return true;
+	}
+
+	bool toggle_gpu_box(size_t panel_slot) {
+		if (panel_slot >= max_gpu_panels) return false;
+
+		auto old_boxes = current_boxes;
+		auto old_slots = current_gpu_panel_slots;
+		const auto slot_it = rng::find(current_gpu_panel_slots, panel_slot);
+		if (slot_it != current_gpu_panel_slots.end()) {
+			const size_t gpu_panel_index = static_cast<size_t>(rng::distance(current_gpu_panel_slots.begin(), slot_it));
+			size_t current_gpu_panel = 0;
+			for (auto box_it = current_boxes.begin(); box_it != current_boxes.end(); ++box_it) {
+				if (gpu_box_index(*box_it).has_value()) {
+					if (current_gpu_panel == gpu_panel_index) {
+						current_boxes.erase(box_it);
+						current_gpu_panel_slots.erase(slot_it);
+						return apply_current_boxes(old_boxes, old_slots);
+					}
+					++current_gpu_panel;
+				}
+			}
+			current_boxes = old_boxes;
+			current_gpu_panel_slots = old_slots;
+			return false;
+		}
+
+		if (std::cmp_greater_equal(panel_slot, Gpu::count)) return false;
+		if (current_gpu_panel_slots.size() >= max_gpu_panels) return false;
+
+		vector<bool> occupied(static_cast<size_t>(Gpu::count), false);
+		for (const auto& box : current_boxes) {
+			const auto gpu_index = gpu_box_index(box);
+			if (gpu_index.has_value()) {
+				if (*gpu_index < occupied.size()) occupied[*gpu_index] = true;
+			}
+		}
+
+		for (size_t step = 0; step < static_cast<size_t>(Gpu::count); ++step) {
+			const size_t gpu_index = (panel_slot + step) % static_cast<size_t>(Gpu::count);
+			if (not occupied[gpu_index]) {
+				current_boxes.push_back(gpu_box_name(gpu_index));
+				current_gpu_panel_slots.push_back(panel_slot);
+				return apply_current_boxes(old_boxes, old_slots);
+			}
+		}
+
+		current_boxes = old_boxes;
+		current_gpu_panel_slots = old_slots;
+		return false;
+	}
+
+	bool switch_gpu_box(size_t panel_index, int direction) {
 		if (Gpu::count <= 1) return false;
 
 		vector<size_t> gpu_positions;
 		for (size_t i = 0; i < current_boxes.size(); ++i) {
 			if (gpu_box_index(current_boxes[i]).has_value()) gpu_positions.push_back(i);
 		}
-		if (panel_slot >= gpu_positions.size()) return false;
+		if (panel_index >= gpu_positions.size()) return false;
 
-		const size_t box_pos = gpu_positions[panel_slot];
+		const size_t box_pos = gpu_positions[panel_index];
 		auto current_gpu = gpu_box_index(current_boxes[box_pos]);
 		if (not current_gpu.has_value()) return false;
 		const size_t original_gpu = *current_gpu;
@@ -792,20 +936,9 @@ namespace Config {
 			current_gpu = next_gpu;
 			if (next_gpu != original_gpu and not occupied[next_gpu]) {
 				auto old_boxes = current_boxes;
+				auto old_slots = current_gpu_panel_slots;
 				current_boxes[box_pos] = gpu_box_name(next_gpu);
-
-				string new_boxes;
-				for (const auto& box : current_boxes) new_boxes += box + ' ';
-				if (not new_boxes.empty()) new_boxes.pop_back();
-
-				auto min_size = Term::get_min_size(new_boxes);
-				if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
-					current_boxes = std::move(old_boxes);
-					return false;
-				}
-
-				Config::set("shown_boxes", new_boxes);
-				return true;
+				return apply_current_boxes(old_boxes, old_slots);
 			}
 		}
 
@@ -815,6 +948,9 @@ namespace Config {
 
 	bool toggle_box(const string& box) {
 		auto old_boxes = current_boxes;
+	#ifdef GPU_SUPPORT
+		auto old_slots = current_gpu_panel_slots;
+	#endif
 		auto box_pos = rng::find(current_boxes, box);
 		if (box_pos == current_boxes.end())
 			current_boxes.push_back(box);
@@ -826,11 +962,15 @@ namespace Config {
 		for (const auto& current_box : current_boxes) {
 			if (gpu_box_index(current_box).has_value() and ++gpu_panels > max_gpu_panels) {
 				current_boxes = old_boxes;
+				current_gpu_panel_slots = old_slots;
 				return false;
 			}
 		}
 	#endif
 
+	#ifdef GPU_SUPPORT
+		return apply_current_boxes(old_boxes, old_slots);
+	#else
 		string new_boxes;
 		if (not current_boxes.empty()) {
 			for (const auto& b : current_boxes) new_boxes += b + ' ';
@@ -846,6 +986,7 @@ namespace Config {
 
 		Config::set("shown_boxes", new_boxes);
 		return true;
+	#endif
 	}
 
 	void load(const fs::path& conf_file, vector<string>& load_warnings) {

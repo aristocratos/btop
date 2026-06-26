@@ -2384,7 +2384,11 @@ namespace Draw {
 				height += (height+Cpu::height == Term::height-1);
 				height = max(height, b_height_vec[i] + 2);
 				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
-				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, "gpu", "", (i + 5) % 10);
+				int panel_key = Config::gpu_panel_key(i);
+				if (const auto slot = Config::gpu_panel_slot(i); slot.has_value()) {
+					panel_key = Config::gpu_panel_key(*slot);
+				}
+				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, "gpu", "", panel_key);
 				const string gpu_selector = Config::gpu_box_name(shown_panels[i]);
 				const int gpu_selector_label_width = static_cast<int>(ulen(gpu_selector));
 				const int gpu_selector_width = 6 + gpu_selector_label_width;

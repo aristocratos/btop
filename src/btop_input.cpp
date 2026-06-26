@@ -241,9 +241,9 @@ namespace Input {
 					const bool next = key.starts_with("gpu_next_");
 					const auto prefix_len = next ? std::string_view{"gpu_next_"}.size() : std::string_view{"gpu_prev_"}.size();
 					try {
-						const auto panel_slot = stoul(string{key.substr(prefix_len)});
+						const auto panel_index = stoul(string{key.substr(prefix_len)});
 						atomic_wait(Runner::active);
-						if (Config::switch_gpu_box(panel_slot, next ? 1 : -1)) {
+						if (Config::switch_gpu_box(panel_index, next ? 1 : -1)) {
 							Config::current_preset.reset();
 							Draw::calcSizes();
 							Draw::update_clock(true);
@@ -257,8 +257,23 @@ namespace Input {
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = std::atoi(key.data());
 				#ifdef GPU_SUPPORT
-					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
-					if ((intKey == 0 and Gpu::count < 6) or (intKey >= 5 and intKey - 4 > Gpu::count))
+					static const array<string, 5> boxes = {"", "cpu", "mem", "net", "proc"};
+					if (const auto gpu_panel_slot = Config::gpu_panel_slot_from_key(intKey); gpu_panel_slot.has_value()) {
+						if (not Config::gpu_panel_slot_active(*gpu_panel_slot) and std::cmp_greater_equal(*gpu_panel_slot, Gpu::count))
+							return;
+
+						atomic_wait(Runner::active);
+						if (not Config::toggle_gpu_box(*gpu_panel_slot)) {
+							Menu::show(Menu::Menus::SizeError);
+							return;
+						}
+						Config::current_preset.reset();
+						Draw::calcSizes();
+						Draw::update_clock(true);
+						Runner::run("all", false, true);
+						return;
+					}
+					if (intKey > 4)
 						return;
 				#else
 				static const array<string, 10> boxes = {"", "cpu", "mem", "net", "proc"};

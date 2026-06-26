@@ -56,6 +56,9 @@ namespace Config {
 #endif
     const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
 	extern vector<string> current_boxes;
+#ifdef GPU_SUPPORT
+	extern vector<size_t> current_gpu_panel_slots;
+#endif
 	extern vector<string> preset_list;
 	const vector<string> disable_preset_options = { "Off", "Default", "Custom", "All" };
 	extern vector<string> available_batteries;
@@ -76,7 +79,12 @@ namespace Config {
 	//* Parse gpuN box names and switch an existing GPU panel to another GPU
 	std::optional<size_t> gpu_box_index(std::string_view box);
 	string gpu_box_name(size_t gpu_index);
-	bool switch_gpu_box(size_t panel_slot, int direction);
+	std::optional<size_t> gpu_panel_slot_from_key(int key);
+	int gpu_panel_key(size_t panel_slot);
+	std::optional<size_t> gpu_panel_slot(size_t panel_index);
+	bool gpu_panel_slot_active(size_t panel_slot);
+	bool toggle_gpu_box(size_t panel_slot);
+	bool switch_gpu_box(size_t panel_index, int direction);
 #endif
 
 	//* Toggle box and update config string shown_boxes

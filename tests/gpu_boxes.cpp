@@ -12,6 +12,7 @@ namespace {
 
 struct GpuConfigState {
 	int count = Gpu::count;
+	vector<size_t> panel_slots = Config::current_gpu_panel_slots;
 	vector<string> boxes = Config::current_boxes;
 	vector<string> presets = Config::preset_list;
 	string shown_boxes = Config::strings.at("shown_boxes");
@@ -20,6 +21,7 @@ struct GpuConfigState {
 
 	~GpuConfigState() {
 		Gpu::count = count;
+		Config::current_gpu_panel_slots = panel_slots;
 		Config::current_boxes = boxes;
 		Config::preset_list = presets;
 		Config::strings.at("shown_boxes") = shown_boxes;
@@ -27,6 +29,25 @@ struct GpuConfigState {
 		Term::height = term_height;
 	}
 };
+
+testing::AssertionResult set_gpu_boxes(const string& boxes) {
+	if (not Config::set_boxes(boxes)) {
+		return testing::AssertionFailure() << "Config::set_boxes(\"" << boxes << "\") failed";
+	}
+	Config::set("shown_boxes", boxes);
+	return testing::AssertionSuccess();
+}
+
+void expect_gpu_state(const vector<string>& boxes, const vector<size_t>& slots, const string& shown_boxes) {
+	EXPECT_EQ(Config::current_boxes, boxes);
+	for (size_t i = 0; i < slots.size(); ++i) {
+		const auto slot = Config::gpu_panel_slot(i);
+		ASSERT_TRUE(slot.has_value()) << "missing GPU panel slot " << i;
+		EXPECT_EQ(*slot, slots[i]) << "GPU panel slot " << i;
+	}
+	EXPECT_FALSE(Config::gpu_panel_slot(slots.size()).has_value());
+	EXPECT_EQ(Config::getS("shown_boxes"), shown_boxes);
+}
 
 }
 
@@ -48,12 +69,12 @@ TEST(gpu_boxes, parse_gpu_box_index) {
 	EXPECT_FALSE(Config::gpu_box_index("cpu").has_value());
 }
 
-TEST(gpu_boxes, set_boxes_accepts_dynamic_gpu_indices) {
+TEST(gpu_boxes, set_boxes_validates_dynamic_gpu_panels) {
 	GpuConfigState state;
 	Gpu::count = 8;
 
-	EXPECT_TRUE(Config::set_boxes("cpu gpu6 gpu7"));
-	EXPECT_EQ(Config::current_boxes, (vector<string>{"cpu", "gpu6", "gpu7"}));
+	ASSERT_TRUE(set_gpu_boxes("cpu gpu6 gpu7"));
+	expect_gpu_state({"cpu", "gpu6", "gpu7"}, {0, 1}, "cpu gpu6 gpu7");
 
 	EXPECT_FALSE(Config::set_boxes("gpu8"));
 	EXPECT_FALSE(Config::set_boxes("gpu0 gpu1 gpu2 gpu3 gpu4 gpu5 gpu6"));
@@ -74,16 +95,13 @@ TEST(gpu_boxes, switch_gpu_box_wraps_and_skips_visible_gpus) {
 	Term::width = 200;
 	Term::height = 80;
 
-	ASSERT_TRUE(Config::set_boxes("cpu gpu0 gpu1 gpu2"));
-	Config::set("shown_boxes", string{"cpu gpu0 gpu1 gpu2"});
+	ASSERT_TRUE(set_gpu_boxes("cpu gpu0 gpu1 gpu2"));
 
 	EXPECT_TRUE(Config::switch_gpu_box(0, -1));
-	EXPECT_EQ(Config::current_boxes, (vector<string>{"cpu", "gpu7", "gpu1", "gpu2"}));
-	EXPECT_EQ(Config::getS("shown_boxes"), "cpu gpu7 gpu1 gpu2");
+	expect_gpu_state({"cpu", "gpu7", "gpu1", "gpu2"}, {0, 1, 2}, "cpu gpu7 gpu1 gpu2");
 
 	EXPECT_TRUE(Config::switch_gpu_box(1, 1));
-	EXPECT_EQ(Config::current_boxes, (vector<string>{"cpu", "gpu7", "gpu3", "gpu2"}));
-	EXPECT_EQ(Config::getS("shown_boxes"), "cpu gpu7 gpu3 gpu2");
+	expect_gpu_state({"cpu", "gpu7", "gpu3", "gpu2"}, {0, 1, 2}, "cpu gpu7 gpu3 gpu2");
 }
 
 TEST(gpu_boxes, switch_gpu_box_returns_false_when_all_other_gpus_are_visible) {
@@ -92,12 +110,70 @@ TEST(gpu_boxes, switch_gpu_box_returns_false_when_all_other_gpus_are_visible) {
 	Term::width = 200;
 	Term::height = 80;
 
-	ASSERT_TRUE(Config::set_boxes("gpu0 gpu1 gpu2"));
-	Config::set("shown_boxes", string{"gpu0 gpu1 gpu2"});
+	ASSERT_TRUE(set_gpu_boxes("gpu0 gpu1 gpu2"));
 
 	EXPECT_FALSE(Config::switch_gpu_box(0, 1));
-	EXPECT_EQ(Config::current_boxes, (vector<string>{"gpu0", "gpu1", "gpu2"}));
-	EXPECT_EQ(Config::getS("shown_boxes"), "gpu0 gpu1 gpu2");
+	expect_gpu_state({"gpu0", "gpu1", "gpu2"}, {0, 1, 2}, "gpu0 gpu1 gpu2");
+}
+
+TEST(gpu_boxes, toggle_gpu_box_closes_slot_after_target_switch) {
+	GpuConfigState state;
+	Gpu::count = 8;
+	Term::width = 200;
+	Term::height = 80;
+
+	ASSERT_TRUE(set_gpu_boxes("gpu0 gpu1"));
+	expect_gpu_state({"gpu0", "gpu1"}, {0, 1}, "gpu0 gpu1");
+
+	ASSERT_TRUE(Config::switch_gpu_box(1, -1));
+	expect_gpu_state({"gpu0", "gpu7"}, {0, 1}, "gpu0 gpu7");
+
+	EXPECT_TRUE(Config::toggle_gpu_box(1));
+	expect_gpu_state({"gpu0"}, {0}, "gpu0");
+}
+
+TEST(gpu_boxes, toggle_gpu_box_opens_requested_slot) {
+	GpuConfigState state;
+	Gpu::count = 8;
+	Term::width = 200;
+	Term::height = 80;
+
+	ASSERT_TRUE(set_gpu_boxes("gpu0"));
+	expect_gpu_state({"gpu0"}, {0}, "gpu0");
+
+	EXPECT_TRUE(Config::toggle_gpu_box(2));
+	expect_gpu_state({"gpu0", "gpu2"}, {0, 2}, "gpu0 gpu2");
+
+	EXPECT_TRUE(Config::toggle_gpu_box(1));
+	expect_gpu_state({"gpu0", "gpu1", "gpu2"}, {0, 1, 2}, "gpu0 gpu1 gpu2");
+}
+
+TEST(gpu_boxes, toggle_gpu_box_keeps_slot_order_when_opened_out_of_order) {
+	GpuConfigState state;
+	Gpu::count = 8;
+	Term::width = 200;
+	Term::height = 80;
+
+	ASSERT_TRUE(set_gpu_boxes(""));
+
+	EXPECT_TRUE(Config::toggle_gpu_box(2));
+	expect_gpu_state({"gpu2"}, {2}, "gpu2");
+
+	EXPECT_TRUE(Config::toggle_gpu_box(0));
+	expect_gpu_state({"gpu0", "gpu2"}, {0, 2}, "gpu0 gpu2");
+}
+
+TEST(gpu_boxes, toggle_gpu_box_removes_the_box_for_the_requested_slot) {
+	GpuConfigState state;
+	Gpu::count = 8;
+	Term::width = 200;
+	Term::height = 80;
+
+	ASSERT_TRUE(set_gpu_boxes("gpu0 gpu1 gpu2"));
+	expect_gpu_state({"gpu0", "gpu1", "gpu2"}, {0, 1, 2}, "gpu0 gpu1 gpu2");
+
+	EXPECT_TRUE(Config::toggle_gpu_box(1));
+	expect_gpu_state({"gpu0", "gpu2"}, {0, 2}, "gpu0 gpu2");
 }
 
 #endif

@@ -142,11 +142,7 @@ void term_resize(bool force) {
 		if (force and refreshed) force = false;
 	}
 	else return;
-#ifdef GPU_SUPPORT
-	static const array<string, 10> all_boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
-#else
 	static const array<string, 5> all_boxes = {"", "cpu", "mem", "net", "proc"};
-#endif
 	Global::resized = true;
 	if (Runner::active) Runner::stop();
 	Term::refresh();
@@ -187,10 +183,16 @@ void term_resize(bool force) {
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = stoi(key);
 				#ifdef GPU_SUPPORT
-					if ((intKey == 0 and Gpu::count >= 6) or (intKey >= 5 and intKey - 4 <= Gpu::count)) {
-				#else
-					if (intKey > 0 and intKey < 5) {
+					if (const auto gpu_panel_slot = Config::gpu_panel_slot_from_key(intKey); gpu_panel_slot.has_value()) {
+						if (Config::gpu_panel_slot_active(*gpu_panel_slot) or std::cmp_less(*gpu_panel_slot, Gpu::count)) {
+							Config::current_preset.reset();
+							Config::toggle_gpu_box(*gpu_panel_slot);
+							boxes = Config::getS("shown_boxes");
+						}
+					}
+					else
 				#endif
+					if (intKey > 0 and intKey < 5) {
 						const auto& box = all_boxes.at(intKey);
 						Config::current_preset.reset();
 						Config::toggle_box(box);
