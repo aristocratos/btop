@@ -100,7 +100,7 @@ namespace Config {
 
 		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
+		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpuN\" for GPU index N, separate values with whitespace. Up to 6 GPU boxes can be shown at once."},
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
@@ -455,16 +455,55 @@ namespace Config {
 	vector<string> preset_list = {"cpu:0:default,mem:0:default,net:0:default,proc:0:default"};
 	std::optional<int> current_preset;
 
+#ifdef GPU_SUPPORT
+	std::optional<size_t> gpu_box_index(std::string_view box) {
+		if (not box.starts_with("gpu") or box.size() <= 3) return {};
+
+		const auto index = box.substr(3);
+		if (not isint(index)) return {};
+
+		try {
+			return stoul(string{index});
+		}
+		catch (...) {
+			return {};
+		}
+	}
+
+	string gpu_box_name(size_t gpu_index) {
+		return "gpu" + to_string(gpu_index);
+	}
+
+	bool valid_box_name(const string& box, bool check_gpu_count = true) {
+		if (v_contains(valid_boxes, box)) return true;
+
+		const auto gpu_index = gpu_box_index(box);
+		return gpu_index.has_value() and (not check_gpu_count or std::cmp_less(*gpu_index, Gpu::count));
+	}
+#else
+	bool valid_box_name(const string& box, bool check_gpu_count = true) {
+		(void)check_gpu_count;
+		return v_contains(valid_boxes, box);
+	}
+#endif
+
 	bool presetsValid(const string& presets) {
 		vector<string> new_presets = {preset_list.at(0)};
+		int max_preset_boxes = static_cast<int>(valid_boxes.size());
+	#ifdef GPU_SUPPORT
+		max_preset_boxes += static_cast<int>(max_gpu_panels);
+	#endif
 
 		for (int x = 0; const auto& preset : ssplit(presets)) {
 			if (++x > 9) {
 				validError = "Too many presets entered!";
 				return false;
 			}
+		#ifdef GPU_SUPPORT
+			size_t gpu_panels = 0;
+		#endif
 			for (int y = 0; const auto& box : ssplit(preset, ',')) {
-				if (++y > 4) {
+				if (++y > max_preset_boxes) {
 					validError = "Too many boxes entered for preset!";
 					return false;
 				}
@@ -473,10 +512,16 @@ namespace Config {
 					validError = "Malformatted preset in config value presets!";
 					return false;
 				}
-				if (not is_in(vals.at(0), "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5")) {
+				if (not valid_box_name(vals.at(0), false)) {
 					validError = "Invalid box name in config value presets!";
 					return false;
 				}
+			#ifdef GPU_SUPPORT
+				if (gpu_box_index(vals.at(0)).has_value() and ++gpu_panels > max_gpu_panels) {
+					validError = "Too many GPU boxes entered for preset!";
+					return false;
+				}
+			#endif
 				if (not is_in(vals.at(1), "0", "1")) {
 					validError = "Invalid position value in config value presets!";
 					return false;
@@ -705,18 +750,68 @@ namespace Config {
 
 	bool set_boxes(const string& boxes) {
 		auto new_boxes = ssplit(boxes);
+	#ifdef GPU_SUPPORT
+		size_t gpu_panels = 0;
+	#endif
 		for (auto& box : new_boxes) {
-			if (not v_contains(valid_boxes, box)) return false;
+			if (not valid_box_name(box)) return false;
 		#ifdef GPU_SUPPORT
-			if (box.starts_with("gpu")) {
-				int gpu_num = stoi(box.substr(3)) + 1;
-				if (gpu_num > Gpu::count) return false;
+			if (gpu_box_index(box).has_value() and ++gpu_panels > max_gpu_panels) {
+				return false;
 			}
 		#endif
 		}
 		current_boxes = std::move(new_boxes);
 		return true;
 	}
+
+#ifdef GPU_SUPPORT
+	bool switch_gpu_box(size_t panel_slot, int direction) {
+		if (Gpu::count <= 1) return false;
+
+		vector<size_t> gpu_positions;
+		for (size_t i = 0; i < current_boxes.size(); ++i) {
+			if (gpu_box_index(current_boxes[i]).has_value()) gpu_positions.push_back(i);
+		}
+		if (panel_slot >= gpu_positions.size()) return false;
+
+		const size_t box_pos = gpu_positions[panel_slot];
+		auto current_gpu = gpu_box_index(current_boxes[box_pos]);
+		if (not current_gpu.has_value()) return false;
+		const size_t original_gpu = *current_gpu;
+
+		vector<bool> occupied(static_cast<size_t>(Gpu::count), false);
+		for (size_t i = 0; i < current_boxes.size(); ++i) {
+			if (i == box_pos) continue;
+			const auto gpu_index = gpu_box_index(current_boxes[i]);
+			if (gpu_index.has_value() and *gpu_index < occupied.size()) occupied[*gpu_index] = true;
+		}
+
+		for (int step = 0; step < Gpu::count; ++step) {
+			const size_t next_gpu = (static_cast<int>(*current_gpu) + direction + Gpu::count) % Gpu::count;
+			current_gpu = next_gpu;
+			if (next_gpu != original_gpu and not occupied[next_gpu]) {
+				auto old_boxes = current_boxes;
+				current_boxes[box_pos] = gpu_box_name(next_gpu);
+
+				string new_boxes;
+				for (const auto& box : current_boxes) new_boxes += box + ' ';
+				if (not new_boxes.empty()) new_boxes.pop_back();
+
+				auto min_size = Term::get_min_size(new_boxes);
+				if (Term::width < min_size.at(0) or Term::height < min_size.at(1)) {
+					current_boxes = std::move(old_boxes);
+					return false;
+				}
+
+				Config::set("shown_boxes", new_boxes);
+				return true;
+			}
+		}
+
+		return false;
+	}
+#endif
 
 	bool toggle_box(const string& box) {
 		auto old_boxes = current_boxes;
@@ -725,6 +820,16 @@ namespace Config {
 			current_boxes.push_back(box);
 		else
 			current_boxes.erase(box_pos);
+
+	#ifdef GPU_SUPPORT
+		size_t gpu_panels = 0;
+		for (const auto& current_box : current_boxes) {
+			if (gpu_box_index(current_box).has_value() and ++gpu_panels > max_gpu_panels) {
+				current_boxes = old_boxes;
+				return false;
+			}
+		}
+	#endif
 
 		string new_boxes;
 		if (not current_boxes.empty()) {

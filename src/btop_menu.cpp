@@ -298,7 +298,8 @@ namespace Menu {
 				"",
 				"Available values are \"cpu mem net proc\".",
 			#ifdef GPU_SUPPORT
-				"Or \"gpu0\" through \"gpu5\" for GPU boxes.",
+				"Or \"gpuN\" for GPU index N.",
+				"Up to 6 GPU boxes can be shown at once.",
 			#endif
 				"Separate values with whitespace.",
 				"",

@@ -18,9 +18,11 @@ tab-size = 4
 
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <unordered_map>
@@ -43,18 +45,14 @@ namespace Config {
 
 	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
 	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
-	const vector<string> valid_boxes = {
-		"cpu", "mem", "net", "proc"
-#ifdef GPU_SUPPORT
-		,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
-#endif
-		};
+	const vector<string> valid_boxes = {"cpu", "mem", "net", "proc"};
 	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
 #ifdef __linux__
 	const vector<string> freq_modes = { "first", "range", "lowest", "highest", "average" };
 #endif
 #ifdef GPU_SUPPORT
 	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
+	constexpr size_t max_gpu_panels = 6;
 #endif
     const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
 	extern vector<string> current_boxes;
@@ -73,6 +71,13 @@ namespace Config {
 	bool set_boxes(const string& boxes);
 
 	bool validBoxSizes(const string& boxes);
+
+#ifdef GPU_SUPPORT
+	//* Parse gpuN box names and switch an existing GPU panel to another GPU
+	std::optional<size_t> gpu_box_index(std::string_view box);
+	string gpu_box_name(size_t gpu_index);
+	bool switch_gpu_box(size_t panel_slot, int direction);
+#endif
 
 	//* Toggle box and update config string shown_boxes
 	bool toggle_box(const string& box);

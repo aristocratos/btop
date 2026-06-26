@@ -187,7 +187,7 @@ void term_resize(bool force) {
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = stoi(key);
 				#ifdef GPU_SUPPORT
-					if ((intKey == 0 and Gpu::count >= 5) or (intKey >= 5 and intKey - 4 <= Gpu::count)) {
+					if ((intKey == 0 and Gpu::count >= 6) or (intKey >= 5 and intKey - 4 <= Gpu::count)) {
 				#else
 					if (intKey > 0 and intKey < 5) {
 				#endif
@@ -517,9 +517,10 @@ namespace Runner {
 				);
 
 				vector<unsigned int> gpu_panels = {};
-				for (auto& box : conf.boxes)
-					if (box.starts_with("gpu"))
-						gpu_panels.push_back(box.back()-'0');
+				for (auto& box : conf.boxes) {
+					if (const auto gpu_index = Config::gpu_box_index(box); gpu_index.has_value())
+						gpu_panels.push_back(static_cast<unsigned int>(*gpu_index));
+				}
 
 				vector<Gpu::gpu_info> gpus;
 				if (gpu_in_cpu_panel or not gpu_panels.empty()) {

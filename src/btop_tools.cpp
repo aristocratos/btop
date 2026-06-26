@@ -122,10 +122,17 @@ namespace Term {
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
 	#ifdef GPU_SUPPORT
-		int gpu = 0;
-        if (Gpu::count > 0)
-        	for (char i = '0'; i <= '5'; i++)
-        		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
+		vector<int> gpu_panels;
+        if (Gpu::count > 0) {
+			std::istringstream iss(boxes, std::istringstream::in);
+			string current;
+			while (iss >> current) {
+				if (const auto gpu_index = Config::gpu_box_index(current); gpu_index.has_value()) {
+					if (std::cmp_less(*gpu_index, Gpu::count))
+						gpu_panels.push_back(static_cast<int>(*gpu_index));
+				}
+			}
+		}
 	#endif
         int width = 0;
 		if (mem) width = Mem::min_width;
@@ -133,15 +140,18 @@ namespace Term {
 		width += (proc ? Proc::min_width : 0);
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
 	#ifdef GPU_SUPPORT
-		if (gpu != 0 and width < Gpu::min_width) width = Gpu::min_width;
+		if (not gpu_panels.empty() and width < Gpu::min_width) width = Gpu::min_width;
 	#endif
 
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
 	#ifdef GPU_SUPPORT
-		for (int i = 0; i < gpu; i++)
-			height += Gpu::gpu_b_height_offsets[i] + 4;
+		for (const int gpu_index : gpu_panels) {
+			height += std::cmp_less(gpu_index, Gpu::gpu_b_height_offsets.size())
+				? Gpu::gpu_b_height_offsets[gpu_index] + 4
+				: Gpu::min_height;
+		}
 	#endif
 
 		return { width, height };

@@ -236,11 +236,29 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
+			#ifdef GPU_SUPPORT
+				else if (key.starts_with("gpu_prev_") or key.starts_with("gpu_next_")) {
+					const bool next = key.starts_with("gpu_next_");
+					const auto prefix_len = next ? std::string_view{"gpu_next_"}.size() : std::string_view{"gpu_prev_"}.size();
+					try {
+						const auto panel_slot = stoul(string{key.substr(prefix_len)});
+						atomic_wait(Runner::active);
+						if (Config::switch_gpu_box(panel_slot, next ? 1 : -1)) {
+							Config::current_preset.reset();
+							Draw::calcSizes();
+							Draw::update_clock(true);
+							Runner::run("all", false, true);
+						}
+					}
+					catch (...) {}
+					return;
+				}
+			#endif
 				else if (key.size() == 1 and isint(key)) {
 					auto intKey = std::atoi(key.data());
 				#ifdef GPU_SUPPORT
 					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
-					if ((intKey == 0 and Gpu::count < 5) or (intKey >= 5 and intKey - 4 > Gpu::count))
+					if ((intKey == 0 and Gpu::count < 6) or (intKey >= 5 and intKey - 4 > Gpu::count))
 						return;
 				#else
 				static const array<string, 10> boxes = {"", "cpu", "mem", "net", "proc"};
