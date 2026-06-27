@@ -603,10 +603,10 @@ namespace Cpu {
 				+ (!Config::current_preset.has_value() ? "*" : to_string(Config::current_preset.value())) + Fx::ub + title_right;
 			Input::mouse_mappings["p"] = {button_y, x + 17, 1, 8};
 			const string update = to_string(Config::getI("update_ms")) + "ms";
-			out += fmt::format("{}{}{}", 
-				Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg") + "- ",
-				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "title") + update,
-				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg") + " +" + Fx::ub + title_right);
+			fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				Mv::to(button_y, x + width - update.size() - 8), title_left, Fx::b, Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg"), "- ",
+				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "title"), update,
+				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg"), " +", Fx::ub, title_right);
 			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
 
