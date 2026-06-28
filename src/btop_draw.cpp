@@ -557,6 +557,15 @@ namespace Cpu {
 		const bool gpu_always = show_gpu_info == "On";
 		const bool gpu_auto = show_gpu_info == "Auto";
 		const bool show_gpu = (gpus.size() > 0 and (gpu_always or (gpu_auto and Gpu::shown < Gpu::count)));
+		auto gpu_hidden = [&](size_t gpu_index) {
+			return gpu_auto and v_contains(Gpu::shown_panels, gpu_index);
+		};
+		auto gpu_draw_count = [&]() {
+			int count = 0;
+			for (size_t i = 0; i < gpus.size(); ++i)
+				if (not gpu_hidden(i)) ++count;
+			return count;
+		};
 #endif // GPU_SUPPORT
 		auto graph_up_field = Config::getS("cpu_graph_upper");
 		if (graph_up_field == "Auto" or not v_contains(Cpu::available_fields, graph_up_field))
@@ -626,27 +635,22 @@ namespace Cpu {
 						gpu_temp_graphs.resize(gpus.size());
 						gpu_mem_graphs.resize(gpus.size());
 						gpu_meters.resize(gpus.size());
-						const int gpu_draw_count = gpu_always ? Gpu::count : Gpu::count - Gpu::shown;
-                                                // Fairly distribute graph_default_width across gpu_draw_count GPUs, leaving 1 col per separator.
-                                                // Clamp to >=1 to avoid degenerate/negative widths reaching Draw::Graph::_create (#1118, #1017).
-                                                const int gpu_drawable_width = graph_default_width - max(0, gpu_draw_count - 1);
-                                                graph_width = gpu_draw_count <= 0 ? graph_default_width : max(1, gpu_drawable_width / gpu_draw_count);
+						const int draw_count = gpu_draw_count();
+						// Fairly distribute graph_default_width across drawn GPUs, leaving 1 col per separator.
+						// Clamp to >=1 to avoid degenerate/negative widths reaching Draw::Graph::_create (#1118, #1017).
+						const int gpu_drawable_width = graph_default_width - max(0, draw_count - 1);
+						graph_width = draw_count <= 0 ? graph_default_width : max(1, gpu_drawable_width / draw_count);
+						int gpu_drawn = 0;
 						for (size_t i = 0; i < gpus.size(); i++) {
-							if (gpu_auto and v_contains(Gpu::shown_panels, i))
+							if (gpu_hidden(i))
 								continue;
 							auto& gpu = gpus[i]; auto& graph = graphs[i];
+							const bool last_gpu = (++gpu_drawn == draw_count);
+							const int gpu_graph_width = max(1, graph_width + (last_gpu and draw_count > 0 ? gpu_drawable_width % draw_count : 0));
 
 							//? GPU graphs
 							if (gpu.supported_functions.gpu_utilization) {
-								if (i + 1 < gpus.size()) {
-									graph = Draw::Graph{graph_width, graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true};
-								}
-								else {
-									graph = Draw::Graph{
-                                                                                max(1, graph_width + (gpu_draw_count > 0 ? gpu_drawable_width % gpu_draw_count : 0)),
-										graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true
-									};
-								}
+								graph = Draw::Graph{gpu_graph_width, graph_height, "cpu", safeVal(gpu.gpu_percent, graph_field), graph_symbol, invert, true};
 							}
 						}
 					} else {
@@ -665,9 +669,9 @@ namespace Cpu {
 			#endif
 			};
 
-            init_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field, false);
-            if (not single_graph)
-            	init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
+			init_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field, false);
+			if (not single_graph)
+				init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
 
 			#ifdef GPU_SUPPORT
 			if (show_gpu and b_columns > 1) {
@@ -786,8 +790,9 @@ namespace Cpu {
 				if (graph_field.starts_with("gpu"))
 					if (graph_field.ends_with("totals")) {
 						int gpu_drawn = 0;
+						const int draw_count = gpu_draw_count();
 						for (size_t i = 0; i < gpus.size(); i++) {
-							if (gpu_auto and v_contains(Gpu::shown_panels, i)) {
+							if (gpu_hidden(i)) {
 								continue;
 							}
 							try {
@@ -796,13 +801,13 @@ namespace Cpu {
 							} catch (std::out_of_range& /* unused */) {
 								continue;
 							}
-							if (Gpu::count - (gpu_auto ? Gpu::shown : 0) > 1) {
+							if (draw_count > 1) {
 								auto i_str = to_string(i);
 								out += Mv::l(max(0, graph_width-1)) + Mv::u(graph_height/2) + (graph_width > 5 ? "GPU" : "") + i_str
 									+ Mv::d(graph_height/2) + Mv::r(max(0, (int)(graph_width - 1 - (graph_width > 5)*3 - i_str.size())));
 							}
 
-							if (++gpu_drawn < Gpu::count - (gpu_auto ? Gpu::shown : 0))
+							if (++gpu_drawn < draw_count)
 								out += Theme::c("div_line") + (Symbols::v_line + Mv::l(1) + Mv::u(1))*graph_height + Mv::r(1) + Mv::d(1);
 						}
 					}
@@ -2258,8 +2263,8 @@ namespace Draw {
 			std::istringstream iss(boxes, std::istringstream::in);
 			string current;
 			while (iss >> current) {
-				if (current.starts_with("gpu"))
-					Gpu::shown_panels.push_back(current.back()-'0');
+				if (const auto gpu_index = Config::gpu_box_index(current); gpu_index.has_value())
+					Gpu::shown_panels.push_back(static_cast<int>(*gpu_index));
 			}
 		}
 		Gpu::shown = Gpu::shown_panels.size();
@@ -2383,7 +2388,22 @@ namespace Draw {
 				height += (height+Cpu::height == Term::height-1);
 				height = max(height, b_height_vec[i] + 2);
 				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
-				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
+				int panel_key = Config::gpu_panel_key(i);
+				if (const auto slot = Config::gpu_panel_slot(i); slot.has_value()) {
+					panel_key = Config::gpu_panel_key(*slot);
+				}
+				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, "gpu", "", panel_key);
+				const string gpu_selector = Config::gpu_box_name(shown_panels[i]);
+				const int gpu_selector_label_width = static_cast<int>(ulen(gpu_selector));
+				const int gpu_selector_width = 6 + gpu_selector_label_width;
+				if (Gpu::count > 1 and width > gpu_selector_width + 10) {
+					const int gpu_selector_x = x_vec[i] + width - gpu_selector_width - 2;
+					box[i] += Mv::to(y_vec[i], gpu_selector_x) + Theme::c("cpu_box") + Symbols::title_left + Fx::b
+						+ Theme::c("title") + Symbols::left + " " + gpu_selector + " " + Symbols::right + Fx::ub
+						+ Theme::c("cpu_box") + Symbols::title_right;
+					Input::mouse_mappings["gpu_prev_" + to_string(i)] = {y_vec[i], gpu_selector_x + 1, 1, 1};
+					Input::mouse_mappings["gpu_next_" + to_string(i)] = {y_vec[i], gpu_selector_x + gpu_selector_label_width + 4, 1, 1};
+				}
 				b_width = clamp(width/2, min_width, 65);
 				total_height += height;
 
@@ -2391,7 +2411,9 @@ namespace Draw {
 				b_x_vec[i] = x_vec[i] + width - b_width - 1;
 				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2 - b_height_vec[i]) / 2) + 1;
 
-				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
+				const string custom_name_key = "custom_gpu_name" + to_string(shown_panels[i]);
+				const std::string_view custom_name_key_view{custom_name_key};
+				string name = Config::strings.contains(custom_name_key_view) ? Config::getS(custom_name_key_view) : "";
 				if (name.empty()) name = gpu_names[shown_panels[i]];
 
 				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
