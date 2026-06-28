@@ -592,6 +592,8 @@ namespace Cpu {
 			graph_up_height = (single_graph ? height - 2 : ceil((double)(height - 2) / 2) - (mid_line and height % 2 != 0));
 			graph_low_height = height - 2 - graph_up_height - mid_line;
 			const int button_y = cpu_bottom ? y + height - 1 : y;
+			const bool is_proc_focused = (Config::getB("follow_process") and Config::getI("followed_pid") == Config::getI("detailed_pid")) or Config::getI("proc_selected") > 0;
+			const bool is_proc_focused_and_in_tree = is_proc_focused and Config::getB("proc_tree");
 			out += box;
 
 			//? Buttons on title
@@ -601,8 +603,10 @@ namespace Cpu {
 				+ (!Config::current_preset.has_value() ? "*" : to_string(Config::current_preset.value())) + Fx::ub + title_right;
 			Input::mouse_mappings["p"] = {button_y, x + 17, 1, 8};
 			const string update = to_string(Config::getI("update_ms")) + "ms";
-			out += Mv::to(button_y, x + width - update.size() - 8) + title_left + Fx::b + Theme::c("hi_fg") + "- " + Theme::c("title") + update
-				+ Theme::c("hi_fg") + " +" + Fx::ub + title_right;
+			fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+				Mv::to(button_y, x + width - update.size() - 8), title_left, Fx::b, Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg"), "- ",
+				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "title"), update,
+				Theme::c(is_proc_focused_and_in_tree ? "inactive_fg" : "hi_fg"), " +", Fx::ub, title_right);
 			Input::mouse_mappings["-"] = {button_y, x + width - (int)update.size() - 7, 1, 2};
 			Input::mouse_mappings["+"] = {button_y, x + width - 5, 1, 2};
 
