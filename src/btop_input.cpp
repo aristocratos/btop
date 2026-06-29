@@ -488,12 +488,12 @@ namespace Input {
 					}
 					Config::set("update_following", true);
 				}
-				else if (is_in(key, "+", "-", "space", "C") and Config::getB("proc_tree")) {
+				else if (is_in(key, "+", "-", "space", "C", "=") and Config::getB("proc_tree")) {
 					const bool is_following_detailed = Config::getB("follow_process") and Config::getI("followed_pid") == Config::getI("detailed_pid");
 					if (Config::getI("proc_selected") > 0 or is_following_detailed) {
 						atomic_wait(Runner::active);
 						auto& pid = is_following_detailed and Config::getI("proc_selected") == 0 ? Config::getI("followed_pid") : Config::getI("selected_pid");
-						if (key == "+" or key == "space") Proc::expand = pid;
+						if (key == "+" or key == "space" or key == "=") Proc::expand = pid;
 						if (key == "-" or key == "space") Proc::collapse = pid;
 						if (key == "C")	Proc::toggle_children = pid;
 						no_update = false;
