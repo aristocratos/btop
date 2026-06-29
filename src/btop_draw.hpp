@@ -31,32 +31,32 @@ using std::string;
 using std::vector;
 
 namespace Symbols {
-	const string h_line				= "─";
-	const string v_line				= "│";
-	const string dotted_v_line		= "╎";
-	const string left_up			= "┌";
-	const string right_up			= "┐";
-	const string left_down			= "└";
-	const string right_down			= "┘";
-	const string round_left_up		= "╭";
-	const string round_right_up		= "╮";
-	const string round_left_down	= "╰";
-	const string round_right_down	= "╯";
-	const string title_left_down	= "┘";
-	const string title_right_down	= "└";
-	const string title_left			= "┐";
-	const string title_right		= "┌";
-	const string div_right			= "┤";
-	const string div_left			= "├";
-	const string div_up				= "┬";
-	const string div_down			= "┴";
+	extern const string h_line;
+	extern const string v_line;
+	extern const string dotted_v_line;
+	extern const string left_up;
+	extern const string right_up;
+	extern const string left_down;
+	extern const string right_down;
+	extern const string round_left_up;
+	extern const string round_right_up;
+	extern const string round_left_down;
+	extern const string round_right_down;
+	extern const string title_left_down;
+	extern const string title_right_down;
+	extern const string title_left;
+	extern const string title_right;
+	extern const string div_right;
+	extern const string div_left;
+	extern const string div_up;
+	extern const string div_down;
 
 
-	const string up = "↑";
-	const string down = "↓";
-	const string left = "←";
-	const string right = "→";
-	const string enter = "↵";
+	extern const string up;
+	extern const string down;
+	extern const string left;
+	extern const string right;
+	extern const string enter;
 }
 
 namespace Draw {

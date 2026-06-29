@@ -124,7 +124,7 @@ namespace Gpu {
 
 	extern std::unordered_map<string, deque<long long>> shared_gpu_percent; // averages, power/vram total
 
-	const array mem_names { "used"s, "free"s };
+	extern const array<string, 2> mem_names;
 
 	//* Container for process information // TODO
 	/*struct proc_info {
@@ -373,31 +373,10 @@ namespace Proc {
 	extern atomic<bool> resized;
 
 	//? Contains the valid sorting options for processes
-	const vector<string> sort_vector = {
-		"pid",
-		"name",
-		"command",
-		"threads",
-		"user",
-		"memory",
-		"cpu direct",
-		"cpu lazy",
-	};
+	extern const vector<string> sort_vector;
 
 	//? Translation from process state char to explanative string
-	const std::unordered_map<char, string> proc_states = {
-		{'R', "Running"},
-		{'S', "Sleeping"},
-		{'D', "Waiting"},
-		{'Z', "Zombie"},
-		{'T', "Stopped"},
-		{'t', "Tracing"},
-		{'X', "Dead"},
-		{'x', "Dead"},
-		{'K', "Wakekill"},
-		{'W', "Unknown"},
-		{'P', "Parked"}
-	};
+	extern const std::unordered_map<char, string> proc_states;
 
 	//* Container for process information
 	struct proc_info {
