@@ -54,24 +54,24 @@ using namespace Tools;
 using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
 
-const string Symbols::h_line				= "─";
-const string Symbols::v_line				= "│";
+const string Symbols::h_line			= "─";
+const string Symbols::v_line			= "│";
 const string Symbols::dotted_v_line		= "╎";
 const string Symbols::left_up			= "┌";
 const string Symbols::right_up			= "┐";
 const string Symbols::left_down			= "└";
-const string Symbols::right_down			= "┘";
+const string Symbols::right_down		= "┘";
 const string Symbols::round_left_up		= "╭";
-const string Symbols::round_right_up		= "╮";
+const string Symbols::round_right_up	= "╮";
 const string Symbols::round_left_down	= "╰";
 const string Symbols::round_right_down	= "╯";
 const string Symbols::title_left_down	= "┘";
 const string Symbols::title_right_down	= "└";
-const string Symbols::title_left			= "┐";
+const string Symbols::title_left		= "┐";
 const string Symbols::title_right		= "┌";
 const string Symbols::div_right			= "┤";
 const string Symbols::div_left			= "├";
-const string Symbols::div_up				= "┬";
+const string Symbols::div_up			= "┬";
 const string Symbols::div_down			= "┴";
 
 
