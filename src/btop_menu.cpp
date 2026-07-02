@@ -690,6 +690,7 @@ namespace Menu {
 		#ifdef __linux__
 			{"show_zswap",
 				"If zswap usage should be shown in memory box.",
+				"Displays the compressed size stored in RAM.",
 				"",
 				"True or False."},
 		#endif
