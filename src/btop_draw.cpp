@@ -1246,7 +1246,7 @@ namespace Mem {
 				for (const auto& name : swap_names) {
 					auto color_gradient = name.substr(5);
 					if (color_gradient == "zswapped") {
-						color_gradient = "used";
+						color_gradient = "cached";
 					}
 					if (use_graphs)
 						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, color_gradient, safeVal(mem.percent, name), graph_symbol};
@@ -1342,13 +1342,13 @@ namespace Mem {
 				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
 					+ Theme::c("main_fg") + Fx::ub;
 				cy += 1;
-				title = show_zswap ? "Disk" : "Used";
+				title = "Used";
 			}
-			else if (name == "swap_zswapped") {
+			else if (name == "swap_zswap_compressed") {
 				if (not show_zswap) {
 					continue;
 				}
-				title = "Zswapped";
+				title = "Zswap";
 			}
 			else if (name == "swap_free")
 				title = "Free";

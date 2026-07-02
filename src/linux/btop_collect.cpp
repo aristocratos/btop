@@ -2389,10 +2389,14 @@ namespace Mem {
 					mem.stats.at("swap_free") <<= 10;
 					if (not show_zswap) break;
 				}
-				else if (label == "Zswapped:") {
-					meminfo >> mem.stats.at("swap_zswapped");
-					mem.stats.at("swap_zswapped") <<= 10;
+				else if (label == "Zswap:") {
+					meminfo >> mem.stats.at("swap_zswap_compressed");
+					mem.stats.at("swap_zswap_compressed") <<= 10;
 					has_zswap = true;
+				}
+				else if (label == "Zswapped:") {
+					meminfo >> mem.stats.at("swap_zswap_original");
+					mem.stats.at("swap_zswap_original") <<= 10;
 					break;
 				}
 				meminfo.ignore(SSmax, '\n');
@@ -2407,7 +2411,7 @@ namespace Mem {
 			mem.stats.at("used") = totalMem - (mem.stats.at("available") <= totalMem ? mem.stats.at("available") : mem.stats.at("free"));
 
 			if (mem.stats.at("swap_total") > 0) mem.stats.at("swap_used") = mem.stats.at("swap_total") - mem.stats.at("swap_free");
-			if (show_zswap and mem.stats.at("swap_zswapped") > 0) mem.stats.at("swap_used") -= mem.stats.at("swap_zswapped");
+			if (show_zswap and mem.stats.at("swap_zswap_original") > 0) mem.stats.at("swap_used") -= mem.stats.at("swap_zswap_original");
 		}
 		else
 			throw std::runtime_error("Failed to read /proc/meminfo");

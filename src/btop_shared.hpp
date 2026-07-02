@@ -270,7 +270,7 @@ namespace Mem {
 	const array swap_names {
 		"swap_used"s,
 		#ifdef __linux__
-		"swap_zswapped"s,
+		"swap_zswap_compressed"s,
 		#endif
 		"swap_free"s
 	};
@@ -298,14 +298,14 @@ namespace Mem {
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0},
 			#ifdef __linux__
-			{"swap_zswapped", 0},
+			{"swap_zswap_compressed", 0}, {"swap_zswap_original", 0},
 			#endif
 			{"swap_free", 0}};
 		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}},
 			#ifdef __linux__
-			{"swap_zswapped", {}},
+			{"swap_zswap_compressed", {}},
 			#endif
 			{"swap_free", {}}};
 		std::unordered_map<string, disk_info> disks;
