@@ -47,7 +47,7 @@ jobs:
       - name: Compile
         uses: vmactions/openbsd-vm@18edb32f4e48dae5865d7b8b3a9587bc01218a20 # v1.4.4
         with:
-          release: '7.8'
+          release: '7.9'
           usesh: true
           prepare: |
             pkg_add gmake coreutils git lowdown
@@ -59,6 +59,6 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: btop-x86_64-openbsd-7.8
+          name: btop-x86_64-openbsd-7.9
           path: 'bin/*'
           if-no-files-found: error
