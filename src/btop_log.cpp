@@ -156,3 +156,5 @@ namespace Logger {
 	} // namespace detail
 
 } // namespace Logger
+
+const std::vector<std::string> Logger::log_levels = { "DISABLED", "ERROR", "WARNING", "INFO", "DEBUG" };

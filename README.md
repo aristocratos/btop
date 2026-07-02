@@ -297,7 +297,9 @@ Also necessary is a UTF8 locale and a font that includes:
 * Unicode Block “Geometric Shapes” U+25A0 - U+25FF
 * Unicode Block "Box Drawing" and "Block Elements" U+2500 - U+259F
 
-### **Optional Dependencies (Needed for GPU monitoring) (Only Linux)**
+### **Optional Dependencies (Needed for GPU monitoring)**
+
+GPU monitoring is supported on Linux and on macOS with Apple Silicon GPUs.
 
 GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
 
@@ -617,8 +619,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
    | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
    | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
@@ -689,6 +689,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `QUIET=true`                    | For less verbose output                                                 |
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on macOS)                |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
@@ -783,8 +784,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    To force any specific compiler, run `CXX=<compiler> cmake -B build -G Ninja`
@@ -942,8 +942,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    _**Note:** Static linking does not work with GCC._
@@ -1104,8 +1102,6 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-
-
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
    To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`

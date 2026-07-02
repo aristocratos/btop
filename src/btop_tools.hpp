@@ -69,31 +69,31 @@ using namespace fmt::literals;
 
 //* Collection of escape codes for text style and formatting
 namespace Fx {
-	const string e = "\x1b[";				//* Escape sequence start
-	const string b = e + "1m";				//* Bold on/off
-	const string ub = e + "22m";			//* Bold off
-	const string d = e + "2m";				//* Dark on
-	const string ud = e + "22m";			//* Dark off
-	const string i = e + "3m";				//* Italic on
-	const string ui = e + "23m";			//* Italic off
-	const string ul = e + "4m";				//* Underline on
-	const string uul = e + "24m";			//* Underline off
-	const string bl = e + "5m";				//* Blink on
-	const string ubl = e + "25m";			//* Blink off
-	const string s = e + "9m";				//* Strike/crossed-out on
-	const string us = e + "29m";			//* Strike/crossed-out on/off
+	extern const string e;	//* Escape sequence start
+	extern const string b;	//* Bold on/off
+	extern const string ub;	//* Bold off
+	extern const string d;	//* Dark on
+	extern const string ud;	//* Dark off
+	extern const string i;	//* Italic on
+	extern const string ui;	//* Italic off
+	extern const string ul;	//* Underline on
+	extern const string uul;//* Underline off
+	extern const string bl;	//* Blink on
+	extern const string ubl;//* Blink off
+	extern const string s;	//* Strike/crossed-out on
+	extern const string us;	//* Strike/crossed-out on/off
 
 	//* Reset foreground/background color and text effects
-	const string reset_base = e + "0m";
+	extern const string reset_base;
 
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
 
 	//* Regex for matching color, style and cursor move escape sequences
-	const std::regex escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
+	extern const std::regex escape_regex;
 
 	//* Regex for matching only color and style escape sequences
-	const std::regex color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
+	extern const std::regex color_regex;
 
 	//* Return a string with all colors and text styling removed
 	inline string uncolor(const string& s) { return std::regex_replace(s, color_regex, ""); }
@@ -132,19 +132,19 @@ namespace Term {
 	extern atomic<int> height;
 	extern string fg, bg, current_tty;
 
-	const string hide_cursor = Fx::e + "?25l";
-	const string show_cursor = Fx::e + "?25h";
-	const string alt_screen = Fx::e + "?1049h";
-	const string normal_screen = Fx::e + "?1049l";
-	const string clear = Fx::e + "2J" + Fx::e + "0;0f";
-	const string clear_end = Fx::e + "0J";
-	const string clear_begin = Fx::e + "1J";
-	const string mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //? Enable reporting of mouse position on click and release
-	const string mouse_off = Fx::e + "?1002l" + Fx::e + "?1015l" + Fx::e + "?1006l";
-	const string mouse_direct_on = Fx::e + "?1003h"; //? Enable reporting of mouse position at any movement
-	const string mouse_direct_off = Fx::e + "?1003l";
-	const string sync_start = Fx::e + "?2026h"; //? Start of terminal synchronized output
-	const string sync_end = Fx::e + "?2026l"; //? End of terminal synchronized output
+	extern const string hide_cursor;
+	extern const string show_cursor;
+	extern const string alt_screen;
+	extern const string normal_screen;
+	extern const string clear;
+	extern const string clear_end;
+	extern const string clear_begin;
+	extern const string mouse_on; //? Enable reporting of mouse position on click and release
+	extern const string mouse_off;
+	extern const string mouse_direct_on; //? Enable reporting of mouse position at any movement
+	extern const string mouse_direct_off;
+	extern const string sync_start; //? Start of terminal synchronized output
+	extern const string sync_end; //? End of terminal synchronized output
 
 	//* Returns true if terminal has been resized and updates width and height
 	bool refresh(bool only_check=false);
