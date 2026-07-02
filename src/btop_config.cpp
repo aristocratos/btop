@@ -143,7 +143,7 @@ namespace Config {
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
-		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel (similar behavior to htop)."},
 
 		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
 
