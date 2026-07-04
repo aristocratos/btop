@@ -44,6 +44,7 @@ tab-size = 4
 #include <chrono>
 #include <utility>
 #include <semaphore>
+#include <strings.h>
 #include <langinfo.h>
 
 #ifdef __APPLE__
@@ -937,8 +938,11 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	init_config(cli.low_color, cli.filter);
 
 	//? Try to find and set a UTF-8 locale
+	auto check_case_ = [](const char *str) {
+		return strcasecmp(str, "utf-8") == 0 || strcasecmp(str, "utf8") == 0;
+	};
 	if (const auto *loc = std::setlocale(LC_ALL, "");
-	loc != nullptr and str_to_upper(s_replace((string)nl_langinfo(CODESET), "-", "")).ends_with("UTF8")) {
+	loc != nullptr and check_case_(nl_langinfo(CODESET))) {
 		std::locale::global(std::locale(loc));
 		Logger::debug("Using locale {}", std::locale().name());
 	}
@@ -968,7 +972,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 			clean_quit(1);
 		}
 	#endif
-  }
+	}
 
 	//? Initialize terminal and set options
 	if (not Term::init()) {
