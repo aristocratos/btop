@@ -175,6 +175,13 @@ namespace Cpu {
 
 namespace Gpu {
 	vector<gpu_info> gpus;
+
+	//? APUs often expose a small VRAM aperture plus GTT-backed shared memory.
+	static bool should_include_gtt_memory(uint64_t vram_total, uint64_t gtt_total) {
+		constexpr uint64_t one_gib = 1ULL << 30;
+		return gtt_total > 0 and (vram_total == 0 or (vram_total <= one_gib and gtt_total > vram_total));
+	}
+
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -238,6 +245,7 @@ namespace Gpu {
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
 		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_MEM_TYPE_GTT             2
 		#define RSMI_TEMP_CURRENT             0
 		#define RSMI_TEMP_TYPE_EDGE           0
 		#define RSMI_CLK_TYPE_MEM             4
@@ -280,6 +288,7 @@ namespace Gpu {
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
+		vector<bool> use_gtt_memory;
 	}
 
 
@@ -308,6 +317,7 @@ namespace Gpu {
 			bool has_freq;
 			bool has_busy;
 			bool has_vram;
+			bool use_gtt_memory;
 		};
 
 		bool initialized = false;
@@ -1668,6 +1678,7 @@ namespace Gpu {
 			if (device_count > 0) {
 				gpus.resize(gpus.size() + device_count);
 				gpu_names.resize(gpus.size() + device_count);
+				use_gtt_memory.assign(device_count, false);
 
 				initialized = true;
 
@@ -1865,23 +1876,44 @@ namespace Gpu {
 
 				//? Memory info
 				if (gpus_slice[i].supported_functions.mem_total) {
-					uint64_t total;
-					result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_VRAM, &total);
+					uint64_t total = 0;
+					uint64_t vram_total = 0;
+					result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_VRAM, &vram_total);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get total VRAM");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
-					} else gpus_slice[i].mem_total = total;
+					} else {
+						total = vram_total;
+						if constexpr(is_init) {
+							uint64_t gtt_total = 0;
+							if (rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &gtt_total) == RSMI_STATUS_SUCCESS)
+								use_gtt_memory[i] = should_include_gtt_memory(vram_total, gtt_total);
+						}
+						if (use_gtt_memory[i]) {
+							uint64_t gtt_total = 0;
+							if (rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &gtt_total) == RSMI_STATUS_SUCCESS)
+								total += gtt_total;
+						}
+						gpus_slice[i].mem_total = total;
+					}
 				}
 
 				if (gpus_slice[i].supported_functions.mem_used) {
-					uint64_t used;
-					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &used);
+					uint64_t used = 0;
+					uint64_t vram_used = 0;
+					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &vram_used);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
 					} else {
+						used = vram_used;
+						if (use_gtt_memory[i]) {
+							uint64_t gtt_used = 0;
+							if (rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_GTT, &gtt_used) == RSMI_STATUS_SUCCESS)
+								used += gtt_used;
+						}
 						gpus_slice[i].mem_used = used;
-						if (gpus_slice[i].supported_functions.mem_total)
+						if (gpus_slice[i].supported_functions.mem_total and gpus_slice[i].mem_total > 0)
 							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
 					}
 				}
@@ -2097,6 +2129,11 @@ namespace Gpu {
 
 				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
 				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
+				if (std::filesystem::exists(device_link / "mem_info_gtt_total")) {
+					const auto vram_total = d.has_vram ? read_ll(device_link / "mem_info_vram_total") : 0;
+					const auto gtt_total = read_ll(device_link / "mem_info_gtt_total");
+					d.use_gtt_memory = should_include_gtt_memory((uint64_t)std::max(vram_total, 0LL), (uint64_t)std::max(gtt_total, 0LL));
+				}
 
 				if (not d.hwmon.empty()) {
 					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
@@ -2111,7 +2148,7 @@ namespace Gpu {
 				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
 				//? or driver states where nothing useful is exposed yet. Otherwise btop would
 				//? render an empty GPU entry every tick.
-				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
+				if (not (d.has_busy or d.has_vram or d.use_gtt_memory or d.has_temp or d.has_freq or not d.power.empty())) {
 					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
 					continue;
 				}
@@ -2162,8 +2199,8 @@ namespace Gpu {
 						.pwr_usage = not d.power.empty(),
 						.pwr_state = false,
 						.temp_info = d.has_temp,
-						.mem_total = d.has_vram,
-						.mem_used = d.has_vram,
+						.mem_total = d.has_vram or d.use_gtt_memory,
+						.mem_used = d.has_vram or d.use_gtt_memory,
 						.pcie_txrx = false,
 						.encoder_utilization = false,
 						.decoder_utilization = false,
@@ -2194,9 +2231,13 @@ namespace Gpu {
 					gpu.gpu_clock_speed = (unsigned int)(read_ll(d.hwmon / "freq1_input") / 1'000'000); //? Hz → MHz
 				}
 
-				if (d.has_vram) {
-					gpu.mem_total = read_ll(d.device / "mem_info_vram_total");
-					gpu.mem_used = read_ll(d.device / "mem_info_vram_used");
+				if (d.has_vram or d.use_gtt_memory) {
+					gpu.mem_total = d.has_vram ? read_ll(d.device / "mem_info_vram_total") : 0;
+					gpu.mem_used = d.has_vram ? read_ll(d.device / "mem_info_vram_used") : 0;
+					if (d.use_gtt_memory) {
+						gpu.mem_total += read_ll(d.device / "mem_info_gtt_total");
+						gpu.mem_used += read_ll(d.device / "mem_info_gtt_used");
+					}
 					if (gpu.mem_total > 0) {
 						gpu.gpu_percent.at("gpu-vram-totals").push_back(
 							std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
