@@ -1710,17 +1710,18 @@ namespace Gpu {
 				if constexpr(is_init) {
 					//? Device name
 					char name[RSMI_DEVICE_NAME_BUFFER_SIZE];
-    				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[Nvml::device_count + i] = string(name);
+					result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
+					if (result != RSMI_STATUS_SUCCESS)
+						Logger::warning("ROCm SMI: Failed to get device name");
+					else gpu_names[Nvml::device_count + i] = string(name);
 
-    				//? Power usage
-    				uint64_t max_power;
-    				result = rsmi_dev_power_cap_get(i, 0, &max_power);
-    				if (result != RSMI_STATUS_SUCCESS)
-						Logger::warning("ROCm SMI: Failed to get maximum GPU power draw, defaulting to 225W");
-					else {
+					//? Power usage
+					uint64_t max_power;
+					result = rsmi_dev_power_cap_get(i, 0, &max_power);
+					if (result != RSMI_STATUS_SUCCESS) {
+						Logger::debug("ROCm SMI: Failed to get maximum GPU power draw, using observed peak");
+						gpus_slice[i].pwr_max_usage = 0;
+					} else {
 						gpus_slice[i].pwr_max_usage = (long long)(max_power/1000); // RSMI reports power in microWatts
 						gpu_pwr_total_max += gpus_slice[i].pwr_max_usage;
 					}
@@ -1847,17 +1848,18 @@ namespace Gpu {
 			#endif
     			//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
-    				uint64_t power;
-    				result = rsmi_dev_power_ave_get(i, 0, &power);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					uint64_t power;
+					result = rsmi_dev_power_ave_get(i, 0, &power);
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU power usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else {
-							gpus_slice[i].pwr_usage = (long long)power / 1000;
-							if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
-								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
-							gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
-						}
+					} else {
+						gpus_slice[i].pwr_usage = (long long)power / 1000;
+						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
+							gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
+						const auto pwr_max_usage = max(gpus_slice[i].pwr_max_usage, 1ll);
+						gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)pwr_max_usage), 0ll, 100ll));
+					}
 
 					if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
 				}
@@ -2221,10 +2223,9 @@ namespace Gpu {
 				if (not d.power.empty()) {
 					gpu.pwr_usage = read_ll(d.power) / 1000; //? microwatts → milliwatts
 					gpu.pwr_max_usage = std::max(gpu.pwr_max_usage, gpu.pwr_usage);
-					if (gpu.pwr_max_usage > 0) {
-						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
-							std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL));
-					}
+					const auto pwr_max_usage = std::max(gpu.pwr_max_usage, 1LL);
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)pwr_max_usage), 0LL, 100LL));
 				}
 
 				if (d.has_freq) {
@@ -2269,6 +2270,7 @@ namespace Gpu {
 		long long mem_usage_total = 0;
 		long long mem_total = 0;
 		long long pwr_total = 0;
+		long long pwr_total_max = 0;
 		for (auto& gpu : gpus) {
 			if (gpu.supported_functions.gpu_utilization)
 				avg += gpu.gpu_percent.at("gpu-totals").back();
@@ -2276,8 +2278,11 @@ namespace Gpu {
 				mem_usage_total += gpu.mem_used;
 			if (gpu.supported_functions.mem_total)
 				mem_total += gpu.mem_total;
-			if (gpu.supported_functions.pwr_usage)
+			if (gpu.supported_functions.pwr_usage) {
 				pwr_total += gpu.pwr_usage;
+				if (gpu.pwr_max_usage > 0)
+					pwr_total_max += gpu.pwr_max_usage;
+			}
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
@@ -2296,8 +2301,9 @@ namespace Gpu {
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
 		if (mem_total != 0)
 			shared_gpu_percent.at("gpu-vram-total").push_back(static_cast<long long>(round(mem_usage_total * 100.0 / mem_total)));
-		if (gpu_pwr_total_max != 0)
-			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp(static_cast<long long>(round(pwr_total * 100.0 / gpu_pwr_total_max)), 0ll, 100ll));
+		gpu_pwr_total_max = pwr_total_max;
+		if (pwr_total_max != 0)
+			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp(static_cast<long long>(round(pwr_total * 100.0 / pwr_total_max)), 0ll, 100ll));
 
 		if (width != 0) {
 			while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
