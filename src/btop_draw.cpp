@@ -1426,7 +1426,7 @@ namespace Mem {
 			const string total_title = is_swap ? "Swap" : "Total";
 			const string total_humanized = is_swap ? floating_humanizer(safeVal(mem.stats, "swap_total"s)) : floating_humanizer(totalMem);
 			const int metric_title_len = humanized.length() + title.length() + 3; // 2 for `: `, 1 for padding
-			const int total_title_len = total_title.length() + 2 + total_humanized.length() + 1; // `Total: ` is 7 chars, 1 for padding
+			const int total_title_len = total_title.length() + 7 + total_humanized.length(); // `Total: ` is 7 chars, 1 for padding
 			// Add 1 for divider in middle
 			if (mem_width > metric_title_len + total_title_len) {
 				out += Mv::to(y + 1, x + 2)
