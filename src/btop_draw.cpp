@@ -1422,15 +1422,16 @@ namespace Mem {
 			string divider = Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
 				+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg");
 			out += Mv::to(y + 2, x + 1) + divider;
-
-			const string total_humanized = floating_humanizer(totalMem);
+			const bool is_swap = mem_selected.starts_with("swap_");
+			const string total_title = is_swap ? "Swap" : "Total";
+			const string total_humanized = is_swap ? floating_humanizer(safeVal(mem.stats, "swap_total"s)) : floating_humanizer(totalMem);
 			const int metric_title_len = humanized.length() + title.length() + 3; // 2 for `: `, 1 for padding
-			const int total_title_len = 7 + total_humanized.length() + 1; // `Total: ` is 7 chars, 1 for padding
+			const int total_title_len = total_title.length() + 2 + total_humanized.length() + 1; // `Total: ` is 7 chars, 1 for padding
 			// Add 1 for divider in middle
 			if (mem_width > metric_title_len + total_title_len) {
 				out += Mv::to(y + 1, x + 2)
 					+ Theme::c("title") + Fx::b
-					+ "Total: " + total_humanized
+					+ total_title + ": " + total_humanized
 					+ Fx::ub;
 				// divider " Total: x GiB   **|**   <mem_selected>: 10 GiB "
 				out += Mv::to(y + 1, x + mem_width / 2)
