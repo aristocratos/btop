@@ -115,17 +115,20 @@ namespace Symbols {
 			"▌", "▛", "▛", "█", "█",
 			"▌", "▛", "▛", "█", "█"
 		}},
+		// The size of all charts is assumed to be 5x5, so pad with spaces.
 		{"block2_up", {
-			" ", "🬞", "🬦", "▐",
-			"🬏", "🬭", "🬵", "🬷",
-			"🬓", "🬱", "🬹", "🬻",
-			"▌", "🬲", "🬺", "█"
+			" ", "🬞", "🬦", "▐", " ",
+			"🬏", "🬭", "🬵", "🬷", " ",
+			"🬓", "🬱", "🬹", "🬻", " ",
+			"▌", "🬲", "🬺", "█", " ",
+			" ", " ", " ", " ", " "
 		}},
 		{"block2_down", {
-			" ", "🬁", "🬉", "▐",
-			"🬀", "🬂", "🬊", "🬨",
-			"🬄", "🬆", "🬎", "🬬",
-			"▌", "🬕", "🬝", "█"
+			" ", "🬁", "🬉", "▐", " ",
+			"🬀", "🬂", "🬊", "🬨", " ",
+			"🬄", "🬆", "🬎", "🬬", " ",
+			"▌", "🬕", "🬝", "█", " ",
+			 " ", " ", " ", " ", " ",
 		}},
 		{"tty_up", {
 			" ", "░", "░", "▒", "▒",
@@ -477,10 +480,10 @@ namespace Draw {
 					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(vert) += Mv::r(1);
 					else {
 						if (not color_gradient.empty()) graphs.at(current).at(vert) += Theme::g(color_gradient).at(clamp(max(last, data_value), 0ll, 100ll));
-						graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * (clamp_max + 1) + result.at(1)));
+						graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 					}
 				}
-				else graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * (clamp_max + 1) + result.at(1)));
+				else graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 			}
 			if (mult and i >= 0) last = data_value;
 		}
