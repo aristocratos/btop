@@ -160,7 +160,7 @@ void term_resize(bool force) {
 		sleep_ms(100);
 		if (Term::width < minWidth or Term::height < minHeight) {
 			int width = Term::width, height = Term::height;
-			cout << fmt::format("{clear}{bg_black}{fg_white}"
+			cout << fmt::format("{clear}{fg_white}"
 					"{mv1}Terminal size too small:"
 					"{mv2} Width = {fg_width}{width} {fg_white}Height = {fg_height}{height}"
 					"{mv3}{fg_white}Needed for current config:"
