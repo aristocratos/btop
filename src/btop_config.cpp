@@ -47,8 +47,8 @@ namespace rng = std::ranges;
 using namespace std::literals;
 using namespace Tools;
 
-const vector<string> Config::valid_graph_symbols = { "braille", "block", "tty" };
-const vector<string> Config::valid_graph_symbols_def = { "default", "braille", "block", "tty" };
+const vector<string> Config::valid_graph_symbols = { "braille", "block", "block2", "tty" };
+const vector<string> Config::valid_graph_symbols_def = { "default", "braille", "block", "block2", "tty" };
 const vector<string> Config::valid_boxes = {
 	"cpu", "mem", "net", "proc"
 #ifdef GPU_SUPPORT
