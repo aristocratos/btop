@@ -102,7 +102,7 @@ namespace Global {
 
 	string fg_white = "\x1b[1;97m";
 	string fg_green = "\x1b[1;92m";
-	string fg_red = "\x1b[0;91m";
+	string fg_red = "\x1b[1;91m";
 
 	uid_t real_uid, set_uid;
 
