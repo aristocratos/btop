@@ -100,7 +100,6 @@ namespace Global {
 	string overlay;
 	string clock;
 
-	string bg_black = "\x1b[0;40m";
 	string fg_white = "\x1b[1;97m";
 	string fg_green = "\x1b[1;92m";
 	string fg_red = "\x1b[0;91m";
@@ -165,7 +164,7 @@ void term_resize(bool force) {
 					"{mv2} Width = {fg_width}{width} {fg_white}Height = {fg_height}{height}"
 					"{mv3}{fg_white}Needed for current config:"
 					"{mv4}Width = {minWidth} Height = {minHeight}",
-					"clear"_a = Term::clear, "bg_black"_a = Global::bg_black, "fg_white"_a = Global::fg_white,
+					"clear"_a = Term::clear, "fg_white"_a = Global::fg_white,
 					"mv1"_a = Mv::to((height / 2) - 2, (width / 2) - 11),
 					"mv2"_a = Mv::to((height / 2) - 1, (width / 2) - 10),
 						"fg_width"_a = (width < minWidth ? Global::fg_red : Global::fg_green),
