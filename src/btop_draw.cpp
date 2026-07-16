@@ -437,7 +437,9 @@ namespace Draw {
 	void Graph::_create(const deque<long long>& data, int data_offset) {
 		const auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
 		const int clamp_max = (symbol == "block2") ? 3 : 4;
-		const float mod = (height == 1) ? 0.3 : 0.1;
+		const float mod = (symbol == "block2") 
+                    ? ((height == 1) ? 0.6f : 0.2f)
+                    : ((height == 1) ? 0.3f : 0.1f);
 		bool mult = (data.size() - data_offset > 1);
 
 		long long data_value = 0;
