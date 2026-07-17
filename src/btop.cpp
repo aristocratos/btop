@@ -966,9 +966,9 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		}
 	#else
 		if (cli.force_utf) {
-			Logger::warning("No UTF-8 locale detected! Forcing start with --force-utf argument.");
+			Logger::warning("The locale might not be detected properly but UTF is forced anyway.");
 		} else {
-			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
+			Global::exit_error_msg = "Could not detect a UTF-8 locale!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 	#endif
