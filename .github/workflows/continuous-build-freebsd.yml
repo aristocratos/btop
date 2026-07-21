@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile
-        uses: vmactions/freebsd-vm@5a72679103d223925653750faa878a143340fbd0 # v1.5.0
+        uses: vmactions/freebsd-vm@77ed28d336d03fe19a3f4f7266c1d2c4714dd79d # v1.5.2
         with:
           release: '15.1'
           usesh: true
