@@ -143,7 +143,7 @@ namespace Config {
 
 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
 
-		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel (similar behavior to htop)."},
 
 		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
 
@@ -199,7 +199,8 @@ namespace Config {
 		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
 		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
-									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
+								"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter.\n"
+								"#* Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
