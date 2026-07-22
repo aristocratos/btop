@@ -90,9 +90,9 @@ namespace {
 		return value;
 	}
 
-	long long avg_to_long(const std::vector<double>& temps) {
+	long long max_to_long(const std::vector<double>& temps) {
 		if (temps.empty()) return 0ll;
-		return round(std::accumulate(temps.begin(), temps.end(), 0ll) / temps.size());
+		return static_cast<long long>(round(*std::max_element(temps.begin(), temps.end())));
 	}
 }
 
@@ -158,8 +158,8 @@ long long Cpu::ThermalSensors::getSensors(std::vector<long long>& core_temps) {
 		}
 		std::sort(indexes.begin(), indexes.end());
 		for (const auto& index : indexes) {
-			auto avg = avg_to_long(tdie_indexed_temps.at(index));
-			if (avg > 0) core_temps.push_back(avg);
+			auto m = max_to_long(tdie_indexed_temps.at(index));
+			if (m > 0) core_temps.push_back(m);
 		}
 	} else if (not acc_named_temps.empty()) {
 		std::vector<std::string> names;
@@ -169,12 +169,12 @@ long long Cpu::ThermalSensors::getSensors(std::vector<long long>& core_temps) {
 		}
 		std::sort(names.begin(), names.end());
 		for (const auto& name : names) {
-			auto avg = avg_to_long(acc_named_temps.at(name));
-			if (avg > 0) core_temps.push_back(avg);
+			auto m = max_to_long(acc_named_temps.at(name));
+			if (m > 0) core_temps.push_back(m);
 		}
 	}
 
 	const auto &temps = not acc_temps.empty() ? acc_temps : (not tdie_temps.empty() ? tdie_temps : soc_temps);
-	return avg_to_long(temps);
+	return max_to_long(temps);
 }
 #endif

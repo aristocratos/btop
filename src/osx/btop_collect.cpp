@@ -343,6 +343,26 @@ namespace Gpu {
 			return true;
 		}
 
+		static long long get_gpu_temp_smc() {
+			// Instantiate the SMC connection once and keep it open
+			static Cpu::SMCConnection smc;
+
+			static const char* keys_all[] = {
+				// M4 / M5
+				"Tg0G", "Tg0H", "Tg1U", "Tg1k", "Tg0K", "Tg0L", "Tg0e", "Tg0k",
+				"Tg0U", "Tg0X", "Tg0d", "Tg0g", "Tg0j", "Tg1Y", "Tg1c", "Tg1g",
+				// M3 / M2 / M1 (Includes common variants across the SoC)
+				"Tg0f", "Tg0j", "Tg05", "Tg0D", "Tg0L", "Tg0T"
+			};
+
+			for (const char* key : keys_all) {
+				// Use the smc instance we just created
+				long long t = smc.getTempByKey(key);
+				if (t > 0) return t;
+			}
+			return -1;
+		}
+
 		//? Read GPU temperature via IOHIDEventSystem thermal sensors
 		static long long get_gpu_temp_iohid() {
 			#if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
@@ -552,7 +572,12 @@ namespace Gpu {
 
 			//? GPU temperature
 			if (gpus_slice[0].supported_functions.temp_info and Config::getB("check_temp")) {
-				long long temp = get_gpu_temp_iohid();
+				// Check SMC (M3/M4/M5) first, fallback to IOHID if nothing is found
+				long long temp = get_gpu_temp_smc();
+				if (temp <= 0) {
+					temp = get_gpu_temp_iohid();
+				}
+
 				if (temp > 0)
 					gpus_slice[0].temp.push_back(temp);
 			}
