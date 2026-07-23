@@ -56,7 +56,7 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
-#if defined(GPU_SUPPORT)
+#if defined(INTEL_GPU_SUPPORT)
 	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
 	// since the C library uses "class" as a struct member and keywords are not allowed to be used
 	// as identifiers in C++.
@@ -284,6 +284,7 @@ namespace Gpu {
 
 
 	//? Intel data collection
+#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		const char* device = "i915";
 		struct engines *engines = nullptr;
@@ -294,6 +295,7 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+#endif // INTEL_GPU_SUPPORT
 
 	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
 	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
@@ -401,9 +403,11 @@ namespace Shared {
 			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
 		}
 
+#if defined(INTEL_GPU_SUPPORT)
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
 		}
+#endif // INTEL_GPU_SUPPORT
 
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
@@ -1907,6 +1911,7 @@ namespace Gpu {
 		}
 	}
 
+#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		bool init() {
 			if (initialized) return false;
@@ -2025,6 +2030,7 @@ namespace Gpu {
 			return true;
 		}
 	}
+#endif // INTEL_GPU_SUPPORT (Gpu::Intel)
 
 	namespace Asysfs {
 		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
@@ -2221,7 +2227,9 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
+#if defined(INTEL_GPU_SUPPORT)
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+#endif // INTEL_GPU_SUPPORT
 
 		//* Calculate average usage
 		long long avg = 0;
