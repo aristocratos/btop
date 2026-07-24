@@ -1,4 +1,4 @@
-# gitginore template for creating Snap packages
+# gitignore template for creating Snap packages
 # website: https://snapcraft.io/
 
 parts/
@@ -88,3 +88,10 @@ CMakeUserPresets.json
 
 # CLion
 cmake-build-*
+
+# Development helper scripts
+fix_init.py
+test_btop.sh
+
+# Internal documentation
+docs/
