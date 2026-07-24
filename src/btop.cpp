@@ -861,12 +861,19 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	Global::debug = cli.debug;
 
 	{
-		const auto config_dir = Config::get_config_dir();
+		//? A config file passed with --config must be honored even if the config directory
+		//? itself is missing/unwritable (e.g. unset or read-only XDG_CONFIG_HOME). In that case
+		//? suppress the config-dir warnings since the user explicitly provided a config file.
+		const bool have_cli_config = cli.config_file.has_value();
+		const auto config_dir = Config::get_config_dir(have_cli_config);
+
+		if (have_cli_config) {
+			Config::conf_file = cli.config_file.value();
+		}
+
 		if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
-			if (cli.config_file.has_value()) {
-				Config::conf_file = cli.config_file.value();
-			} else {
+			if (not have_cli_config) {
 				Config::conf_file = Config::conf_dir / "btop.conf";
 			}
 
