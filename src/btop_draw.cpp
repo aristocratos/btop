@@ -37,6 +37,10 @@ tab-size = 4
 #include "btop_theme.hpp"
 #include "btop_tools.hpp"
 
+#if defined(__APPLE__) && defined(__x86_64__)
+#include "osx/intel_mac.hpp"
+#endif
+
 using std::array;
 using std::clamp;
 using std::cmp_equal;
@@ -911,7 +915,16 @@ namespace Cpu {
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
-		for (const auto& n : iota(0, Shared::coreCount)) {
+		for (const auto& slot : iota(0, Shared::coreCount)) {
+			#if defined(__APPLE__) && defined(__x86_64__)
+			const auto n = static_cast<int>(::IntelMac::physical_core_for_layout_slot(
+				slot,
+				b_columns,
+				Shared::coreCount
+			));
+			#else
+			const auto n = slot;
+			#endif
 			auto enabled = is_cpu_enabled(n);
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
@@ -951,7 +964,7 @@ namespace Cpu {
 
 			out += Theme::c("div_line") + Symbols::v_line;
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
+			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and slot != Shared::coreCount - 1) {
 				if (++cc >= b_columns) break;
 				cy = 1; cx = (b_width / b_columns) * cc;
 			}

@@ -232,6 +232,7 @@ void clean_quit(int sig) {
 	Gpu::Asysfs::shutdown();
 	#ifdef __APPLE__
 	Gpu::AppleSilicon::shutdown();
+	Gpu::IntelMac::shutdown();
 	#endif
 #endif
 

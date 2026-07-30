@@ -24,6 +24,7 @@ tab-size = 4
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
 
+#include <optional>
 #include <stdexcept>
 
 #define VERSION "0.01"
@@ -42,13 +43,9 @@ tab-size = 4
 #define DATATYPE_UINT16 "ui16"
 #define DATATYPE_UINT32 "ui32"
 #define DATATYPE_SP78 "sp78"
+#define DATATYPE_FLT "flt "
 
 // key values
-#define SMC_KEY_CPU_TEMP "TC0P" // proximity temp?
-#define SMC_KEY_CPU_DIODE_TEMP "TC0D" // diode temp?
-#define SMC_KEY_CPU_DIE_TEMP "TC0F" // die temp?
-#define SMC_KEY_CPU1_TEMP "TC1C"
-#define SMC_KEY_CPU2_TEMP "TC2C"  // etc
 #define SMC_KEY_FAN0_RPM_CUR "F0Ac"
 
 typedef struct {
@@ -103,10 +100,11 @@ namespace Cpu {
 		virtual ~SMCConnection();
 
 		long long getTemp(int core);
+		std::optional<double> getValue(const char *key);
 
 	   private:
 		kern_return_t SMCReadKey(UInt32Char_t key, SMCVal_t *val);
-		long long getSMCTemp(char *key);
+		long long getSMCTemp(const char *key);
 		kern_return_t SMCCall(int index, SMCKeyData_t *inputStructure, SMCKeyData_t *outputStructure);
 
 		io_connect_t conn;

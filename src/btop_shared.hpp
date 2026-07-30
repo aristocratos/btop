@@ -194,6 +194,9 @@ namespace Gpu {
 	namespace AppleSilicon {
 		extern bool shutdown();
 	}
+	namespace IntelMac {
+		extern bool shutdown();
+	}
 	#endif
 
 	//* Collect gpu stats and temperatures

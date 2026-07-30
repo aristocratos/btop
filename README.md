@@ -299,7 +299,8 @@ Also necessary is a UTF8 locale and a font that includes:
 
 ### **Optional Dependencies (Needed for GPU monitoring)**
 
-GPU monitoring is supported on Linux and on macOS with Apple Silicon GPUs.
+GPU monitoring is supported on Linux and on macOS with Apple Silicon GPUs or Intel and AMD GPUs on
+Intel Macs.
 
 GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
 
@@ -706,7 +707,20 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Notice! Only use "sudo" when installing to a NON user owned directory.
 
-5. **(Recommended) Set suid bit to make btop always run as root (or other user)**
+5. **(Optional, Intel Macs) Install the live CPU frequency helper**
+
+   Intel macOS reports only nominal CPU frequency to unprivileged processes. The optional helper
+   runs Apple's fixed `powermetrics` sampler command as a launch daemon and publishes the current
+   package-average active frequency for btop. All other Intel Mac CPU, SMC, and GPU metrics remain
+   unprivileged.
+
+   ```bash
+   sudo gmake install-frequency-helper
+   ```
+
+   Remove it with `sudo gmake uninstall-frequency-helper`.
+
+6. **(Recommended) Set suid bit to make btop always run as root (or other user)**
 
    ```bash
    sudo gmake setuid

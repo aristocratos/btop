@@ -40,6 +40,7 @@ tab-size = 4
 #include <netinet/tcp_fsm.h>
 #include <pwd.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -51,17 +52,23 @@ tab-size = 4
 #if __MAC_OS_X_VERSION_MIN_REQUIRED > 101504
 #include "sensors.hpp"
 #endif
+#include "intel_mac.hpp"
 #include "smc.hpp"
 #endif
 
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <future>
+#include <limits>
+#include <memory>
 #include <mutex>
 #include <numeric>
 #include <ranges>
 #include <regex>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include <fmt/format.h>
@@ -166,6 +173,7 @@ struct IORef {
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
+	vector<std::size_t> logical_to_physical;
 	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
@@ -177,6 +185,12 @@ namespace Cpu {
 
 	//* Get current cpu clock speed
 	string get_cpuHz();
+
+	//* Get current CPU package power
+	std::optional<float> get_cpuWatts();
+
+	//* Read the logical CPU to physical core mapping from the device-tree APIC topology
+	auto get_logical_to_physical_map(std::size_t logical_count, std::size_t physical_count) -> vector<std::size_t>;
 
 	//* Search /proc/cpuinfo for a cpu name
 	string get_cpuName();
@@ -208,6 +222,7 @@ namespace Gpu {
 	namespace Asysfs { bool shutdown() { return false; } }
 
 	//? Apple Silicon GPU data collection via IOReport
+	#if defined(__arm64__)
 	namespace AppleSilicon {
 		bool initialized = false;
 		unsigned int device_count = 0;
@@ -589,12 +604,21 @@ namespace Gpu {
 		template bool collect<true>(gpu_info*);
 		template bool collect<false>(gpu_info*);
 	} // namespace AppleSilicon
+	#else
+	namespace AppleSilicon {
+		bool shutdown() { return false; }
+	}
+	#endif
 
-	//? Collect data from Apple Silicon GPU
+	//? Collect data from the native macOS GPU backend
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
 
+		#if defined(__arm64__)
 		AppleSilicon::collect<0>(gpus.data());
+		#elif defined(__x86_64__)
+		::IntelMac::Gpu::collect(gpus);
+		#endif
 
 		//* Calculate averages
 		long long avg = 0;
@@ -652,23 +676,30 @@ namespace Shared {
 
 	fs::path passwd_path;
 	uint64_t totalMem;
-	long pageSize, coreCount, clkTck, physicalCoreCount, arg_max;
+	long pageSize, coreCount, logicalCoreCount, clkTck, physicalCoreCount, arg_max;
 	double machTck;
 	int totalMem_len;
 
 	void init() {
 		//? Shared global variables init
 
-		coreCount = sysconf(_SC_NPROCESSORS_ONLN); // this returns all logical cores (threads)
-		if (coreCount < 1) {
-			coreCount = 1;
+		logicalCoreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		if (logicalCoreCount < 1) {
+			logicalCoreCount = 1;
 			Logger::warning("Could not determine number of cores, defaulting to 1.");
 		}
 
 		size_t physicalCoreCountSize = sizeof(physicalCoreCount);
 		if (sysctlbyname("hw.physicalcpu", &physicalCoreCount, &physicalCoreCountSize, nullptr, 0) < 0) {
 			Logger::error("Could not get physical core count");
+			physicalCoreCount = logicalCoreCount;
 		}
+		#if defined(__x86_64__)
+		coreCount = physicalCoreCount > 0 ? physicalCoreCount : logicalCoreCount;
+		Cpu::logical_to_physical = Cpu::get_logical_to_physical_map(logicalCoreCount, coreCount);
+		#else
+		coreCount = logicalCoreCount;
+		#endif
 
 		pageSize = sysconf(_SC_PAGE_SIZE);
 		if (pageSize <= 0) {
@@ -703,8 +734,8 @@ namespace Shared {
 		//? Init for namespace Cpu
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
-		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
-		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::logicalCoreCount, 0);
+		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::logicalCoreCount, 0);
 		Cpu::collect();
 		for (auto &[field, vec] : Cpu::current_cpu.cpu_percent) {
 			if (not vec.empty() and not v_contains(Cpu::available_fields, field)) Cpu::available_fields.push_back(field);
@@ -716,9 +747,13 @@ namespace Shared {
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
 		auto shown_gpus = Config::getS("shown_gpus");
+		#if defined(__arm64__)
 		if (shown_gpus.contains("apple")) {
 			Gpu::AppleSilicon::init();
 		}
+		#elif defined(__x86_64__)
+		::IntelMac::Gpu::init(Gpu::gpus, shown_gpus);
+		#endif
 
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
@@ -763,6 +798,60 @@ namespace Cpu {
 		{"idle", 0}
 	};
 
+	auto get_logical_to_physical_map(
+		const std::size_t logical_count,
+		const std::size_t physical_count
+	) -> vector<std::size_t> {
+		vector<unsigned int> apic_ids(logical_count, std::numeric_limits<unsigned int>::max());
+		io_iterator_t iterator = 0;
+		if (IORegistryCreateIterator(
+				kIOMainPortDefault,
+				kIODeviceTreePlane,
+				kIORegistryIterateRecursively,
+				&iterator
+			) == kIOReturnSuccess) {
+			io_registry_entry_t entry = 0;
+			while ((entry = IOIteratorNext(iterator)) != 0) {
+				io_name_t name{};
+				io_name_t location{};
+				if (IORegistryEntryGetNameInPlane(entry, kIODeviceTreePlane, name) == kIOReturnSuccess
+				and std::string_view{name}.starts_with("CPU")
+				and IORegistryEntryGetLocationInPlane(entry, kIODeviceTreePlane, location) == kIOReturnSuccess) {
+					char* logical_end = nullptr;
+					char* apic_end = nullptr;
+					const auto logical = std::strtoul(name + 3, &logical_end, 10);
+					const auto apic = std::strtoul(location, &apic_end, 16);
+					if (logical_end != name + 3 and *logical_end == '\0'
+					and apic_end != location and *apic_end == '\0'
+					and logical < apic_ids.size()
+					and apic <= std::numeric_limits<unsigned int>::max()) {
+						apic_ids[logical] = static_cast<unsigned int>(apic);
+					}
+				}
+				IOObjectRelease(entry);
+			}
+			IOObjectRelease(iterator);
+		}
+
+		if (std::ranges::find(apic_ids, std::numeric_limits<unsigned int>::max()) != apic_ids.end())
+			apic_ids.clear();
+		auto mapping = ::IntelMac::physical_core_map_from_apic_ids(apic_ids, physical_count);
+		if (mapping.empty()) {
+			Logger::warning("Intel Mac CPU: APIC topology unavailable, grouping adjacent XNU processor slots");
+			mapping = ::IntelMac::physical_core_map_from_xnu_order(logical_count, physical_count);
+			return mapping;
+		}
+
+		std::ranges::sort(apic_ids);
+		string topology;
+		for (std::size_t logical = 0; logical < mapping.size(); ++logical) {
+			if (not topology.empty()) topology += ", ";
+			topology += fmt::format("CPU{}(APIC {:X})->C{}", logical, apic_ids[logical], mapping[logical]);
+		}
+		Logger::info("Intel Mac CPU topology: {}", topology);
+		return mapping;
+	}
+
 	string get_cpuName() {
 		string name;
 		char buffer[1024];
@@ -771,7 +860,12 @@ namespace Cpu {
 			Logger::error("Failed to get CPU name");
 			return name;
 		}
-		return trim_name(string(buffer));
+		name = trim_name(string(buffer));
+		#if defined(__x86_64__)
+		return ::IntelMac::format_cpu_title(name, Shared::coreCount);
+		#else
+		return name;
+		#endif
 	}
 
 	bool get_sensors() {
@@ -838,10 +932,9 @@ namespace Cpu {
 #endif
 			} else {
 				SMCConnection smcCon;
-				int threadsPerCore = Shared::coreCount / Shared::physicalCoreCount;
 				result.package_temp = smcCon.getTemp(-1);
 				for (int core = 0; core < Shared::coreCount; core++) {
-					result.core_temps.push_back(smcCon.getTemp((core / threadsPerCore) + core_offset));
+					result.core_temps.push_back(smcCon.getTemp(core + core_offset));
 				}
 				result.valid = true;
 			}
@@ -892,6 +985,19 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
+		#if defined(__x86_64__)
+		struct stat file_status {};
+		if (stat(::IntelMac::cpu_frequency_path, &file_status) != 0
+		or not ::IntelMac::cpu_frequency_sample_is_fresh(std::time(nullptr), file_status.st_mtime)) {
+			return ::IntelMac::format_cpu_frequency_ghz(0.0);
+		}
+
+		std::ifstream frequency_file(::IntelMac::cpu_frequency_path);
+		double frequency_mhz = 0.0;
+		if (not (frequency_file >> frequency_mhz) or frequency_mhz < 100.0 or frequency_mhz > 10'000.0)
+			return ::IntelMac::format_cpu_frequency_ghz(0.0);
+		return ::IntelMac::format_cpu_frequency_ghz(frequency_mhz);
+		#else
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
@@ -902,6 +1008,28 @@ namespace Cpu {
 			return "";
 		}
 		return std::to_string(freq / 1000.0 / 1000.0 / 1000.0).substr(0, 3);
+		#endif
+	}
+
+	std::optional<float> get_cpuWatts() {
+		static std::unique_ptr<SMCConnection> connection;
+		static bool attempted = false;
+		if (not attempted) {
+			attempted = true;
+			try {
+				connection = std::make_unique<SMCConnection>();
+			}
+			catch (const std::runtime_error& error) {
+				Logger::debug("CPU power SMC unavailable: {}", error.what());
+			}
+		}
+		if (not connection) return std::nullopt;
+
+		// PCPT is total CPU package power; PCPC excludes package graphics and system-agent power.
+		const auto watts = connection->getValue("PCPT");
+		if (not watts.has_value() or watts.value() < 0 or watts.value() > 1000)
+			return std::nullopt;
+		return static_cast<float>(watts.value());
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -918,7 +1046,7 @@ namespace Cpu {
 			Logger::error("Failed getting CPU info");
 			return core_map;
 		}
-		for (i = 0; i < cpu_count; i++) {
+		for (i = 0; i < std::min<natural_t>(cpu_count, Shared::coreCount); i++) {
 			core_map[i] = i;
 		}
 
@@ -1039,6 +1167,10 @@ namespace Cpu {
 		long long global_totals = 0;
 		long long global_idles = 0;
 		vector<long long> times_summed = {0, 0, 0, 0};
+		vector<long long> logical_total_deltas(cpu_count, 0);
+		vector<long long> logical_idle_deltas(cpu_count, 0);
+		if (core_old_totals.size() < cpu_count) core_old_totals.resize(cpu_count, 0);
+		if (core_old_idles.size() < cpu_count) core_old_idles.resize(cpu_count, 0);
 		for (i = 0; i < cpu_count; i++) {
 			vector<long long> times;
 			//? 0=user, 1=nice, 2=system, 3=idle
@@ -1048,32 +1180,27 @@ namespace Cpu {
 				times_summed.at(x++) += val;
 			}
 
-			try {
-				//? All values
-				const long long totals = std::accumulate(times.begin(), times.end(), 0ll);
+			//? All values
+			const long long totals = std::accumulate(times.begin(), times.end(), 0ll);
+			const long long idles = times.at(3);
 
-				//? Idle time
-				const long long idles = times.at(3);
+			global_totals += totals;
+			global_idles += idles;
+			logical_total_deltas.at(i) = max(0ll, totals - core_old_totals.at(i));
+			logical_idle_deltas.at(i) = max(0ll, idles - core_old_idles.at(i));
+			core_old_totals.at(i) = totals;
+			core_old_idles.at(i) = idles;
+		}
 
-				global_totals += totals;
-				global_idles += idles;
-
-				//? Calculate cpu total for each core
-				if (i > Shared::coreCount) break;
-				const long long calc_totals = max(0ll, totals - core_old_totals.at(i));
-				const long long calc_idles = max(0ll, idles - core_old_idles.at(i));
-				core_old_totals.at(i) = totals;
-				core_old_idles.at(i) = idles;
-
-				cpu.core_percent.at(i).push_back(clamp((long long)round((double)(calc_totals - calc_idles) * 100 / calc_totals), 0ll, 100ll));
-
-				//? Reduce size if there are more values than needed for graph
-				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
-
-			} catch (const std::exception &e) {
-				Logger::error("Cpu::collect() : {}", e.what());
-				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
-			}
+		const auto physical_usage = ::IntelMac::aggregate_physical_usage(
+			logical_total_deltas,
+			logical_idle_deltas,
+			cpu.core_percent.size(),
+			logical_to_physical
+		);
+		for (std::size_t core = 0; core < physical_usage.size(); ++core) {
+			cpu.core_percent.at(core).push_back(physical_usage.at(core));
+			if (cpu.core_percent.at(core).size() > 40) cpu.core_percent.at(core).pop_front();
 		}
 
 		const long long calc_totals = max(1ll, global_totals - cpu_old.at("totals"));
@@ -1103,6 +1230,13 @@ namespace Cpu {
 			auto hz = get_cpuHz();
 			if (hz != "") {
 				cpuHz = hz;
+			}
+		}
+
+		if (Config::getB("show_cpu_watts")) {
+			if (const auto watts = get_cpuWatts(); watts.has_value()) {
+				supports_watts = true;
+				cpu.usage_watts = watts.value();
 			}
 		}
 
@@ -1696,7 +1830,7 @@ namespace Proc {
 		detailed.entry = *p_info;
 
 		//? Update cpu percent deque for process cpu graph
-		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::coreCount;
+		if (not Config::getB("proc_per_core")) detailed.entry.cpu_p *= Shared::logicalCoreCount;
 		detailed.cpu_percent.push_back(clamp((long long)round(detailed.entry.cpu_p), 0ll, 100ll));
 		while (cmp_greater(detailed.cpu_percent.size(), width)) detailed.cpu_percent.pop_front();
 
@@ -1755,7 +1889,7 @@ namespace Proc {
 		}
 		if (tree_mode_change) is_tree_mode = tree;
 
-		const int cmult = (per_core) ? Shared::coreCount : 1;
+		const int cmult = (per_core) ? Shared::logicalCoreCount : 1;
 		bool got_detailed = false;
 
 		static vector<size_t> found;
@@ -1886,7 +2020,7 @@ namespace Proc {
 					}
 
 					//? Process cpu usage since last update
-					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::coreCount);
+					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::logicalCoreCount);
 
 					//? Process cumulative cpu usage since process start
 					new_proc.cpu_c = (double)(cpu_t * Shared::machTck) / (timeNow - new_proc.cpu_s);

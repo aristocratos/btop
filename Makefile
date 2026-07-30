@@ -102,6 +102,9 @@ endif
 ifeq ($(PLATFORM_LC)$(ARCH),macosarm64)
 	GPU_SUPPORT := true
 endif
+ifeq ($(PLATFORM_LC)$(ARCH),macosx86_64)
+	GPU_SUPPORT := true
+endif
 ifneq ($(GPU_SUPPORT),true)
 	GPU_SUPPORT := false
 endif
@@ -221,6 +224,7 @@ SRCDIR		:= src
 INCDIRS		:= include $(wildcard lib/**/include)
 BUILDDIR	:= obj
 TARGETDIR	:= bin
+FREQUENCY_HELPER := $(TARGETDIR)/btop-cpu-frequency
 SRCEXT		:= cpp
 DEPEXT		:= d
 OBJEXT		:= o
@@ -317,6 +321,9 @@ help:
 	@printf "  clean        Remove built objects\n"
 	@printf "  distclean    Remove built objects and binaries\n"
 	@printf "  install      Install btop++ to \$$PREFIX ($(PREFIX))\n"
+	@printf "  frequency-helper          Build the Intel Mac CPU frequency sampler\n"
+	@printf "  install-frequency-helper  Install and start the sampler (run with sudo)\n"
+	@printf "  uninstall-frequency-helper Remove the Intel Mac CPU frequency sampler\n"
 	@printf "  setcap       Set extended capabilities on binary (preferable to setuid)\n"
 	@printf "  setuid       Set installed binary owner/group to \$$SU_USER/\$$SU_GROUP ($(SU_USER)/$(SU_GROUP)) and set SUID bit\n"
 	@printf "  uninstall    Uninstall btop++ from \$$PREFIX\n"
@@ -381,6 +388,50 @@ ifneq ($(wildcard btop.1),)
 	@$(call green,Installing man page to: ,$(WHITE)$(DESTDIR)$(PREFIX)/share/man/man1/btop.1)
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
 	@cp -p btop.1 $(DESTDIR)$(PREFIX)/share/man/man1/btop.1
+endif
+
+frequency-helper: $(FREQUENCY_HELPER)
+
+$(FREQUENCY_HELPER): src/osx/helpers/cpu_frequency.cpp src/osx/intel_mac.hpp | directories
+ifeq ($(PLATFORM_LC)$(ARCH),macosx86_64)
+	@$(call green,Building Intel Mac CPU frequency helper,...)
+	@$(CXX) $(REQFLAGS) -O2 -Wall -Wextra -pedantic -o $@ $<
+else
+	@$(call red,The CPU frequency helper is only supported on Intel macOS.)
+	@false
+endif
+
+install-frequency-helper: frequency-helper
+ifeq ($(PLATFORM_LC)$(ARCH),macosx86_64)
+	@test "$$(id -u)" = "0" || { printf "install-frequency-helper must run with sudo\n"; exit 1; }
+	@plutil -lint src/osx/helpers/com.btop.cpu-frequency.plist
+	@install -o root -g wheel -m 755 $(FREQUENCY_HELPER) /Library/PrivilegedHelperTools/btop-cpu-frequency
+	@install -o root -g wheel -m 644 src/osx/helpers/com.btop.cpu-frequency.plist /Library/LaunchDaemons/com.btop.cpu-frequency.plist
+	@launchctl bootout system/com.btop.cpu-frequency >/dev/null 2>&1 || true
+	@for attempt in 1 2 3; do \
+		launchctl bootstrap system /Library/LaunchDaemons/com.btop.cpu-frequency.plist && break; \
+		test "$$attempt" = "3" && exit 1; \
+		sleep 1; \
+	done
+	@launchctl enable system/com.btop.cpu-frequency
+	@launchctl kickstart -k system/com.btop.cpu-frequency
+	@$(call green,Intel Mac CPU frequency helper installed and started.)
+else
+	@$(call red,The CPU frequency helper is only supported on Intel macOS.)
+	@false
+endif
+
+uninstall-frequency-helper:
+ifeq ($(PLATFORM_LC)$(ARCH),macosx86_64)
+	@test "$$(id -u)" = "0" || { printf "uninstall-frequency-helper must run with sudo\n"; exit 1; }
+	@launchctl bootout system/com.btop.cpu-frequency >/dev/null 2>&1 || true
+	@rm -f /Library/LaunchDaemons/com.btop.cpu-frequency.plist
+	@rm -f /Library/PrivilegedHelperTools/btop-cpu-frequency
+	@rm -f /var/run/btop-cpu-frequency-mhz /var/run/btop-cpu-frequency-mhz.tmp
+	@$(call green,Intel Mac CPU frequency helper removed.)
+else
+	@$(call red,The CPU frequency helper is only supported on Intel macOS.)
+	@false
 endif
 
 #? Set SUID bit for btop as $SU_USER in $SU_GROUP
@@ -479,4 +530,4 @@ $(BUILDDIR)/%.c.o: $(SRCDIR)/$(PLATFORM_DIR)/intel_gpu_top/%.c | directories
 
 
 #? Non-File Targets
-.PHONY: all config.h msg help pre
+.PHONY: all config.h msg help pre frequency-helper install-frequency-helper uninstall-frequency-helper
