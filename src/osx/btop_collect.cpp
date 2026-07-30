@@ -1313,7 +1313,7 @@ namespace Mem {
 
 				//? Match filter if not empty
 				if (not filter.empty()) {
-					bool match = v_contains(filter, mountpoint);
+					bool match = matches_any_glob(filter, mountpoint);
 					if ((filter_exclude and match) or (not filter_exclude and not match))
 						continue;
 				}
