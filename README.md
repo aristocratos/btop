@@ -517,6 +517,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
+   | `BTOP_GPU_INTEL_USE_LEVELZERO=true` | Use Level Zero instead of the legacy PMU backend for Intel GPUs     |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
@@ -620,6 +621,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
    | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
+   | `-DBTOP_GPU_INTEL_USE_LEVELZERO=<ON\|OFF>` | Use Level Zero instead of the legacy Intel PMU backend (OFF by default) |
    | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
 
