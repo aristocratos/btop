@@ -30,7 +30,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
-option(BTOP_GPU_INTEL_USE_LEVELZERO "Use Level Zero instead of the legacy PMU backend for Intel GPUs" OFF)
+option(USE_LEVELZERO "Use Level Zero instead of the legacy PMU backend for Intel GPUs" OFF)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
 
 # Enable LTO in release builds by default
@@ -79,8 +79,8 @@ elseif(LINUX)
   target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
   if(BTOP_GPU)
     add_subdirectory(src/linux/intel_gpu_top)
-    if(BTOP_GPU_INTEL_USE_LEVELZERO)
-      target_compile_definitions(libbtop PRIVATE BTOP_GPU_INTEL_USE_LEVELZERO)
+    if(USE_LEVELZERO)
+      target_compile_definitions(libbtop PRIVATE USE_LEVELZERO)
       target_link_libraries(libbtop ze_loader)
     endif()
   endif()
@@ -95,7 +95,7 @@ execute_process(
   OUTPUT_VARIABLE GIT_COMMIT
   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_GPU=${BTOP_GPU} -DBTOP_GPU_INTEL_USE_LEVELZERO=${BTOP_GPU_INTEL_USE_LEVELZERO}"
+    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_GPU=${BTOP_GPU} -DUSE_LEVELZERO=${USE_LEVELZERO}"
 )
 get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
 set(COMPILER "${CXX_COMPILER_BASENAME}")

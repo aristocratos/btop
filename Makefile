@@ -93,7 +93,7 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? GPU Support
-BTOP_GPU_INTEL_USE_LEVELZERO ?= false
+USE_LEVELZERO ?= false
 
 ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
 	ifneq ($(STATIC),true)
@@ -111,8 +111,8 @@ endif
 ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
 endif
-ifeq ($(INTEL_GPU_SUPPORT)$(BTOP_GPU_INTEL_USE_LEVELZERO),truetrue)
-	override ADDFLAGS += -DBTOP_GPU_INTEL_USE_LEVELZERO
+ifeq ($(INTEL_GPU_SUPPORT)$(USE_LEVELZERO),truetrue)
+	override ADDFLAGS += -DUSE_LEVELZERO
 endif
 
 #? Compiler and Linker
@@ -218,7 +218,7 @@ endif
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2> /dev/null || true)
 CONFIGURE_COMMAND := $(MAKE) STATIC=$(STATIC)
 ifeq ($(PLATFORM_LC),linux)
-	CONFIGURE_COMMAND +=  GPU_SUPPORT=$(GPU_SUPPORT) RSMI_STATIC=$(RSMI_STATIC) BTOP_GPU_INTEL_USE_LEVELZERO=$(BTOP_GPU_INTEL_USE_LEVELZERO)
+	CONFIGURE_COMMAND +=  GPU_SUPPORT=$(GPU_SUPPORT) RSMI_STATIC=$(RSMI_STATIC) USE_LEVELZERO=$(USE_LEVELZERO)
 endif
 
 #? The Directories, Source, Includes, Objects and Binary
@@ -258,7 +258,7 @@ ifeq ($(GPU_SUPPORT)$(INTEL_GPU_SUPPORT),truetrue)
 	OBJECTS += $(IGT_OBJECTS)
 	SHOW_CC_INFO = false
 	CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion || echo 0)
-	ifeq ($(BTOP_GPU_INTEL_USE_LEVELZERO),true)
+	ifeq ($(USE_LEVELZERO),true)
 		override LDFLAGS += -lze_loader
 	endif
 else

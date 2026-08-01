@@ -75,7 +75,7 @@ extern "C" {
 		#pragma clang diagnostic pop
 	#endif // __clang__
 
-	#if defined(BTOP_GPU_INTEL_USE_LEVELZERO)
+	#if defined(USE_LEVELZERO)
 		#include <level_zero/zes_api.h>
 	#endif
 #endif
@@ -298,7 +298,7 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 
-	#if defined(BTOP_GPU_INTEL_USE_LEVELZERO)
+	#if defined(USE_LEVELZERO)
 		//? Intel Level Zero data collection
 		namespace LevelZero {
 			struct engine_info {
@@ -438,7 +438,7 @@ namespace Shared {
 		}
 
 		if (shown_gpus.contains("intel")) {
-		#if defined(BTOP_GPU_INTEL_USE_LEVELZERO)
+		#if defined(USE_LEVELZERO)
 			Gpu::Intel::LevelZero::init();
 		#else
 			Gpu::Intel::init();
@@ -1947,7 +1947,7 @@ namespace Gpu {
 		}
 	}
 
-	#if defined(BTOP_GPU_INTEL_USE_LEVELZERO)
+	#if defined(USE_LEVELZERO)
 	namespace Intel::LevelZero {
 		bool init() {
 			if (initialized) return false;
@@ -2646,7 +2646,7 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
-	#if defined(BTOP_GPU_INTEL_USE_LEVELZERO)
+	#if defined(USE_LEVELZERO)
 		Intel::LevelZero::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::LevelZero::device_count
 	#else
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
