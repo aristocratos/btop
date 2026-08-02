@@ -519,7 +519,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                      |
 
    Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -692,7 +692,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on macOS)                |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                      |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -854,7 +854,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                      |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -1169,7 +1169,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | `CXX=<compiler>`                | Manually set which compiler to use                                      |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -1414,7 +1414,7 @@ proc_info_smaps = false
 #* Show proc box on left side of screen instead of right.
 proc_left = false
 
-#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop).
+#* (Linux) Filter processes tied to the Linux kernel (similar behavior to htop).
 proc_filter_kernel = false
 
 #* Should the process list follow the selected process when detailed view is open.
@@ -1491,7 +1491,8 @@ background_update = true
 custom_cpu_name = ""
 
 #* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace " ".
-#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
+#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter.
+#* Examples: disk_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
 disks_filter = ""
 
 #* Show graphs instead of meters for memory values.
