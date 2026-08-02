@@ -1305,6 +1305,10 @@ namespace Mem {
 				std::error_code ec;
 				string mountpoint = stfs[i].f_mntonname;
 				string dev = stfs[i].f_mntfromname;
+
+				//? Skip synthetic Time Machine snapshot mounts
+				if (dev.starts_with("com.apple.TimeMachine.")) continue;
+
 				mapping[dev] = mountpoint;
 
 				if (string(stfs[i].f_fstypename) == "autofs") {
