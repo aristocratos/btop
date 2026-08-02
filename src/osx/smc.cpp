@@ -73,15 +73,23 @@ namespace Cpu {
 		SMCVal_t val;
 		kern_return_t result;
 		result = SMCReadKey(key, &val);
-		if (result == kIOReturnSuccess) {
-			if (val.dataSize > 0) {
-				if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
-					// convert sp78 value to temperature
-					int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
-					return static_cast<long long>(intValue / 256.0);
-				}
-			}
+		if (result != kIOReturnSuccess or val.dataSize == 0)
+			return -1;
+
+		// sp78: 8-bit signed integer + 8-bit fraction (Legacy Intel)
+		if (strcmp(val.dataType, DATATYPE_SP78) == 0) {
+			int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
+			return static_cast<long long>(intValue / 256.0);
 		}
+
+		// ADD THIS BLOCK: flt : 4-byte IEEE little-endian float (Apple Silicon)
+		if (strcmp(val.dataType, "flt ") == 0 and val.dataSize >= 4) {
+			float f;
+			memcpy(&f, val.bytes, sizeof(f));
+			if (f > 0.0f and f < 150.0f)
+				return static_cast<long long>(f);
+		}
+
 		return -1;
 	}
 
@@ -149,6 +157,15 @@ namespace Cpu {
 										 inputStructure, structureInputSize,
 										 // outputStructure
 										 outputStructure, &structureOutputSize);
+	}
+
+	long long SMCConnection::getTempByKey(const char *key) {
+		char k[5];
+		strncpy(k, key, 4);
+		k[4] = '\0';
+		long long t = getSMCTemp(k);
+		if (t <= 0 or t >= 150) return -1;
+		return t;
 	}
 
 }  // namespace Cpu
