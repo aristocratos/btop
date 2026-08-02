@@ -131,7 +131,7 @@ namespace Draw {
 	};
 
 	//* Calculate sizes of boxes, draw outlines and save to enabled boxes namespaces
-	void calcSizes();
+	void calcSizes(const bool clear_proc_graphs = true);
 }
 
 namespace Proc {
