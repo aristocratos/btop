@@ -862,6 +862,9 @@ namespace Mem {
 				if (not is_in(name, "/", "swap", "/dev"))
 					mem.disks_order.push_back(name);
 
+			//? Apply user-defined disk order from the "disks_order" config option
+			apply_disks_order(mem);
+
 			disk_ios = 0;
 			collect_disk(disks, mapping);
 
