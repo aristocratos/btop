@@ -188,6 +188,13 @@ if(LINUX AND BTOP_GPU)
 
     target_link_libraries(libbtop ROCm)
   endif()
+
+  # DRM backend for AMD GPUs (GRBM register sampling)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
+  pkg_check_modules(LIBDRM_AMDGPU REQUIRED IMPORTED_TARGET libdrm_amdgpu)
+  target_link_libraries(libbtop PkgConfig::LIBDRM PkgConfig::LIBDRM_AMDGPU)
+
   if(NOT BTOP_STATIC)
     target_link_libraries(libbtop ${CMAKE_DL_LIBS})
   endif()

@@ -230,6 +230,7 @@ void clean_quit(int sig) {
 	Gpu::Nvml::shutdown();
 	Gpu::Rsmi::shutdown();
 	Gpu::Asysfs::shutdown();
+	Gpu::Drm::shutdown();
 	#ifdef __APPLE__
 	Gpu::AppleSilicon::shutdown();
 	#endif
