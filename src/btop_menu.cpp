@@ -803,6 +803,10 @@ namespace Menu {
 			    "       setting for bitrates",
 			    "",
 			    "True, False, or Auto",},
+			{"net_hide_ip",
+				"Hides the IP address in the net box.",
+				"",
+				"True or False."},
 		},
 		{
 			{"proc_left",
