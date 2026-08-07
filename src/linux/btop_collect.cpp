@@ -142,7 +142,6 @@ struct join_thread
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
-	vector<fs::path> core_freq;
 	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
@@ -169,6 +168,74 @@ namespace Cpu {
 	string cpu_sensor;
 	vector<string> core_sensors;
 	std::unordered_map<int, int> core_mapping;
+
+	struct CoreFrequency {
+		long long kHz;
+		long long default_kHz;
+		fs::path path;
+		int fail_count = 0;
+
+		CoreFrequency(fs::path path, long long default_kHz = 0) :
+			kHz(default_kHz),
+			default_kHz(default_kHz),
+			path(path)
+		{
+			if (not fs::exists(this->path) or access(this->path.c_str(), R_OK) == -1)
+				this->path.clear();
+		}
+
+		bool reading_failed() {
+			return this->fail_count >= 2 || this->path.empty();
+		}
+
+		double MHz() { return (double)this->kHz / 1000; }
+
+		void try_update() {
+			if (this->reading_failed())
+				return;
+
+			try {
+				long long new_kHz = stoll(readfile(this->path, "0"));
+				if (new_kHz >= 0) {
+					this->kHz = new_kHz;
+				} else {
+					this->kHz = this->default_kHz;
+					this->fail_count++;
+					Logger::warning("CoreFrequency::try_update() : Invalid frequency value {} [kHz] in {}", new_kHz, this->path);
+				}
+			} catch (const std::exception& e) {
+				this->kHz = this->default_kHz;
+				this->fail_count++;
+				Logger::warning("CoreFrequency::try_update() : {}", e.what());
+			}
+		}
+	};
+
+	struct CorePolicy {
+		fs::path policy_path;
+		CoreFrequency cur_freq;
+		CoreFrequency min_freq;
+		CoreFrequency max_freq;
+
+		CorePolicy(int cpu_index) :
+			// "/sys/devices/system/cpu/cpuX/cpufreq/*" specified in https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-devices-system-cpu
+			policy_path("/sys/devices/system/cpu/cpu" + to_string(cpu_index) + "/cpufreq/"),
+			cur_freq(CoreFrequency(policy_path / "scaling_cur_freq")),
+			min_freq(CoreFrequency(policy_path / "scaling_min_freq")),
+			max_freq(CoreFrequency(policy_path / "scaling_max_freq", 10000))
+		{}
+
+		void try_update() {
+			this->cur_freq.try_update();
+			if (Config::getS("show_core_freq") != Config::show_core_freq_values[0])
+			{
+				this->min_freq.try_update();
+				this->max_freq.try_update();
+			}
+		}
+	};
+
+	vector<CorePolicy> core_policies;
 }
 
 #if defined(GPU_SUPPORT)
@@ -365,14 +432,14 @@ namespace Shared {
 		//? Init for namespace Cpu
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
+		Cpu::current_cpu.core_freq_kHz.insert(Cpu::current_cpu.core_freq_kHz.begin(), Shared::coreCount, {});
+		Cpu::current_cpu.min_core_freq_kHz.insert(Cpu::current_cpu.min_core_freq_kHz.begin(), Shared::coreCount, 0);
+		Cpu::current_cpu.max_core_freq_kHz.insert(Cpu::current_cpu.max_core_freq_kHz.begin(), Shared::coreCount, 9'999'999);
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 
 		for (int i = 0; i < Shared::coreCount; ++i) {
-			Cpu::core_freq.push_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
-			if (not fs::exists(Cpu::core_freq.back()) or access(Cpu::core_freq.back().c_str(), R_OK) == -1) {
-				Cpu::core_freq.pop_back();
-			}
+			Cpu::core_policies.push_back(Cpu::CorePolicy(i));
 		}
 
 		Cpu::collect();
@@ -680,21 +747,27 @@ namespace Cpu {
 			double hz = 0.0;
 			// Read frequencies from all CPU cores
 			vector<double> frequencies;
-			for (auto it = Cpu::core_freq.begin(); it != Cpu::core_freq.end(); ) {
-    			if (it->empty()) {
-        			it = Cpu::core_freq.erase(it);
-        			continue;
-    			}
+			for (auto it = Cpu::core_policies.begin(); it != Cpu::core_policies.end(); it++) {
+				it->try_update();
 
-    			double core_hz = stod(readfile(*it, "0.0")) / 1000;
-    			if (core_hz <= 0.0 and ++failed >= 2) {
-        			it = Cpu::core_freq.erase(it);
-    			} else {
-        			frequencies.push_back(core_hz);
-        			if (freq_mode == "first") break;
-        			++it;
-    			}
- 			}
+				if (not it->cur_freq.reading_failed())
+					frequencies.push_back(it->cur_freq.MHz());
+			}
+
+			// Record per-core frequencies
+			if (Config::getS("show_core_freq") != Config::show_core_freq_values[0])
+			{
+				const size_t max_cores = std::min(Cpu::current_cpu.core_freq_kHz.size(), Cpu::core_policies.size());
+				for (size_t i = 0; i < max_cores; i++) {
+					const CorePolicy& core_policy = Cpu::core_policies.at(i);
+					Cpu::current_cpu.min_core_freq_kHz[i] = core_policy.min_freq.kHz;
+					Cpu::current_cpu.max_core_freq_kHz[i] = core_policy.max_freq.kHz;
+
+					deque<long long>& core_freq_kHz = Cpu::current_cpu.core_freq_kHz.at(i);
+					core_freq_kHz.push_back(core_policy.cur_freq.kHz);
+					if (core_freq_kHz.size() > 20) core_freq_kHz.pop_front();
+				}
+			}
 
 			if (not frequencies.empty()) {
 				if (freq_mode == "first") {
@@ -720,6 +793,7 @@ namespace Cpu {
 					return min_str + " - " + max_str;
 				}
 			}
+
 			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
 			if (hz <= 0.0) {
 				ifstream cpufreq(Shared::procPath / "cpuinfo");
@@ -1219,10 +1293,17 @@ namespace Cpu {
 
 			//? Notify main thread to redraw screen if we found more cores than previously detected
 			if (cmp_greater(cpu.core_percent.size(), Shared::coreCount)) {
+				const int prev_core_count = Shared::coreCount;
 				Logger::debug("Changing CPU max corecount from {} to {}.", Shared::coreCount, cpu.core_percent.size());
 				Runner::coreNum_reset = true;
 				Shared::coreCount = cpu.core_percent.size();
 				while (cmp_less(current_cpu.temp.size(), cpu.core_percent.size() + 1)) current_cpu.temp.push_back({0});
+				while (cmp_less(current_cpu.core_freq_kHz.size(), Shared::coreCount)) current_cpu.core_freq_kHz.push_back({0});
+				while (cmp_less(current_cpu.min_core_freq_kHz.size(), Shared::coreCount)) current_cpu.min_core_freq_kHz.push_back(0);
+				while (cmp_less(current_cpu.max_core_freq_kHz.size(), Shared::coreCount)) current_cpu.max_core_freq_kHz.push_back(9'999'999);
+				for (int i = prev_core_count; i < Shared::coreCount; i++) {
+					Cpu::core_policies.push_back(Cpu::CorePolicy(i));
+				}
 			}
 
 		}

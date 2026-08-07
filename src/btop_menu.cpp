@@ -1580,7 +1580,7 @@ static int optionsMenu(const string& key) {
 					else if (option == "base_10_bitrate") {
 						recollect = true;
 					}
-					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info", "show_core_freq") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 						screen_redraw = true;
 					else if (option == "disable_presets" and optList.at(i) != "Off") {
 						atomic_wait(Runner::active);
