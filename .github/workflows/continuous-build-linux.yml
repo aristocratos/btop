@@ -61,6 +61,7 @@ jobs:
           - s390x-ibm-linux-musl
           - x86_64-unknown-linux-musl
     env:
+      RELEASE: "20260515"
       TOOLCHAIN: "${{ matrix.toolchain }}"
 
     steps:
@@ -70,8 +71,8 @@ jobs:
 
       - name: Install cross toolchain
         run: |
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz
-          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20260430/${TOOLCHAIN}.tar.xz.sha256
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz.sha256
           echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
           mkdir -p /opt/x-tools/
           tar -xf /tmp/${TOOLCHAIN}.tar.xz -C /opt/x-tools
