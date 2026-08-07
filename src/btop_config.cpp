@@ -64,6 +64,7 @@ const vector<string> Config::show_gpu_values = { "Auto", "On", "Off" };
 #endif
 const vector<string> Config::base_10_bitrate_values = { "Auto", "True", "False" };
 const vector<string> Config::disable_preset_options = { "Off", "Default", "Custom", "All" };
+const vector<string> Config::mem_metrics_values = { "default", "used", "available", "cached", "free", "swap_used" };
 
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
@@ -112,11 +113,11 @@ namespace Config {
 #ifdef GPU_SUPPORT
 		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 #endif
-		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in mem box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_net", 	"# Graph symbol to use for graphs in net box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in proc box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
 
@@ -202,6 +203,8 @@ namespace Config {
 									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
+		
+		{"mem_selected", 		"#* Focuses only one kind of memory metric, available values: \"default\", \"used\", \"available\", \"cached\", \"free\", or \"swap_used\"."},
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
 
@@ -301,6 +304,7 @@ namespace Config {
 		{"proc_filter", ""},
 		{"proc_command", ""},
 		{"selected_name", ""},
+		{"mem_selected", "default"},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
 		{"custom_gpu_name1", ""},

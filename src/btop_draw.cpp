@@ -1245,6 +1245,8 @@ namespace Mem {
 		auto io_graph_combined = Config::getB("io_graph_combined");
 		auto use_graphs = Config::getB("mem_graphs");
 		auto tty_mode = Config::getB("tty_mode");
+		auto mem_selected = Config::getS("mem_selected");
+		if (mem_selected.empty()) mem_selected = "default";
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_mem"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto totalMem = Mem::get_totalMem();
@@ -1261,20 +1263,27 @@ namespace Mem {
 			io_graphs.clear();
 
 			//? Mem graphs and meters
-			for (const auto& name : mem_names) {
-
-				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, safeVal(mem.percent, name), graph_symbol};
-				else
-					mem_meters[name] = Draw::Meter{mem_meter, name};
-			}
-			if (show_swap and has_swap) {
-				for (const auto& name : swap_names) {
+			if (mem_selected == "default") {
+				for (const auto& name : mem_names) {
 					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), safeVal(mem.percent, name), graph_symbol};
+						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, safeVal(mem.percent, name), graph_symbol};
 					else
-						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
+						mem_meters[name] = Draw::Meter{mem_meter, name};
 				}
+				if (show_swap and has_swap) {
+					for (const auto& name : swap_names) {
+						if (use_graphs)
+							mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), safeVal(mem.percent, name), graph_symbol};
+						else
+							mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
+					}
+				}
+			} else {
+				string title = mem_selected;
+				if (mem_selected.starts_with("swap_")) {
+					title = mem_selected.substr(5);
+				}
+				mem_graphs[mem_selected] = Draw::Graph{mem_width - 2, height - 4, title, safeVal(mem.percent, mem_selected), graph_symbol};
 			}
 
 			//? Disk meters and io graphs
@@ -1349,47 +1358,116 @@ namespace Mem {
 		string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
 		bool big_mem = mem_width > 21;
 
-		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
-		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
-		for (const auto& name : comb_names) {
-			if (cy > height - 4) break;
-			string title;
-			if (name == "swap_used") {
-				if (cy > height - 5) break;
-				if (height - cy > 6) {
-					if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + divider;
+		if (show_swap and has_swap and not swap_disk and mem_selected == "default") comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
+		if (mem_selected == "default") {
+			out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
+			for (const auto& name : comb_names) {
+				if (cy > height - 4) break;
+				string title;
+				if (name == "swap_used") {
+					if (cy > height - 5) break;
+					if (height - cy > 6) {
+						if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + divider;
+						cy += 1;
+					}
+					out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
+						+ Theme::c("main_fg") + Fx::ub;
 					cy += 1;
+					title = "Used";
 				}
-				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
-					+ Theme::c("main_fg") + Fx::ub;
-				cy += 1;
-				title = "Used";
-			}
-			else if (name == "swap_free")
-				title = "Free";
+				else if (name == "swap_free")
+					title = "Free";
 
-			if (title.empty()) title = capitalize(name);
-			const string humanized = floating_humanizer(safeVal(mem.stats, name));
-			const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
-			const string graphics = (
-				use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same)
-				: mem_meters.contains(name) ? mem_meters.at(name)(safeVal(mem.percent, name).back())
-				: "");
-			if (mem_size > 2) {
-				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
-					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
-					+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(safeVal(mem.percent, name).back()) + "%", 4);
-				cy += (graph_height == 0 ? 2 : graph_height + 1);
+				if (title.empty()) title = capitalize(name);
+				const string humanized = floating_humanizer(safeVal(mem.stats, name));
+				const int offset = max(0, divider.empty() ? 9 - (int)humanized.size() : 0);
+				const string graphics = (
+					use_graphs and mem_graphs.contains(name) ? mem_graphs.at(name)(safeVal(mem.percent, name), redraw or data_same)
+					: mem_meters.contains(name) ? mem_meters.at(name)(safeVal(mem.percent, name).back())
+					: "");
+				if (mem_size > 2) {
+					out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
+						+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
+						+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(safeVal(mem.percent, name).back()) + "%", 4);
+					cy += (graph_height == 0 ? 2 : graph_height + 1);
+				}
+				else {
+					out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
+						+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
+					cy += (graph_height == 0 ? 1 : graph_height);
+				}
 			}
-			else {
-				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
-					+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
-				cy += (graph_height == 0 ? 1 : graph_height);
+
+			if (graph_height > 0 and cy < height - 2)
+				out += Mv::to(y+1+cy, x+1+cx) + divider;
+		} else {
+			const string title = mem_selected.starts_with("swap_") ? mem_selected.substr(5) : mem_selected;
+			const string humanized = floating_humanizer(safeVal(mem.stats, mem_selected));
+
+			const int graph_y = y + 3;
+			const int graph_x = x + 1;
+
+			// Recreate if size just changed.
+			if (not mem_graphs.contains(mem_selected)) {
+				mem_graphs.emplace(mem_selected, Draw::Graph{
+					mem_width - 2,
+					height - 4,
+					title,
+					safeVal(mem.percent, mem_selected),
+					graph_symbol
+				});
 			}
+
+			string divider = Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
+				+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg");
+			out += Mv::to(y + 2, x + 1) + divider;
+			const bool is_swap = mem_selected.starts_with("swap_");
+			const string total_title = is_swap ? "Swap" : "Total";
+			const string total_humanized = is_swap ? floating_humanizer(safeVal(mem.stats, "swap_total"s)) : floating_humanizer(totalMem);
+			const int metric_title_len = humanized.length() + title.length() + 3; // 2 for `: `, 1 for padding
+			const int total_title_len = total_title.length() + 7 + total_humanized.length(); // `Total: ` is 7 chars, 1 for padding
+			// Add 1 for divider in middle
+			if (mem_width > metric_title_len + total_title_len) {
+				out += Mv::to(y + 1, x + 2)
+					+ Theme::c("title") + Fx::b
+					+ total_title + ": " + total_humanized
+					+ Fx::ub;
+				// divider " Total: x GiB   **|**   <mem_selected>: 10 GiB "
+				out += Mv::to(y + 1, x + mem_width / 2)
+					+ Theme::c("mem_box") + Symbols::v_line;
+				out += Mv::to(y, x + mem_width / 2)
+					+ Theme::c("mem_box") + Symbols::div_up
+					+ Mv::to(y + 2, x + mem_width / 2)
+					+ Symbols::div_down;
+			}
+
+			// Used: 10 GiB (FROM THE RIGHT)
+			if (mem_width > metric_title_len + total_title_len) {
+				out += Mv::to(y + 1, x + mem_width - metric_title_len)
+					+ Theme::c("title") + Fx::b
+					+ capitalize(title) + ": "
+					+ humanized
+					+ Fx::ub;
+			} else if (mem_width > metric_title_len + 2) {
+				out += Mv::to(y + 1, x + 2)
+					+ Theme::c("title") + Fx::b
+					+ capitalize(title) + ": "
+					+ humanized
+					+ Fx::ub;
+			} else {
+				out += Mv::to(y + 1, x + 2)
+					+ Fx::b
+					+ humanized
+					+ Fx::ub;
+			}
+			const string graph = mem_graphs.contains(mem_selected) ? mem_graphs.at(mem_selected)(
+				safeVal(mem.percent, mem_selected),
+				redraw || data_same
+			) : "";
+			out += Mv::to(graph_y, graph_x)
+				+ graph;
 		}
-		if (graph_height > 0 and cy < height - 2)
-			out += Mv::to(y+1+cy, x+1+cx) + divider;
 
 		//? Disks
 		if (show_disks) {
