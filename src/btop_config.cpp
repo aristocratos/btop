@@ -102,21 +102,23 @@ namespace Config {
 
 		{"terminal_sync", 		"#* Use terminal synchronized output sequences to reduce flickering on supported terminals."},
 
-		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n"
+		{"graph_symbol", 		"#* Default symbols to use for graph creation, \"braille\", \"block\", \"block2\", \"tty\".\n"
 								"#* \"braille\" offers the highest resolution but might not be included in all fonts.\n"
 								"#* \"block\" has half the resolution of braille but uses more common characters.\n"
+								"#* \"block\" has half the resolution of braille but uses more common characters.\n"
+								"#* \"block2\"'s resolution is between braile and block, but it has a cleaner look than braile.\n"
 								"#* \"tty\" uses only 3 different symbols but will work with most fonts and should work in a real TTY.\n"
 								"#* Note that \"tty\" only has half the horizontal resolution of the other two, so will show a shorter historical view."},
 
-		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_cpu", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\", \"block2\", or \"tty\"."},
 #ifdef GPU_SUPPORT
-		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\", \"block2\", or \"tty\"."},
 #endif
-		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\", \"block2\", or \"tty\"."},
 
-		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\", \"block2\", or \"tty\"."},
 
-		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\", \"block2\", or \"tty\"."},
 
 		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
 
