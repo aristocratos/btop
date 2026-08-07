@@ -37,7 +37,13 @@ using namespace Tools;
 namespace fs = std::filesystem;
 
 string Term::fg, Term::bg;
-string Fx::reset = reset_base;
+
+//? Not initialized from Fx::reset_base, which is defined in another translation unit and
+//? is therefore not guaranteed to be constructed first. Reading it here is the static
+//? initialization order fiasco and crashes before main() on some toolchains. The literal is
+//? the value reset_base expands to, so this is constant initialized and ordering can't bite.
+//? Theme::setTheme() overwrites it with reset_base + the theme colors once config is loaded.
+constinit string Fx::reset = "\x1b[0m";
 
 namespace Theme {
 
