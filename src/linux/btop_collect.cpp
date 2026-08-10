@@ -1974,9 +1974,9 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = string(gpu_device_name);
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "GPU: " + string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "Intel GPU";
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "GPU: Intel";
 			}
 
 			free(gpu_device_name);
@@ -2282,7 +2282,7 @@ namespace Gpu {
 			gpus.resize(gpus.size() + device_count);
 			gpu_names.resize(Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + device_count);
 			for (uint32_t i = 0; i < device_count; ++i) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + i] = "Intel NPU";
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + i] = "NPU: Intel";
 			}
 
 			//? Baseline: read the busy counter once so first sample doesn't show a spike.
