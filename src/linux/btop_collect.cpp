@@ -317,6 +317,25 @@ namespace Gpu {
 		uint32_t device_count = 0;
 		vector<device_paths> devices;
 	}
+
+	//? Intel NPU (VPU) data collection — Meteor Lake / Lunar Lake accelerators.
+	//? Reads only the sysfs statistics exposed by the intel_vpu driver at
+	//? /sys/bus/pci/devices/<BDF>/npu_*; no library dependency.
+	namespace IntelNPU {
+		struct npu_paths {
+			std::filesystem::path busy;   //? npu_busy_time_us  (monotonic µs counter)
+			std::filesystem::path freq;   //? npu_current_frequency_mhz
+			std::filesystem::path mem;    //? npu_memory_utilization (bytes)
+		};
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+		vector<npu_paths> devices;
+		std::vector<std::pair<std::filesystem::path, long long>> busy_prev;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -403,6 +422,7 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+			Gpu::IntelNPU::init();
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -2211,6 +2231,125 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	//? Intel NPU (VPU) data collection — Meteor Lake / Lunar Lake accelerators.
+	namespace IntelNPU {
+		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
+		static long long read_ll(const std::filesystem::path& path, long long fallback = 0) {
+			try {
+				return std::stoll(readfile(path, std::to_string(fallback)));
+			} catch (const std::exception&) {
+				return fallback;
+			}
+		}
+
+		//? Find candidate NPU devices by scanning the intel_vpu driver sysfs directory.
+		//? Each device is a subdirectory named <domain>:<bus>:<dev>.<fn>, and exposes
+		//? npu_busy_time_us / npu_current_frequency_mhz / npu_memory_utilization.
+		bool init() {
+			if (initialized) return false;
+			devices.clear();
+			busy_prev.clear();
+
+			const std::filesystem::path driver_root("/sys/bus/pci/drivers/intel_vpu");
+			std::error_code ec;
+			if (not std::filesystem::is_directory(driver_root, ec)) {
+				Logger::debug("Intel NPU: /sys/bus/pci/drivers/intel_vpu not present");
+				return false;
+			}
+
+			for (const auto& entry : std::filesystem::directory_iterator(driver_root, ec)) {
+				const auto name = entry.path().filename().string();
+				//? Skip control files (uevent, bind, unbind, new_id, remove_id, module).
+				if (not std::filesystem::is_directory(entry.path(), ec)) continue;
+				if (name.find(':') == string::npos) continue; //? only PCI BDF dirs contain ':'
+
+				const auto busy_file = entry.path() / "npu_busy_time_us";
+				if (not std::filesystem::exists(busy_file)) continue;
+
+				npu_paths d{};
+				d.busy = busy_file;
+				d.freq = entry.path() / "npu_current_frequency_mhz";
+				d.mem  = entry.path() / "npu_memory_utilization";
+				devices.push_back(std::move(d));
+			}
+
+			device_count = (uint32_t)devices.size();
+			if (device_count == 0) {
+				Logger::debug("Intel NPU: no intel_vpu devices found");
+				return false;
+			}
+
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + device_count);
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + i] = "Intel NPU";
+			}
+
+			//? Baseline: read the busy counter once so first sample doesn't show a spike.
+			busy_prev.reserve(device_count);
+			for (auto& d : devices)
+				busy_prev.emplace_back(d.busy, read_ll(d.busy));
+
+			initialized = true;
+			Logger::info("Using intel_vpu sysfs for {} Intel NPU device(s)", device_count);
+			IntelNPU::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			devices.clear();
+			busy_prev.clear();
+			device_count = 0;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_info& gpu = gpus_slice[i];
+				const npu_paths& d = devices[i];
+
+				if constexpr (is_init) {
+					gpu.supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = false,
+						.gpu_clock = true,
+						.mem_clock = false,
+						.pwr_usage = false,
+						.pwr_state = false,
+						.temp_info = false,
+						.mem_total = false, //? driver exposes used bytes only, no total
+						.mem_used = true,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false
+					};
+				}
+
+				//? Utilization: busy_time_us is a monotonic counter — compute per-second rate.
+				long long now = read_ll(d.busy);
+				long long prev = busy_prev[i].second;
+				busy_prev[i].second = now;
+				long long delta = now - prev;
+				gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(delta / 10'000LL, 0LL, 100LL)); //? µs/s → %
+
+				//? Clock
+				gpu.gpu_clock_speed = (unsigned int)read_ll(d.freq);
+
+				//? Memory
+				gpu.mem_used = read_ll(d.mem);
+			}
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2222,6 +2361,7 @@ namespace Gpu {
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		IntelNPU::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count); // size = IntelNPU::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
