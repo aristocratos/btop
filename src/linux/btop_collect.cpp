@@ -175,6 +175,15 @@ namespace Cpu {
 
 namespace Gpu {
 	vector<gpu_info> gpus;
+	//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
+	//? Shared by the AMD sysfs (Asysfs) and Intel NPU (IntelNPU) backends.
+	static long long read_ll(const std::filesystem::path& path, long long fallback = 0) {
+		try {
+			return std::stoll(readfile(path, std::to_string(fallback)));
+		} catch (const std::exception&) {
+			return fallback;
+		}
+	}
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -334,7 +343,7 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 		vector<npu_paths> devices;
-		std::vector<std::pair<std::filesystem::path, long long>> busy_prev;
+		vector<long long> busy_prev; //? last npu_busy_time_us per device, same index as devices
 	}
 }
 
@@ -2047,15 +2056,6 @@ namespace Gpu {
 	}
 
 	namespace Asysfs {
-		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
-		static long long read_ll(const std::filesystem::path& path, long long fallback = 0) {
-			try {
-				return std::stoll(readfile(path, std::to_string(fallback)));
-			} catch (const std::exception&) {
-				return fallback;
-			}
-		}
-
 		//? Match /sys/class/drm/cardN (no '-', all digits after "card"). Skips card1-DP-1, renderD*, etc.
 		static bool is_card_node(const string& fname) {
 			if (not fname.starts_with("card") or fname.size() <= 4) return false;
@@ -2233,15 +2233,6 @@ namespace Gpu {
 
 	//? Intel NPU (VPU) data collection — Meteor Lake / Lunar Lake accelerators.
 	namespace IntelNPU {
-		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
-		static long long read_ll(const std::filesystem::path& path, long long fallback = 0) {
-			try {
-				return std::stoll(readfile(path, std::to_string(fallback)));
-			} catch (const std::exception&) {
-				return fallback;
-			}
-		}
-
 		//? Find candidate NPU devices by scanning the intel_vpu driver sysfs directory.
 		//? Each device is a subdirectory named <domain>:<bus>:<dev>.<fn>, and exposes
 		//? npu_busy_time_us / npu_current_frequency_mhz / npu_memory_utilization.
@@ -2288,7 +2279,7 @@ namespace Gpu {
 			//? Baseline: read the busy counter once so first sample doesn't show a spike.
 			busy_prev.reserve(device_count);
 			for (auto& d : devices)
-				busy_prev.emplace_back(d.busy, read_ll(d.busy));
+				busy_prev.push_back(read_ll(d.busy));
 
 			initialized = true;
 			Logger::info("Using intel_vpu sysfs for {} Intel NPU device(s)", device_count);
@@ -2331,10 +2322,13 @@ namespace Gpu {
 
 				//? Utilization: busy_time_us is a monotonic counter — compute per-second rate.
 				long long now = read_ll(d.busy);
-				long long prev = busy_prev[i].second;
-				busy_prev[i].second = now;
+				long long prev = busy_prev[i];
+				busy_prev[i] = now;
 				long long delta = now - prev;
-				gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(delta / 10'000LL, 0LL, 100LL)); //? µs/s → %
+				//? Guard against counter wrap (driver reload) or a huge gap after system
+				//? suspend, which would otherwise show a spurious 100% spike.
+				long long util = (delta < 0 or delta > 10'000'000) ? 0 : delta / 10'000LL; //? µs/s → %
+				gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(util, 0LL, 100LL));
 
 				//? Clock
 				gpu.gpu_clock_speed = (unsigned int)read_ll(d.freq);
