@@ -80,6 +80,12 @@ namespace Cpu {
 					int intValue = val.bytes[0] * 256 + (unsigned char)val.bytes[1];
 					return static_cast<long long>(intValue / 256.0);
 				}
+				//? Apple Silicon reports thermal sensors as 32 bit floats
+				if (strcmp(val.dataType, DATATYPE_FLT) == 0 and val.dataSize == sizeof(float)) {
+					float floatValue;
+					memcpy(&floatValue, val.bytes, sizeof(floatValue));
+					return static_cast<long long>(floatValue);
+				}
 			}
 		}
 		return -1;
@@ -105,6 +111,13 @@ namespace Cpu {
 			result = getSMCTemp(key);
 		}
 		return result;
+	}
+
+	//? Read an arbitrary temperature sensor by its four character SMC key
+	long long SMCConnection::getTempByKey(const char *key) {
+		UInt32Char_t key_buffer;
+		snprintf(key_buffer, sizeof(key_buffer), "%s", key);
+		return getSMCTemp(key_buffer);
 	}
 
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
