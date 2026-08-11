@@ -22,6 +22,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "btop_config.hpp"
@@ -305,6 +306,117 @@ bool set_priority(pid_t pid, int priority) {
 			if (static_cast<size_t>(p.ppid) == root_ppid or root_pids.contains(static_cast<size_t>(p.ppid))) continue;
 			if (rng::count(current_procs, p.pid, &proc_info::ppid) >= threshold) {
 				p.collapsed = true;
+			}
+		}
+	}
+
+	namespace {
+		std::unordered_map<string, bool> saved_tree_states;
+		string loaded_tree_states;
+
+		auto encode_tree_state_key(const string& key) -> string {
+			static constexpr char hex[] = "0123456789abcdef";
+			string encoded;
+			encoded.reserve(key.size() * 2);
+			for (const unsigned char c : key) {
+				encoded += hex[c >> 4];
+				encoded += hex[c & 0x0f];
+			}
+			return encoded;
+		}
+
+		auto decode_tree_state_key(const string& encoded) -> std::optional<string> {
+			if (encoded.size() % 2 != 0) return std::nullopt;
+			string key;
+			key.reserve(encoded.size() / 2);
+			for (size_t i = 0; i < encoded.size(); i += 2) {
+				auto hex_value = [](const char c) -> int {
+					if (c >= '0' and c <= '9') return c - '0';
+					if (c >= 'a' and c <= 'f') return c - 'a' + 10;
+					return -1;
+				};
+				const int high = hex_value(encoded.at(i));
+				const int low = hex_value(encoded.at(i + 1));
+				if (high < 0 or low < 0) return std::nullopt;
+				key += static_cast<char>((high << 4) | low);
+			}
+			return key;
+		}
+
+		auto tree_state_key(const proc_info& process, const vector<proc_info>& processes) -> std::optional<string> {
+			vector<string> ancestry;
+			std::unordered_set<size_t> seen;
+			const proc_info* current = &process;
+			while (current != nullptr and seen.insert(current->pid).second) {
+				ancestry.push_back(current->name);
+				auto parent = rng::find(processes, current->ppid, &proc_info::pid);
+				current = (parent == processes.end()) ? nullptr : &*parent;
+			}
+			if (ancestry.empty()) return std::nullopt;
+			rng::reverse(ancestry);
+			string key;
+			for (const auto& name : ancestry) {
+				if (not key.empty()) key += '\x1f';
+				key += name;
+			}
+			return key;
+		}
+
+		void load_tree_states() {
+			const auto& encoded = Config::getS("proc_tree_state");
+			if (encoded == loaded_tree_states) return;
+			saved_tree_states.clear();
+			for (const auto& item : ssplit(encoded, ',')) {
+				if (item.size() < 3 or item.at(1) != ':') continue;
+				auto key = decode_tree_state_key(item.substr(2));
+				if (key.has_value() and is_in(item.at(0), '0', '1'))
+					saved_tree_states.insert_or_assign(*key, item.at(0) == '1');
+			}
+			loaded_tree_states = encoded;
+		}
+
+		void save_tree_states() {
+			string encoded;
+			for (const auto& [key, collapsed] : saved_tree_states) {
+				if (not encoded.empty()) encoded += ',';
+				encoded += collapsed ? "1:" : "0:";
+				encoded += encode_tree_state_key(key);
+			}
+			loaded_tree_states = encoded;
+			Config::set("proc_tree_state", encoded);
+		}
+	}
+
+	void remember_tree_state(const vector<proc_info>& processes, const size_t pid, const bool collapsed) {
+		if (not Config::getB("proc_tree_persist_state")) return;
+		load_tree_states();
+		const auto process = rng::find(processes, pid, &proc_info::pid);
+		if (process == processes.end()) return;
+		const auto key = tree_state_key(*process, processes);
+		if (not key.has_value()) return;
+		saved_tree_states.insert_or_assign(*key, collapsed);
+		save_tree_states();
+	}
+
+	void remember_tree_children(const vector<proc_info>& processes, const size_t pid) {
+		if (not Config::getB("proc_tree_persist_state")) return;
+		load_tree_states();
+		for (const auto& process : processes) {
+			if (process.ppid != pid) continue;
+			const auto key = tree_state_key(process, processes);
+			if (key.has_value()) saved_tree_states.insert_or_assign(*key, process.collapsed);
+		}
+		save_tree_states();
+	}
+
+	void restore_tree_state(vector<proc_info>& processes) {
+		if (not Config::getB("proc_tree_persist_state")) return;
+		load_tree_states();
+		for (auto& process : processes) {
+			const auto key = tree_state_key(process, processes);
+			if (key.has_value()) {
+				if (const auto saved = saved_tree_states.find(*key); saved != saved_tree_states.end())
+					process.collapsed = saved->second;
 			}
 		}
 	}

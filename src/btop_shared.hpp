@@ -456,6 +456,11 @@ namespace Proc {
 
 	//* Auto-collapse processes with many direct children when entering tree mode
 	void _auto_collapse_oversized(std::vector<proc_info>& current_procs, const bool tree_mode_change);
+
+	//* Persist explicit tree collapse choices by process-name ancestry instead of volatile PIDs
+	void remember_tree_state(const std::vector<proc_info>& processes, size_t pid, bool collapsed);
+	void remember_tree_children(const std::vector<proc_info>& processes, size_t pid);
+	void restore_tree_state(std::vector<proc_info>& current_procs);
 }
 
 /// Detect container engine.
