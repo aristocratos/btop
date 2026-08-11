@@ -146,22 +146,48 @@ bool set_priority(pid_t pid, int priority) {
 		}
 	}
 
+	namespace {
+		void set_tree_totals(tree_proc& proc) {
+			auto& entry = proc.entry.get();
+			proc.tree_threads = entry.threads;
+			proc.tree_mem = entry.mem;
+			proc.tree_cpu_p = entry.cpu_p;
+			proc.tree_cpu_c = entry.cpu_c;
+			// _tree_gen already folds a collapsed branch into its entry for display.
+			// Re-adding its children here would make the sort total double-count them.
+			if (entry.collapsed) return;
+
+			for (auto& child : proc.children) {
+				set_tree_totals(child);
+				if (child.entry.get().state == 'X') continue;
+				proc.tree_threads += child.tree_threads;
+				proc.tree_mem += child.tree_mem;
+				proc.tree_cpu_p += child.tree_cpu_p;
+				proc.tree_cpu_c += child.tree_cpu_c;
+			}
+		}
+	}
+
 	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused, int& c_index, const int index_max, bool collapsed) {
+		const bool use_tree_totals = not Config::getB("proc_aggregate");
+		if (use_tree_totals) {
+			for (auto& proc : proc_vec) set_tree_totals(proc);
+		}
 		if (proc_vec.size() > 1 and not paused) {
 			if (reverse) {
 				switch (v_index(sort_vector, sorting)) {
-				case 3: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().threads < b.entry.get().threads; });	break;
-				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem < b.entry.get().mem; });	break;
-				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p < b.entry.get().cpu_p; });	break;
-				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c < b.entry.get().cpu_c; });	break;
+				case 3: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_threads < b.tree_threads : a.entry.get().threads < b.entry.get().threads; });	break;
+				case 5: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_mem < b.tree_mem : a.entry.get().mem < b.entry.get().mem; });	break;
+				case 6: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_cpu_p < b.tree_cpu_p : a.entry.get().cpu_p < b.entry.get().cpu_p; });	break;
+				case 7: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_cpu_c < b.tree_cpu_c : a.entry.get().cpu_c < b.entry.get().cpu_c; });	break;
 				}
 			}
 			else {
 				switch (v_index(sort_vector, sorting)) {
-				case 3: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().threads > b.entry.get().threads; });	break;
-				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem > b.entry.get().mem; });	break;
-				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p > b.entry.get().cpu_p; });	break;
-				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c > b.entry.get().cpu_c; });	break;
+				case 3: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_threads > b.tree_threads : a.entry.get().threads > b.entry.get().threads; });	break;
+				case 5: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_mem > b.tree_mem : a.entry.get().mem > b.entry.get().mem; });	break;
+				case 6: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_cpu_p > b.tree_cpu_p : a.entry.get().cpu_p > b.entry.get().cpu_p; });	break;
+				case 7: rng::stable_sort(proc_vec, [use_tree_totals](const auto& a, const auto& b) { return use_tree_totals ? a.tree_cpu_c > b.tree_cpu_c : a.entry.get().cpu_c > b.entry.get().cpu_c; });	break;
 				}
 			}
 		}
