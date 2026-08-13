@@ -62,6 +62,7 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 
 #include <fmt/format.h>
@@ -1093,12 +1094,23 @@ namespace Proc {
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
 			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get() , KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), KERN_PROC_KTHREAD | KERN_PROC_SHOW_THREADS, 0, sizeof(struct kinfo_proc), &count);
+
+			// OpenBSD returns one aggregate record per process and one record for
+			// each thread when KERN_PROC_SHOW_THREADS is requested. Count the
+			// thread records first, then only use aggregate records as btop rows.
+			std::unordered_map<size_t, size_t> thread_counts;
+			for (int i = 0; i < count; i++) {
+				const struct kinfo_proc* kproc = &kprocs[i];
+				if (kproc->p_tid != -1)
+					thread_counts[static_cast<size_t>(kproc->p_pid)]++;
+			}
 
 			for (int i = 0; i < count; i++) {
 				const struct kinfo_proc* kproc = &kprocs[i];
-				const size_t pid = (size_t)kproc->p_pid;
-				if (pid < 1) continue;
+				if (kproc->p_tid != -1) continue;
+				if (kproc->p_pid < 0) continue;
+				const size_t pid = static_cast<size_t>(kproc->p_pid);
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1119,11 +1131,6 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
-					if (string(kproc->p_comm) == "idle"s) {
-						current_procs.pop_back();
-						found.pop_back();
-						continue;
-					}
 					new_proc.name = kproc->p_comm;
 					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
@@ -1150,7 +1157,8 @@ namespace Proc {
 				cpu_t 	= kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
 
 				new_proc.mem = kproc->p_vm_rssize * Shared::pageSize;
-				new_proc.threads = 1; // can't seem to find this in kinfo_proc
+				const auto thread_count = thread_counts.find(pid);
+				new_proc.threads = thread_count != thread_counts.end() ? thread_count->second : 1;
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
