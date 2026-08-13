@@ -620,11 +620,11 @@ namespace Mem {
   		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
 
 		if (show_swap) {
-			int total = uvmexp.swpages * Shared::pageSize;
+			const uint64_t total = static_cast<uint64_t>(uvmexp.swpages) * static_cast<uint64_t>(Shared::pageSize);
+			const uint64_t used = static_cast<uint64_t>(uvmexp.swpginuse) * static_cast<uint64_t>(Shared::pageSize);
 			mem.stats.at("swap_total") = total;
-			int swapped = uvmexp.swpgonly * Shared::pageSize;
-			mem.stats.at("swap_used") = swapped;
-			mem.stats.at("swap_free") = total - swapped;
+			mem.stats.at("swap_used") = used;
+			mem.stats.at("swap_free") = total >= used ? total - used : 0;
 		}
 
 		if (show_swap and mem.stats.at("swap_total") > 0) {
