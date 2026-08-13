@@ -621,23 +621,20 @@ namespace Mem {
 		mem.stats.at("cached") = memCache;
 		mem.stats.at("free") = memFree;
 
-		if (show_swap) {
-			const uint64_t total = static_cast<uint64_t>(uvmexp.swpages) * static_cast<uint64_t>(Shared::pageSize);
-			const uint64_t used = static_cast<uint64_t>(uvmexp.swpginuse) * static_cast<uint64_t>(Shared::pageSize);
-			mem.stats.at("swap_total") = total;
-			mem.stats.at("swap_used") = used;
-			mem.stats.at("swap_free") = total >= used ? total - used : 0;
-		}
+		const uint64_t total = static_cast<uint64_t>(uvmexp.swpages) * static_cast<uint64_t>(Shared::pageSize);
+		const uint64_t used = static_cast<uint64_t>(uvmexp.swpginuse) * static_cast<uint64_t>(Shared::pageSize);
+		mem.stats.at("swap_total") = total;
+		mem.stats.at("swap_used") = used;
+		mem.stats.at("swap_free") = total >= used ? total - used : 0;
 
-		if (show_swap and mem.stats.at("swap_total") > 0) {
+		if ((show_swap or swap_disk) and total > 0) {
 			for (const auto &name : swap_names) {
-				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / total));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2))
 					mem.percent.at(name).pop_front();
 			}
-			has_swap = true;
-		} else
-			has_swap = false;
+		}
+		has_swap = (show_swap or swap_disk) and total > 0;
 		//? Calculate percentages
 		for (const auto &name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
