@@ -376,7 +376,7 @@ namespace Cpu {
 		if (sysctlbyname("hw.cpuspeed", &freq, &size, nullptr, 0) < 0) {
 			return "";
 		}
-		return std::to_string(freq / 1000.0 ).substr(0, 3); // seems to be in MHz
+		return format_frequency_mhz(freq);
 	}
 
 	auto get_core_mapping() -> std::unordered_map<int, int> {
@@ -609,10 +609,7 @@ namespace Cpu {
 		while (cmp_greater(cpu.cpu_percent.at("total").size(), width * 2)) cpu.cpu_percent.at("total").pop_front();
 
 		if (Config::getB("show_cpu_freq")) {
-			auto hz = get_cpuHz();
-			if (hz != "") {
-				cpuHz = hz;
-			}
+			cpuHz = get_cpuHz();
 		}
 
 		if (Config::getB("check_temp") and got_sensors)
