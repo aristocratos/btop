@@ -985,6 +985,7 @@ namespace Proc {
 	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
+	bool current_filter_kernel = false;
 	bool current_rev = false;
 	bool is_tree_mode;
 
@@ -1066,6 +1067,11 @@ namespace Proc {
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+
+		const auto filter_kernel = Config::getB("proc_filter_kernel");
+		const bool kernel_filter_change = current_filter_kernel != filter_kernel;
+		if (kernel_filter_change) current_filter_kernel = filter_kernel;
+
 		bool tree_mode_change = tree != is_tree_mode;
 		if (sorted_change) {
 			current_sort = sorting;
@@ -1079,7 +1085,7 @@ namespace Proc {
 		static vector<size_t> found;
 
 		//* Use pids from last update if only changing filter, sorting or tree options
-		if (no_update and not current_procs.empty()) {
+		if (no_update and not current_procs.empty() and not kernel_filter_change) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
 			//* ---------------------------------------------Collection start----------------------------------------------
@@ -1093,7 +1099,8 @@ namespace Proc {
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
 			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), KERN_PROC_KTHREAD | KERN_PROC_SHOW_THREADS, 0, sizeof(struct kinfo_proc), &count);
+			const int proc_op = filter_kernel ? KERN_PROC_ALL : KERN_PROC_KTHREAD;
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), proc_op | KERN_PROC_SHOW_THREADS, 0, sizeof(struct kinfo_proc), &count);
 
 			// OpenBSD returns one aggregate record per process and one record for
 			// each thread when KERN_PROC_SHOW_THREADS is requested. Count the
