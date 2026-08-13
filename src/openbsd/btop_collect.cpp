@@ -593,8 +593,6 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		u_int memActive, memWire, cachedMem;
-		// u_int freeMem;
 		size_t size;
 		static int uvmexp_mib[] = {CTL_VM, VM_UVMEXP};
 		static int bcstats_mib[] = {CTL_VFS, VFS_GENERIC, VFS_BCACHESTAT};
@@ -610,14 +608,18 @@ namespace Mem {
 			Logger::error("sysctl failed");
 			bzero(&bcstats, sizeof(bcstats));
 		}
-		memActive = uvmexp.active * Shared::pageSize;
-		memWire = uvmexp.wired;
-		// freeMem = uvmexp.free * Shared::pageSize;
-		cachedMem = bcstats.numbufpages * Shared::pageSize;
-		mem.stats.at("used") = memActive;
-		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-   		mem.stats.at("cached") = cachedMem;
-  		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
+		const uint64_t pageSize = static_cast<uint64_t>(Shared::pageSize);
+		const uint64_t memCache = static_cast<uint64_t>(bcstats.numbufpages + uvmexp.percpucaches +
+			uvmexp.vnodepages + uvmexp.vtextpages) * pageSize;
+		const uint64_t memUsed = static_cast<uint64_t>(uvmexp.active + uvmexp.wired) * pageSize;
+		const uint64_t memFree = static_cast<uint64_t>(uvmexp.free) * pageSize;
+		const uint64_t memReserve = static_cast<uint64_t>(uvmexp.reserve_pagedaemon + uvmexp.reserve_kernel +
+			uvmexp.freemin + uvmexp.anonmin + uvmexp.vtextmin + uvmexp.vnodemin) * pageSize;
+
+		mem.stats.at("used") = memUsed;
+		mem.stats.at("available") = memFree + memCache - memReserve;
+		mem.stats.at("cached") = memCache;
+		mem.stats.at("free") = memFree;
 
 		if (show_swap) {
 			const uint64_t total = static_cast<uint64_t>(uvmexp.swpages) * static_cast<uint64_t>(Shared::pageSize);
