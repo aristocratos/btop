@@ -988,12 +988,6 @@ namespace Cpu {
 				if (CFArrayGetCount(one_ps_descriptor())) {
 					CFDictionaryRef one_ps = IOPSGetPowerSourceDescription(ps_info(), CFArrayGetValueAtIndex(one_ps_descriptor(), 0));
 					has_battery = true;
-					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSTimeToEmptyKey));
-					int32_t estimatedMinutesRemaining;
-					if (remaining) {
-						CFNumberGetValue(remaining, kCFNumberSInt32Type, &estimatedMinutesRemaining);
-						seconds = estimatedMinutesRemaining * 60;
-					}
 					CFNumberRef charge = (CFNumberRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSCurrentCapacityKey));
 					if (charge) {
 						CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
@@ -1009,6 +1003,17 @@ namespace Cpu {
 					}
 					if (percent == 100) {
 						status = "full";
+					}
+					//? macOS reports the estimate under a different key depending on which way
+					//? the battery is going, and -1 while it has not settled on one yet
+					const CFStringRef time_key = (status == "charging")
+						? CFSTR(kIOPSTimeToFullChargeKey)
+						: CFSTR(kIOPSTimeToEmptyKey);
+					CFNumberRef remaining = (CFNumberRef)CFDictionaryGetValue(one_ps, time_key);
+					if (remaining) {
+						int32_t mins;
+						CFNumberGetValue(remaining, kCFNumberSInt32Type, &mins);
+						if (mins > 0) seconds = mins * 60;
 					}
 				} else {
 					has_battery = false;
