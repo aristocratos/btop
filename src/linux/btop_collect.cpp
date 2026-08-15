@@ -19,7 +19,6 @@ tab-size = 4
 #include <algorithm>
 #include <charconv>
 #include <cmath>
-#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -311,7 +310,8 @@ namespace Gpu {
 			bool has_busy;
 			bool has_fdinfo;
 			bool has_vram;
-			uint64_t prev_engine_ns = 0;
+			//? Previous /proc fdinfo snapshot, keyed by "pid:drm-client-id".
+			std::unordered_map<string, std::unordered_map<string, uint64_t>> prev_fdinfo;
 			long long prev_t_us = 0;
 		};
 
@@ -2066,25 +2066,51 @@ namespace Gpu {
 			return {};
 		}
 
-		//? Sum per-client DRM engine time for this PCI device. Used when gpu_busy_percent
-		//? is missing or unreadable (same signal nvtop/btop-on-Intel already lean on).
-		static uint64_t fdinfo_engine_ns(const string& pci_slot) {
-			if (pci_slot.empty()) return 0;
-			std::unordered_map<string, uint64_t> clients;
+		static bool is_drm_engine_line(const string& line) {
+			return line.starts_with("drm-engine-gfx:")
+				or line.starts_with("drm-engine-compute:")
+				or line.starts_with("drm-engine-render:")
+				or line.starts_with("drm-engine-gpu:");
+		}
+
+		//? True if this process already has a DRM device open. Used to skip the
+		//? thousands of unrelated fdinfo files; a full /proc walk was ~200ms here.
+		static bool pid_has_dri_fd(const std::filesystem::path& proc_dir) {
 			std::error_code ec;
-			for (const auto& proc : std::filesystem::directory_iterator("/proc", ec)) {
-				if (ec or not proc.is_directory(ec) or ec) continue;
+			const auto fd_dir = proc_dir / "fd";
+			if (not std::filesystem::is_directory(fd_dir, ec) or ec) return false;
+			for (const auto& ent : std::filesystem::directory_iterator(fd_dir, ec)) {
+				std::error_code link_ec;
+				const auto target = std::filesystem::read_symlink(ent, link_ec);
+				if (link_ec) continue;
+				if (target.native().find("/dri/") != string::npos) return true;
+			}
+			return false;
+		}
+
+		//? Snapshot per-client DRM engine counters for this PCI device.
+		//? Same source as radeontop-style fdinfo sampling: /proc/<pid>/fdinfo drm-engine-*.
+		//? Each /proc error is ignored so one dead pid cannot abort the whole walk.
+		static std::unordered_map<string, std::unordered_map<string, uint64_t>>
+		fdinfo_snapshot(const string& pci_slot) {
+			std::unordered_map<string, std::unordered_map<string, uint64_t>> clients;
+			if (pci_slot.empty()) return clients;
+			std::error_code walk_ec;
+			for (const auto& proc : std::filesystem::directory_iterator("/proc", walk_ec)) {
+				std::error_code ec;
+				if (not proc.is_directory(ec) or ec) continue;
 				const string pid = proc.path().filename().string();
 				if (pid.empty() or not rng::all_of(pid, [](char c) { return c >= '0' and c <= '9'; })) continue;
+				if (not pid_has_dri_fd(proc.path())) continue;
 				const auto fdinfo_dir = proc.path() / "fdinfo";
 				if (not std::filesystem::is_directory(fdinfo_dir, ec) or ec) continue;
-				for (const auto& fd : std::filesystem::directory_iterator(fdinfo_dir, ec)) {
-					if (ec or not fd.is_regular_file(ec) or ec) continue;
+				std::error_code fd_walk_ec;
+				for (const auto& fd : std::filesystem::directory_iterator(fdinfo_dir, fd_walk_ec)) {
 					ifstream file(fd.path());
 					if (not file) continue;
 					string line, client;
 					bool match_pdev = false;
-					uint64_t best_ns = 0;
+					std::unordered_map<string, uint64_t> engines;
 					while (getline(file, line)) {
 						if (line.starts_with("drm-pdev:")) {
 							match_pdev = line.find(pci_slot) != string::npos;
@@ -2092,29 +2118,56 @@ namespace Gpu {
 						else if (line.starts_with("drm-client-id:")) {
 							const auto colon = line.find(':');
 							client = (colon == string::npos) ? "" : line.substr(colon + 1);
+							const auto first = client.find_first_not_of(" \t");
+							client = (first == string::npos) ? "" : client.substr(first);
 						}
-						else if (line.starts_with("drm-engine-gfx:")
-								or line.starts_with("drm-engine-compute:")
-								or line.starts_with("drm-engine-render:")
-								or line.starts_with("drm-engine-gpu:")) {
+						else if (is_drm_engine_line(line)) {
 							const auto colon = line.find(':');
 							if (colon == string::npos) continue;
+							const string engine_name = line.substr(0, colon);
 							const char* first = line.c_str() + colon + 1;
 							while (*first == ' ' or *first == '\t') ++first;
 							uint64_t ns = 0;
-							if (std::from_chars(first, line.c_str() + line.size(), ns).ec == std::errc{})
-								best_ns = max(best_ns, ns);
+							if (std::from_chars(first, line.c_str() + line.size(), ns).ec == std::errc{}) {
+								auto& slot = engines[engine_name];
+								if (ns > slot) slot = ns;
+							}
 						}
 					}
-					if (not match_pdev or best_ns == 0) continue;
-					const string key = pid + ':' + client;
-					auto& slot = clients[key];
-					if (best_ns > slot) slot = best_ns;
+					if (not match_pdev or engines.empty()) continue;
+					auto& dest = clients[fmt::format("{}:{}", pid, client)];
+					for (const auto& [name, ns] : engines) {
+						auto& slot = dest[name];
+						if (ns > slot) slot = ns;
+					}
 				}
 			}
-			uint64_t total = 0;
-			for (const auto& [_, ns] : clients) total += ns;
-			return total;
+			return clients;
+		}
+
+		static long long fdinfo_busy_percent(
+			const std::unordered_map<string, std::unordered_map<string, uint64_t>>& first,
+			const std::unordered_map<string, std::unordered_map<string, uint64_t>>& second,
+			long long dt_us) {
+			if (dt_us <= 0) return 0;
+			std::unordered_map<string, uint64_t> before, after;
+			for (const auto& [key, engines] : second) {
+				const auto it = first.find(key);
+				if (it == first.end()) continue;
+				for (const auto& [name, later] : engines) {
+					const auto prev = it->second.find(name);
+					if (prev == it->second.end() or later < prev->second) continue;
+					after[name] += later;
+					before[name] += prev->second;
+				}
+			}
+			double best = 0.0;
+			const double dt_ns = (double)dt_us * 1000.0;
+			for (const auto& [name, later] : after) {
+				const double pct = (double)(later - before[name]) * 100.0 / dt_ns;
+				if (pct > best) best = pct;
+			}
+			return std::clamp((long long)std::round(best), 0LL, 100LL);
 		}
 
 		//? Match /sys/class/drm/cardN (no '-', all digits after "card"). Skips card1-DP-1, renderD*, etc.
@@ -2264,14 +2317,12 @@ namespace Gpu {
 						std::clamp(read_ll(d.device / "gpu_busy_percent"), 0LL, 100LL));
 				}
 				else if (d.has_fdinfo) {
-					const uint64_t engine_ns = fdinfo_engine_ns(d.pci_slot);
+					auto snap = fdinfo_snapshot(d.pci_slot);
 					const long long now_us = get_monotonicTimeUSec();
 					long long pct = 0;
-					if (d.prev_t_us > 0 and now_us > d.prev_t_us and engine_ns >= d.prev_engine_ns) {
-						const double dt_ns = (double)(now_us - d.prev_t_us) * 1000.0;
-						pct = std::clamp((long long)std::round((double)(engine_ns - d.prev_engine_ns) * 100.0 / dt_ns), 0LL, 100LL);
-					}
-					d.prev_engine_ns = engine_ns;
+					if (d.prev_t_us > 0 and now_us > d.prev_t_us)
+						pct = fdinfo_busy_percent(d.prev_fdinfo, snap, now_us - d.prev_t_us);
+					d.prev_fdinfo = std::move(snap);
 					d.prev_t_us = now_us;
 					gpu.gpu_percent.at("gpu-totals").push_back(pct);
 				}
