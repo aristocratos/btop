@@ -107,6 +107,25 @@ namespace Cpu {
 		return result;
 	}
 
+	float SMCConnection::getSMCFloat(char *key) {
+		SMCVal_t val;
+		kern_return_t result = SMCReadKey(key, &val);
+		if (result == kIOReturnSuccess and val.dataSize == sizeof(float)) {
+			if (strcmp(val.dataType, DATATYPE_FLT) == 0) {
+				// the key holds a plain IEEE-754 single in host byte order
+				float value;
+				memcpy(&value, val.bytes, sizeof(value));
+				return value;
+			}
+		}
+		return -1.0f;
+	}
+
+	float SMCConnection::getSystemPower() {
+		char key[] = SMC_KEY_SYSTEM_TOTAL_POWER;
+		return getSMCFloat(key);
+	}
+
 	kern_return_t SMCConnection::SMCReadKey(UInt32Char_t key, SMCVal_t *val) {
 		kern_return_t result;
 		SMCKeyData_t inputStructure;

@@ -978,7 +978,9 @@ namespace Cpu {
 
 		uint32_t percent = -1;
 		long seconds = -1;
+		float watts = -1;
 		string status = "discharging";
+		bool on_battery = false;
 		IOPSInfo_Wrap ps_info{};
 		if (ps_info()) {
 			IOPSList_Wrap one_ps_descriptor(ps_info());
@@ -996,6 +998,8 @@ namespace Cpu {
 					if (charge) {
 						CFNumberGetValue(charge, kCFNumberSInt32Type, &percent);
 					}
+					CFStringRef power_state = (CFStringRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSPowerSourceStateKey));
+					on_battery = power_state and CFStringCompare(power_state, CFSTR(kIOPSBatteryPowerValue), 0) == kCFCompareEqualTo;
 					CFBooleanRef charging = (CFBooleanRef)CFDictionaryGetValue(one_ps, CFSTR(kIOPSIsChargingKey));
 					if (charging) {
 						bool isCharging = CFBooleanGetValue(charging);
@@ -1013,7 +1017,22 @@ namespace Cpu {
 				has_battery = false;
 			}
 		}
-		return {percent, -1, seconds, status};
+
+		//? Get power draw, only while running on battery. The SMC reports total system
+		//? power, which is what the battery is being drained at when nothing else feeds it.
+		if (on_battery) {
+			try {
+				SMCConnection smcCon;
+				const float power = smcCon.getSystemPower();
+				if (std::isfinite(power) and power >= 0.0f) {
+					watts = power;
+				}
+			} catch (std::runtime_error &e) {
+				Logger::debug("SMC system power unavailable: {}", e.what());
+			}
+		}
+
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
