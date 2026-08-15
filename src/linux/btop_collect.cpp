@@ -19,6 +19,7 @@ tab-size = 4
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -304,10 +305,14 @@ namespace Gpu {
 			std::filesystem::path hwmon;
 			std::filesystem::path power;            //? empty if no power sensor
 			uint32_t pci_device_id;
+			string pci_slot;                        //? "0000:01:00.0", matches drm-pdev
 			bool has_temp;
 			bool has_freq;
 			bool has_busy;
+			bool has_fdinfo;
 			bool has_vram;
+			uint64_t prev_engine_ns = 0;
+			long long prev_t_us = 0;
 		};
 
 		bool initialized = false;
@@ -2036,6 +2041,82 @@ namespace Gpu {
 			}
 		}
 
+		//? exists() is not enough: Cyan Skillfish / BC-250 exports gpu_busy_percent but
+		//? read() returns ENOTSUPP, and some APUs leave the node as an empty file.
+		static bool readable_sysfs_ll(const std::filesystem::path& path) {
+			ifstream file(path);
+			if (not file) return false;
+			long long value{};
+			file >> value;
+			return bool(file);
+		}
+
+		static string pci_slot_from_device(const std::filesystem::path& device) {
+			//? Do not use readfile() here — it strips newlines, so the next uevent key
+			//? would be glued onto the slot string (PCI_SLOT_NAME=0000:01:00.0MODALIAS=...).
+			ifstream file(device / "uevent");
+			string line;
+			static constexpr string_view key = "PCI_SLOT_NAME=";
+			while (getline(file, line)) {
+				if (line.starts_with(key)) return line.substr(key.size());
+			}
+			std::error_code ec;
+			const auto real = std::filesystem::canonical(device, ec);
+			if (not ec) return real.filename().string();
+			return {};
+		}
+
+		//? Sum per-client DRM engine time for this PCI device. Used when gpu_busy_percent
+		//? is missing or unreadable (same signal nvtop/btop-on-Intel already lean on).
+		static uint64_t fdinfo_engine_ns(const string& pci_slot) {
+			if (pci_slot.empty()) return 0;
+			std::unordered_map<string, uint64_t> clients;
+			std::error_code ec;
+			for (const auto& proc : std::filesystem::directory_iterator("/proc", ec)) {
+				if (ec or not proc.is_directory(ec) or ec) continue;
+				const string pid = proc.path().filename().string();
+				if (pid.empty() or not rng::all_of(pid, [](char c) { return c >= '0' and c <= '9'; })) continue;
+				const auto fdinfo_dir = proc.path() / "fdinfo";
+				if (not std::filesystem::is_directory(fdinfo_dir, ec) or ec) continue;
+				for (const auto& fd : std::filesystem::directory_iterator(fdinfo_dir, ec)) {
+					if (ec or not fd.is_regular_file(ec) or ec) continue;
+					ifstream file(fd.path());
+					if (not file) continue;
+					string line, client;
+					bool match_pdev = false;
+					uint64_t best_ns = 0;
+					while (getline(file, line)) {
+						if (line.starts_with("drm-pdev:")) {
+							match_pdev = line.find(pci_slot) != string::npos;
+						}
+						else if (line.starts_with("drm-client-id:")) {
+							const auto colon = line.find(':');
+							client = (colon == string::npos) ? "" : line.substr(colon + 1);
+						}
+						else if (line.starts_with("drm-engine-gfx:")
+								or line.starts_with("drm-engine-compute:")
+								or line.starts_with("drm-engine-render:")
+								or line.starts_with("drm-engine-gpu:")) {
+							const auto colon = line.find(':');
+							if (colon == string::npos) continue;
+							const char* first = line.c_str() + colon + 1;
+							while (*first == ' ' or *first == '\t') ++first;
+							uint64_t ns = 0;
+							if (std::from_chars(first, line.c_str() + line.size(), ns).ec == std::errc{})
+								best_ns = max(best_ns, ns);
+						}
+					}
+					if (not match_pdev or best_ns == 0) continue;
+					const string key = pid + ':' + client;
+					auto& slot = clients[key];
+					if (best_ns > slot) slot = best_ns;
+				}
+			}
+			uint64_t total = 0;
+			for (const auto& [_, ns] : clients) total += ns;
+			return total;
+		}
+
 		//? Match /sys/class/drm/cardN (no '-', all digits after "card"). Skips card1-DP-1, renderD*, etc.
 		static bool is_card_node(const string& fname) {
 			if (not fname.starts_with("card") or fname.size() <= 4) return false;
@@ -2094,8 +2175,10 @@ namespace Gpu {
 					d.pci_device_id = 0;
 				}
 				d.hwmon = find_hwmon(device_link);
+				d.pci_slot = pci_slot_from_device(device_link);
 
-				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
+				d.has_busy = readable_sysfs_ll(device_link / "gpu_busy_percent");
+				d.has_fdinfo = not d.has_busy and not d.pci_slot.empty();
 				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
 
 				if (not d.hwmon.empty()) {
@@ -2111,7 +2194,7 @@ namespace Gpu {
 				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
 				//? or driver states where nothing useful is exposed yet. Otherwise btop would
 				//? render an empty GPU entry every tick.
-				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
+				if (not (d.has_busy or d.has_fdinfo or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
 					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
 					continue;
 				}
@@ -2134,6 +2217,10 @@ namespace Gpu {
 
 			initialized = true;
 			Logger::info("Using amdgpu sysfs for {} AMD GPU(s)", device_count);
+			for (const auto& d : devices) {
+				if (d.has_fdinfo)
+					Logger::info("amdgpu sysfs: {} using DRM fdinfo for load (gpu_busy_percent unreadable)", d.pci_slot);
+			}
 			Asysfs::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
 			return true;
 		}
@@ -2151,11 +2238,11 @@ namespace Gpu {
 
 			for (uint32_t i = 0; i < device_count; ++i) {
 				gpu_info& gpu = gpus_slice[i];
-				const device_paths& d = devices[i];
+				device_paths& d = devices[i];
 
 				if constexpr (is_init) {
 					gpu.supported_functions = {
-						.gpu_utilization = d.has_busy,
+						.gpu_utilization = d.has_busy or d.has_fdinfo,
 						.mem_utilization = false,
 						.gpu_clock = d.has_freq,
 						.mem_clock = false, //? only DPM table is exposed via pp_dpm_mclk, not the current frequency
@@ -2175,6 +2262,18 @@ namespace Gpu {
 				if (d.has_busy) {
 					gpu.gpu_percent.at("gpu-totals").push_back(
 						std::clamp(read_ll(d.device / "gpu_busy_percent"), 0LL, 100LL));
+				}
+				else if (d.has_fdinfo) {
+					const uint64_t engine_ns = fdinfo_engine_ns(d.pci_slot);
+					const long long now_us = get_monotonicTimeUSec();
+					long long pct = 0;
+					if (d.prev_t_us > 0 and now_us > d.prev_t_us and engine_ns >= d.prev_engine_ns) {
+						const double dt_ns = (double)(now_us - d.prev_t_us) * 1000.0;
+						pct = std::clamp((long long)std::round((double)(engine_ns - d.prev_engine_ns) * 100.0 / dt_ns), 0LL, 100LL);
+					}
+					d.prev_engine_ns = engine_ns;
+					d.prev_t_us = now_us;
+					gpu.gpu_percent.at("gpu-totals").push_back(pct);
 				}
 
 				if (d.has_temp) {
