@@ -973,6 +973,40 @@ namespace Cpu {
 		~IOPSList_Wrap() { CFRelease(data); }
 	};
 
+	//? Read power draw from the battery's own gauge. Unlike the SMC this also works on
+	//? Intel Macs and while charging, but AppleSmartBatteryManager only refreshes it
+	//? about once a minute, so it is used as a fallback rather than the primary source.
+	auto get_battery_watts_iokit() -> float {
+		//? matching dictionary ownership is consumed by IOServiceGetMatchingService
+		IORef battery(IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery")));
+		if (not battery.get()) return -1;
+
+		CFMutableDictionaryRef props_raw = nullptr;
+		if (IORegistryEntryCreateCFProperties(battery, &props_raw, kCFAllocatorDefault, 0) != kIOReturnSuccess or not props_raw)
+			return -1;
+		CFRef<CFMutableDictionaryRef> props(props_raw);
+
+		CFNumberRef amperage_ref = (CFNumberRef)CFDictionaryGetValue(props, CFSTR("InstantAmperage"));
+		if (not amperage_ref) amperage_ref = (CFNumberRef)CFDictionaryGetValue(props, CFSTR("Amperage"));
+		CFNumberRef voltage_ref = (CFNumberRef)CFDictionaryGetValue(props, CFSTR("Voltage"));
+		if (not amperage_ref or not voltage_ref) return -1;
+
+		long long amperage = 0, voltage = 0;
+		CFNumberGetValue(amperage_ref, kCFNumberLongLongType, &amperage);
+		CFNumberGetValue(voltage_ref, kCFNumberLongLongType, &voltage);
+
+		//? mA * mV gives uW. The sign of the current only says which way the charge is
+		//? flowing, and the drawing code has the charging status already.
+		const double watts = std::abs(static_cast<double>(amperage) * static_cast<double>(voltage)) / 1'000'000.0;
+
+		//? rdar://15394253 has the gauge sign extending the current to 16 bits instead of
+		//? 64, which turns a small drain into a reading of around 65000 mA. Nothing with a
+		//? laptop battery draws hundreds of watts, so discard rather than display that.
+		if (watts > 200.0) return -1;
+
+		return static_cast<float>(watts);
+	}
+
 	auto get_battery() -> tuple<int, float, long, string> {
 		if (not has_battery) return {0, 0, 0, ""};
 
@@ -1023,8 +1057,10 @@ namespace Cpu {
 			}
 		}
 
-		//? Get power draw, only while running on battery. The SMC reports total system
-		//? power, which is what the battery is being drained at when nothing else feeds it.
+		//? Get power draw. Prefer the SMC while running on battery: it reports total system
+		//? power, which is what the battery is being drained at when nothing else feeds the
+		//? machine, and it updates every refresh. On AC, or where the SMC key is missing,
+		//? fall back to the battery gauge.
 		if (on_battery) {
 			try {
 				SMCConnection smcCon;
@@ -1035,6 +1071,9 @@ namespace Cpu {
 			} catch (std::runtime_error &e) {
 				Logger::debug("SMC system power unavailable: {}", e.what());
 			}
+		}
+		if (watts < 0) {
+			watts = get_battery_watts_iokit();
 		}
 
 		return {percent, watts, seconds, status};
