@@ -1262,11 +1262,14 @@ namespace Mem {
 
 			//? Mem graphs and meters
 			for (const auto& name : mem_names) {
+				if (name == "compressed" and not has_compressed) continue;
+				//? No compressed_start/_mid/_end theme colors exist, borrow the "used" gradient like the swap rows do
+				const string& gradient = (name == "compressed" ? "used"s : name);
 
 				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, safeVal(mem.percent, name), graph_symbol};
+					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, gradient, safeVal(mem.percent, name), graph_symbol};
 				else
-					mem_meters[name] = Draw::Meter{mem_meter, name};
+					mem_meters[name] = Draw::Meter{mem_meter, gradient};
 			}
 			if (show_swap and has_swap) {
 				for (const auto& name : swap_names) {
@@ -1350,7 +1353,11 @@ namespace Mem {
 		bool big_mem = mem_width > 21;
 
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
-		vector<string> comb_names (mem_names.begin(), mem_names.end());
+		vector<string> comb_names;
+		for (const auto& name : mem_names) {
+			if (name == "compressed" and not has_compressed) continue;
+			comb_names.push_back(name);
+		}
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
 		for (const auto& name : comb_names) {
 			if (cy > height - 4) break;
@@ -2461,7 +2468,8 @@ namespace Draw {
 			else
 				mem_width = width - 1;
 
-			item_height = has_swap and not swap_disk ? 6 : 4;
+			//? One row per drawn mem_name plus the swap rows when shown here
+			item_height = (has_compressed ? 5 : 4) + (has_swap and not swap_disk ? 2 : 0);
 			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)
