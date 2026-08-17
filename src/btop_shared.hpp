@@ -266,7 +266,9 @@ namespace Mem {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool has_swap, shown, redraw;
-	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
+	//? Set by collectors on platforms with a compressed memory pool, "compressed" row is skipped when false
+	inline bool has_compressed = false;
+	const array mem_names { "used"s, "compressed"s, "available"s, "cached"s, "free"s };
 	const array swap_names { "swap_used"s, "swap_free"s };
 	extern int disk_ios;
 
@@ -289,10 +291,10 @@ namespace Mem {
 
 	struct mem_info {
 		std::unordered_map<string, uint64_t> stats =
-			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
+			{{"used", 0}, {"compressed", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
 		std::unordered_map<string, deque<long long>> percent =
-			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
+			{{"used", {}}, {"compressed", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
