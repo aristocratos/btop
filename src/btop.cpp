@@ -861,13 +861,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	{
 		const auto config_dir = Config::get_config_dir();
-		if (config_dir.has_value()) {
+
+		if (cli.config_file.has_value()) {
+			Config::conf_file = cli.config_file.value();
+		} else if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
-			if (cli.config_file.has_value()) {
-				Config::conf_file = cli.config_file.value();
-			} else {
-				Config::conf_file = Config::conf_dir / "btop.conf";
-			}
+			Config::conf_file = Config::conf_dir / "btop.conf";
 
 			auto log_file = Config::get_log_file();
 			if (log_file.has_value()) {
