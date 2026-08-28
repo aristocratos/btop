@@ -18,6 +18,9 @@ tab-size = 4
 
 #ifdef __APPLE__
 #include <Availability.h>
+#include <algorithm>
+#include <bit>
+#include <cstring>
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
@@ -1530,11 +1533,19 @@ namespace Net {
 						next += ifm->ifm_msglen;
 						if (ifm->ifm_type == RTM_IFINFO2) {
 							struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
+							// sysctl() 返回的缓冲区仅保证 4 字节对齐，直接解引用
+							// if_msghdr2::ifm_data（含 u_int64_t 字段）属未定义行为
+							// （UBSan: misaligned address）。使用 C++20 std::bit_cast
+							// 按对象表示做位级安全拷贝（等价于同大小字节拷贝，
+							// 无对齐要求、无需类型重解释转换），
+							// 得到对齐的本地结构后再按字段访问。
+							struct if_msghdr2 if2m_aligned = std::bit_cast<struct if_msghdr2>(*if2m);
+							// sdl 仍指向 sysctl 缓冲区内的消息头之后（字段为 char/short，无对齐问题）
 							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
-							ifstats[iface] = std::tuple(if2m->ifm_data.ifi_ibytes, if2m->ifm_data.ifi_obytes);
+							ifstats[iface] = std::tuple(if2m_aligned.ifm_data.ifi_ibytes, if2m_aligned.ifm_data.ifi_obytes);
 						}
 					}
 				}
