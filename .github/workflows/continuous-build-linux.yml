@@ -61,7 +61,7 @@ jobs:
           - s390x-ibm-linux-musl
           - x86_64-unknown-linux-musl
     env:
-      RELEASE: "20260515"
+      RELEASE: "20260823"
       TOOLCHAIN: "${{ matrix.toolchain }}"
 
     steps:
