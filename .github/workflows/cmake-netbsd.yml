@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile
-        uses: vmactions/netbsd-vm@00081e82b14bc40114eb97f32b4455306828516b # v1.4.6
+        uses: vmactions/netbsd-vm@6334c835de4c04a59fe59f0f8f071e02a2f0bab3 # v1.4.7
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
