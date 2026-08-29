@@ -1452,6 +1452,17 @@ namespace Net {
 		auto operator()() -> struct ifaddrs * { return ifaddr; }
 	};
 
+	// 对齐安全地读取 sysctl 网络接口消息中的字节计数对。
+	// sysctl(NET_RT_IFLIST2) 返回的缓冲区仅保证 4 字节对齐，而 ifm_data 的
+	// ifi_ibytes/ifi_obytes（u_int64_t）要求 8 字节对齐——直接解引用属未定义行为
+	// （UBSan: misaligned address）。使用 C++20 std::bit_cast 按对象表示做位级
+	// 安全拷贝（等价于同大小字节拷贝，无对齐要求），得到对齐的本地结构后再
+	// 按字段访问。
+	std::tuple<uint64_t, uint64_t> read_ifstats_pair(const struct if_msghdr2 *if2m) {
+		const struct if_msghdr2 if2m_aligned = std::bit_cast<struct if_msghdr2>(*if2m);
+		return { if2m_aligned.ifm_data.ifi_ibytes, if2m_aligned.ifm_data.ifi_obytes };
+	}
+
 	auto collect(bool no_update) -> net_info & {
 		// Lock mutex to prevent concurrent interface access during USB device changes
 		std::lock_guard<std::mutex> lock(Mem::interface_mutex);
@@ -1533,19 +1544,12 @@ namespace Net {
 						next += ifm->ifm_msglen;
 						if (ifm->ifm_type == RTM_IFINFO2) {
 							struct if_msghdr2 *if2m = (struct if_msghdr2 *)ifm;
-							// sysctl() 返回的缓冲区仅保证 4 字节对齐，直接解引用
-							// if_msghdr2::ifm_data（含 u_int64_t 字段）属未定义行为
-							// （UBSan: misaligned address）。使用 C++20 std::bit_cast
-							// 按对象表示做位级安全拷贝（等价于同大小字节拷贝，
-							// 无对齐要求、无需类型重解释转换），
-							// 得到对齐的本地结构后再按字段访问。
-							struct if_msghdr2 if2m_aligned = std::bit_cast<struct if_msghdr2>(*if2m);
 							// sdl 仍指向 sysctl 缓冲区内的消息头之后（字段为 char/short，无对齐问题）
 							struct sockaddr_dl *sdl = (struct sockaddr_dl *)(if2m + 1);
 							char iface[32];
 							strncpy(iface, sdl->sdl_data, sdl->sdl_nlen);
 							iface[sdl->sdl_nlen] = 0;
-							ifstats[iface] = std::tuple(if2m_aligned.ifm_data.ifi_ibytes, if2m_aligned.ifm_data.ifi_obytes);
+							ifstats[iface] = read_ifstats_pair(if2m);
 						}
 					}
 				}

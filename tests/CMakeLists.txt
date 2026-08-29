@@ -13,7 +13,12 @@ add_library(libbtop_test)
 target_include_directories(libbtop_test PUBLIC ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(libbtop_test libbtop GTest::gtest_main)
 
-add_executable(btop_test cpu_names.cpp tools.cpp)
+set(BTOP_TEST_SOURCES cpu_names.cpp tools.cpp)
+if(APPLE)
+	# Net::read_ifstats_pair 对齐安全回归测试（对应 osx/btop_collect.cpp 的修复）
+	list(APPEND BTOP_TEST_SOURCES btop_collect.cpp)
+endif()
+add_executable(btop_test ${BTOP_TEST_SOURCES})
 target_link_libraries(btop_test libbtop_test)
 
 include(GoogleTest)
