@@ -31,6 +31,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BTOP_STATIC "Link btop statically" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
+cmake_dependent_option(BTOP_JETSON_GPU "Enable Jetson GPU support" ON
+  "BTOP_GPU;LINUX;CMAKE_SYSTEM_PROCESSOR MATCHES aarch64|arm64" OFF)
 
 # Enable LTO in release builds by default
 if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
@@ -76,7 +78,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
 elseif(LINUX)
   target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
-  if(BTOP_GPU)
+  if(BTOP_GPU AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
     add_subdirectory(src/linux/intel_gpu_top)
   endif()
 else()
@@ -163,6 +165,12 @@ target_link_libraries(libbtop Threads::Threads)
 # Enable GPU support
 if(LINUX AND BTOP_GPU)
   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_definitions(libbtop PUBLIC INTEL_GPU_SUPPORT)
+  endif()
+  if(BTOP_JETSON_GPU)
+    target_compile_definitions(libbtop PUBLIC JETSON_GPU_SUPPORT)
+  endif()
 
   if(BTOP_RSMI_STATIC)
     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
