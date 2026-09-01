@@ -222,6 +222,7 @@ namespace Menu {
 
 	const vector<vector<vector<string>>> categories = {
 		{
+			{"@ Appearance"},
 			{"color_theme",
 				"Set color theme.",
 				"",
@@ -248,6 +249,7 @@ namespace Menu {
 				"Set to False if your terminal doesn't have",
 				"truecolor support and can't convert to",
 				"256-color."},
+			{"@ Terminal and input"},
 			{"force_tty",
 				"TTY mode.",
 				"",
@@ -267,6 +269,7 @@ namespace Menu {
 				"is accessible while holding shift."},
 			{"disable_mouse",
 				"Disable all mouse events."},
+			{"@ Layout"},
 			{"disable_presets",
 				"Disable the presets.",
 				"",
@@ -303,6 +306,21 @@ namespace Menu {
 				"Separate values with whitespace.",
 				"",
 				"Toggle between presets with key \"p\"."},
+			{"cpu_bottom",
+				"Cpu box location.",
+				"",
+				"Show cpu box at bottom of screen instead",
+				"of top."},
+			{"mem_below_net",
+				"Mem box location.",
+				"",
+				"Show mem box below net box instead of above."},
+			{"proc_left",
+				"Proc box location.",
+				"",
+				"Show proc box on left side of screen",
+				"instead of right."},
+			{"@ Runtime and rendering"},
 			{"update_ms",
 				"Update time in milliseconds.",
 				"",
@@ -324,6 +342,7 @@ namespace Menu {
 				"to reduce flickering on supported terminals.",
 				"",
 				"True or False."},
+			{"@ Graph glyphs"},
 			{"graph_symbol",
 				"Default symbols to use for graph creation.",
 				"",
@@ -341,6 +360,14 @@ namespace Menu {
 				"Note that \"tty\" only has half the horizontal",
 				"resolution of the other two,",
 				"so will show a shorter historical view."},
+			{"graph_symbol_cpu", "Graph symbol override for cpu box."},
+			{"graph_symbol_mem", "Graph symbol override for mem box."},
+			{"graph_symbol_net", "Graph symbol override for net box."},
+			{"graph_symbol_proc", "Graph symbol override for proc box."},
+		#ifdef GPU_SUPPORT
+			{"graph_symbol_gpu", "Graph symbol override for gpu box."},
+		#endif
+			{"@ Status and units"},
 			{"clock_format",
 				"Draw a clock at top of screen.",
 				"(Only visible if cpu box is enabled!)",
@@ -391,6 +418,7 @@ namespace Menu {
 				"",
 				"Show discharge power when discharging.",
 				"Show charging power when charging."},
+			{"@ Diagnostics and persistence"},
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
@@ -410,17 +438,7 @@ namespace Menu {
 				"toggling this setting on and off again."}
 		},
 		{
-			{"cpu_bottom",
-				"Cpu box location.",
-				"",
-				"Show cpu box at bottom of screen instead",
-				"of top."},
-			{"graph_symbol_cpu",
-				"Graph symbol to use for graphs in cpu box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
+			{"@ Graphs"},
 			{"cpu_graph_upper",
 				"Cpu upper graph.",
 				"",
@@ -490,6 +508,7 @@ namespace Menu {
 					"\"On\" to always show.",
 					"\"Off\" to never show."},
 		#endif
+			{"@ Temperature sensors"},
 			{"check_temp",
 				"Enable cpu temperature reporting.",
 				"",
@@ -534,6 +553,7 @@ namespace Menu {
 				"",
 				"Rankine, 0 = absolute zero, 1 degree change",
 				"equals 1 degree change in Fahrenheit."},
+			{"@ CPU status"},
 			{"show_cpu_freq",
 				"Show CPU frequency.",
 				"",
@@ -576,6 +596,7 @@ namespace Menu {
 		},
 	#ifdef GPU_SUPPORT
 		{
+			{"@ Telemetry"},
 			{"nvml_measure_pcie_speeds",
 				"Measure PCIe throughput on NVIDIA cards.",
 				"",
@@ -588,12 +609,7 @@ namespace Menu {
 				"May impact performance on certain cards.",
 				"",
 				"True or False."},
-			{"graph_symbol_gpu",
-				"Graph symbol to use for graphs in gpu box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
+			{"@ Display"},
 			{"gpu_mirror_graph",
 				"Horizontally mirror the GPU graph.",
 				"",
@@ -607,6 +623,7 @@ namespace Menu {
 				"Separate values with whitespace.",
 				"",
 				"A restart is required to apply changes."},
+			{"@ Names"},
 			{"custom_gpu_name0",
 				"Custom gpu0 model name in gpu stats box.",
 				"",
@@ -634,16 +651,7 @@ namespace Menu {
 		},
 	#endif
 		{
-			{"mem_below_net",
-				"Mem box location.",
-				"",
-				"Show mem box below net box instead of above."},
-			{"graph_symbol_mem",
-				"Graph symbol to use for graphs in mem box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
+			{"@ Memory and swap"},
 			{"mem_graphs",
 				"Show graphs for memory values.",
 				"",
@@ -652,6 +660,7 @@ namespace Menu {
 				"Split memory box to also show disks.",
 				"",
 				"True or False."},
+			{"@ I/O graphs"},
 			{"show_io_stat",
 				"Toggle IO activity graphs.",
 				"",
@@ -692,6 +701,7 @@ namespace Menu {
 				"",
 				"Ignores show_swap value above.",
 				"Inserts itself after first disk."},
+			{"@ Disk selection"},
 			{"only_physical",
 				"Filter out non physical disks.",
 				"",
@@ -747,12 +757,7 @@ namespace Menu {
 				"True or False."},
 		},
 		{
-			{"graph_symbol_net",
-				"Graph symbol to use for graphs in net box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
+			{"@ Graphs and scale"},
 			{"swap_upload_download",
 				"Swap the positions of the upload and download",
 				"graphs.",
@@ -785,6 +790,7 @@ namespace Menu {
 				"whichever currently has the highest scale.",
 				"",
 				"True or False."},
+			{"@ Interface and units"},
 			{"net_iface",
 				"Network Interface.",
 				"",
@@ -805,17 +811,7 @@ namespace Menu {
 			    "True, False, or Auto",},
 		},
 		{
-			{"proc_left",
-				"Proc box location.",
-				"",
-				"Show proc box on left side of screen",
-				"instead of right."},
-			{"graph_symbol_proc",
-				"Graph symbol to use for graphs in proc box.",
-				"",
-				"\"default\", \"braille\", \"block\" or \"tty\".",
-				"",
-				"\"default\" for the general default symbol.",},
+			{"@ Order and tree"},
 			{"proc_sorting",
 				"Processes sorting option.",
 				"",
@@ -837,6 +833,13 @@ namespace Menu {
 				"Set true to show processes grouped by",
 				"parents with lines drawn between parent",
 				"and child process."},
+			{"proc_tree_persist_state",
+				"Remember manual tree expansion.",
+				"",
+				"Save manual expand/collapse choices across",
+				"btop runs using process-name ancestry.",
+				"",
+				"PIDs are not saved because they change."},
 			{"proc_aggregate",
 				"Aggregate child's resources in parent.",
 				"",
@@ -856,6 +859,7 @@ namespace Menu {
 				"",
 				"Min value: 0",
 				"Max value: 10000"},
+			{"@ Rows and selection"},
 			{"proc_colors",
 				"Enable colors in process view.",
 				"",
@@ -905,6 +909,10 @@ namespace Menu {
 				"and stop following the process."},
 		}
 	};
+
+	[[nodiscard]] auto is_section_header(const vector<string>& item) -> bool {
+		return item.size() == 1 and item.front().starts_with('@');
+	}
 
 	msgBox::msgBox() {}
 	msgBox::msgBox(int width, int boxtype, const vector<string>& content, const std::string_view title)
@@ -1336,6 +1344,16 @@ static int optionsMenu(const string& key) {
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
 		#endif
 		};
+		auto select_next_option = [&](const int direction) {
+			const int option_count = categories[selected_cat].size();
+			int option_index = item_height * page + selected;
+			for (int attempts = 0; attempts < option_count; attempts++) {
+				option_index = (option_index + direction + option_count) % option_count;
+				if (not is_section_header(categories[selected_cat][option_index])) break;
+			}
+			page = option_index / item_height;
+			selected = option_index % item_height;
+		};
 		auto tty_mode = Config::getB("tty_mode");
 		auto vim_keys = Config::getB("vim_keys");
 		if (max_items == 0) {
@@ -1439,19 +1457,10 @@ static int optionsMenu(const string& key) {
 			return Closed;
 		}
 		else if (is_in(key, "down", "mouse_scroll_down") or (vim_keys and key == "j")) {
-			if (++selected > select_max or selected >= item_height) {
-				if (page < pages - 1) page++;
-				else if (pages > 1) page = 0;
-				selected = 0;
-			}
+			select_next_option(1);
 		}
 		else if (is_in(key, "up", "mouse_scroll_up") or (vim_keys and key == "k")) {
-			if (--selected < 0) {
-				if (page > 0) page--;
-				else if (pages > 1) page = pages - 1;
-
-				selected = item_height - 1;
-			}
+			select_next_option(-1);
 		}
 		else if (pages > 1 and key == "page_down") {
 			if (++page >= pages) page = 0;
@@ -1600,6 +1609,13 @@ static int optionsMenu(const string& key) {
 			if (selected > select_max) {
 				selected = select_max;
 			}
+			int selected_index = item_height * page + selected;
+			for (int attempts = 0; attempts < (int)categories[selected_cat].size() and is_section_header(categories[selected_cat][selected_index]); attempts++) {
+				selected_index = (selected_index + 1) % categories[selected_cat].size();
+			}
+			page = selected_index / item_height;
+			selected = selected_index % item_height;
+			select_max = min(item_height - 1, (int)categories[selected_cat].size() - 1 - item_height * page);
 
 			//? Get variable properties for currently selected option
 			selPred.reset();
@@ -1658,6 +1674,11 @@ static int optionsMenu(const string& key) {
 			//? Option name and value
 			auto cy = y+9;
 			for (int c = 0, i = max(0, item_height * page); c++ < item_height and i < (int)categories[selected_cat].size(); i++) {
+				if (is_section_header(categories[selected_cat][i])) {
+					out += Mv::to(cy++, x + 2) + Theme::c("hi_fg") + Fx::b + uresize(categories[selected_cat][i][0].substr(1), 27) + Fx::ub;
+					cy++;
+					continue;
+				}
 				const auto& option = categories[selected_cat][i][0];
 				const auto& value = (option == "color_theme" ? fs::path(Config::getS("color_theme")).stem().string() : Config::getAsString(option));
 
