@@ -198,8 +198,9 @@ namespace Config {
 
 		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
-		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
-									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
+		{"disks_filter", 		"#* Optional filter for shown disks, matches full mountpoint paths and supports shell-style wildcards (*, ? and [c-e]). Separate multiple values with whitespace \" \".\n"
+									"#* '*' matches path separators. Prefix wildcard characters with '\\' to match them literally.\n"
+									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disks_filter=\"/boot /home/*\", disks_filter=\"exclude=/mnt/[c-e]* /run/media/*\""},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
