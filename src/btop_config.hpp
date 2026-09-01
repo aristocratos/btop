@@ -56,6 +56,7 @@ namespace Config {
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
 	extern const vector<string> disable_preset_options;
+	extern const vector<string> mem_metrics_values;
 	extern vector<string> available_batteries;
 	extern std::optional<int> current_preset;
 
