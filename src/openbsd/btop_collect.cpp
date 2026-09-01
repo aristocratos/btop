@@ -62,6 +62,7 @@ tab-size = 4
 #include <regex>
 #include <string>
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 
 #include <fmt/format.h>
@@ -592,8 +593,6 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		u_int memActive, memWire, cachedMem;
-		// u_int freeMem;
 		size_t size;
 		static int uvmexp_mib[] = {CTL_VM, VM_UVMEXP};
 		static int bcstats_mib[] = {CTL_VFS, VFS_GENERIC, VFS_BCACHESTAT};
@@ -609,32 +608,33 @@ namespace Mem {
 			Logger::error("sysctl failed");
 			bzero(&bcstats, sizeof(bcstats));
 		}
-		memActive = uvmexp.active * Shared::pageSize;
-		memWire = uvmexp.wired;
-		// freeMem = uvmexp.free * Shared::pageSize;
-		cachedMem = bcstats.numbufpages * Shared::pageSize;
-		mem.stats.at("used") = memActive;
-		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-   		mem.stats.at("cached") = cachedMem;
-  		mem.stats.at("free") = Shared::totalMem - memActive - memWire;
+		const uint64_t pageSize = static_cast<uint64_t>(Shared::pageSize);
+		const uint64_t memCache = static_cast<uint64_t>(bcstats.numbufpages + uvmexp.percpucaches +
+			uvmexp.vnodepages + uvmexp.vtextpages) * pageSize;
+		const uint64_t memUsed = static_cast<uint64_t>(uvmexp.active + uvmexp.wired) * pageSize;
+		const uint64_t memFree = static_cast<uint64_t>(uvmexp.free) * pageSize;
+		const uint64_t memReserve = static_cast<uint64_t>(uvmexp.reserve_pagedaemon + uvmexp.reserve_kernel +
+			uvmexp.freemin + uvmexp.anonmin + uvmexp.vtextmin + uvmexp.vnodemin) * pageSize;
 
-		if (show_swap) {
-			int total = uvmexp.swpages * Shared::pageSize;
-			mem.stats.at("swap_total") = total;
-			int swapped = uvmexp.swpgonly * Shared::pageSize;
-			mem.stats.at("swap_used") = swapped;
-			mem.stats.at("swap_free") = total - swapped;
-		}
+		mem.stats.at("used") = memUsed;
+		mem.stats.at("available") = memFree + memCache - memReserve;
+		mem.stats.at("cached") = memCache;
+		mem.stats.at("free") = memFree;
 
-		if (show_swap and mem.stats.at("swap_total") > 0) {
+		const uint64_t total = static_cast<uint64_t>(uvmexp.swpages) * static_cast<uint64_t>(Shared::pageSize);
+		const uint64_t used = static_cast<uint64_t>(uvmexp.swpginuse) * static_cast<uint64_t>(Shared::pageSize);
+		mem.stats.at("swap_total") = total;
+		mem.stats.at("swap_used") = used;
+		mem.stats.at("swap_free") = total >= used ? total - used : 0;
+
+		if ((show_swap or swap_disk) and total > 0) {
 			for (const auto &name : swap_names) {
-				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
+				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / total));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2))
 					mem.percent.at(name).pop_front();
 			}
-			has_swap = true;
-		} else
-			has_swap = false;
+		}
+		has_swap = (show_swap or swap_disk) and total > 0;
 		//? Calculate percentages
 		for (const auto &name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / Shared::totalMem));
@@ -985,6 +985,7 @@ namespace Proc {
 	std::unordered_map<string, string> uid_user;
 	string current_sort;
 	string current_filter;
+	bool current_filter_kernel = false;
 	bool current_rev = false;
 	bool is_tree_mode;
 
@@ -1066,6 +1067,11 @@ namespace Proc {
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
 		bool sorted_change = (sorting != current_sort or reverse != current_rev or should_filter);
+
+		const auto filter_kernel = Config::getB("proc_filter_kernel");
+		const bool kernel_filter_change = current_filter_kernel != filter_kernel;
+		if (kernel_filter_change) current_filter_kernel = filter_kernel;
+
 		bool tree_mode_change = tree != is_tree_mode;
 		if (sorted_change) {
 			current_sort = sorting;
@@ -1079,7 +1085,7 @@ namespace Proc {
 		static vector<size_t> found;
 
 		//* Use pids from last update if only changing filter, sorting or tree options
-		if (no_update and not current_procs.empty()) {
+		if (no_update and not current_procs.empty() and not kernel_filter_change) {
 			if (show_detailed and detailed_pid != detailed.last_pid) _collect_details(detailed_pid, current_procs);
 		} else {
 			//* ---------------------------------------------Collection start----------------------------------------------
@@ -1093,12 +1099,24 @@ namespace Proc {
 			int count = 0;
 			char buf[_POSIX2_LINE_MAX];
 			Shared::KvmPtr kd {kvm_openfiles(nullptr, nullptr, nullptr, KVM_NO_FILES, buf)};
-			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get() , KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &count);
+			const int proc_op = filter_kernel ? KERN_PROC_ALL : KERN_PROC_KTHREAD;
+			const struct kinfo_proc* kprocs = kvm_getprocs(kd.get(), proc_op | KERN_PROC_SHOW_THREADS, 0, sizeof(struct kinfo_proc), &count);
+
+			// OpenBSD returns one aggregate record per process and one record for
+			// each thread when KERN_PROC_SHOW_THREADS is requested. Count the
+			// thread records first, then only use aggregate records as btop rows.
+			std::unordered_map<size_t, size_t> thread_counts;
+			for (int i = 0; i < count; i++) {
+				const struct kinfo_proc* kproc = &kprocs[i];
+				if (kproc->p_tid != -1)
+					thread_counts[static_cast<size_t>(kproc->p_pid)]++;
+			}
 
 			for (int i = 0; i < count; i++) {
 				const struct kinfo_proc* kproc = &kprocs[i];
-				const size_t pid = (size_t)kproc->p_pid;
-				if (pid < 1) continue;
+				if (kproc->p_tid != -1) continue;
+				if (kproc->p_pid < 0) continue;
+				const size_t pid = static_cast<size_t>(kproc->p_pid);
 				found.push_back(pid);
 
 				//? Check if pid already exists in current_procs
@@ -1119,11 +1137,6 @@ namespace Proc {
 
 				//? Get program name, command, username, parent pid, nice and status
 				if (no_cache) {
-					if (string(kproc->p_comm) == "idle"s) {
-						current_procs.pop_back();
-						found.pop_back();
-						continue;
-					}
 					new_proc.name = kproc->p_comm;
 					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
@@ -1150,7 +1163,8 @@ namespace Proc {
 				cpu_t 	= kproc->p_uctime_usec * 1'000'000 + kproc->p_uctime_sec;
 
 				new_proc.mem = kproc->p_vm_rssize * Shared::pageSize;
-				new_proc.threads = 1; // can't seem to find this in kinfo_proc
+				const auto thread_count = thread_counts.find(pid);
+				new_proc.threads = thread_count != thread_counts.end() ? thread_count->second : 1;
 
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp((100.0 * kproc->p_pctcpu / Shared::kfscale) * cmult, 0.0, 100.0 * Shared::coreCount);
