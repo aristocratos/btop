@@ -317,6 +317,155 @@ namespace Gpu {
 		uint32_t device_count = 0;
 		vector<device_paths> devices;
 	}
+
+	//? DRM (Direct Rendering Manager) data collection for AMD GPUs
+	namespace Drm {
+		// GRBM register offsets (from radeontop)
+		static constexpr uint32_t GRBM_STATUS_BYTE   = 0x8010;  // byte offset
+		static constexpr uint32_t GRBM_STATUS_DWORD  = GRBM_STATUS_BYTE / 4;  // dword offset for amdgpu_read_mm_registers
+		static constexpr uint32_t GUI_ACTIVE_BIT     = 1U << 31;  // GUI active = bit 31 (like radeontop's bits.gui)
+
+		struct DeviceData {
+			int fd = -1;
+			amdgpu_device_handle amdgpu_dev{};
+			std::string drm_sysfs_name;  // e.g. "card1"
+			std::string hwmon_path;       // e.g. "/sys/class/hwmon/hwmon2"
+			uint64_t vram_total = 0;
+			uint64_t gtt_total = 0;
+			bool use_grbm = false;  // true if amdgpu_read_mm_registers works
+		};
+
+		vector<DeviceData> devices;
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+
+		// Radeontop-style auth (needed before amdgpu_device_initialize on some systems)
+		static void authenticate_drm(int fd) {
+			drm_magic_t magic;
+			if (drmGetMagic(fd, &magic) == 0)
+				drmAuthMagic(fd, magic);
+		}
+
+		// Find the render node for a given sysfs card (like radeontop's find_drm)
+		static std::string find_render_node(const std::string& sysfs_card_name) {
+			auto dev_path = fs::path("/sys/class/drm") / sysfs_card_name / "device";
+			std::string vendor_str{trim(Tools::readfile(dev_path / "vendor"))};
+			std::string device_str{trim(Tools::readfile(dev_path / "device"))};
+
+			uint32_t vendor_id = 0, device_id = 0;
+			try {
+				vendor_id = std::stoul(vendor_str, nullptr, 16);
+				device_id = std::stoul(device_str, nullptr, 16);
+			} catch (...) { return {}; }
+
+			drmDevicePtr *devs = nullptr;
+			int alloc_count = drmGetDevices2(0, nullptr, 0);
+			if (alloc_count <= 0) return {};
+
+			devs = (drmDevicePtr*)calloc(alloc_count, sizeof(drmDevicePtr));
+			if (!devs) return {};
+			int count = drmGetDevices2(0, devs, alloc_count);
+			if (count < 0) { drmFreeDevices(devs, alloc_count); free(devs); return {}; }
+
+			// Use the smaller count to avoid out-of-bounds access
+			int dev_count = std::min(count, alloc_count);
+
+			std::string render_path;
+			for (int i = 0; i < dev_count && render_path.empty(); i++) {
+				if (devs[i]->bustype != DRM_BUS_PCI) continue;
+				if (devs[i]->deviceinfo.pci->vendor_id != vendor_id) continue;
+				if (devs[i]->deviceinfo.pci->device_id != device_id) continue;
+
+				for (int j = DRM_NODE_MAX - 1; j >= 0; j--) {
+					if (!(1 << j & devs[i]->available_nodes)) continue;
+					if (devs[i]->nodes[j]) {
+						render_path = devs[i]->nodes[j];
+						break;
+					}
+				}
+			}
+			drmFreeDevices(devs, alloc_count);
+			free(devs);
+			return render_path;
+		}
+
+		// Estimate GPU load from SCLK frequency (fallback when GRBM is unavailable)
+		static long long read_gpu_load_sclk(const std::string& sysfs_name) {
+			auto sclk_path = fs::path("/sys/class/drm") / sysfs_name / "device" / "pp_dpm_sclk";
+			std::string sclk_str{trim(Tools::readfile(sclk_path))};
+			if (sclk_str.empty()) return 0;
+
+			long long min_mhz = LLONG_MAX, max_mhz = 0, current_mhz = 0;
+			std::istringstream ss(sclk_str);
+			for (string line; getline(ss, line);) {
+				auto mhz_pos = line.find("Mhz");
+				if (mhz_pos == string::npos) continue;
+				auto colon_pos = line.find(':');
+				if (colon_pos == string::npos) continue;
+				std::string freq_str{trim(line.substr(colon_pos + 1, mhz_pos - colon_pos - 1))};
+				try {
+					long long freq = std::stoll(freq_str);
+					min_mhz = std::min(min_mhz, freq);
+					max_mhz = std::max(max_mhz, freq);
+					if (line.find('*') != string::npos) current_mhz = freq;
+				} catch (...) {}
+			}
+			if (current_mhz > 0 && max_mhz > min_mhz)
+				return (current_mhz - min_mhz) * 100 / (max_mhz - min_mhz);
+			return 0;
+		}
+
+		// Read current clock frequency from pp_dpm_sclk or pp_dpm_mclk
+		static uint32_t read_current_clock(const std::string& sysfs_name, const std::string& clock_type) {
+			auto clock_path = fs::path("/sys/class/drm") / sysfs_name / "device" / clock_type;
+			std::string clock_str{trim(Tools::readfile(clock_path))};
+			if (clock_str.empty()) return 0;
+
+			uint32_t current_mhz = 0;
+			std::istringstream ss(clock_str);
+			for (string line; getline(ss, line);) {
+				if (line.find('*') != string::npos) {
+					auto mhz_pos = line.find("Mhz");
+					auto colon_pos = line.find(':');
+					if (mhz_pos != string::npos && colon_pos != string::npos) {
+						std::string freq_str{trim(line.substr(colon_pos + 1, mhz_pos - colon_pos - 1))};
+						try { current_mhz = std::stoul(freq_str); } catch (...) {}
+					}
+					break;
+				}
+			}
+			return current_mhz;
+		}
+
+		// Find hwmon path for a given DRM card
+		static std::string find_hwmon_path(const std::string& sysfs_name) {
+			auto device_path = fs::path("/sys/class/drm") / sysfs_name / "device";
+			auto hwmon_base = device_path / "hwmon";
+			if (!fs::is_directory(hwmon_base)) return {};
+
+			for (const auto& entry : fs::directory_iterator(hwmon_base)) {
+				if (entry.is_directory()) {
+					std::string hwmon_name = entry.path().filename().string();
+					if (hwmon_name.starts_with("hwmon")) {
+						return entry.path().string();
+					}
+				}
+			}
+			return {};
+		}
+
+		// Read value from hwmon file (returns value in base unit, e.g., millidegrees for temp)
+		static long long read_hwmon_value(const std::string& hwmon_path, const std::string& filename) {
+			if (hwmon_path.empty()) return 0;
+			auto file_path = fs::path(hwmon_path) / filename;
+			std::string value_str{trim(Tools::readfile(file_path))};
+			if (value_str.empty()) return 0;
+			try { return std::stoll(value_str); } catch (...) { return 0; }
+		}
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -399,6 +548,18 @@ namespace Shared {
 		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
 			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
+		}
+
+		if (shown_gpus.contains("drm")) {
+			//? If both "amd" and "drm" are enabled, prefer DRM (GRBM sampling is more accurate than RSMI on some AMD iGPUs)
+			if (Gpu::Rsmi::initialized && Gpu::Rsmi::device_count > 0) {
+				Logger::debug("DRM: Preferred over RSMI, shutting down RSMI to avoid duplicate detection");
+				Gpu::Rsmi::shutdown();
+				Gpu::gpus.erase(Gpu::gpus.begin(), Gpu::gpus.begin() + Gpu::Rsmi::device_count);
+				Gpu::gpu_names.erase(Gpu::gpu_names.begin(), Gpu::gpu_names.begin() + Gpu::Rsmi::device_count);
+				Gpu::Rsmi::device_count = 0;
+			}
+			Gpu::Drm::init();
 		}
 
 		if (shown_gpus.contains("intel")) {
@@ -2211,6 +2372,231 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	//? DRM (Direct Rendering Manager) implementation for AMD GPUs
+	namespace Drm {
+		bool init() {
+			if (initialized) return false;
+			Logger::debug("DRM: Scanning sysfs for AMD GPUs");
+
+			if (!fs::is_directory("/sys/class/drm/")) {
+				Logger::debug("DRM: /sys/class/drm/ does not exist");
+				return false;
+			}
+
+			for (const auto& entry : fs::directory_iterator("/sys/class/drm/")) {
+				std::string name = entry.path().filename().string();
+				if (!name.starts_with("card")) continue;
+				if (name.find('-') != std::string::npos) continue;
+
+				auto vendor_path = entry.path() / "device" / "vendor";
+				std::string vendor{trim(Tools::readfile(vendor_path))};
+				if (vendor != "0x1002") continue;  // Not AMD
+
+				Logger::debug("DRM: Found AMD GPU at sysfs card {}", name);
+
+				DeviceData dev;
+				dev.drm_sysfs_name = name;
+
+				// Read VRAM/GTT total from sysfs (always works)
+				auto vram_path = entry.path() / "device" / "mem_info_vram_total";
+				std::string vram_str{trim(Tools::readfile(vram_path))};
+				if (!vram_str.empty()) {
+					try { dev.vram_total = std::stoull(vram_str); }
+					catch (...) {}
+				}
+
+				auto gtt_path = entry.path() / "device" / "mem_info_gtt_total";
+				std::string gtt_str{trim(Tools::readfile(gtt_path))};
+				if (!gtt_str.empty()) {
+					try { dev.gtt_total = std::stoull(gtt_str); }
+					catch (...) {}
+				}
+
+				// Try libdrm_amdgpu via render node (like radeontop)
+				std::string render_path = find_render_node(name);
+				if (!render_path.empty()) {
+					int fd = open(render_path.c_str(), O_RDWR);
+					if (fd >= 0) {
+						drmVersionPtr ver = drmGetVersion(fd);
+						if (ver) {
+							if (strcmp(ver->name, "amdgpu") == 0) {
+								authenticate_drm(fd);
+								uint32_t major, minor;
+								amdgpu_device_handle adev;
+								if (amdgpu_device_initialize(fd, &major, &minor, &adev) == 0) {
+									uint32_t grbm;
+									if (amdgpu_read_mm_registers(adev, GRBM_STATUS_DWORD, 1, 0xffffffff, 0, &grbm) == 0) {
+										dev.fd = fd;
+										dev.amdgpu_dev = adev;
+										dev.use_grbm = true;
+										Logger::debug("DRM: Using GRBM register sampling on {}", render_path);
+									} else {
+										amdgpu_device_deinitialize(adev);
+										close(fd);
+										Logger::debug("DRM: GRBM unavailable on {}, using SCLK fallback", render_path);
+									}
+								} else {
+									amdgpu_device_deinitialize(adev);
+									close(fd);
+									Logger::debug("DRM: amdgpu_device_initialize failed on {}", render_path);
+								}
+							} else {
+								close(fd);
+							}
+							drmFreeVersion(ver);
+						} else {
+							close(fd);
+						}
+					}
+				}
+
+				if (!dev.use_grbm) {
+					Logger::debug("DRM: Using sysfs SCLK estimation for {}", name);
+				}
+
+				// Find hwmon path for temperature/power sensors
+				dev.hwmon_path = find_hwmon_path(name);
+				if (!dev.hwmon_path.empty()) {
+					Logger::debug("DRM: Found hwmon at {}", dev.hwmon_path);
+				}
+
+				devices.push_back(dev);
+			}
+
+			if (devices.empty()) {
+				Logger::debug("DRM: No AMD GPU devices found");
+				return false;
+			}
+
+			device_count = devices.size();
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size());
+			initialized = true;
+			Drm::collect<1>(gpus.data() + Gpu::Nvml::device_count + Gpu::Rsmi::device_count + Gpu::Asysfs::device_count + Gpu::Intel::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			for (auto& dev : devices) {
+				if (dev.use_grbm) {
+					amdgpu_device_deinitialize(dev.amdgpu_dev);
+					close(dev.fd);
+				}
+			}
+			devices.clear();
+			initialized = false;
+			device_count = 0;
+			return true;
+		}
+
+		template <bool is_init>
+		bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				auto& dev = devices[i];
+				gpu_info& gpu = gpus_slice[i];
+
+				if constexpr(is_init) {
+					gpu_names[Gpu::Nvml::device_count + Gpu::Rsmi::device_count + Gpu::Intel::device_count + i] = "AMD GPU " + std::to_string(i);
+					gpu.supported_functions.gpu_utilization = true;
+					gpu.supported_functions.mem_utilization = true;
+					gpu.supported_functions.gpu_clock = true;
+					gpu.supported_functions.mem_clock = true;
+					gpu.supported_functions.pwr_usage = (!dev.hwmon_path.empty() && fs::exists(fs::path(dev.hwmon_path) / "power1_average"));
+					gpu.supported_functions.pwr_state = false;
+					gpu.supported_functions.temp_info = (!dev.hwmon_path.empty() && fs::exists(fs::path(dev.hwmon_path) / "temp1_input"));
+					gpu.supported_functions.mem_total = (dev.vram_total > 0);
+					gpu.supported_functions.mem_used = (dev.vram_total > 0);
+					gpu.supported_functions.pcie_txrx = false;
+					gpu.supported_functions.encoder_utilization = false;
+					gpu.supported_functions.decoder_utilization = false;
+
+					if (dev.vram_total > 0) {
+						gpu.mem_total = (long long)dev.vram_total;
+					}
+
+					// Initialize temperature and power to safe defaults
+					gpu.pwr_max_usage = 255000;  // 255W default max
+					gpu.temp_max = 110;          // 110°C default max
+				}
+
+				// --- GPU Utilization ---
+				long long utilization = 0;
+
+				if (dev.use_grbm) {
+					// Radeontop-style: sample GRBM_STATUS multiple times
+					int busy = 0, samples = 50;
+					for (int s = 0; s < samples; s++) {
+						uint32_t grbm;
+						if (amdgpu_read_mm_registers(dev.amdgpu_dev, GRBM_STATUS_DWORD, 1, 0xffffffff, 0, &grbm) == 0) {
+							if (grbm & GUI_ACTIVE_BIT) busy++;
+						}
+						usleep(200);
+					}
+					utilization = busy * 100 / samples;
+				} else {
+					// Fallback: estimate from SCLK frequency
+					utilization = read_gpu_load_sclk(dev.drm_sysfs_name);
+				}
+
+				gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(utilization, 0LL, 100LL));
+
+				// --- GPU Clock ---
+				gpu.gpu_clock_speed = read_current_clock(dev.drm_sysfs_name, "pp_dpm_sclk");
+
+				// --- Memory Clock ---
+				gpu.mem_clock_speed = read_current_clock(dev.drm_sysfs_name, "pp_dpm_mclk");
+
+				// --- Temperature ---
+				if (gpu.supported_functions.temp_info) {
+					long long temp_raw = read_hwmon_value(dev.hwmon_path, "temp1_input");
+					gpu.temp.push_back(temp_raw / 1000);  // Convert millidegrees to degrees
+				}
+
+				// --- Power Usage ---
+				if (gpu.supported_functions.pwr_usage) {
+					long long power_raw = read_hwmon_value(dev.hwmon_path, "power1_average");
+					gpu.pwr_usage = power_raw / 1000;  // Convert µW to mW
+					if (gpu.pwr_usage > gpu.pwr_max_usage)
+						gpu.pwr_max_usage = gpu.pwr_usage;
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						std::clamp((long long)round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL));
+				}
+
+				// --- VRAM used ---
+				if (dev.use_grbm) {
+					uint64_t vram_usage = 0;
+					if (amdgpu_query_info(dev.amdgpu_dev, AMDGPU_INFO_VRAM_USAGE,
+								sizeof(vram_usage), &vram_usage) == 0) {
+						gpu.mem_used = vram_usage;
+					}
+				} else if (dev.vram_total > 0) {
+					auto vram_used_path = fs::path("/sys/class/drm") / dev.drm_sysfs_name / "device" / "mem_info_vram_used";
+					std::string vram_str{trim(Tools::readfile(vram_used_path))};
+					if (!vram_str.empty()) {
+						try { gpu.mem_used = std::stoll(vram_str); }
+						catch (...) {}
+					}
+				}
+
+				// Push VRAM percentage
+				if (dev.vram_total > 0) {
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(
+						std::clamp((long long)round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
+				} else {
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(0);
+				}
+			}
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2222,6 +2608,7 @@ namespace Gpu {
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		Drm::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count); // size = Drm::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
