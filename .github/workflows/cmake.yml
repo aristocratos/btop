@@ -1,0 +1,206 @@
+name: CI (CMake)
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BUILD_TYPE: Debug
+  CMAKE_COLOR_DIAGNOSTICS: ON
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  changes:
+    name: Detect file changes
+    runs-on: ubuntu-26.04
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      freebsd: ${{ steps.filter.outputs.freebsd }}
+      linux: ${{ steps.filter.outputs.linux }}
+      netbsd: ${{ steps.filter.outputs.netbsd }}
+      openbsd: ${{ steps.filter.outputs.openbsd }}
+      osx: ${{ steps.filter.outputs.osx }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - ".github/workflows/cmake.yml"
+              - "cmake/**"
+              - "CMakeLists.txt"
+              - "include/**"
+              - "src/*.cpp"
+              - "src/*.hpp"
+              - "tests/**"
+            freebsd: "src/freebsd/**"
+            linux: "src/linux/**"
+            netbsd: "src/netbsd/**"
+            openbsd: "src/openbsd/**"
+            osx: "src/osx/**"
+
+  linux:
+    name: Linux (${{ matrix.cxx }}-${{ matrix.version }})
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.cxx }}-${{ matrix.version }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        include:
+          - cc: gcc
+            cxx: g++
+            version: 14
+          - cc: gcc
+            cxx: g++
+            version: 16
+          - cc: clang
+            cxx: clang++
+            version: 21
+          - cc: clang
+            cxx: clang++
+            version: 23
+    env:
+      CC: ${{ matrix.cc }}-${{ matrix.version }}
+      CXX: ${{ matrix.cxx }}-${{ matrix.version }}
+      LDFLAGS: -fuse-ld=mold
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install mold
+        uses: rui314/setup-mold@7e4f20ad28a2e8ca6fd0892ccf72e2abb706b9c3 # v1
+
+      - name: Install gcc
+        if: matrix.cxx == 'g++' && contains(matrix.version, '16')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${CXX}
+
+      - name: Install clang
+        if: matrix.cxx == 'clang++'
+        env:
+          VERSION: ${{ matrix.version }}
+        run: wget -qO - https://apt.llvm.org/llvm.sh | sudo bash -s -- ${VERSION} all
+
+      - name: Configure
+        run: |
+          cmake -B build -DBUILD_TESTING=OFF
+
+      - name: Build
+        run: cmake --build build --verbose
+
+  osx:
+    name: macOS 26
+    runs-on: macos-26
+    needs: changes
+    if: needs.changes.outputs.osx == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install clang
+        run: |
+          brew update --quiet
+          brew install --force --overwrite --quiet cmake lld llvm ninja
+
+      - name: Configure
+        run: |
+          export CXX="$(brew --prefix llvm)/bin/clang++"
+          export LDFLAGS="-L$(brew --prefix llvm)/lib/c++ -fuse-ld=$(brew --prefix lld)/bin/ld64.lld"
+          cmake -B build -DBUILD_TESTING=OFF
+
+      - name: Build
+        run: cmake --build build --verbose
+
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.freebsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/freebsd-vm@f0552d3b69211736abd97f02ff3d4674c56b73b1 # v1.5.5
+        with:
+          arch: x86_64
+          release: "15.1"
+          copyback: false
+          envs: "CMAKE_BUILD_TYPE CMAKE_COLOR_DIAGNOSTICS CMAKE_GENERATOR"
+          run: |
+            pkg install -y cmake git ninja
+            cmake -B build -DBUILD_TESTING=OFF
+            cmake --build build --verbose
+
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.openbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/openbsd-vm@86cdc08415d9d0865267e686561e276c52d62530 # v1.4.7
+        with:
+          arch: x86_64
+          release: "7.9"
+          copyback: false
+          envs: "CMAKE_BUILD_TYPE CMAKE_COLOR_DIAGNOSTICS CMAKE_GENERATOR"
+          run: |
+            pkg_add cmake ninja
+            cmake -B build -DBUILD_TESTING=OFF
+            cmake --build build --verbose
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.netbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/netbsd-vm@7f23a491dcc69c34195721ab67934917707f84c7 # v1.4.9
+        with:
+          arch: x86_64
+          release: "11.0"
+          copyback: false
+          envs: "CMAKE_BUILD_TYPE CMAKE_COLOR_DIAGNOSTICS CMAKE_GENERATOR LDFLAGS"
+          run: |
+            pkg_add -u pkgin
+            pkgin update
+            pkgin -y install cmake gcc15 ninja-build
+            export CXX="/usr/pkg/gcc15/bin/g++"
+            cmake -B build -DBUILD_TESTING=OFF
+            cmake --build build --verbose
