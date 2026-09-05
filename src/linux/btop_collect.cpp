@@ -175,6 +175,13 @@ namespace Cpu {
 
 namespace Gpu {
 	vector<gpu_info> gpus;
+
+	//? APUs often expose a small VRAM aperture plus GTT-backed shared memory.
+	static bool should_include_gtt_memory(uint64_t vram_total, uint64_t gtt_total) {
+		constexpr uint64_t one_gib = 1ULL << 30;
+		return gtt_total > 0 and (vram_total == 0 or (vram_total <= one_gib and gtt_total > vram_total));
+	}
+
 	//? NVIDIA data collection
 	namespace Nvml {
 		//? NVML defines, structs & typedefs
@@ -238,6 +245,7 @@ namespace Gpu {
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
 		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_MEM_TYPE_GTT             2
 		#define RSMI_TEMP_CURRENT             0
 		#define RSMI_TEMP_TYPE_EDGE           0
 		#define RSMI_CLK_TYPE_MEM             4
@@ -280,6 +288,7 @@ namespace Gpu {
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
+		vector<bool> use_gtt_memory;
 	}
 
 
@@ -308,6 +317,7 @@ namespace Gpu {
 			bool has_freq;
 			bool has_busy;
 			bool has_vram;
+			bool use_gtt_memory;
 		};
 
 		bool initialized = false;
@@ -1668,6 +1678,7 @@ namespace Gpu {
 			if (device_count > 0) {
 				gpus.resize(gpus.size() + device_count);
 				gpu_names.resize(gpus.size() + device_count);
+				use_gtt_memory.assign(device_count, false);
 
 				initialized = true;
 
@@ -1699,17 +1710,18 @@ namespace Gpu {
 				if constexpr(is_init) {
 					//? Device name
 					char name[RSMI_DEVICE_NAME_BUFFER_SIZE];
-    				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[Nvml::device_count + i] = string(name);
+					result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
+					if (result != RSMI_STATUS_SUCCESS)
+						Logger::warning("ROCm SMI: Failed to get device name");
+					else gpu_names[Nvml::device_count + i] = string(name);
 
-    				//? Power usage
-    				uint64_t max_power;
-    				result = rsmi_dev_power_cap_get(i, 0, &max_power);
-    				if (result != RSMI_STATUS_SUCCESS)
-						Logger::warning("ROCm SMI: Failed to get maximum GPU power draw, defaulting to 225W");
-					else {
+					//? Power usage
+					uint64_t max_power;
+					result = rsmi_dev_power_cap_get(i, 0, &max_power);
+					if (result != RSMI_STATUS_SUCCESS) {
+						Logger::debug("ROCm SMI: Failed to get maximum GPU power draw, using observed peak");
+						gpus_slice[i].pwr_max_usage = 0;
+					} else {
 						gpus_slice[i].pwr_max_usage = (long long)(max_power/1000); // RSMI reports power in microWatts
 						gpu_pwr_total_max += gpus_slice[i].pwr_max_usage;
 					}
@@ -1836,17 +1848,18 @@ namespace Gpu {
 			#endif
     			//? Power usage & state
 				if (gpus_slice[i].supported_functions.pwr_usage) {
-    				uint64_t power;
-    				result = rsmi_dev_power_ave_get(i, 0, &power);
-    				if (result != RSMI_STATUS_SUCCESS) {
+					uint64_t power;
+					result = rsmi_dev_power_ave_get(i, 0, &power);
+					if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get GPU power usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.pwr_usage = false;
-    				} else {
-							gpus_slice[i].pwr_usage = (long long)power / 1000;
-							if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
-								gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
-							gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
-						}
+					} else {
+						gpus_slice[i].pwr_usage = (long long)power / 1000;
+						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
+							gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
+						const auto pwr_max_usage = max(gpus_slice[i].pwr_max_usage, 1ll);
+						gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)pwr_max_usage), 0ll, 100ll));
+					}
 
 					if constexpr(is_init) gpus_slice[i].supported_functions.pwr_state = false;
 				}
@@ -1865,23 +1878,44 @@ namespace Gpu {
 
 				//? Memory info
 				if (gpus_slice[i].supported_functions.mem_total) {
-					uint64_t total;
-					result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_VRAM, &total);
+					uint64_t total = 0;
+					uint64_t vram_total = 0;
+					result = rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_VRAM, &vram_total);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get total VRAM");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
-					} else gpus_slice[i].mem_total = total;
+					} else {
+						total = vram_total;
+						if constexpr(is_init) {
+							uint64_t gtt_total = 0;
+							if (rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &gtt_total) == RSMI_STATUS_SUCCESS)
+								use_gtt_memory[i] = should_include_gtt_memory(vram_total, gtt_total);
+						}
+						if (use_gtt_memory[i]) {
+							uint64_t gtt_total = 0;
+							if (rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &gtt_total) == RSMI_STATUS_SUCCESS)
+								total += gtt_total;
+						}
+						gpus_slice[i].mem_total = total;
+					}
 				}
 
 				if (gpus_slice[i].supported_functions.mem_used) {
-					uint64_t used;
-					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &used);
+					uint64_t used = 0;
+					uint64_t vram_used = 0;
+					result = rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_VRAM, &vram_used);
     				if (result != RSMI_STATUS_SUCCESS) {
 						Logger::warning("ROCm SMI: Failed to get VRAM usage");
 						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
 					} else {
+						used = vram_used;
+						if (use_gtt_memory[i]) {
+							uint64_t gtt_used = 0;
+							if (rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_GTT, &gtt_used) == RSMI_STATUS_SUCCESS)
+								used += gtt_used;
+						}
 						gpus_slice[i].mem_used = used;
-						if (gpus_slice[i].supported_functions.mem_total)
+						if (gpus_slice[i].supported_functions.mem_total and gpus_slice[i].mem_total > 0)
 							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
 					}
 				}
@@ -2097,6 +2131,11 @@ namespace Gpu {
 
 				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
 				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
+				if (std::filesystem::exists(device_link / "mem_info_gtt_total")) {
+					const auto vram_total = d.has_vram ? read_ll(device_link / "mem_info_vram_total") : 0;
+					const auto gtt_total = read_ll(device_link / "mem_info_gtt_total");
+					d.use_gtt_memory = should_include_gtt_memory((uint64_t)std::max(vram_total, 0LL), (uint64_t)std::max(gtt_total, 0LL));
+				}
 
 				if (not d.hwmon.empty()) {
 					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
@@ -2111,7 +2150,7 @@ namespace Gpu {
 				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
 				//? or driver states where nothing useful is exposed yet. Otherwise btop would
 				//? render an empty GPU entry every tick.
-				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
+				if (not (d.has_busy or d.has_vram or d.use_gtt_memory or d.has_temp or d.has_freq or not d.power.empty())) {
 					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
 					continue;
 				}
@@ -2162,8 +2201,8 @@ namespace Gpu {
 						.pwr_usage = not d.power.empty(),
 						.pwr_state = false,
 						.temp_info = d.has_temp,
-						.mem_total = d.has_vram,
-						.mem_used = d.has_vram,
+						.mem_total = d.has_vram or d.use_gtt_memory,
+						.mem_used = d.has_vram or d.use_gtt_memory,
 						.pcie_txrx = false,
 						.encoder_utilization = false,
 						.decoder_utilization = false,
@@ -2184,19 +2223,22 @@ namespace Gpu {
 				if (not d.power.empty()) {
 					gpu.pwr_usage = read_ll(d.power) / 1000; //? microwatts → milliwatts
 					gpu.pwr_max_usage = std::max(gpu.pwr_max_usage, gpu.pwr_usage);
-					if (gpu.pwr_max_usage > 0) {
-						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
-							std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL));
-					}
+					const auto pwr_max_usage = std::max(gpu.pwr_max_usage, 1LL);
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)pwr_max_usage), 0LL, 100LL));
 				}
 
 				if (d.has_freq) {
 					gpu.gpu_clock_speed = (unsigned int)(read_ll(d.hwmon / "freq1_input") / 1'000'000); //? Hz → MHz
 				}
 
-				if (d.has_vram) {
-					gpu.mem_total = read_ll(d.device / "mem_info_vram_total");
-					gpu.mem_used = read_ll(d.device / "mem_info_vram_used");
+				if (d.has_vram or d.use_gtt_memory) {
+					gpu.mem_total = d.has_vram ? read_ll(d.device / "mem_info_vram_total") : 0;
+					gpu.mem_used = d.has_vram ? read_ll(d.device / "mem_info_vram_used") : 0;
+					if (d.use_gtt_memory) {
+						gpu.mem_total += read_ll(d.device / "mem_info_gtt_total");
+						gpu.mem_used += read_ll(d.device / "mem_info_gtt_used");
+					}
 					if (gpu.mem_total > 0) {
 						gpu.gpu_percent.at("gpu-vram-totals").push_back(
 							std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
@@ -2228,6 +2270,7 @@ namespace Gpu {
 		long long mem_usage_total = 0;
 		long long mem_total = 0;
 		long long pwr_total = 0;
+		long long pwr_total_max = 0;
 		for (auto& gpu : gpus) {
 			if (gpu.supported_functions.gpu_utilization)
 				avg += gpu.gpu_percent.at("gpu-totals").back();
@@ -2235,8 +2278,11 @@ namespace Gpu {
 				mem_usage_total += gpu.mem_used;
 			if (gpu.supported_functions.mem_total)
 				mem_total += gpu.mem_total;
-			if (gpu.supported_functions.pwr_usage)
+			if (gpu.supported_functions.pwr_usage) {
 				pwr_total += gpu.pwr_usage;
+				if (gpu.pwr_max_usage > 0)
+					pwr_total_max += gpu.pwr_max_usage;
+			}
 
 			//* Trim vectors if there are more values than needed for graphs
 			if (width != 0) {
@@ -2255,8 +2301,9 @@ namespace Gpu {
 		shared_gpu_percent.at("gpu-average").push_back(avg / gpus.size());
 		if (mem_total != 0)
 			shared_gpu_percent.at("gpu-vram-total").push_back(static_cast<long long>(round(mem_usage_total * 100.0 / mem_total)));
-		if (gpu_pwr_total_max != 0)
-			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp(static_cast<long long>(round(pwr_total * 100.0 / gpu_pwr_total_max)), 0ll, 100ll));
+		gpu_pwr_total_max = pwr_total_max;
+		if (pwr_total_max != 0)
+			shared_gpu_percent.at("gpu-pwr-total").push_back(clamp(static_cast<long long>(round(pwr_total * 100.0 / pwr_total_max)), 0ll, 100ll));
 
 		if (width != 0) {
 			while (cmp_greater(shared_gpu_percent.at("gpu-average").size(), width * 2)) shared_gpu_percent.at("gpu-average").pop_front();
