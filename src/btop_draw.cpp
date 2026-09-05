@@ -1277,7 +1277,7 @@ namespace Mem {
 				for (const auto& name : swap_names) {
 					auto color_gradient = name.substr(5);
 					if (color_gradient == "zswap_compressed") {
-						color_gradient = "used";
+						color_gradient = "cached";
 					}
 					if (use_graphs)
 						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, color_gradient, safeVal(mem.percent, name), graph_symbol};
