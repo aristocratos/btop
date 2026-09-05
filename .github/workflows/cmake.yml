@@ -22,7 +22,7 @@ jobs:
     name: Detect file changes
     runs-on: ubuntu-26.04
     outputs:
-      shared: ${{ steps.filter.outputs.shared }}
+      shared: ${{ steps.filter.outputs.cmake == 'true' }}
       freebsd: ${{ steps.filter.outputs.freebsd }}
       linux: ${{ steps.filter.outputs.linux }}
       netbsd: ${{ steps.filter.outputs.netbsd }}
@@ -38,20 +38,7 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
-          filters: |
-            shared:
-              - ".github/workflows/cmake.yml"
-              - "cmake/**"
-              - "CMakeLists.txt"
-              - "include/**"
-              - "src/*.cpp"
-              - "src/*.hpp"
-              - "tests/**"
-            freebsd: "src/freebsd/**"
-            linux: "src/linux/**"
-            netbsd: "src/netbsd/**"
-            openbsd: "src/openbsd/**"
-            osx: "src/osx/**"
+          filters: .github/filters.yml
 
   linux:
     name: Linux (${{ matrix.cxx }}-${{ matrix.version }})

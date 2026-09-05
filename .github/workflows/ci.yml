@@ -1,0 +1,240 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  STATIC: "true"
+  STRIP: "true"
+  VERBOSE: "true"
+
+jobs:
+  changes:
+    name: Detect file changes
+    runs-on: ubuntu-26.04
+    outputs:
+      shared: ${{ steps.filter.outputs.make == 'true' }}
+      freebsd: ${{ steps.filter.outputs.freebsd }}
+      linux: ${{ steps.filter.outputs.linux }}
+      netbsd: ${{ steps.filter.outputs.netbsd }}
+      openbsd: ${{ steps.filter.outputs.openbsd }}
+      osx: ${{ steps.filter.outputs.osx }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters.yml
+
+  linux:
+    name: Linux (${{ matrix.toolchain }})
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.toolchain }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        toolchain:
+          - aarch64-unknown-linux-musl
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+          - armv7-unknown-linux-musleabi
+          - armv7-unknown-linux-musleabihf
+          - i586-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - m68k-unknown-linux-musl
+          - mips-unknown-linux-musl
+          - mips-unknown-linux-muslsf
+          - mips64-unknown-linux-musl
+          - mips64el-unknown-linux-musl
+          - mipsel-unknown-linux-musl
+          - mipsel-unknown-linux-muslsf
+          - powerpc-unknown-linux-musl
+          - powerpc64-unknown-linux-musl
+          - powerpc64le-unknown-linux-musl
+          - powerpcle-unknown-linux-musl
+          - riscv32-unknown-linux-musl
+          - riscv64-unknown-linux-musl
+          - s390x-ibm-linux-musl
+          - x86_64-unknown-linux-musl
+    env:
+      CXX: /opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++
+      RELEASE: "20260823"
+      TOOLCHAIN: ${{ matrix.toolchain }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: |
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz.sha256
+          echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
+          mkdir -p /opt/x-tools/
+          tar -xf /tmp/${TOOLCHAIN}.tar.xz -C /opt/x-tools
+
+      - name: Build
+        run: make
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  linux-gpu:
+    name: Linux GPU
+    runs-on: ubuntu-26.04
+    container: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    env:
+      CXX: g++
+      LDFLAGS: -fuse-ld=mold
+      STATIC: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: apk add --update --no-cache g++ linux-headers make mold
+
+      - name: Build
+        run: make GPU_SUPPORT=true
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  osx:
+    name: macOS 26
+    runs-on: macos-26
+    needs: changes
+    if: needs.changes.outputs.osx == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install gcc
+        run: |
+          brew update --quiet
+          brew install --force --overwrite --quiet gcc@16
+
+      - name: Build
+        run: |
+          export CXX="$(brew --prefix gcc@16)/bin/g++-16"
+          make
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.freebsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/freebsd-vm@f0552d3b69211736abd97f02ff3d4674c56b73b1 # v1.5.5
+        with:
+          arch: x86_64
+          release: "15.1"
+          envs: "STATIC STRIP"
+          run: |
+            pkg install -y coreutils cmake gcc15 gmake ninja
+            gmake
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.openbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/openbsd-vm@86cdc08415d9d0865267e686561e276c52d62530 # v1.4.7
+        with:
+          arch: x86_64
+          release: "7.9"
+          envs: "STATIC STRIP"
+          run: |
+            pkg_add coreutils gmake
+            gmake
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.netbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/netbsd-vm@7f23a491dcc69c34195721ab67934917707f84c7 # v1.4.9
+        with:
+          arch: x86_64
+          release: "11.0"
+          envs: "STATIC STRIP"
+          run: |
+            pkg_add -u pkgin
+            pkgin update
+            pkgin -y install coreutils gcc15 gmake
+            export CXX="/usr/pkg/gcc15/bin/g++"
+            gmake
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
