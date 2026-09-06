@@ -1490,8 +1490,9 @@ background_update = true
 #* Custom cpu model name, empty string to disable.
 custom_cpu_name = ""
 
-#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace " ".
-#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
+#* Optional filter for shown disks, matches full mountpoint paths and supports shell-style wildcards (*, ? and [c-e]). Separate multiple values with whitespace " ".
+#* '*' matches path separators. Prefix wildcard characters with '\' to match them literally.
+#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disks_filter="/boot /home/*", disks_filter="exclude=/mnt/[c-e]* /run/media/*"
 disks_filter = ""
 
 #* Show graphs instead of meters for memory values.

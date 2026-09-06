@@ -30,6 +30,7 @@ tab-size = 4
 #include <cstdint>
 #include <ctime>
 #include <filesystem>
+#include <fnmatch.h>
 #include <limits.h>
 #include <mutex>
 #include <ranges>
@@ -212,6 +213,13 @@ namespace Tools {
 	template <typename T, typename T2>
 	inline bool v_contains(const vector<T>& vec, const T2& find_val) {
 		return std::ranges::find(vec, find_val) != vec.end();
+	}
+
+	//* Check if <value> exactly matches or matches any shell-style glob in <patterns>
+	inline bool matches_any_glob(const vector<string>& patterns, const string& value) {
+		return std::ranges::any_of(patterns, [&value](const auto& pattern) {
+			return pattern == value or ::fnmatch(pattern.c_str(), value.c_str(), 0) == 0;
+		});
 	}
 
 	//* Check if string <str> contains string <find_val>, while ignoring case
