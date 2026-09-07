@@ -1875,8 +1875,13 @@ namespace Proc {
 				out += Mv::to(d_y + 1, d_x + 1) + Fx::b + Theme::c("title")
 										+ cjust("Status:", item_width)
 										+ cjust("Elapsed:", item_width);
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+				if (item_fit >= 3) out += cjust("Op/R:", item_width);
+				if (item_fit >= 4) out += cjust("Op/W:", item_width);
+#else
 				if (item_fit >= 3) out += cjust("IO/R:", item_width);
 				if (item_fit >= 4) out += cjust("IO/W:", item_width);
+#endif
 				if (item_fit >= 5) out += cjust("Parent:", item_width);
 				if (item_fit >= 6) out += cjust("User:", item_width);
 				if (item_fit >= 7) out += cjust("Threads:", item_width);
@@ -1992,7 +1997,11 @@ namespace Proc {
 
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+					+ (io_size > 0 ? rjust("Op/R", 6) + " " + rjust("Op/W", 6) + " " : "")
+#else
 					+ (io_size > 0 ? rjust("IO/R", 6) + " " + rjust("IO/W", 6) + " " : "")
+#endif
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
 					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
 		}
@@ -2166,7 +2175,11 @@ namespace Proc {
 
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+				+ (io_size > 0 ? t_color + rjust((p.io_read_b > 0 ? (p.io_read_b < 1000 ? to_string(p.io_read_b) : fmt::format("{:.1f}K", p.io_read_b / 1000.0)) : "0"), 6) + " " + rjust((p.io_write_b > 0 ? (p.io_write_b < 1000 ? to_string(p.io_write_b) : fmt::format("{:.1f}K", p.io_write_b / 1000.0)) : "0"), 6) + " " + end : "")
+#else
 				+ (io_size > 0 ? t_color + rjust((p.io_read_b > 0 ? floating_humanizer(p.io_read_b, true) : "0B"), 6) + " " + rjust((p.io_write_b > 0 ? floating_humanizer(p.io_write_b, true) : "0B"), 6) + " " + end : "")
+#endif
 				+ m_color + rjust(mem_str, 5) + end + ' '
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
