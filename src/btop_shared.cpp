@@ -249,7 +249,7 @@ bool set_priority(pid_t pid, int priority) {
 				filter_found++;
 				p.filtered = true;
 			}
-			else if (Config::getB("proc_aggregate") and p.state != 'X') {
+			else if (not no_update and Config::getB("proc_aggregate") and p.state != 'X') {
 				cur_proc.cpu_p += p.cpu_p;
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;
