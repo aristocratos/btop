@@ -1491,7 +1491,7 @@ background_update = true
 custom_cpu_name = ""
 
 #* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace " ".
-#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
+#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disks_filter="/boot /home/user", disks_filter="exclude=/boot /home/user"
 disks_filter = ""
 
 #* Show graphs instead of meters for memory values.
