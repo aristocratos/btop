@@ -299,11 +299,13 @@ Also necessary is a UTF8 locale and a font that includes:
 
 ### **Optional Dependencies (Needed for GPU monitoring)**
 
-GPU monitoring is supported on Linux and on macOS with Apple Silicon GPUs.
+GPU monitoring is supported on Linux and macOS. On Intel-based Macs, GPU data is read from the built-in Intel, AMD, or NVIDIA driver through IOKit.
 
 GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
 
 See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
+
+The vendor-specific dependencies below apply to Linux. macOS uses system frameworks and needs no additional GPU library.
 
  * **NVIDIA**
 
@@ -655,6 +657,8 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    The Makefile also needs GNU coreutils and `sed`.
 
    Install and use Homebrew or MacPorts package managers for easy dependency installation
+
+   GPU monitoring is enabled by default. Apple Silicon GPUs use IOReport, while Intel-based Macs read Intel, AMD, and NVIDIA driver statistics through IOKit without extra dependencies.
 
 <details>
 <summary>
