@@ -1914,7 +1914,10 @@ namespace Proc {
 
 			//? pause, per-core, reverse, tree and sorting
 			const auto& sorting = Config::getS("proc_sorting");
-			const int sort_len = sorting.size();
+			const string sorting_label = (proc_tree and not Config::getB("proc_aggregate") and
+				(sorting == "threads" or sorting == "memory" or sorting == "cpu lazy" or sorting == "cpu responsive"))
+				? "tree " + sorting : sorting;
+			const int sort_len = sorting_label.size();
 			const int sort_pos = x + width - sort_len - 8;
 
 			if (width > 60 + sort_len) {
@@ -1939,7 +1942,7 @@ namespace Proc {
 					+ Theme::c("hi_fg") + 'e' + Fx::ub + title_right;
 				Input::mouse_mappings["e"] = {y, sort_pos - 5, 1, 4};
 			}
-			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c("hi_fg") + Symbols::left + " " + Theme::c("title") + sorting + " " + Theme::c("hi_fg")
+			out += Mv::to(y, sort_pos) + title_left + Fx::b + Theme::c("hi_fg") + Symbols::left + " " + Theme::c("title") + sorting_label + " " + Theme::c("hi_fg")
 				+ Symbols::right + Fx::ub + title_right;
 				Input::mouse_mappings["left"] = {y, sort_pos + 1, 1, 2};
 				Input::mouse_mappings["right"] = {y, sort_pos + sort_len + 3, 1, 2};

@@ -429,6 +429,12 @@ namespace Proc {
 	struct tree_proc {
 		std::reference_wrapper<proc_info> entry;
 		vector<tree_proc> children;
+		// Resource totals are used to keep a branch in the same sort position while
+		// it is expanded. They never change the values rendered for open children.
+		size_t tree_threads{};
+		uint64_t tree_mem{};
+		double tree_cpu_p{};
+		double tree_cpu_c{};
 	};
 
 	//* Change priority (nice) of pid, returns true on success otherwise false
@@ -456,6 +462,11 @@ namespace Proc {
 
 	//* Auto-collapse processes with many direct children when entering tree mode
 	void _auto_collapse_oversized(std::vector<proc_info>& current_procs, const bool tree_mode_change);
+
+	//* Persist explicit tree collapse choices by process-name ancestry instead of volatile PIDs
+	void remember_tree_state(const std::vector<proc_info>& processes, size_t pid, bool collapsed);
+	void remember_tree_children(const std::vector<proc_info>& processes, size_t pid);
+	void restore_tree_state(std::vector<proc_info>& current_procs);
 }
 
 /// Detect container engine.
