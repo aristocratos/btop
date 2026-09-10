@@ -1009,6 +1009,7 @@ namespace Proc {
 	uint64_t cputimes;
 	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes = 0;
+	double old_uptime = 0.0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
 
@@ -1066,14 +1067,10 @@ namespace Proc {
 			redraw = true;
 		}
 
-		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
+		detailed.io_read = (detailed.entry.io_read < 1000 ? to_string(detailed.entry.io_read) : fmt::format("{:.1f}K", detailed.entry.io_read / 1000.0));
+		detailed.io_write = (detailed.entry.io_write < 1000 ? to_string(detailed.entry.io_write) : fmt::format("{:.1f}K", detailed.entry.io_write / 1000.0));
 
-		// rusage_info_current rusage;
-		// if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
-		// 	// this fails for processes we don't own - same as in Linux
-		// 	detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
-		// 	detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
-		// }
+		while (cmp_greater(detailed.mem_bytes.size(), width)) detailed.mem_bytes.pop_front();
 	}
 
 	//* Collects and sorts process information from /proc
@@ -1100,6 +1097,8 @@ namespace Proc {
 		bool got_detailed = false;
 
 		static vector<size_t> found;
+
+		const double uptime = system_uptime();
 
 		vector<array<long, CPUSTATES>> cpu_time(Shared::coreCount);
 		size_t size = sizeof(long) * CPUSTATES * Shared::coreCount;
@@ -1197,6 +1196,21 @@ namespace Proc {
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
 
+				//? Calculate IO operations rates
+				uint64_t current_io_read = kproc->ki_rusage.ru_inblock;
+				uint64_t current_io_write = kproc->ki_rusage.ru_oublock;
+				
+				if (no_cache or old_uptime == 0.0) {
+					new_proc.io_read_b = 0;
+					new_proc.io_write_b = 0;
+				} else {
+					double time_diff = max(0.1, uptime - old_uptime);
+					new_proc.io_read_b = (current_io_read >= new_proc.io_read) ? (current_io_read - new_proc.io_read) / time_diff : 0;
+					new_proc.io_write_b = (current_io_write >= new_proc.io_write) ? (current_io_write - new_proc.io_write) / time_diff : 0;
+				}
+				new_proc.io_read = current_io_read;
+				new_proc.io_write = current_io_write;
+
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 					got_detailed = true;
 				}
@@ -1238,6 +1252,7 @@ namespace Proc {
 			}
 
 			old_cputimes = cputimes;
+			old_uptime = uptime;
 
 		}
 

@@ -3096,6 +3096,7 @@ namespace Proc {
 	uint64_t cputimes;
 	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes{};
+	double old_uptime{};
 	atomic<int> numpids{};
 	int filter_found{};
 
@@ -3470,6 +3471,47 @@ namespace Proc {
 				//? Update cached value with latest cpu times
 				new_proc.cpu_t = cpu_t;
 
+				//? Get bytes read and written from proc/[pid]/io
+				if (fs::exists(d.path() / "io")) {
+					pread.open(d.path() / "io");
+					if (pread.good()) {
+						try {
+							string name;
+							uint64_t current_io_read = 0;
+							uint64_t current_io_write = 0;
+							while (pread.good()) {
+								getline(pread, name, ':');
+								if (name.ends_with("read_bytes")) {
+									getline(pread, short_str);
+									current_io_read = stoull(short_str);
+								}
+								else if (name.ends_with("write_bytes")) {
+									getline(pread, short_str);
+									current_io_write = stoull(short_str);
+									break;
+								}
+								else {
+									pread.ignore(SSmax, '\n');
+								}
+							}
+							
+							if (no_cache or old_uptime == 0.0) {
+								new_proc.io_read_b = 0;
+								new_proc.io_write_b = 0;
+							} else {
+								double time_diff = max(0.1, uptime - old_uptime);
+								new_proc.io_read_b = (current_io_read >= new_proc.io_read) ? (current_io_read - new_proc.io_read) / time_diff : 0;
+								new_proc.io_write_b = (current_io_write >= new_proc.io_write) ? (current_io_write - new_proc.io_write) / time_diff : 0;
+							}
+							new_proc.io_read = current_io_read;
+							new_proc.io_write = current_io_write;
+						}
+						catch (const std::invalid_argument&) {}
+						catch (const std::out_of_range&) {}
+						pread.close();
+					}
+				}
+
 				if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 					got_detailed = true;
 				}
@@ -3508,6 +3550,7 @@ namespace Proc {
 			}
 
 			old_cputimes = cputimes;
+			old_uptime = uptime;
 		}
 		//* ---------------------------------------------Collection done-----------------------------------------------
 

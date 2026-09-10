@@ -1668,6 +1668,7 @@ namespace Proc {
 	uint64_t cputimes;
 	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes = 0;
+	double old_uptime = 0.0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
 
@@ -1790,6 +1791,7 @@ namespace Proc {
 			found.clear();
 			size_t size = 0;
 			const auto timeNow = time_micros();
+			const double uptime = system_uptime();
 
 			if (sysctl(mib, 4, nullptr, &size, nullptr, 0) < 0 || size == 0) {
 				Logger::error("Unable to get size of kproc_infos");
@@ -1894,6 +1896,22 @@ namespace Proc {
 					//? Update cached value with latest cpu times
 					new_proc.cpu_t = cpu_t;
 
+					rusage_info_current rusage;
+					if (proc_pid_rusage(new_proc.pid, RUSAGE_INFO_CURRENT, (void **)&rusage) == 0) {
+						uint64_t current_io_read = rusage.ri_diskio_bytesread;
+						uint64_t current_io_write = rusage.ri_diskio_byteswritten;
+						if (no_cache or old_uptime == 0.0) {
+							new_proc.io_read_b = 0;
+							new_proc.io_write_b = 0;
+						} else {
+							double time_diff = max(0.1, uptime - old_uptime);
+							new_proc.io_read_b = (current_io_read >= new_proc.io_read) ? (current_io_read - new_proc.io_read) / time_diff : 0;
+							new_proc.io_write_b = (current_io_write >= new_proc.io_write) ? (current_io_write - new_proc.io_write) / time_diff : 0;
+						}
+						new_proc.io_read = current_io_read;
+						new_proc.io_write = current_io_write;
+					}
+
 					if (show_detailed and not got_detailed and new_proc.pid == detailed_pid) {
 						got_detailed = true;
 					}
@@ -1935,6 +1953,7 @@ namespace Proc {
 				}
 
 				old_cputimes = cputimes;
+				old_uptime = uptime;
 			}
 		}
 
