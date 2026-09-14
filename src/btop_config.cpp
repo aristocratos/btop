@@ -61,6 +61,9 @@ const vector<string> Config::freq_modes = { "first", "range", "lowest", "highest
 #endif
 #ifdef GPU_SUPPORT
 const vector<string> Config::show_gpu_values = { "Auto", "On", "Off" };
+	#ifdef __APPLE__
+const vector<string> Config::gpu_utilization_modes = { "active", "normalized" };
+	#endif
 #endif
 const vector<string> Config::base_10_bitrate_values = { "Auto", "True", "False" };
 const vector<string> Config::disable_preset_options = { "Off", "Default", "Custom", "All" };
@@ -260,6 +263,10 @@ namespace Config {
 		{"rsmi_measure_pcie_speeds",
 								"#* Measure PCIe throughput on AMD cards, may impact performance on certain cards."},
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+	#ifdef __APPLE__
+		{"gpu_utilization_mode",
+							"#* Apple Silicon GPU utilization mode. \"active\" reports non-idle residency; \"normalized\" also weights residency by GPU frequency."},
+	#endif
 		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel apple\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
@@ -309,6 +316,9 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 		{"show_gpu_info", "Auto"},
+	#ifdef __APPLE__
+		{"gpu_utilization_mode", "active"},
+	#endif
 		{"shown_gpus", "nvidia amd intel apple"}
 	#endif
 	};
@@ -621,6 +631,10 @@ namespace Config {
 	#ifdef GPU_SUPPORT
 		else if (name == "show_gpu_info" and not v_contains(show_gpu_values, value))
 			validError = "Invalid value for show_gpu_info: " + value;
+		#ifdef __APPLE__
+		else if (name == "gpu_utilization_mode" and not v_contains(gpu_utilization_modes, value))
+			validError = "Invalid value for gpu_utilization_mode: " + value;
+		#endif
 	#endif
 
 		else if (name == "presets" and not presetsValid(value))
