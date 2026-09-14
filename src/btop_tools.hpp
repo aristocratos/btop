@@ -321,6 +321,9 @@ namespace Tools {
 	//* Convert seconds to format "<days>d <hours>:<minutes>:<seconds>" and return string
 	string sec_to_dhms(size_t seconds, bool no_days = false, bool no_seconds = false);
 
+	//* Format a frequency in MHz with an appropriate unit
+	string format_frequency_mhz(double mhz);
+
 	//* Scales up in steps of 1024 to highest positive value unit and returns string with unit suffixed
 	//* bit=true or defaults to bytes
 	//* start=int to set 1024 multiplier starting unit
