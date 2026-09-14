@@ -466,6 +466,7 @@ namespace Gpu {
 			bool got_gpu_util = false;
 			double gpu_power_watts = 0;
 			bool got_gpu_power = false;
+			const bool normalize_gpu_utilization = Config::getS("gpu_utilization_mode") == "normalized";
 
 			long chan_count = CFArrayGetCount(channels);
 			for (long i = 0; i < chan_count; i++) {
@@ -483,6 +484,7 @@ namespace Gpu {
 
 					int64_t total_residency = 0;
 					int64_t active_residency = 0;
+					int64_t mapped_residency = 0;
 					double weighted_freq = 0;
 
 					//? Find offset past IDLE/OFF/DOWN states
@@ -499,12 +501,19 @@ namespace Gpu {
 						int64_t res = IOReportStateGetResidency(item, s);
 						active_residency += res;
 						int freq_idx = s - offset;
-						if (freq_idx < freq_count and active_residency > 0)
+						if (freq_idx < freq_count) {
 							weighted_freq += static_cast<double>(res) * gpu_freqs[freq_idx];
+							mapped_residency += res;
+						}
 					}
 
 					if (total_residency > 0) {
 						double usage_ratio = static_cast<double>(active_residency) / static_cast<double>(total_residency);
+						if (normalize_gpu_utilization and mapped_residency == active_residency and not gpu_freqs.empty()) {
+							const auto max_freq = *std::ranges::max_element(gpu_freqs);
+							if (max_freq > 0)
+								usage_ratio = weighted_freq / (static_cast<double>(total_residency) * max_freq);
+						}
 						gpu_utilization = clamp(static_cast<long long>(round(usage_ratio * 100.0)), 0ll, 100ll);
 						got_gpu_util = true;
 
