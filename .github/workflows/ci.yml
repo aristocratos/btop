@@ -178,7 +178,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/freebsd-vm@8b0f1a8fc0ea0def307835c258940ca358fe6480 # v1.5.6
+        uses: vmactions/freebsd-vm@4469451fe39bee80be4066836c5170362e9349f3 # v1.5.7
         with:
           arch: x86_64
           release: "15.1"
