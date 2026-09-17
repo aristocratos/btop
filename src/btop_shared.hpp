@@ -177,6 +177,10 @@ namespace Gpu {
 
 		gpu_info_supported supported_functions;
 
+		//? Short label used for the box/row header ("GPU", "NPU", ...). Kept the same
+		//? width as "GPU" so it doesn't perturb existing column-width math.
+		string box_label = "GPU";
+
 		// vector<proc_info> graphics_processes = {}; // TODO
 		// vector<proc_info> compute_processes = {};
 	};

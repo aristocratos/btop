@@ -34,9 +34,12 @@ tab-size = 4
 
 #include <arpa/inet.h> // for inet_ntop()
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <ifaddrs.h>
+#include <linux/ioctl.h> // for the _IOWR() ioctl-number macro (amdxdna NPU query)
 #include <net/if.h>
 #include <netdb.h>
+#include <sys/ioctl.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 
@@ -317,6 +320,22 @@ namespace Gpu {
 		uint32_t device_count = 0;
 		vector<device_paths> devices;
 	}
+
+	//? AMD XDNA NPU (Ryzen AI) data collection — reads live utilization/power via an
+	//? ioctl on /dev/accel/accelN; see the implementation below for details.
+	namespace Axdna {
+		struct device_paths {
+			std::filesystem::path accel_dev; //? /dev/accel/accelN
+			uint32_t pci_device_id;
+		};
+
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+		vector<device_paths> devices;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -399,6 +418,7 @@ namespace Shared {
 		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
 			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
+			Gpu::Axdna::init(); //? AMD Ryzen AI NPU, independent of the GPU backends above
 		}
 
 		if (shown_gpus.contains("intel")) {
@@ -1954,15 +1974,15 @@ namespace Gpu {
 			gpu_names.resize(gpus.size() + device_count);
 
 			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = string(gpu_device_name);
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Axdna::device_count] = string(gpu_device_name);
 			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "Intel GPU";
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Axdna::device_count] = "Intel GPU";
 			}
 
 			free(gpu_device_name);
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
+			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Axdna::device_count);
 
 			return true;
 		}
@@ -2211,6 +2231,243 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	//? AMD XDNA NPU (Ryzen AI) data collection — see forward-declaration comment above.
+	namespace Axdna {
+		//? Subset of <drm/amdxdna_accel.h> (stable kernel UAPI), vendored so this
+		//? doesn't need xrt/libdrm headers installed to build.
+		namespace uapi {
+			struct amdxdna_drm_get_info {
+				uint32_t param;       // in
+				uint32_t buffer_size; // in/out
+				uint64_t buffer;      // in/out
+			};
+
+			struct amdxdna_drm_query_sensor {
+				uint8_t  label[64];
+				uint32_t input;
+				uint32_t max;
+				uint32_t average;
+				uint32_t highest;
+				uint8_t  status[64];
+				uint8_t  units[16];
+				int8_t   unitm;
+				uint8_t  type;
+				uint8_t  pad[6];
+			};
+
+			enum : uint8_t {
+				AMDXDNA_SENSOR_TYPE_POWER = 0,
+				AMDXDNA_SENSOR_TYPE_COLUMN_UTILIZATION = 1,
+			};
+
+			enum : uint32_t {
+				DRM_AMDXDNA_QUERY_SENSORS = 4,
+			};
+
+			//? DRM_COMMAND_BASE (0x40) + the GET_INFO ordinal (7) in
+			//? enum amdxdna_drm_ioctl_id, encoded the same way <drm/drm.h>'s DRM_IOWR
+			//? macro would (_IOWR('d', nr, type)) — spelled out so we don't need drm.h.
+			constexpr unsigned long DRM_IOCTL_AMDXDNA_GET_INFO =
+				_IOWR('d', 0x40 + 7, amdxdna_drm_get_info);
+		}
+
+		static bool query(int fd, uint32_t param, void* buf, uint32_t& size) {
+			uapi::amdxdna_drm_get_info info{
+				.param = param,
+				.buffer_size = size,
+				.buffer = reinterpret_cast<uint64_t>(buf),
+			};
+			if (ioctl(fd, uapi::DRM_IOCTL_AMDXDNA_GET_INFO, &info) != 0) return false;
+			size = info.buffer_size;
+			return true;
+		}
+
+		bool init() {
+			if (initialized) return false;
+			devices.clear();
+
+			const std::filesystem::path accel_root("/sys/class/accel");
+			std::error_code ec;
+			if (not std::filesystem::is_directory(accel_root, ec)) {
+				Logger::debug("amdxdna: /sys/class/accel not present");
+				return false;
+			}
+
+			for (const auto& entry : std::filesystem::directory_iterator(accel_root, ec)) {
+				const string fname = entry.path().filename().string();
+				if (not fname.starts_with("accel")) continue;
+
+				const auto device_link = entry.path() / "device";
+				if (not std::filesystem::exists(device_link)) continue;
+
+				//? Vendor must be exactly 0x1022 (AMD). Sysfs node ends with a newline.
+				string vendor = readfile(device_link / "vendor", "");
+				while (not vendor.empty() and (vendor.back() == '\n' or vendor.back() == ' ')) vendor.pop_back();
+				if (vendor != "0x1022") continue;
+
+				//? Driver must be amdxdna — rules out other accel-class devices (e.g.
+				//? Habana, other AI accelerators) that don't speak this ioctl ABI.
+				const auto driver_link = std::filesystem::read_symlink(device_link / "driver", ec);
+				if (ec or driver_link.filename().string() != "amdxdna") continue;
+
+				device_paths d{};
+				d.accel_dev = std::filesystem::path("/dev/accel") / fname;
+				if (not std::filesystem::exists(d.accel_dev)) continue;
+				try {
+					//? "device" file holds e.g. "0x17f0\n" — base 0 lets stoul autodetect the 0x prefix.
+					d.pci_device_id = (uint32_t)std::stoul(readfile(device_link / "device", "0"), nullptr, 0);
+				} catch (const std::exception&) {
+					d.pci_device_id = 0;
+				}
+
+				//? Confirm the sensors query actually works before committing to this
+				//? device — older firmware/driver combos may not support it yet.
+				int fd = open(d.accel_dev.c_str(), O_RDWR | O_CLOEXEC);
+				if (fd < 0) {
+					Logger::debug("amdxdna: failed to open {}", d.accel_dev.string());
+					continue;
+				}
+				uapi::amdxdna_drm_query_sensor sensors[16] = {};
+				uint32_t nbytes = sizeof(sensors);
+				bool ok = query(fd, uapi::DRM_AMDXDNA_QUERY_SENSORS, sensors, nbytes);
+				close(fd);
+				if (not ok) {
+					Logger::debug("amdxdna: {} does not support QUERY_SENSORS, skipping", d.accel_dev.string());
+					continue;
+				}
+
+				devices.push_back(std::move(d));
+			}
+
+			device_count = (uint32_t)devices.size();
+			if (device_count == 0) {
+				Logger::debug("amdxdna: no NPU accel nodes found");
+				return false;
+			}
+
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(Nvml::device_count + Rsmi::device_count + Asysfs::device_count + device_count);
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + i] =
+					fmt::format("AMD NPU (1022:{:04x})", devices[i].pci_device_id);
+			}
+
+			initialized = true;
+			Logger::info("Using amdxdna ioctl sensors for {} AMD NPU(s)", device_count);
+			Axdna::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			devices.clear();
+			device_count = 0;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_info& gpu = gpus_slice[i];
+				const device_paths& d = devices[i];
+
+				if constexpr (is_init) {
+					gpu.box_label = "NPU";
+					gpu.supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = false,
+						.gpu_clock = false,
+						.mem_clock = false,
+						.pwr_usage = true,
+						.pwr_state = false,
+						.temp_info = false,
+						.mem_total = false,
+						.mem_used = false,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false,
+					};
+					//? Start at zero and let the observed peak set the scale, like Asysfs/Intel do.
+					gpu.pwr_max_usage = 0;
+				}
+
+				//? AMDXDNA_SENSOR_TYPE_COLUMN_UTILIZATION is reported per AIE column
+				//? (one entry each); average them into a single "NPU busy %" like the
+				//? existing GPU rows show a single aggregate figure.
+				double util_sum = 0;
+				int util_count = 0;
+				long long pwr_mw = -1;
+				size_t num = 0;
+
+				//? On any failure here (open/ioctl), fall through with num == 0 rather
+				//? than skipping the device entirely — the push logic below always
+				//? pushes a (possibly repeated) value for every field declared
+				//? supported, which is an invariant the draw code relies on.
+				int fd = open(d.accel_dev.c_str(), O_RDWR | O_CLOEXEC);
+				if (fd < 0) {
+					Logger::debug("amdxdna: failed to open {}", d.accel_dev.string());
+				} else {
+					uapi::amdxdna_drm_query_sensor sensors[16] = {};
+					uint32_t nbytes = sizeof(sensors);
+					bool ok = query(fd, uapi::DRM_AMDXDNA_QUERY_SENSORS, sensors, nbytes);
+					close(fd);
+					if (ok) num = std::min<size_t>(nbytes / sizeof(sensors[0]), std::size(sensors));
+
+					for (size_t si = 0; si < num; ++si) {
+						const auto& s = sensors[si];
+						//? "Translates value member variables into the correct unit via
+						//? pow(10, unitm) * value" — per the kernel doc comment on this struct.
+						//? Empirically (checked against real load: raw input=1972, unitm=-3
+						//? gives a plausible ~2W), this already lands in the sensor type's
+						//? canonical unit — percent for utilization, Watts for power — with
+						//? no further conversion based on the `units` label needed.
+						const double scaled = (double)s.input * std::pow(10.0, s.unitm);
+
+						if (s.type == uapi::AMDXDNA_SENSOR_TYPE_COLUMN_UTILIZATION) {
+							util_sum += scaled;
+							util_count++;
+						} else if (s.type == uapi::AMDXDNA_SENSOR_TYPE_POWER) {
+							pwr_mw = (long long)std::llround(scaled * 1000.0); //? W -> mW
+						}
+					}
+				}
+
+				if (util_count > 0) {
+					gpu.gpu_percent.at("gpu-totals").push_back(
+						std::clamp((long long)std::llround(util_sum / util_count), 0LL, 100LL));
+				} else {
+					gpu.gpu_percent.at("gpu-totals").push_back(
+						gpu.gpu_percent.at("gpu-totals").empty() ? 0 : gpu.gpu_percent.at("gpu-totals").back());
+				}
+
+				//? A "Total Power" sensor is always present once QUERY_SENSORS succeeds, so
+				//? pwr_mw is expected to be >= 0 every tick. Push unconditionally (falling
+				//? back to 0%) rather than gating on pwr_max_usage > 0 — the NPU reads
+				//? exactly 0mW at genuine idle, and supported_functions.pwr_usage is
+				//? declared true from the start, so the deque must never be left empty.
+				if (pwr_mw >= 0) {
+					gpu.pwr_usage = pwr_mw;
+					gpu.pwr_max_usage = std::max(gpu.pwr_max_usage, gpu.pwr_usage);
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						gpu.pwr_max_usage > 0
+							? std::clamp((long long)std::llround((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL)
+							: 0LL);
+				} else {
+					gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+						gpu.gpu_percent.at("gpu-pwr-totals").empty() ? 0 : gpu.gpu_percent.at("gpu-pwr-totals").back());
+				}
+			}
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2221,7 +2478,8 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
-		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		Axdna::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Axdna::device_count
+		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Axdna::device_count); // size = Intel::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
