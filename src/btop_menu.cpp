@@ -648,6 +648,14 @@ namespace Menu {
 				"Show graphs for memory values.",
 				"",
 				"True or False."},
+			{"mem_selected",
+				"Which memory metrics to display.",
+				"",
+				"\"default\", \"used\", \"available\", \"cached\",",
+				"\"free\", or \"swap_used\".",
+			    "",
+			    "\"default\" shows all metrics.",
+				"Any other option forces \"Mem graphs\"."},
 			{"show_disks",
 				"Split memory box to also show disks.",
 				"",
@@ -1335,6 +1343,7 @@ static int optionsMenu(const string& key) {
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
 		#endif
+			{"mem_selected", std::cref(Config::mem_metrics_values)}
 		};
 		auto tty_mode = Config::getB("tty_mode");
 		auto vim_keys = Config::getB("vim_keys");
@@ -1572,6 +1581,9 @@ static int optionsMenu(const string& key) {
 					}
 					else if (option == "base_10_bitrate") {
 						recollect = true;
+					}
+					else if (option == "mem_selected") {
+						screen_redraw = true;
 					}
 					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 						screen_redraw = true;
