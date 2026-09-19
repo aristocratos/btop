@@ -428,15 +428,15 @@ namespace Theme {
 
 	void updateThemes() {
 		themes.clear();
-		themes.push_back("Default");
-		themes.push_back("TTY");
+		themes.emplace_back("Default");
+		themes.emplace_back("TTY");
 
 		//? Priority: custom_theme_dir -> user_theme_dir -> theme_dir
 		for (const auto& path : { custom_theme_dir, user_theme_dir, theme_dir } ) {
 			if (path.empty()) continue;
 			for (auto& file : fs::directory_iterator(path)) {
 				if (file.path().extension() == ".theme" and access(file.path().c_str(), R_OK) != -1 and not v_contains(themes, file.path().c_str())) {
-					themes.push_back(file.path().c_str());
+					themes.emplace_back(file.path().c_str());
 				}
 			}
 		}
