@@ -191,7 +191,7 @@ namespace Gpu {
 		extern bool shutdown();
 	}
 	#ifdef __APPLE__
-	namespace AppleSilicon {
+	namespace MacOS {
 		extern bool shutdown();
 	}
 	#endif
