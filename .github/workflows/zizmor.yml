@@ -15,7 +15,7 @@ concurrency:
 jobs:
   zizmor:
     name: Run zizmor 🌈
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       security-events: write # Required for upload-sarif (used by zizmor-action) to upload SARIF files.
     steps:
