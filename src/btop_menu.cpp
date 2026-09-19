@@ -598,6 +598,14 @@ namespace Menu {
 				"Horizontally mirror the GPU graph.",
 				"",
 				"True or False."},
+		#ifdef __APPLE__
+			{"gpu_utilization_mode",
+				"Apple Silicon GPU utilization mode.",
+				"",
+				"\"active\" reports time outside idle states.",
+				"\"normalized\" also weights active time",
+				"by GPU frequency relative to its maximum."},
+		#endif
 			{"shown_gpus",
 				"Manually set which gpu vendors to show.",
 				"",
@@ -1334,6 +1342,9 @@ static int optionsMenu(const string& key) {
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
+			#ifdef __APPLE__
+			{"gpu_utilization_mode", std::cref(Config::gpu_utilization_modes)},
+			#endif
 		#endif
 		};
 		auto tty_mode = Config::getB("tty_mode");
