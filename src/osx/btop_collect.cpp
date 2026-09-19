@@ -426,7 +426,7 @@ namespace Gpu {
 				//? Supported functions
 				gpus_slice[0].supported_functions = {
 					.gpu_utilization = true,
-					.mem_utilization = true,
+					.mem_utilization = false,
 					.gpu_clock = not gpu_freqs.empty(),
 					.mem_clock = false,
 					.pwr_usage = true,
@@ -538,7 +538,6 @@ namespace Gpu {
 			//? Store GPU utilization
 			if (got_gpu_util) {
 				gpus_slice[0].gpu_percent.at("gpu-totals").push_back(gpu_utilization);
-				gpus_slice[0].mem_utilization_percent.push_back(gpu_utilization);
 			}
 
 			//? Store power usage (convert W to mW)
