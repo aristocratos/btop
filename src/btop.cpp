@@ -358,8 +358,25 @@ namespace Runner {
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
 
+	//* Set while the runner thread writes to the terminal, which blocks for as long as the terminal is not reading (e.g. paused by the OS)
+	atomic<bool> writing (false);
+
 	static inline auto set_active(bool value) noexcept {
 		active.store(value);
+	}
+
+	//* Waits up to <wait_ms> for the runner thread to finish, not counting time blocked on terminal output or time this process was suspended
+	static void wait_idle(uint64_t wait_ms) {
+		uint64_t stalled_ms = 0;
+		auto last = time_ms();
+		while (active and stalled_ms < wait_ms) {
+			atomic_wait_for(active, true, 100);
+			const auto now = time_ms();
+			if (not writing or Global::quitting or Global::should_quit) {
+				stalled_ms += min(now - last, (uint64_t)1'000);
+			}
+			last = now;
+		}
 	}
 
 	//* Setup semaphore for triggering thread to do work
@@ -718,10 +735,12 @@ namespace Runner {
 
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			const bool term_sync = Config::getB("terminal_sync");
+			writing = true;
 			cout << (term_sync ? Term::sync_start : "") << (conf.overlay.empty()
 					? output
 					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
 				<< (term_sync ? Term::sync_end : "") << flush;
+			writing = false;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		return {};
@@ -730,10 +749,10 @@ namespace Runner {
 
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
-		atomic_wait_for(active, true, 10'000);
+		wait_idle(10'000);
 		if (active) {
 			Logger::warning("Runner thread slow (>10s), waiting up to 30s...");
-			atomic_wait_for(active, true, 20'000);
+			wait_idle(20'000);
 		}
 		if (active) {
 			Global::exit_error_msg = "Runner thread stalled for 30s, exiting.";
@@ -782,7 +801,7 @@ namespace Runner {
 			Global::exit_error_msg = "Runner thread died unexpectedly!";
 			clean_quit(1);
 		} else if (is_runner_busy) {
-			atomic_wait_for(active, true, 30'000);
+			wait_idle(30'000);
 			if (active) {
 				set_active(false);
 				if (Global::quitting) {
