@@ -1843,8 +1843,9 @@ namespace Proc {
 								std::string_view proc_args(proc_chars.get(), argmax);
 								if (size_t null_pos = proc_args.find('\0', sizeof(argc)); null_pos != string::npos) {
 									if (size_t start_pos = proc_args.find_first_not_of('\0', null_pos); start_pos != string::npos) {
-										while (argc-- > 0 and null_pos != string::npos and cmp_less(new_proc.cmd.size(), 1000)) {
+										for (bool first_arg = true; argc-- > 0 and null_pos != string::npos and cmp_less(new_proc.cmd.size(), 1000); first_arg = false) {
 											null_pos = proc_args.find('\0', start_pos);
+											if (first_arg) new_proc.cmd_basename_offset = command_basename_offset(proc_args.substr(start_pos, null_pos - start_pos));
 											new_proc.cmd += (string)proc_args.substr(start_pos, null_pos - start_pos) + ' ';
 											start_pos = null_pos + 1;
 										}

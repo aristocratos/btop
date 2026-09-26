@@ -129,6 +129,9 @@ namespace Config {
 
 		{"proc_tree",			"#* Show processes as a tree."},
 
+		{"proc_command_basename", "#* Show only the executable basename in process commands, preserving arguments.\n"
+								 "#* The detailed view still shows the full command."},
+
 		{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
 
 		{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
@@ -320,6 +323,7 @@ namespace Config {
 		{"rounded_corners", true},
 		{"proc_reversed", false},
 		{"proc_tree", false},
+		{"proc_command_basename", false},
 		{"proc_colors", true},
 		{"proc_gradient", true},
 		{"proc_per_core", false},
