@@ -166,6 +166,10 @@ namespace Gpu {
 
 		long long mem_total = 0;
 		long long mem_used = 0;
+		// System RAM managed by the GPU driver, separate from dedicated VRAM.
+		long long shared_mem_total = 0;
+		std::optional<long long> shared_mem_used;
+		[[nodiscard]] auto shared_mem_percent() const -> std::optional<int>;
 		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
 		long long mem_clock_speed = 0; // MHz
 
@@ -180,6 +184,10 @@ namespace Gpu {
 		// vector<proc_info> graphics_processes = {}; // TODO
 		// vector<proc_info> compute_processes = {};
 	};
+
+	// Number of rows occupied by GPU summaries in the CPU box.
+	int brief_info_rows(const vector<gpu_info>& gpus, std::string_view mode,
+		const vector<int>& shown_panels, bool show_shared);
 
 	namespace Nvml {
 		extern bool shutdown();
