@@ -224,13 +224,14 @@ namespace Cpu {
 		prop_dictionary_t dict;
 		prop_object_t fields_array;
 		// List of common thermal sensors in NetBSD.
-		const string sensors[6] = {
+		const string sensors[7] = {
 			"coretemp0",
 			"acpitz0",
 			"thinkpad0",
 			"amdzentemp0",
 			"coretemp1",
-			"acpitz1"
+			"acpitz1",
+			"vcmbox0"
 		};
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
