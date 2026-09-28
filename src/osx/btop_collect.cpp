@@ -67,6 +67,9 @@ tab-size = 4
 #include "sensors.hpp"
 #endif
 #include "smc.hpp"
+#if defined(__x86_64__)
+#include "intel_cpu_frequency.hpp"
+#endif
 
 #if defined(GPU_SUPPORT)
 #include <dlfcn.h>
@@ -863,6 +866,12 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
+	#if defined(__x86_64__)
+		static IntelCpuFrequency frequency;
+		if (const auto hz = frequency.sample_hz())
+			return fmt::format("{:.2f}", *hz / 1e9);
+	#endif
+		// Nominal frequency while warming up, or if the native sampler is unavailable.
 		unsigned int freq = 1;
 		size_t size = sizeof(freq);
 
