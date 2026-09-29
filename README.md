@@ -40,7 +40,7 @@
 * [Compilation NetBSD](#compilation-netbsd)
 * [Compilation OpenBSD](#compilation-openbsd)
 * [Testing](#testing)
-* [GPU compatibility](#gpu-compatibility)
+* [GPU compatibility](#optional-dependencies-needed-for-gpu-monitoring)
 * [Installing the snap](#installing-the-snap)
 * [Configurability](#configurability)
 * [License](#license)
@@ -303,7 +303,7 @@ GPU monitoring is supported on Linux and on macOS with Apple Silicon GPUs.
 
 GPU monitoring also requires a btop binary built with GPU support (`GPU_SUPPORT=true` flag).
 
-See [GPU compatibility](#gpu-compatibility) section for more about compiling with GPU support.
+See [GPU compatibility](#optional-dependencies-needed-for-gpu-monitoring) section for more about compiling with GPU support.
 
  * **NVIDIA**
 
