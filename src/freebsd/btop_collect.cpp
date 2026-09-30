@@ -148,10 +148,8 @@ namespace Shared {
 
 		int64_t memsize = 0;
 		size_t size = sizeof(memsize);
-		if (sysctlbyname("hw.physmem", &memsize, &size, nullptr, 0) < 0) {
-			Logger::warning("Could not get memory size");
-		}
-		totalMem = memsize;
+		sysctlbyname("vm.stats.vm.v_page_count", &memsize, &size, nullptr, 0);
+		totalMem = memsize * pageSize;
 
 		struct timeval result;
 		size = sizeof(result);
@@ -599,33 +597,24 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		int mib[4];
-		u_int memActive, memWire, cachedMem, freeMem;
-		size_t len;
+		uint64_t memActive, memWire, cachedMem, freeMem, laundryMem;
+		u_int page_count = 0;
+		size_t len = sizeof(page_count);
 
-   		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
-		len = sizeof(memActive);
-		sysctl(mib, 4, &(memActive), &len, nullptr, 0);
-		memActive *= Shared::pageSize;
+		sysctlbyname("vm.stats.vm.v_active_count", &page_count, &len, nullptr, 0);
+		memActive = page_count * Shared::pageSize;
+		sysctlbyname("vm.stats.vm.v_wire_count",   &page_count,   &len, nullptr, 0);
+		memWire = page_count * Shared::pageSize;
+		sysctlbyname("vm.stats.vm.v_cache_count",  &page_count, &len, nullptr, 0);
+		cachedMem = page_count * Shared::pageSize;
+		sysctlbyname("vm.stats.vm.v_free_count",   &page_count,   &len, nullptr, 0);
+		freeMem = page_count * Shared::pageSize;
+		sysctlbyname("vm.stats.vm.v_laundry_count", &page_count, &len, nullptr, 0); 
+		laundryMem = page_count * Shared::pageSize;
 
-		len = 4; sysctlnametomib("vm.stats.vm.v_wire_count", mib, &len);
-		len = sizeof(memWire);
-		sysctl(mib, 4, &(memWire), &len, nullptr, 0);
-		memWire *= Shared::pageSize;
-
-		mem.stats.at("used") = memWire + memActive;
-		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
-
-		len = sizeof(cachedMem);
-   		len = 4; sysctlnametomib("vm.stats.vm.v_cache_count", mib, &len);
-   		sysctl(mib, 4, &(cachedMem), &len, nullptr, 0);
-   		cachedMem *= Shared::pageSize;
+		mem.stats.at("used") = memWire + memActive + laundryMem;
+		mem.stats.at("available") = Shared::totalMem - (memWire + memActive + laundryMem);
    		mem.stats.at("cached") = cachedMem;
-
-		len = sizeof(freeMem);
-   		len = 4; sysctlnametomib("vm.stats.vm.v_free_count", mib, &len);
-   		sysctl(mib, 4, &(freeMem), &len, nullptr, 0);
-   		freeMem *= Shared::pageSize;
    		mem.stats.at("free") = freeMem;
 
 		if (show_swap) {
