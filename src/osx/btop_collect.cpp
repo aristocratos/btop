@@ -546,7 +546,7 @@ namespace Gpu {
 				gpus_slice[0].pwr_usage = static_cast<long long>(round(gpu_power_watts * 1000.0));
 				if (gpus_slice[0].pwr_usage > gpus_slice[0].pwr_max_usage)
 					gpus_slice[0].pwr_max_usage = gpus_slice[0].pwr_usage;
-				gpus_slice[0].gpu_percent.at("gpu-pwr-totals").push_back(
+					gpus_slice[0].gpu_percent.at("gpu-pwr-totals").push_back(
 					clamp(static_cast<long long>(round(static_cast<double>(gpus_slice[0].pwr_usage) * 100.0 / static_cast<double>(gpus_slice[0].pwr_max_usage))), 0ll, 100ll));
 			}
 
@@ -1338,7 +1338,7 @@ namespace Mem {
 			}
 
 			//? Remove disks no longer mounted or filtered out
-			if (swap_disk and has_swap) found.push_back("swap");
+			if (swap_disk and has_swap) found.emplace_back("swap");
 			for (auto it = disks.begin(); it != disks.end();) {
 				if (not v_contains(found, it->first))
 					it = disks.erase(it);
@@ -1400,11 +1400,11 @@ namespace Mem {
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
 			if (snapped and disks.contains("/mnt"))
-				mem.disks_order.push_back("/mnt");
+				mem.disks_order.emplace_back("/mnt");
 			else if (disks.contains("/"))
-				mem.disks_order.push_back("/");
+				mem.disks_order.emplace_back("/");
 			if (swap_disk and has_swap) {
-				mem.disks_order.push_back("swap");
+				mem.disks_order.emplace_back("swap");
 				if (not disks.contains("swap"))
 					disks["swap"] = {"", "swap"};
 				disks.at("swap").total = mem.stats.at("swap_total");
