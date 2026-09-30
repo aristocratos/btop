@@ -161,6 +161,8 @@ namespace Config {
 								"#* Select from a list of detected attributes from the options menu."},
 	#ifdef GPU_SUPPORT
 		{"show_gpu_info",		"#* If gpu info should be shown in the cpu box. Available values = \"Auto\", \"On\" and \"Off\"."},
+		{"show_gpu_shared", "#* Show shared GPU system memory (AMD GTT) below each GPU summary in the CPU box.\n"
+			"#* The reported total is a driver budget, not additional or currently free RAM."},
 	#endif
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
@@ -372,6 +374,7 @@ namespace Config {
 		{"should_selection_return_to_followed", false},
 	#ifdef GPU_SUPPORT
 		{"nvml_measure_pcie_speeds", true},
+		{"show_gpu_shared", true},
 		{"rsmi_measure_pcie_speeds", true},
 		{"gpu_mirror_graph", true},
 	#endif

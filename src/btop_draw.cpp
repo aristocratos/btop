@@ -418,6 +418,24 @@ namespace Draw {
 		return out;
 	}
 
+	#ifdef GPU_SUPPORT
+	string gpu_shared_memory(const Gpu::gpu_info& gpu, int width) {
+		if (width <= 0 or gpu.shared_mem_total <= 0) return "";
+		const bool compact = width < 40;
+		const string label = "GTT ";
+		const auto percent = gpu.shared_mem_percent();
+		const string values = fmt::format("{} / {}",
+			percent ? floating_humanizer(*gpu.shared_mem_used, compact) : "N/A",
+			floating_humanizer(gpu.shared_mem_total, compact));
+		const int meter_width = width - static_cast<int>(label.size() + values.size()) - 1;
+		if (meter_width < 1)
+			return Theme::c("main_fg") + ljust(uresize(label + values, width), width);
+		const string meter = percent ? Meter(meter_width, "used")(*percent) : string(meter_width, ' ');
+		return fmt::format("{}{}{}{}{} {}{}", Theme::c("main_fg"), Fx::b, label, Fx::ub,
+			meter, Theme::c("main_fg"), values);
+	}
+	#endif
+
 	//* Graph class ------------------------------------------------------------------------------------------------------------>
 	void Graph::_create(const deque<long long>& data, int data_offset) {
 		bool mult = (data.size() - data_offset > 1);
@@ -898,11 +916,11 @@ namespace Cpu {
 		}
 
 		int max_row = b_height - 3; // Subtracting one extra row for the load average (and power if enabled)
-		int n_gpus_to_show = 0;
+		int gpu_rows = 0;
 	#ifdef GPU_SUPPORT
-		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
+		gpu_rows = Gpu::brief_info_rows(gpus, show_gpu_info, Gpu::shown_panels, Config::getB("show_gpu_shared"));
 	#endif
-		max_row -= n_gpus_to_show;
+		max_row = max(2, max_row - gpu_rows);
 
 		auto is_cpu_enabled = [&cpu](const std::int32_t num) -> bool {
 			return !cpu.active_cpus.has_value() || std::ranges::find(cpu.active_cpus.value(), num) != cpu.active_cpus.value().end();
@@ -959,7 +977,7 @@ namespace Cpu {
 
 		//? Load average
 		if (cy < b_height - 1 and cc <= b_columns) {
-			cy = b_height - 2 - n_gpus_to_show;
+			cy = max(1, b_height - 2 - gpu_rows);
 
 			string load_avg_pre = "Load avg:";
 			string load_avg;
@@ -978,6 +996,7 @@ namespace Cpu {
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
 				if (gpu_auto and v_contains(Gpu::shown_panels, i))
 					continue;
+				if (cy + 1 >= b_height - 1) break;
 				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
 				if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
 				if (gpus[i].supported_functions.gpu_utilization) {
@@ -1015,7 +1034,8 @@ namespace Cpu {
 						+ fmt::format("{:>4.{}f}", gpus[i].pwr_usage / 1000.0, gpus[i].pwr_usage < 10'000 ? 2 : gpus[i].pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
 				}
 
-				if (cy > b_height - 1) break;
+				if (Config::getB("show_gpu_shared") and gpus[i].shared_mem_total > 0 and cy + 1 < b_height - 1)
+					out += Mv::to(b_y + ++cy, b_x + 1) + Draw::gpu_shared_memory(gpus[i], b_width - 2);
 			}
 		}
 	#endif
@@ -2308,10 +2328,8 @@ namespace Draw {
 			using namespace Cpu;
 		#ifdef GPU_SUPPORT
 			// inline GPU information
-			int gpus_extra_height =
-				Config::getS("show_gpu_info") == "On" ? Gpu::count
-				: Config::getS("show_gpu_info") == "Auto" ? Gpu::count - Gpu::shown
-				: 0;
+			const int gpus_extra_height = Gpu::count > 0 ? Gpu::brief_info_rows(Gpu::collect(true),
+				Config::getS("show_gpu_info"), Gpu::shown_panels, Config::getB("show_gpu_shared")) : 0;
 		#endif
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
@@ -2329,7 +2347,7 @@ namespace Draw {
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
 		#ifdef GPU_SUPPORT
-			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - 5)));
+			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / max(1, height - gpus_extra_height - 5)));
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
