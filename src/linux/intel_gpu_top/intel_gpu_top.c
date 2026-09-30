@@ -173,6 +173,95 @@ static void pkg_power_open(struct pmu_counter *pmu,
 	rapl_open(pmu, "energy-pkg", engines);
 }
 
+//* Read a decimal u64 attribute from a hwmon sysfs file. Returns 0 if the
+//* file is missing or unreadable (best-effort; sensors may appear later).
+static uint64_t hwmon_read_u64(const char *path)
+{
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return 0;
+
+	unsigned long long value = 0;
+	if (fscanf(f, "%llu", &value) != 1)
+		value = 0;
+
+	fclose(f);
+	return (uint64_t)value;
+}
+
+//* Locate the i915 hwmon device. The driver creates /sys/class/hwmon/hwmonN
+//* whose `name` file equals `i915`; its `device` symlink points back at
+//* the PCI GPU (e.g. 0000:2f:00.0). We match by name and, when we can derive
+//* the PCI address from the resolved i915 device name, confirm the symlink so
+//* we never read the wrong sensor on a multi-GPU host.
+static bool hwmon_find(struct engines *engines, char *path, size_t size)
+{
+	DIR *d;
+	struct dirent *de;
+	char wanted[64] = {0};
+	bool found = false;
+
+	path[0] = 0;
+
+	//* engines->device is the resolved perf name, e.g. "i915_0000_2f_00.0";
+	//* turn it into "0000:2f:00.0" for the symlink match.
+	if (engines->device) {
+		const char *p = strstr(engines->device, "i915_");
+		if (p) {
+			p += 5;
+			size_t i = 0;
+			for (; p[i] && i < sizeof(wanted) - 1; i++)
+				wanted[i] = (p[i] == '_') ? ':' : p[i];
+		}
+	}
+
+	if ((d = opendir("/sys/class/hwmon")) == NULL)
+		return false;
+
+	while ((de = readdir(d)) != NULL) {
+		char base[64], namepath[PATH_MAX], name[16];
+		char target[PATH_MAX];
+		ssize_t tn;
+
+		//* Note: do not gate on d_type == DT_DIR. sysfs frequently reports
+		//* d_type == DT_UNKNOWN, which would silently skip every entry.
+		if (strncmp(de->d_name, "hwmon", 5) != 0)
+			continue;
+
+		snprintf(base, sizeof(base), "/sys/class/hwmon/%s", de->d_name);
+		snprintf(namepath, sizeof(namepath), "%s/name", base);
+
+		FILE *f = fopen(namepath, "r");
+		if (f) {
+			if (fgets(name, sizeof(name), f) && strncmp(name, "i915", 4) == 0) {
+				//* Confirm the PCI address, if we have one to check against.
+				bool dev_ok = true;
+				if (wanted[0]) {
+					snprintf(namepath, sizeof(namepath), "%s/device", base);
+					tn = readlink(namepath, target, sizeof(target) - 1);
+					if (tn >= 0) {
+						target[tn] = 0;
+						if (strstr(target, wanted) == NULL)
+							dev_ok = false;
+					}
+				}
+
+				if (dev_ok) {
+					snprintf(path, size, "%s", base);
+					found = true;
+				}
+			}
+			fclose(f);
+		}
+
+		if (found)
+			break;
+	}
+
+	closedir(d);
+	return found;
+}
+
 static uint64_t
 get_pmu_config(int dirfd, const char *name, const char *counter)
 {
@@ -253,13 +342,40 @@ static int engine_cmp(const void *__a, const void *__b)
 struct engines *discover_engines(const char *device)
 {
 	char sysfs_root[PATH_MAX];
+	char device_name[64];
 	struct engines *engines;
 	struct dirent *dent;
 	int ret = 0;
-	DIR *d;
+	DIR *d, *scan;
 
+	//* The i915 perf PMU used to be exposed as
+	//* /sys/devices/<driver>/events. Kernels that identify the device by
+	//* its PCI address expose it as /sys/devices/i915_<b:d.f>/events
+	//* instead, so the bare <driver> path is absent. Resolve the concrete
+	//* i915_* device by scanning /sys/devices for an entry exposing an
+	//* events subdir, and remember its name (pmu_init needs it to find the
+	//* perf event source type).
 	snprintf(sysfs_root, sizeof(sysfs_root),
 		 "/sys/devices/%s/events", device);
+	snprintf(device_name, sizeof(device_name), "%s", device);
+	if ((scan = opendir("/sys/devices")) != NULL) {
+		struct dirent *ed;
+		while ((ed = readdir(scan)) != NULL) {
+			if (strncmp(ed->d_name, "i915", 4) != 0)
+				continue;
+			char cand[PATH_MAX];
+			snprintf(cand, sizeof(cand),
+				"/sys/devices/%s/events", ed->d_name);
+			if (opendir(cand) != NULL) {
+				snprintf(sysfs_root, sizeof(sysfs_root),
+					"%s", cand);
+				snprintf(device_name, sizeof(device_name),
+					"%s", ed->d_name);
+				break;
+			}
+		}
+		closedir(scan);
+	}
 
 	engines = malloc(sizeof(struct engines));
 	if (!engines)
@@ -268,7 +384,10 @@ struct engines *discover_engines(const char *device)
 	memset(engines, 0, sizeof(*engines));
 
 	engines->num_engines = 0;
-	engines->device = device;
+	//* engines->device drives the perf-event-source lookup in pmu_init
+	//* (/sys/bus/event_source/devices/<device>/type), so it must carry the
+	//* resolved instance name rather than just "i915".
+	engines->device = strdup(device_name);
 	engines->discrete = !is_igpu(device);
 
 	d = opendir(sysfs_root);
@@ -368,6 +487,8 @@ struct engines *discover_engines(const char *device)
 	return engines;
 
 err:
+	if (engines->device)
+		free(engines->device);
 	free(engines);
 
 	return NULL;
@@ -402,6 +523,8 @@ void free_engines(struct engines *engines)
 
 	closedir(engines->root);
 
+	if (engines->device)
+		free(engines->device);
 	free(engines->class);
 	free(engines);
 }
@@ -561,6 +684,16 @@ int pmu_init(struct engines *engines)
 	imc_reads_open(&engines->imc_reads, engines);
 	imc_writes_open(&engines->imc_writes, engines);
 
+	//* DG1 / IGPUs have no RAPL `energy-gpu` PMU; fall back to the i915
+	//* hwmon sensor for power and temperature.
+	engines->hwmon_energy.present = false;
+	engines->temp_milli = -1;
+	if (hwmon_find(engines, engines->hwmon_path, sizeof(engines->hwmon_path))) {
+		engines->hwmon_present = true;
+		engines->hwmon_energy.present = true;
+		engines->hwmon_energy.idx = 0;
+	}
+
 	return 0;
 }
 
@@ -664,5 +797,17 @@ void pmu_sample(struct engines *engines)
 		pmu_read_multi(engines->imc_fd, engines->num_imc, val);
 		update_sample(&engines->imc_reads, val);
 		update_sample(&engines->imc_writes, val);
+	}
+	//* Read the i915 hwmon sensors: the energy counter is a cumulative
+	//* microjoule value (power = dE/dt), temp1_input is milli-Celsius.
+	if (engines->hwmon_present) {
+		char buf[PATH_MAX];
+
+		snprintf(buf, sizeof(buf), "%s/energy1_input", engines->hwmon_path);
+		engines->hwmon_energy.val.prev = engines->hwmon_energy.val.cur;
+		engines->hwmon_energy.val.cur = hwmon_read_u64(buf);
+
+		snprintf(buf, sizeof(buf), "%s/temp1_input", engines->hwmon_path);
+		engines->temp_milli = (int)hwmon_read_u64(buf);
 	}
 }
