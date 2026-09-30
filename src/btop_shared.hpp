@@ -231,6 +231,9 @@ namespace Cpu {
 		};
 		vector<deque<long long>> core_percent;
 		vector<deque<long long>> temp;
+		vector<deque<long long>> core_freq_kHz;
+		vector<long long> min_core_freq_kHz;
+		vector<long long> max_core_freq_kHz;
 		long long temp_max = 0;
 		array<double, 3> load_avg;
 		float usage_watts = 0;
