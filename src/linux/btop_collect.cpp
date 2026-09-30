@@ -3548,6 +3548,7 @@ namespace Proc {
 							}
 						}
 					}
+					remember_tree_children(current_procs, toggle_children);
 					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
 				}
 				toggle_children = -1;
@@ -3565,6 +3566,7 @@ namespace Proc {
 					else if (expand > -1) {
 						collapser->collapsed = false;
 					}
+					remember_tree_state(current_procs, find_pid, collapser->collapsed);
 					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
 				}
 				collapse = expand = -1;
@@ -3592,6 +3594,7 @@ namespace Proc {
 
 			//? Auto-collapse processes with many children when entering tree mode
 			_auto_collapse_oversized(current_procs, tree_mode_change);
+			restore_tree_state(current_procs);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {

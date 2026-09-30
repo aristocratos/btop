@@ -129,6 +129,10 @@ namespace Config {
 
 		{"proc_tree",			"#* Show processes as a tree."},
 
+		{"proc_tree_persist_state", "#* Persist manual tree expand/collapse choices by process-name ancestry across btop runs."},
+
+		{"proc_tree_state", "# Internal state for proc_tree_persist_state. Do not edit manually."},
+
 		{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
 
 		{"proc_gradient", 		"#* Use a darkening gradient in the process list."},
@@ -300,6 +304,7 @@ namespace Config {
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
 		{"proc_command", ""},
+		{"proc_tree_state", ""},
 		{"selected_name", ""},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
@@ -320,6 +325,7 @@ namespace Config {
 		{"rounded_corners", true},
 		{"proc_reversed", false},
 		{"proc_tree", false},
+		{"proc_tree_persist_state", false},
 		{"proc_colors", true},
 		{"proc_gradient", true},
 		{"proc_per_core", false},
