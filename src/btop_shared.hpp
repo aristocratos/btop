@@ -396,6 +396,10 @@ namespace Proc {
 		uint64_t cpu_s{};
 		uint64_t cpu_t{};
 		uint64_t death_time{};
+		uint64_t io_read{};
+		uint64_t io_write{};
+		uint64_t io_read_b{};
+		uint64_t io_write_b{};
 		string prefix{};        // defaults to ""
 		size_t depth{};
 		size_t tree_index{};
