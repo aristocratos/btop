@@ -1707,6 +1707,7 @@ namespace Proc {
 	string draw(const vector<proc_info>& plist, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
 		auto proc_tree = Config::getB("proc_tree");
+		const auto proc_command_basename = Config::getB("proc_command_basename");
 		bool show_detailed = (Config::getB("show_detailed") and cmp_equal(Proc::detailed.last_pid, Config::getI("detailed_pid")));
 		bool proc_gradient = (Config::getB("proc_gradient") and not Config::getB("lowcolor") and Theme::gradients.contains("proc"));
 		auto proc_colors = Config::getB("proc_colors");
@@ -2105,9 +2106,11 @@ namespace Proc {
 				}
 			}
 
-			const auto san_cmd = replace_ascii_control(p.cmd);
+			string_view command = p.cmd;
+			if (proc_command_basename and p.cmd_basename_offset < command.size()) command.remove_prefix(p.cmd_basename_offset);
+			const auto san_cmd = replace_ascii_control(string{command});
 
-			if (not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(san_cmd) != ulen(san_cmd, true);
+			if (redraw or not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(san_cmd) != ulen(san_cmd, true);
 
 			//? Normal view line
 			if (not proc_tree) {
@@ -2127,10 +2130,12 @@ namespace Proc {
 					width_left -= (ulen(p.name) + 1);
 				}
 				if (width_left > 7) {
-					const string_view cmd = width_left > 40 ? rtrim(san_cmd) : p.short_cmd;
+					const string_view cmd = width_left > 40 or proc_command_basename ? rtrim(san_cmd) : p.short_cmd;
 					if (not cmd.empty() and cmd != p.name) {
-						out += g_color + '(' + uresize(string{cmd}, width_left - 3, p_wide_cmd[p.pid]) + ") ";
-						width_left -= (ulen(string{cmd}, true) + 3);
+						const auto command_width = ulen(cmd, p_wide_cmd[p.pid]);
+						const auto display_cmd = cmp_greater(command_width, width_left - 3) ? uresize(string{cmd}, width_left - 3, p_wide_cmd[p.pid]) : string{cmd};
+						out += g_color + '(' + display_cmd + ") ";
+						width_left -= (ulen(display_cmd, true) + 3);
 					}
 				}
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
