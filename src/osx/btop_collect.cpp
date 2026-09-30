@@ -978,6 +978,7 @@ namespace Cpu {
 
 		uint32_t percent = -1;
 		long seconds = -1;
+		float watts = -1;
 		string status = "discharging";
 		IOPSInfo_Wrap ps_info{};
 		if (ps_info()) {
@@ -1006,6 +1007,28 @@ namespace Cpu {
 					if (percent == 100) {
 						status = "full";
 					}
+
+					CFMutableDictionaryRef matchingDict = IOServiceMatching("AppleSmartBattery");
+					if (matchingDict) {
+						io_service_t service = IOServiceGetMatchingService(0, matchingDict);
+						if (service) {
+							CFMutableDictionaryRef properties = NULL;
+							if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS and properties) {
+								long long amperage = 0;
+								long long voltage = 0;
+								CFNumberRef ampref = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("InstantAmperage"));
+								if (not ampref) ampref = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("Amperage"));
+								if (ampref) CFNumberGetValue(ampref, kCFNumberLongLongType, &amperage);
+								CFNumberRef voltref = (CFNumberRef)CFDictionaryGetValue(properties, CFSTR("Voltage"));
+								if (voltref) CFNumberGetValue(voltref, kCFNumberLongLongType, &voltage);
+								if (voltage != 0) {
+									watts = std::abs(static_cast<float>(amperage) * voltage) / 1000000.0f;
+								}
+								CFRelease(properties);
+							}
+							IOObjectRelease(service);
+						}
+					}
 				} else {
 					has_battery = false;
 				}
@@ -1013,7 +1036,7 @@ namespace Cpu {
 				has_battery = false;
 			}
 		}
-		return {percent, -1, seconds, status};
+		return {percent, watts, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
