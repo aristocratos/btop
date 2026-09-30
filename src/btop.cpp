@@ -623,8 +623,8 @@ namespace Runner {
 					}
 				}
 
-				//? PROC
-				if (v_contains(conf.boxes, "proc")) {
+				//? PROC and CTR, containers are collected together with the processes
+				if (v_contains(conf.boxes, "proc") or v_contains(conf.boxes, "ctr")) {
 					try {
 						if (Global::debug) debug_timer("proc", collect_begin);
 
@@ -633,8 +633,9 @@ namespace Runner {
 
 						if (Global::debug) debug_timer("proc", draw_begin);
 
-						//? Draw box
-						if (not pause_output) output += Proc::draw(proc, conf.force_redraw, conf.no_update);
+						//? Draw boxes
+						if (not pause_output and Ctr::shown) output += Ctr::draw(conf.force_redraw, conf.no_update);
+						if (not pause_output and Proc::shown) output += Proc::draw(proc, conf.force_redraw, conf.no_update);
 
 						if (Global::debug) debug_timer("proc", draw_done);
 					}
@@ -674,6 +675,7 @@ namespace Runner {
 						"{mv4}{hiFg}3 {mainFg}| Show NET box"
 						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
 						"{mv6}{hiFg}5-0 {mainFg}| Show GPU boxes"
+						"{mv9}{hiFg}x {mainFg}| Show CTR box"
 						"{mv7}{hiFg}esc {mainFg}| Show menu"
 						"{mv8}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
@@ -684,8 +686,9 @@ namespace Runner {
 						"mv4"_a = Mv::to(y+10, x),
 						"mv5"_a = Mv::to(y+11, x),
 						"mv6"_a = Mv::to(y+12, x-2),
-						"mv7"_a = Mv::to(y+13, x-2),
-						"mv8"_a = Mv::to(y+14, x)
+						"mv9"_a = Mv::to(y+13, x),
+						"mv7"_a = Mv::to(y+14, x-2),
+						"mv8"_a = Mv::to(y+15, x)
 					);
 				}
 				output += empty_bg;

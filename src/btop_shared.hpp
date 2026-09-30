@@ -401,6 +401,7 @@ namespace Proc {
 		size_t tree_index{};
 		bool collapsed{};
 		bool filtered{};
+		string container{};     // cgroup path of the container the process runs in, "" if not in a container
 	};
 
 	//* Container for process info box
@@ -443,6 +444,9 @@ namespace Proc {
 
 	auto matches_filter(const proc_info& proc, const std::string& filter) -> bool;
 
+	//* True if process should be hidden from the process list because it runs in a container
+	auto ctr_hidden(const proc_info& proc) -> bool;
+
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 				   int cur_depth, bool collapsed, const string& filter,
@@ -456,6 +460,49 @@ namespace Proc {
 
 	//* Auto-collapse processes with many direct children when entering tree mode
 	void _auto_collapse_oversized(std::vector<proc_info>& current_procs, const bool tree_mode_change);
+}
+
+namespace Ctr {
+	extern string box;
+	extern int x, y, width, height, min_width, min_height;
+	extern bool shown, redraw;
+
+	//? Cgroup path of the container selected in the container box, "" if none
+	extern string selected;
+
+	//* Container for container information
+	struct ctr_info {
+		string engine;
+		string name;
+		string path;            // cgroup path of the container root
+		size_t procs{};
+		double cpu_p{};
+		uint64_t mem{};
+		uint64_t mem_limit{};   // 0 if unlimited
+		uint64_t cpu_t{};       // total cpu time in microseconds at last update, 0 if unknown
+		deque<long long> cpu_percent{};
+		bool operator==(const ctr_info&) const = default;
+	};
+
+	extern vector<ctr_info> current_ctrs;
+
+	//* Get container from a cgroup path, returns nullopt if the cgroup doesn't belong to a container
+	auto parse_cgroup(std::string_view cgroup) -> std::optional<ctr_info>;
+
+	//* Get name of container with <id> from a docker engine api container list, empty if not found
+	auto docker_name(std::string_view response, std::string_view id) -> string;
+
+	//* Group processes by container and collect cpu and memory usage of the containers
+	void collect(const vector<Proc::proc_info>& procs);
+
+	//* Move selection <step> containers forward or back, wraps around through no selection
+	void select(int step);
+
+	//* Toggle selection of the container on line <row> of the container box
+	void select_row(int row);
+
+	//* Draw contents of container box
+	string draw(bool force_redraw = false, bool data_same = false);
 }
 
 /// Detect container engine.
