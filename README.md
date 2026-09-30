@@ -1512,7 +1512,7 @@ swap_disk = true
 #* If mem box should be split to also show disks info.
 show_disks = true
 
-#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar.
+#* Filter out non physical disks. Set this to False to include network disks, RAM disks and similar. On macOS, also hides disk images and non-user-facing APFS volumes.
 only_physical = true
 
 #* Read disks list from /etc/fstab. This also disables only_physical.

@@ -19,6 +19,7 @@ tab-size = 4
 #ifdef __APPLE__
 #include <Availability.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOBSD.h>
 #include <IOKit/IOKitLib.h>
 #include <arpa/inet.h>
 #include <libproc.h>
@@ -1159,6 +1160,93 @@ namespace Mem {
 		return bool(val);
 	}
 
+	//? IOKit metadata used to classify mounted volumes for only_physical
+	struct disk_metadata {
+		bool device_backed = false;
+		bool disk_image = false;
+		bool data_volume = false;
+		bool system_volume = false;
+		bool helper_volume = false;
+		string volume_group;
+	};
+
+	void update_role(const CFStringRef role, disk_metadata& metadata) {
+		char role_name[64]{};
+		if (not CFStringGetCString(role, role_name, sizeof(role_name), kCFStringEncodingUTF8)) return;
+
+		const string name = role_name;
+		if (name == "Data")
+			metadata.data_volume = true;
+		else if (name == "System")
+			metadata.system_volume = true;
+		else if (is_in(name, "Preboot", "Recovery", "VM", "Installer", "Update", "xART", "XART", "Hardware", "Sidecar"))
+			metadata.helper_volume = true;
+	}
+
+	disk_metadata get_disk_metadata(const string& device) {
+		disk_metadata metadata;
+		if (not device.starts_with("/dev/")) return metadata;
+
+		const string bsd_name = device.substr(5);
+		auto match = IOBSDNameMatching(kIOMainPortDefault, 0, bsd_name.c_str());
+		if (not match) return metadata;
+		io_registry_entry_t entry = IOServiceGetMatchingService(kIOMainPortDefault, match);
+		if (not entry) return metadata;
+		metadata.device_backed = true;
+
+		//? APFS role and disk-image information may live on an ancestor of the mounted volume
+		while (entry) {
+			IORef current(entry);
+
+			io_name_t class_name{};
+			if (IOObjectGetClass(entry, class_name) == KERN_SUCCESS) {
+				const string name = class_name;
+				if (name.starts_with("IODiskImageBlockStorageDevice") or name.starts_with("IOHDIX"))
+					metadata.disk_image = true;
+			}
+
+			CFRef<CFTypeRef> roles(IORegistryEntryCreateCFProperty(entry, CFSTR("Role"), kCFAllocatorDefault, 0));
+			if (roles.get()) {
+				if (CFGetTypeID(roles) == CFArrayGetTypeID()) {
+					auto role_list = (CFArrayRef)roles.get();
+					for (CFIndex i = 0; i < CFArrayGetCount(role_list); i++) {
+						auto role = (CFTypeRef)CFArrayGetValueAtIndex(role_list, i);
+						if (role and CFGetTypeID(role) == CFStringGetTypeID())
+							update_role((CFStringRef)role, metadata);
+					}
+				}
+				else if (CFGetTypeID(roles) == CFStringGetTypeID())
+					update_role((CFStringRef)roles.get(), metadata);
+			}
+
+			if (metadata.volume_group.empty()) {
+				CFRef<CFTypeRef> group(IORegistryEntryCreateCFProperty(
+					entry, CFSTR("VolGroupUUID"), kCFAllocatorDefault, 0));
+				if (group.get() and CFGetTypeID(group) == CFStringGetTypeID()) {
+					char uuid[64]{};
+					if (CFStringGetCString((CFStringRef)group.get(), uuid, sizeof(uuid), kCFStringEncodingUTF8)
+					and string(uuid) != "00000000-0000-0000-0000-000000000000")
+						metadata.volume_group = uuid;
+				}
+			}
+
+			io_registry_entry_t parent = 0;
+			if (IORegistryEntryGetParentEntry(entry, kIOServicePlane, &parent) != KERN_SUCCESS)
+				parent = 0;
+			entry = parent;
+		}
+
+		return metadata;
+	}
+
+	bool should_show_physical_mount(const disk_metadata& metadata, const std::unordered_set<string>& data_volume_groups) {
+		if (not metadata.device_backed or metadata.disk_image or metadata.helper_volume) return false;
+		//? Prefer the writable Data volume over its paired sealed System snapshot
+		if (metadata.system_volume and not metadata.volume_group.empty()
+		and data_volume_groups.contains(metadata.volume_group)) return false;
+		return true;
+	}
+
 	class IOObject {
 		public:
 			IOObject(string name, io_object_t& obj) : name(name), object(obj) {}
@@ -1286,7 +1374,7 @@ namespace Mem {
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-			// auto only_physical = Config::getB("only_physical");
+			auto only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -1299,6 +1387,54 @@ namespace Mem {
 
 			struct statfs *stfs;
 			int count = getmntinfo(&stfs, MNT_NOWAIT);
+
+			//? Cache IOKit metadata by mounted /dev topology
+			static string metadata_signature;
+			static std::unordered_map<string, disk_metadata> metadata_cache;
+			static double metadata_refresh = 0;
+			std::unordered_set<string> data_volume_groups;
+			if (only_physical) {
+				vector<string> mounted_devices;
+				std::unordered_set<string> unique_devices;
+				for (int i = 0; i < count; i++) {
+					const string device = stfs[i].f_mntfromname;
+					if (device.starts_with("/dev/")) {
+						mounted_devices.push_back(fmt::format("{}\n{}\n{}\n{}:{}", device,
+							stfs[i].f_mntonname, stfs[i].f_fstypename,
+							stfs[i].f_fsid.val[0], stfs[i].f_fsid.val[1]));
+						unique_devices.insert(device);
+					}
+				}
+				rng::sort(mounted_devices);
+				string signature;
+				for (const auto& device : mounted_devices)
+					signature += device + '\0';
+
+				if (signature != metadata_signature or uptime - metadata_refresh >= 30) {
+					metadata_cache.clear();
+					metadata_signature = std::move(signature);
+					metadata_refresh = uptime;
+				}
+
+				vector<string> devices_to_refresh;
+				for (const auto& device : unique_devices) {
+					auto metadata = metadata_cache.find(device);
+					if (metadata == metadata_cache.end() or not metadata->second.device_backed)
+						devices_to_refresh.push_back(device);
+				}
+				if (not devices_to_refresh.empty()) {
+					std::lock_guard<std::mutex> lock(iokit_mutex);
+					for (const auto& device : devices_to_refresh)
+						metadata_cache.insert_or_assign(device, get_disk_metadata(device));
+				}
+
+				for (const auto& [device, metadata] : metadata_cache) {
+					(void)device;
+					if (metadata.data_volume and not metadata.volume_group.empty())
+						data_volume_groups.insert(metadata.volume_group);
+				}
+			}
+
 			vector<string> found;
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
@@ -1309,6 +1445,13 @@ namespace Mem {
 
 				if (string(stfs[i].f_fstypename) == "autofs") {
 					continue;
+				}
+
+				if (only_physical) {
+					auto metadata = metadata_cache.find(dev);
+					if (metadata == metadata_cache.end()
+					or not should_show_physical_mount(metadata->second, data_volume_groups))
+						continue;
 				}
 
 				//? Match filter if not empty
