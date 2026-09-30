@@ -239,7 +239,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/netbsd-vm@20ee93a005c9fc78743e6e05269f4cb023b87413 # v1.5.0
+        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92 # v1.5.2
         with:
           arch: x86_64
           release: "11.0"
