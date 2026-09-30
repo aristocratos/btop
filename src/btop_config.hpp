@@ -51,6 +51,9 @@ namespace Config {
 #endif
 #ifdef GPU_SUPPORT
 	extern const  vector<string> show_gpu_values;
+	#ifdef __APPLE__
+	extern const vector<string> gpu_utilization_modes;
+	#endif
 #endif
     extern const vector<string> base_10_bitrate_values;
 	extern vector<string> current_boxes;
