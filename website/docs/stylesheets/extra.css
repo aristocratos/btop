@@ -1,0 +1,20 @@
+@font-face {
+  font-family: "Google Sans Flex";
+  src: "fonts/GoogleSansFlex.ttf" format("truetype");
+}
+
+@font-face {
+  font-family: "Google Sans Code";
+  src: "fonts/GoogleSansCode.ttf" format("truetype");
+}
+
+:root {
+  --md-text-font: "Google Sans Flex";
+  --md-code-font: "Google Sans Code";
+}
+
+/* :root  > * { */
+/*   --md-primary-fg-color: #FF0000; */
+/*   --md-primary-fg-color--light: #FF0000; */
+/*   --md-primary-fg-color--dark: #FF0000; */
+/* } */
