@@ -236,20 +236,20 @@ namespace Input {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
-				else if (key.size() == 1 and isint(key)) {
+				else if (key == "x" or (key.size() == 1 and isint(key))) {
 					auto intKey = std::atoi(key.data());
 				#ifdef GPU_SUPPORT
 					static const array<string, 10> boxes = {"gpu5", "cpu", "mem", "net", "proc", "gpu0", "gpu1", "gpu2", "gpu3", "gpu4"};
-					if ((intKey == 0 and Gpu::count < 5) or (intKey >= 5 and intKey - 4 > Gpu::count))
+					if (key != "x" and ((intKey == 0 and Gpu::count < 5) or (intKey >= 5 and intKey - 4 > Gpu::count)))
 						return;
 				#else
 				static const array<string, 10> boxes = {"", "cpu", "mem", "net", "proc"};
-					if (intKey == 0 or intKey > 4)
+					if (key != "x" and (intKey == 0 or intKey > 4))
 						return;
 				#endif
 					atomic_wait(Runner::active);
 
-					if (not Config::toggle_box(boxes.at(intKey))) {
+					if (not Config::toggle_box(key == "x" ? "ctr" : boxes.at(intKey))) {
 						Menu::show(Menu::Menus::SizeError);
 						return;
 					}
@@ -638,6 +638,18 @@ namespace Input {
 					Runner::run("net", no_update, redraw);
 					return;
 				}
+			}
+
+			//? Input actions for container box
+			if (Ctr::shown and (is_in(key, "[", "]") or key.starts_with("ctr_row"))) {
+				atomic_wait(Runner::active);
+				if (key.starts_with("ctr_row")) Ctr::select_row(std::atoi(key.substr(7).data()));
+				else Ctr::select(key == "]" ? 1 : -1);
+				//? Proc box only shows the processes of the selected container
+				Config::set("proc_selected", 0);
+				Config::set("proc_start", 0);
+				Runner::run("proc", true, true);
+				return;
 			}
 		}
 

@@ -17,12 +17,20 @@ tab-size = 4
 */
 
 #include <sys/resource.h>
+#ifdef __linux__
+	#include <sys/socket.h>
+	#include <sys/un.h>
+#endif
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
 #include <regex>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 #include "btop_config.hpp"
 #include "btop_shared.hpp"
@@ -193,12 +201,25 @@ bool set_priority(pid_t pid, int priority) {
 					 s_contains_ic(proc.cmd, filter) || s_contains_ic(proc.user, filter);
 	}
 
+	auto ctr_hidden(const proc_info& proc) -> bool {
+		//? Only show processes of the container selected in the container box
+		if (not Ctr::selected.empty()) return proc.container != Ctr::selected;
+		return not proc.container.empty() and Config::getB("proc_filter_containers");
+	}
+
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
 		bool filtering = false;
 
+		//? Processes in containers are hidden even if a parent matches the filter
+		if (ctr_hidden(cur_proc)) {
+			filtering = true;
+			cur_proc.filtered = true;
+			//? filter_found is only reset by the caller under this condition
+			if (should_filter or not filter.empty()) filter_found++;
+		}
 		//? If filtering, include children of matching processes
-		if (not found and (should_filter or not filter.empty())) {
+		else if (not found and (should_filter or not filter.empty())) {
 			if (!matches_filter(cur_proc, filter)) {
 				filtering = true;
 				cur_proc.filtered = true;
@@ -246,7 +267,8 @@ bool set_priority(pid_t pid, int priority) {
 					cur_proc.mem += p.mem;
 					cur_proc.threads += p.threads;
 				}
-				filter_found++;
+				//? Processes hidden for being in a container are already counted
+				if (not ctr_hidden(p)) filter_found++;
 				p.filtered = true;
 			}
 			else if (not no_update and Config::getB("proc_aggregate") and p.state != 'X') {
@@ -307,6 +329,179 @@ bool set_priority(pid_t pid, int priority) {
 				p.collapsed = true;
 			}
 		}
+	}
+}
+
+namespace Ctr {
+	auto parse_cgroup(const std::string_view cgroup) -> std::optional<ctr_info> {
+		const auto is_id = [](const std::string_view str) {
+			return str.size() == 64 and rng::all_of(str, [](unsigned char c) { return std::isxdigit(c); });
+		};
+
+		//? Iterate from the root so nested containers are attributed to the outermost one
+		std::string_view prev;
+		for (size_t start = 0; start < cgroup.size();) {
+			const size_t end = std::min(cgroup.find('/', start), cgroup.size());
+			const auto part = cgroup.substr(start, end - start);
+			const auto path = cgroup.substr(0, end);
+			start = end + 1;
+
+			const bool scope = part.ends_with(".scope");
+			const auto stem = part.substr(0, part.size() - (scope ? 6 : 0));
+
+			//? LXC and Incus: lxc.payload.<name> or lxc/<name> (Proxmox)
+			if (stem.starts_with("lxc.payload.") and stem.size() > 12)
+				return ctr_info{"lxc", string{stem.substr(12)}, string{path}};
+			if (prev == "lxc" and not part.empty())
+				return ctr_info{"lxc", string{part}, string{path}};
+
+			//? systemd-nspawn and other systemd-machined containers: machine-<name>.scope, qemu machines are not containers
+			if (scope and stem.starts_with("machine-") and stem.size() > 8 and not stem.starts_with("machine-qemu"))
+				return ctr_info{"nspawn", s_replace(string{stem.substr(8)}, "\\x2d", "-"), string{path}};
+
+			//? OCI runtimes (docker, podman, containerd, cri-o...): [<engine>-]<64 hex id>[.scope]
+			if (stem.size() >= 64 and is_id(stem.substr(stem.size() - 64)) and (stem.size() == 64 or stem.at(stem.size() - 65) == '-')) {
+				const auto engine = stem.substr(0, stem.size() - std::min<size_t>(stem.size(), 65));
+				//? conmon monitors the container from the outside
+				if (not engine.ends_with("conmon")) {
+					return ctr_info{
+						string{cgroup.contains("kubepods") ? "k8s" : engine == "libpod" ? "podman"
+							: not engine.empty() ? engine : prev == "docker" ? "docker" : "container"},
+						string{stem.substr(stem.size() - 64, 12)},
+						string{path}
+					};
+				}
+			}
+
+			prev = part;
+		}
+		return std::nullopt;
+	}
+
+	auto docker_name(const std::string_view response, const std::string_view id) -> string {
+		//? Containers are listed as {"Id":"<64 hex id>","Names":["/<name>",...
+		static constexpr std::string_view id_key = "\"Id\":\"", names_key = "\",\"Names\":[\"/";
+		auto pos = response.find(string{id_key} + string{id});
+		if (pos == std::string_view::npos) return "";
+		pos += id_key.size() + 64;
+		if (pos + names_key.size() > response.size() or response.substr(pos, names_key.size()) != names_key) return "";
+		pos += names_key.size();
+		const auto name = response.substr(pos, response.find('"', pos) - pos);
+		//? Only accept the characters docker allows in a name, the name is printed to the terminal
+		const auto valid = [](unsigned char c) { return std::isalnum(c) or c == '_' or c == '.' or c == '-'; };
+		return (name.empty() or not rng::all_of(name, valid)) ? "" : string{name};
+	}
+
+#ifdef __linux__
+	//* Get list of running containers from the docker engine api, empty if the docker socket isn't accessible
+	static auto docker_containers() -> string {
+		string path = "/var/run/docker.sock";
+		if (const char* host = getenv("DOCKER_HOST"); host != nullptr and std::string_view{host}.starts_with("unix://")) path = host + 7;
+
+		sockaddr_un addr{};
+		addr.sun_family = AF_UNIX;
+		if (path.size() >= sizeof(addr.sun_path)) return "";
+		path.copy(addr.sun_path, path.size());
+
+		const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+		if (fd < 0) return "";
+
+		//? Don't hang the runner thread if the docker daemon doesn't answer
+		const timeval timeout{1, 0};
+		setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+		setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+		//? HTTP/1.0 to get the response unchunked and the connection closed when done
+		static constexpr std::string_view request = "GET /containers/json HTTP/1.0\r\nHost: docker\r\n\r\n";
+		string response;
+		if (connect(fd, (const sockaddr*)&addr, sizeof(addr)) == 0
+		and send(fd, request.data(), request.size(), MSG_NOSIGNAL) == (ssize_t)request.size()) {
+			char buf[4096];
+			for (ssize_t count; (count = recv(fd, buf, sizeof(buf), 0)) > 0;) response.append(buf, count);
+		}
+		close(fd);
+		return response;
+	}
+#endif
+
+	vector<ctr_info> current_ctrs;
+	string selected;
+
+	void collect(const vector<Proc::proc_info>& procs) {
+		static uint64_t old_time{};
+		const uint64_t now = time_micros();
+		const auto per_core = Config::getB("proc_per_core");
+
+		//? Group processes by container, sum of process values is used for containers without readable cgroup stats
+		for (auto& c : current_ctrs) {
+			c.procs = 0;
+			c.cpu_p = 0;
+			c.mem = c.mem_limit = 0;
+		}
+		[[maybe_unused]] bool new_docker = false;
+		for (const auto& p : procs) {
+			if (p.container.empty() or p.state == 'X') continue;
+			auto c = rng::find(current_ctrs, p.container, &ctr_info::path);
+			if (c == current_ctrs.end()) {
+				auto new_ctr = parse_cgroup(p.container);
+				if (not new_ctr) continue;
+				if (new_ctr->engine == "docker") new_docker = true;
+				current_ctrs.push_back(std::move(*new_ctr));
+				c = current_ctrs.end() - 1;
+			}
+			c->procs++;
+			c->cpu_p += p.cpu_p;
+			c->mem += p.mem;
+		}
+		std::erase_if(current_ctrs, [](const auto& c) { return c.procs == 0; });
+
+	#ifdef __linux__
+		//? The cgroup only has the id of docker containers, ask docker for the names when a new container shows up
+		if (new_docker) {
+			const auto response = docker_containers();
+			for (auto& c : current_ctrs) {
+				//? Name is still the short id from the cgroup path if not found earlier
+				if (c.engine != "docker" or not c.path.contains(c.name)) continue;
+				if (auto name = docker_name(response, c.name); not name.empty()) c.name = std::move(name);
+			}
+		}
+	#endif
+
+		rng::sort(current_ctrs, rng::less{}, &ctr_info::name);
+		if (rng::find(current_ctrs, selected, &ctr_info::path) == current_ctrs.end()) selected.clear();
+
+		for (auto& c : current_ctrs) {
+			//? Cgroup v2 stats, same values as reported by the container engines
+			const fs::path cgroup = "/sys/fs/cgroup" + c.path;
+			string key;
+			uint64_t val{};
+
+			if (std::ifstream cpu_stat{cgroup / "cpu.stat"}; cpu_stat >> key >> val and key == "usage_usec") {
+				if (c.cpu_t > 0 and val >= c.cpu_t and now > old_time)
+					c.cpu_p = 100.0 * (val - c.cpu_t) / (now - old_time) / (per_core ? 1 : Shared::coreCount);
+				c.cpu_t = val;
+			}
+
+			if (std::ifstream mem_current{cgroup / "memory.current"}; mem_current >> val) {
+				c.mem = val;
+				//? Reclaimable file cache is not counted as used
+				for (std::ifstream mem_stat{cgroup / "memory.stat"}; mem_stat >> key >> val;) {
+					if (key == "inactive_file") {
+						c.mem -= std::min(c.mem, val);
+						break;
+					}
+				}
+			}
+
+			//? Contains "max" if unlimited
+			if (std::ifstream mem_max{cgroup / "memory.max"}; mem_max >> val) c.mem_limit = val;
+
+			//? Cpu graph is in percent of total available cpu power
+			c.cpu_percent.push_back(std::clamp(std::llround(c.cpu_p / (per_core ? Shared::coreCount : 1)), 0ll, 100ll));
+			while (std::cmp_greater(c.cpu_percent.size(), Term::width.load())) c.cpu_percent.pop_front();
+		}
+
+		old_time = now;
 	}
 }
 

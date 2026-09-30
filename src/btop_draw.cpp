@@ -2244,6 +2244,171 @@ namespace Proc {
 
 }
 
+namespace Ctr {
+	int min_width = 44, min_height = 6;
+	int x, y, width = 20, height;
+	int start = 0;
+	bool shown = false, redraw = true;
+	bool detail_shown = false;
+	string detail_path;
+	std::unordered_map<string, Draw::Graph> graphs;
+	Draw::Graph detail_graph;
+	Draw::Meter mem_meter;
+	string box;
+
+	void select(const int step) {
+		//? Position 0 is no selection
+		const int size = current_ctrs.size();
+		int pos = rng::find(current_ctrs, selected, &ctr_info::path) - current_ctrs.begin() + 1;
+		if (selected.empty() or pos > size) pos = 0;
+		pos = (pos + step + size + 1) % (size + 1);
+		selected = (pos == 0 ? "" : current_ctrs.at(pos - 1).path);
+	}
+
+	void select_row(const int row) {
+		if (row < 0 or std::cmp_greater_equal(start + row, current_ctrs.size())) return;
+		const auto& path = current_ctrs.at(start + row).path;
+		selected = (selected == path ? "" : path);
+	}
+
+	string draw(bool force_redraw, bool data_same) {
+		if (Runner::stopping) return "";
+		if (force_redraw) redraw = true;
+		auto tty_mode = Config::getB("tty_mode");
+		auto proc_colors = Config::getB("proc_colors");
+		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
+		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
+		const auto totalMem = Mem::get_totalMem();
+		const int num_ctrs = current_ctrs.size();
+		const int select_max = height - 3;
+		int selected_i = rng::find(current_ctrs, selected, &ctr_info::path) - current_ctrs.begin();
+		if (selected.empty() or selected_i >= num_ctrs) selected_i = -1;
+
+		//? Cpu graph and memory usage of the selected container is shown to the right of the list if there's room
+		const bool show_detail = selected_i >= 0 and width >= 80;
+		const int d_width = show_detail ? max(30, width * 2 / 5) : 0;
+		const int d_x = x + width - d_width - 1;
+		const int list_width = width - 2 - d_width;
+		const int engine_size = list_width >= 52 ? 9 : 0;
+		const int name_size = list_width - 25 - (engine_size > 0 ? engine_size + 1 : 0);
+
+		if (show_detail != detail_shown or (show_detail and selected != detail_path)) {
+			detail_shown = show_detail;
+			detail_path = selected;
+			redraw = true;
+		}
+
+		//? Keep selected container in view
+		if (selected_i >= 0) start = clamp(start, selected_i - select_max + 1, selected_i);
+		start = clamp(start, 0, max(0, num_ctrs - select_max));
+
+		const auto cpu_str = [](const double cpu_p) { return fmt::format("{:.{}f}", cpu_p, cpu_p < 99.95 ? 1 : 0); };
+
+		string out;
+		out.reserve(width * height);
+
+		//* Redraw elements not needed to be updated every cycle
+		if (redraw) {
+			out = box;
+			const string title_left = Theme::c("proc_box") + Symbols::title_left;
+			const string title_right = Theme::c("proc_box") + Symbols::title_right;
+
+			//? Container selector
+			out += Mv::to(y, x + width - 13) + title_left + Fx::b + Theme::c("hi_fg") + '[' + Theme::c("title") + " select "
+				+ Theme::c("hi_fg") + ']' + Fx::ub + title_right;
+			Input::mouse_mappings["["] = {y, x + width - 12, 1, 5};
+			Input::mouse_mappings["]"] = {y, x + width - 7, 1, 5};
+
+			//? Labels for fields in list
+			out += Mv::to(y + 1, x + 1) + Theme::c("title") + Fx::b
+				+ ljust("Container:", name_size) + ' '
+				+ (engine_size > 0 ? ljust("Engine:", engine_size) + ' ' : "")
+				+ rjust("Procs:", 6) + ' '
+				+ rjust("Mem", 5) + ' '
+				+ rjust("Cpu%", 10) + ' ' + Fx::ub;
+
+			//? Divider and graphs for selected container
+			if (show_detail) {
+				out += Mv::to(y, d_x) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y + height - 1, d_x) + Symbols::div_down + Theme::c("div_line");
+				for (const int i : iota(1, height - 1)) out += Mv::to(y + i, d_x) + Symbols::v_line;
+				detail_graph = Draw::Graph{d_width - 1, height - 4, "cpu", current_ctrs.at(selected_i).cpu_percent, graph_symbol, false, true};
+				mem_meter = Draw::Meter{d_width - 18, "used"};
+			}
+		}
+
+		//? Cpu graph and memory usage of selected container
+		if (show_detail) {
+			const auto& c = current_ctrs.at(selected_i);
+			const uint64_t mem_limit = (c.mem_limit > 0 ? c.mem_limit : totalMem);
+			out += Mv::to(y + 1, d_x + 1) + Theme::c("title") + Fx::b + ljust(c.name + ' ' + c.engine, d_width - 11, true)
+				+ rjust("Cpu " + cpu_str(c.cpu_p) + '%', 10) + Fx::ub
+				+ Mv::to(y + 2, d_x + 1) + detail_graph(c.cpu_percent, redraw or data_same)
+				+ Mv::to(y + height - 2, d_x + 1) + Theme::c("title") + Fx::b + "Mem " + Fx::ub
+				+ mem_meter(clamp((int)(c.mem * 100 / max((uint64_t)1, mem_limit)), 0, 100)) + ' '
+				+ Theme::c("main_fg") + rjust(floating_humanizer(c.mem, true) + '/' + floating_humanizer(mem_limit, true), 12);
+		}
+
+		//* Iteration over containers
+		int lc = 0;
+		for (int n = 0; const auto& c : current_ctrs) {
+			if (n++ < start) continue;
+			const bool is_selected = (n - 1 == selected_i);
+			if (not graphs.contains(c.path)) graphs[c.path] = Draw::Graph{5, 1, "", {}, graph_symbol};
+			Input::mouse_mappings["ctr_row" + to_string(lc)] = {y + 2 + lc, x + 1, 1, list_width};
+
+			out += Fx::reset + Mv::to(y + 2 + lc, x + 1);
+			string c_color, m_color, end;
+			if (is_selected) {
+				c_color = m_color = Fx::b;
+				end = Fx::ub;
+				out += Theme::c("selected_bg") + Theme::c("selected_fg") + Fx::b;
+			}
+			else if (proc_colors) {
+				c_color = Theme::g("process").at(clamp((int)round(c.cpu_p), 0, 100));
+				m_color = Theme::g("process").at(clamp((int)(c.mem * 100 / totalMem), 0, 100));
+				end = Theme::c("main_fg") + Fx::ub;
+				out += Theme::c("main_fg");
+			}
+			else {
+				c_color = m_color = Fx::b;
+				end = Fx::ub;
+				out += Theme::c("main_fg");
+			}
+
+			out += ljust(c.name, name_size, true) + ' '
+				+ (engine_size > 0 ? ljust(c.engine, engine_size) + ' ' : "")
+				+ rjust(to_string(c.procs), 6) + ' '
+				+ m_color + rjust(floating_humanizer(c.mem, true), 5) + end + ' '
+				+ (is_selected ? "" : Theme::c("inactive_fg")) + graph_bg * 5 + Mv::l(5)
+				+ c_color + graphs.at(c.path)({(c.cpu_p >= 0.1 and c.cpu_p < 5 ? 5ll : (long long)round(c.cpu_p))}, data_same) + end + ' '
+				+ c_color + rjust(cpu_str(c.cpu_p), 4) + ' ' + end;
+
+			if (++lc >= select_max) break;
+		}
+
+		//? Clear lines and mouse mappings below last container
+		out += Fx::reset;
+		for (int i = lc; i < select_max; i++) {
+			Input::mouse_mappings.erase("ctr_row" + to_string(i));
+			out += Mv::to(y + 2 + i, x + 1) + string(list_width, ' ');
+		}
+		if (num_ctrs == 0) out += Mv::to(y + 2, x + 1) + Theme::c("inactive_fg") + "No containers found";
+		std::erase_if(graphs, [&](const auto& pair) {
+			return rng::find(current_ctrs, pair.first, &ctr_info::path) == current_ctrs.end();
+		});
+
+		//? Current selection and number of containers
+		const string location = to_string(selected_i + 1) + '/' + to_string(num_ctrs);
+		out += Mv::to(y + height - 1, x + width - 3 - max(7, (int)location.size())) + Theme::c("proc_box")
+			+ Symbols::h_line * max(0, 7 - (int)location.size()) + Symbols::title_left_down + Theme::c("title") + Fx::b + location
+			+ Fx::ub + Theme::c("proc_box") + Symbols::title_right_down;
+
+		redraw = false;
+		return out + Fx::reset;
+	}
+
+}
+
 namespace Draw {
 	void calcSizes() {
 		atomic_wait(Runner::active);
@@ -2258,6 +2423,7 @@ namespace Draw {
 		Mem::box.clear();
 		Net::box.clear();
 		Proc::box.clear();
+		Ctr::box.clear();
 		Global::clock.clear();
 		Global::overlay.clear();
 		Runner::pause_output = false;
@@ -2274,7 +2440,8 @@ namespace Draw {
 		Cpu::y = Mem::y = Net::y = Proc::y = 1;
 		Cpu::width = Mem::width = Net::width = Proc::width = 0;
 		Cpu::height = Mem::height = Net::height = Proc::height = 0;
-		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
+		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = Ctr::redraw = true;
+		Ctr::width = Ctr::height = 0;
 
 		Cpu::shown = boxes.contains("cpu");
 	#ifdef GPU_SUPPORT
@@ -2302,6 +2469,10 @@ namespace Draw {
 		Mem::shown = boxes.contains("mem");
 		Net::shown = boxes.contains("net");
 		Proc::shown = boxes.contains("proc");
+		Ctr::shown = boxes.contains("ctr");
+		if (not Ctr::shown) Ctr::selected.clear();
+		//? Container box shares a column with the proc box
+		const bool proc_column = Proc::shown or Ctr::shown;
 
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
@@ -2316,7 +2487,7 @@ namespace Draw {
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);
 		#ifdef GPU_SUPPORT
-			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
+			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or proc_column)) {
 				height = Term::height - Gpu::total_height - gpus_extra_height;
 			} else {
 				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
@@ -2397,11 +2568,11 @@ namespace Draw {
 				int height = 0;
 				width = Term::width;
 				if (Cpu::shown)
-					if (not (Mem::shown or Net::shown or Proc::shown))
+					if (not (Mem::shown or Net::shown or proc_column))
 						height = min_height;
 					else height = Cpu::height;
 				else
-					if (not (Mem::shown or Net::shown or Proc::shown))
+					if (not (Mem::shown or Net::shown or proc_column))
 						height = (Term::height - total_height) / (Gpu::shown - i) + (i == 0) * ((Term::height - total_height) % (Gpu::shown - i));
 					else
 						height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
@@ -2434,13 +2605,13 @@ namespace Draw {
 			auto swap_disk = Config::getB("swap_disk");
 			auto mem_graphs = Config::getB("mem_graphs");
 
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			width = round((double)Term::width * (proc_column ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
 			height = floor(static_cast<double>(Term::height) * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
 		#else
 			height = floor(static_cast<double>(Term::height) * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100);
 		#endif
-			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
+			x = (proc_left and proc_column) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
 		#ifdef GPU_SUPPORT
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
@@ -2498,13 +2669,13 @@ namespace Draw {
 		//* Calculate and draw net box outlines
 		if (Net::shown) {
 			using namespace Net;
-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+			width = round((double)Term::width * (proc_column ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
 			height = Term::height - Cpu::height - Gpu::total_height - Mem::height;
 		#else
 			height = Term::height - Cpu::height - Mem::height;
 		#endif
-			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
+			x = (proc_left and proc_column) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
 			#ifdef GPU_SUPPORT
 				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
@@ -2529,8 +2700,8 @@ namespace Draw {
 				box += createBox(b_x, b_y, b_width, b_height, "", false, "download", "upload");
 		}
 
-		//* Calculate and draw proc box outlines
-		if (Proc::shown) {
+		//* Calculate and draw proc and container box outlines
+		if (proc_column) {
 			using namespace Proc;
 			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
 		#ifdef GPU_SUPPORT
@@ -2544,8 +2715,25 @@ namespace Draw {
 		#else
 			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
 		#endif
-			select_max = height - 3;
-			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+
+			//? Container box takes the top of the column
+			if (Ctr::shown) {
+				Ctr::x = x;
+				Ctr::y = y;
+				Ctr::width = width;
+				Ctr::height = Proc::shown ? clamp(height / 3, Ctr::min_height, max(Ctr::min_height, height - min_height)) : height;
+				y += Ctr::height;
+				height -= Ctr::height;
+				Ctr::box = createBox(Ctr::x, Ctr::y, Ctr::width, Ctr::height, Theme::c("proc_box"), true)
+					+ Mv::to(Ctr::y, Ctr::x + 2) + Theme::c("proc_box") + Symbols::title_left + Fx::b + Theme::c("hi_fg")
+					+ (Config::getB("tty_mode") ? "x" : "ˣ") + Theme::c("title") + "ctr" + Fx::ub + Theme::c("proc_box") + Symbols::title_right;
+			}
+
+			if (Proc::shown) {
+				select_max = height - 3;
+				box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+			}
+			else width = height = 0;
 		}
 	}
 }
