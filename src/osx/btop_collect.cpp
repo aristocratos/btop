@@ -159,6 +159,7 @@ struct IORef {
 	operator io_object_t() const { return ref; }
 	io_object_t get() const { return ref; }
 	io_object_t* ptr() { return &ref; }
+	io_object_t release() { io_object_t r = ref; ref = 0; return r; }
 };
 
 //? --------------------------------------------------- FUNCTIONS -----------------------------------------------------
@@ -207,6 +208,7 @@ namespace Gpu {
 	namespace Rsmi { bool shutdown() { return false; } }
 	namespace Asysfs { bool shutdown() { return false; } }
 
+	#if defined(__arm64__)
 	//? Apple Silicon GPU data collection via IOReport
 	namespace AppleSilicon {
 		bool initialized = false;
@@ -589,12 +591,332 @@ namespace Gpu {
 		template bool collect<true>(gpu_info*);
 		template bool collect<false>(gpu_info*);
 	} // namespace AppleSilicon
+	#endif
 
-	//? Collect data from Apple Silicon GPU
+	#if defined(__x86_64__)
+	//? Intel Mac GPU data collection through IOAccelerator registry properties
+	namespace IOAccelerator {
+		struct device_info {
+			io_service_t service;
+			size_t gpu_index;
+			bool uses_shared_memory;
+		};
+
+		bool initialized = false;
+		vector<device_info> devices;
+
+		static bool cf_type_to_integer(CFTypeRef value, int64_t& result) {
+			if (not value) return false;
+
+			if (CFGetTypeID(value) == CFNumberGetTypeID())
+				return CFNumberGetValue((CFNumberRef)value, kCFNumberSInt64Type, &result);
+
+			if (CFGetTypeID(value) == CFDataGetTypeID()) {
+				auto data = (CFDataRef)value;
+				auto size = CFDataGetLength(data);
+				if (size <= 0 or size > static_cast<CFIndex>(sizeof(uint64_t))) return false;
+
+				uint64_t raw = 0;
+				memcpy(&raw, CFDataGetBytePtr(data), static_cast<size_t>(size));
+				if (raw > static_cast<uint64_t>(numeric_limits<int64_t>::max())) return false;
+				result = static_cast<int64_t>(raw);
+				return true;
+			}
+
+			return false;
+		}
+
+		static bool get_number(CFDictionaryRef dictionary, CFStringRef key, int64_t& result) {
+			if (not dictionary) return false;
+			return cf_type_to_integer((CFTypeRef)CFDictionaryGetValue(dictionary, key), result);
+		}
+
+		static bool get_nonnegative_number(CFDictionaryRef dictionary, CFStringRef key, int64_t& result) {
+			return get_number(dictionary, key, result) and result >= 0;
+		}
+
+		static bool get_gpu_utilization(CFDictionaryRef statistics, int64_t& utilization) {
+			if (get_nonnegative_number(statistics, CFSTR("Device Utilization %"), utilization)
+			or get_nonnegative_number(statistics, CFSTR("GPU Activity(%)"), utilization)) {
+				utilization = clamp(utilization, 0ll, 100ll);
+				return true;
+			}
+
+			int64_t scaled_utilization = 0;
+			if (get_nonnegative_number(statistics, CFSTR("GPU Core Utilization"), scaled_utilization)) {
+				utilization = clamp(static_cast<long long>(round(static_cast<double>(scaled_utilization) / 10000000.0)), 0ll, 100ll);
+				return true;
+			}
+
+			return false;
+		}
+
+		static bool get_memory_used(CFDictionaryRef statistics, bool uses_shared_memory, int64_t& memory_used) {
+			if (uses_shared_memory) {
+				return get_nonnegative_number(statistics, CFSTR("Alloc system memory"), memory_used)
+					or get_nonnegative_number(statistics, CFSTR("In use system memory"), memory_used)
+					or get_nonnegative_number(statistics, CFSTR("inUseSysMemoryBytes"), memory_used)
+					or get_nonnegative_number(statistics, CFSTR("gartUsedBytes"), memory_used);
+			}
+
+			return get_nonnegative_number(statistics, CFSTR("vramUsedBytes"), memory_used)
+				or get_nonnegative_number(statistics, CFSTR("inUseVidMemoryBytes"), memory_used);
+		}
+
+		static string cf_type_to_string(CFTypeRef value) {
+			if (not value) return "";
+
+			if (CFGetTypeID(value) == CFStringGetTypeID()) {
+				char buffer[256];
+				if (CFStringGetCString((CFStringRef)value, buffer, sizeof(buffer), kCFStringEncodingUTF8))
+					return string(buffer);
+			}
+			else if (CFGetTypeID(value) == CFDataGetTypeID()) {
+				auto data = (CFDataRef)value;
+				string result((const char*)CFDataGetBytePtr(data), static_cast<size_t>(CFDataGetLength(data)));
+				while (not result.empty() and result.back() == '\0') result.pop_back();
+				return result;
+			}
+
+			return "";
+		}
+
+		static CFTypeRef search_property(io_service_t service, CFStringRef key) {
+			return IORegistryEntrySearchCFProperty(service, kIOServicePlane, key, kCFAllocatorDefault,
+				kIORegistryIterateRecursively | kIORegistryIterateParents);
+		}
+
+		static string get_gpu_name(io_service_t service, const string& class_name) {
+			CFRef<CFTypeRef> model(search_property(service, CFSTR("model")));
+			auto name = cf_type_to_string(model);
+			if (not name.empty()) return name;
+
+			auto lower_class = str_to_lower(class_name);
+			if (lower_class.contains("intel")) return "Intel Graphics";
+			if (lower_class.contains("amd") or lower_class.contains("ati")) return "AMD Graphics";
+			if (lower_class.contains("nvidia") or lower_class.contains("nvaccelerator")) return "NVIDIA Graphics";
+			return class_name;
+		}
+
+		static string get_gpu_vendor(const string& class_name, const string& gpu_name) {
+			auto identity = str_to_lower(class_name + " " + gpu_name);
+			if (identity.contains("intel")) return "intel";
+			if (identity.contains("amd") or identity.contains("ati") or identity.contains("radeon")) return "amd";
+			if (identity.contains("nvidia") or identity.contains("nvaccelerator")) return "nvidia";
+			return "";
+		}
+
+		static long long get_total_memory(io_service_t service) {
+			int64_t total_mb = 0;
+			CFRef<CFTypeRef> total_mb_property(search_property(service, CFSTR("VRAM,totalMB")));
+			if (cf_type_to_integer(total_mb_property, total_mb) and total_mb > 0
+			and total_mb <= numeric_limits<long long>::max() / (1024ll * 1024ll)) {
+				return total_mb * 1024ll * 1024ll;
+			}
+
+			int64_t total_bytes = 0;
+			CFRef<CFTypeRef> total_bytes_property(search_property(service, CFSTR("ATY,memsize")));
+			if (cf_type_to_integer(total_bytes_property, total_bytes) and total_bytes > 0)
+				return total_bytes;
+
+			return 0;
+		}
+
+		static bool get_performance_statistics(io_service_t service, CFRef<CFTypeRef>& property, CFDictionaryRef& statistics) {
+			property.reset(IORegistryEntryCreateCFProperty(service, CFSTR("PerformanceStatistics"), kCFAllocatorDefault, 0));
+			if (not property.get() or CFGetTypeID(property.get()) != CFDictionaryGetTypeID()) return false;
+			statistics = (CFDictionaryRef)property.get();
+			return true;
+		}
+
+		static void collect_device(gpu_info& gpu, CFDictionaryRef statistics, bool uses_shared_memory) {
+			int64_t value = 0;
+
+			if (gpu.supported_functions.gpu_utilization) {
+				if (not get_gpu_utilization(statistics, value)) value = 0;
+				gpu.gpu_percent.at("gpu-totals").push_back(value);
+			}
+
+			if (gpu.supported_functions.gpu_clock) {
+				gpu.gpu_clock_speed = get_nonnegative_number(statistics, CFSTR("Core Clock(MHz)"), value)
+					? static_cast<unsigned int>(value) : 0;
+			}
+
+			if (gpu.supported_functions.mem_clock) {
+				gpu.mem_clock_speed = get_nonnegative_number(statistics, CFSTR("Memory Clock(MHz)"), value) ? value : 0;
+			}
+
+			if (gpu.supported_functions.pwr_usage) {
+				gpu.pwr_usage = get_nonnegative_number(statistics, CFSTR("Total Power(W)"), value)
+					? value * 1000 : 0;
+				if (gpu.pwr_usage > gpu.pwr_max_usage) {
+					gpu_pwr_total_max += gpu.pwr_usage - gpu.pwr_max_usage;
+					gpu.pwr_max_usage = gpu.pwr_usage;
+				}
+				gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+					clamp(gpu.pwr_usage * 100 / max(1ll, gpu.pwr_max_usage), 0ll, 100ll));
+			}
+
+			if (gpu.supported_functions.temp_info and Config::getB("check_temp")
+			and get_nonnegative_number(statistics, CFSTR("Temperature(C)"), value) and value > 0) {
+				gpu.temp.push_back(value);
+			}
+
+			if (gpu.supported_functions.mem_used) {
+				gpu.mem_used = get_memory_used(statistics, uses_shared_memory, value) ? value : 0;
+				if (gpu.mem_total > 0) {
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(
+						clamp(gpu.mem_used * 100 / gpu.mem_total, 0ll, 100ll));
+				}
+			}
+		}
+
+		bool init(const string& shown_gpus) {
+			if (initialized) return false;
+
+			CFMutableDictionaryRef matching = IOServiceMatching("IOAccelerator");
+			if (not matching) return false;
+			CFDictionarySetValue(matching, CFSTR("IOMatchCategory"), CFSTR("IOAccelerator"));
+
+			io_iterator_t iterator_raw = 0;
+			if (IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator_raw) != kIOReturnSuccess)
+				return false;
+			IORef iterator(iterator_raw);
+			std::unordered_set<uint64_t> seen_devices;
+
+			io_object_t service_raw;
+			while ((service_raw = IOIteratorNext(iterator)) != 0) {
+				IORef service(service_raw);
+				uint64_t registry_id = 0;
+				if (IORegistryEntryGetRegistryEntryID(service, &registry_id) != kIOReturnSuccess
+				or not seen_devices.insert(registry_id).second) continue;
+
+				CFRef<CFTypeRef> statistics_property;
+				CFDictionaryRef statistics = nullptr;
+				if (not get_performance_statistics(service, statistics_property, statistics)) continue;
+
+				int64_t ignored = 0;
+				if (not get_gpu_utilization(statistics, ignored)) continue;
+
+				io_name_t class_buffer = {};
+				string class_name = IOObjectGetClass(service, class_buffer) == kIOReturnSuccess
+					? string(class_buffer) : "IOAccelerator";
+				auto gpu_name = get_gpu_name(service, class_name);
+				auto vendor = get_gpu_vendor(class_name, gpu_name);
+				if (vendor.empty() or not shown_gpus.contains(vendor)) continue;
+				const bool uses_shared_memory = vendor == "intel";
+
+				auto gpu_index = gpus.size();
+				gpus.emplace_back();
+				gpu_names.push_back(gpu_name);
+				devices.push_back({service.release(), gpu_index, uses_shared_memory});
+
+				auto& gpu = gpus.back();
+				gpu.gpu_clock_speed = 0;
+				gpu.pwr_usage = 0;
+				gpu.pwr_state = 0;
+				gpu.mem_total = get_total_memory(devices.back().service);
+				gpu.mem_used = 0;
+				gpu.mem_clock_speed = 0;
+				gpu.pcie_tx = 0;
+				gpu.pcie_rx = 0;
+				gpu.encoder_utilization = 0;
+				gpu.decoder_utilization = 0;
+
+				int64_t metric = 0;
+				const bool supports_power = get_nonnegative_number(statistics, CFSTR("Total Power(W)"), metric);
+				gpu.supported_functions = {
+					.gpu_utilization = true,
+					.mem_utilization = false,
+					.gpu_clock = get_nonnegative_number(statistics, CFSTR("Core Clock(MHz)"), metric),
+					.mem_clock = get_nonnegative_number(statistics, CFSTR("Memory Clock(MHz)"), metric),
+					.pwr_usage = supports_power,
+					.pwr_state = false,
+					.temp_info = get_nonnegative_number(statistics, CFSTR("Temperature(C)"), metric),
+					.mem_total = gpu.mem_total > 0,
+					.mem_used = get_memory_used(statistics, uses_shared_memory, metric),
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
+				};
+
+				if (supports_power) {
+					gpu.pwr_max_usage = 1;
+					gpu_pwr_total_max += gpu.pwr_max_usage;
+				}
+
+				collect_device(gpu, statistics, uses_shared_memory);
+				Logger::debug("Intel Mac GPU: Found {} through {}", gpu_name, class_name);
+			}
+
+			initialized = not devices.empty();
+			if (not initialized)
+				Logger::info("Intel Mac GPU: No supported IOAccelerator performance statistics found");
+			return initialized;
+		}
+
+		bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (const auto& device : devices) {
+				CFRef<CFTypeRef> statistics_property;
+				CFDictionaryRef statistics = nullptr;
+				if (get_performance_statistics(device.service, statistics_property, statistics))
+					collect_device(gpus_slice[device.gpu_index], statistics, device.uses_shared_memory);
+			}
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			for (const auto& device : devices) IOObjectRelease(device.service);
+			devices.clear();
+			initialized = false;
+			return true;
+		}
+	} // namespace IOAccelerator
+	#endif
+
+	namespace MacOS {
+		bool init(const string& shown_gpus) {
+			#if defined(__arm64__)
+			return shown_gpus.contains("apple") and AppleSilicon::init();
+			#elif defined(__x86_64__)
+			return IOAccelerator::init(shown_gpus);
+			#else
+			(void)shown_gpus;
+			return false;
+			#endif
+		}
+
+		bool collect(gpu_info* gpus_slice) {
+			#if defined(__arm64__)
+			return AppleSilicon::collect<0>(gpus_slice);
+			#elif defined(__x86_64__)
+			return IOAccelerator::collect(gpus_slice);
+			#else
+			(void)gpus_slice;
+			return false;
+			#endif
+		}
+
+		bool shutdown() {
+			#if defined(__arm64__)
+			return AppleSilicon::shutdown();
+			#elif defined(__x86_64__)
+			return IOAccelerator::shutdown();
+			#else
+			return false;
+			#endif
+		}
+	} // namespace MacOS
+
+	//? Collect data from macOS GPUs
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
 
-		AppleSilicon::collect<0>(gpus.data());
+		MacOS::collect(gpus.data());
 
 		//* Calculate averages
 		long long avg = 0;
@@ -716,9 +1038,7 @@ namespace Shared {
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
 		auto shown_gpus = Config::getS("shown_gpus");
-		if (shown_gpus.contains("apple")) {
-			Gpu::AppleSilicon::init();
-		}
+		Gpu::MacOS::init(shown_gpus);
 
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
