@@ -978,7 +978,7 @@ namespace Cpu {
 			for (unsigned long i = 0; i < gpus.size(); ++i) {
 				if (gpu_auto and v_contains(Gpu::shown_panels, i))
 					continue;
-				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU";
+				out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + gpus[i].box_label;
 				if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
 				if (gpus[i].supported_functions.gpu_utilization) {
 					out += ' ';
@@ -1116,7 +1116,7 @@ namespace Gpu {
 			if (not single_graph)
 				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
 
-			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "GPU " + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + gpu.box_label + ' ' + gpu_meter(safeVal(gpu.gpu_percent, "gpu-totals"s).back())
 				+ Theme::g("cpu").at(clamp(safeVal(gpu.gpu_percent, "gpu-totals"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-totals"s).back()), 5) + Theme::c("main_fg") + '%';
 
 			//? Temperature graph, I assume the device supports utilization if it supports temperature
