@@ -641,6 +641,11 @@ namespace Cpu {
 			if (Cpu::container_engine.has_value()) {
 				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}", Mv::to(button_y, x + 28), title_left, Theme::c("title"), Cpu::container_engine.value(), title_right);
 			}
+			//? Button for the container box, fits between the preset button and the longest possible clock
+			else if (width >= 76) {
+				out += Mv::to(button_y, x + 26) + title_left + Theme::c("hi_fg") + Fx::b + 'x' + Theme::c("title") + " ctr" + Fx::ub + title_right;
+				Input::mouse_mappings["x"] = {button_y, x + 27, 1, 5};
+			}
 
 			//? Graphs & meters
 			const int graph_default_width = x + width - b_width - 3;
@@ -1896,9 +1901,16 @@ namespace Proc {
 
 			}
 
+			//? pause, per-core, reverse, tree and sorting
+			const auto& sorting = Config::getS("proc_sorting");
+			const int sort_len = sorting.size();
+			const int sort_pos = x + width - sort_len - 8;
+			const bool show_omit_ctr = width > 72 + sort_len;
+
 			//? Filter
 			auto filtering = Config::getB("proc_filtering"); // ? filter(20) : Config::getS("proc_filter"))
-			const auto filter_text = (filtering) ? filter(max(6, width - 66)) : uresize(Config::getS("proc_filter"), max(6, width - 66));
+			const int filter_size = max(6, width - (show_omit_ctr ? 78 : 66));
+			const auto filter_text = (filtering) ? filter(filter_size) : uresize(Config::getS("proc_filter"), filter_size);
 			out += Mv::to(y, x+9) + title_left + (not filter_text.empty() ? Fx::b : "") + Theme::c("hi_fg") + 'f'
 				+ Theme::c("title") + (not filter_text.empty() ? ' ' + filter_text : "ilter")
 				+ (not filtering and not filter_text.empty() ? Theme::c("hi_fg") + " del" : "")
@@ -1912,11 +1924,11 @@ namespace Proc {
 					Input::mouse_mappings["delete"] = {y, x + 11 + f_len, 1, 3};
 			}
 
-			//? pause, per-core, reverse, tree and sorting
-			const auto& sorting = Config::getS("proc_sorting");
-			const int sort_len = sorting.size();
-			const int sort_pos = x + width - sort_len - 8;
-
+			if (show_omit_ctr) {
+				out += Mv::to(y, sort_pos - 42) + title_left + (Config::getB("proc_filter_containers") ? Fx::b : "") + Theme::c("hi_fg")
+					+ 'O' + Theme::c("title") + "mit ctr" + Fx::ub + title_right;
+				Input::mouse_mappings["O"] = {y, sort_pos - 41, 1, 8};
+			}
 			if (width > 60 + sort_len) {
 			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 32), title_left, pause_proc_list ? Fx::b : "",

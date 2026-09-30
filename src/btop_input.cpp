@@ -387,6 +387,11 @@ namespace Input {
 				else if (key == "%")
 					Config::flip("proc_mem_bytes");
 
+				else if (key == "O") {
+					Config::flip("proc_filter_containers");
+					no_update = false;
+				}
+
 				else if (key == "delete" and not Config::getS("proc_filter").empty())
 					Config::set("proc_filter", ""s);
 
