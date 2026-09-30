@@ -1249,10 +1249,16 @@ namespace Mem {
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
+			//? Compressed pages occupy physical RAM and can't be handed out without decompressing, so they count as used
+			const uint64_t compressed = static_cast<uint64_t>(p.compressor_page_count) * Shared::pageSize;
 			mem.stats.at("free") = p.free_count * Shared::pageSize;
 			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
-			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+			mem.stats.at("compressed") = compressed;
+			mem.stats.at("used") = static_cast<uint64_t>(p.active_count + p.wire_count) * Shared::pageSize + compressed;
+			//? Saturate, page counts are sampled separately from hw.memsize so used can briefly exceed it
+			mem.stats.at("available") = (Shared::totalMem > mem.stats.at("used"))
+				? Shared::totalMem - mem.stats.at("used") : 0;
+			has_compressed = true;
 		}
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
