@@ -122,7 +122,7 @@ namespace Config {
 
 		{"update_ms", 			"#* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs."},
 
-		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\",\n"
+		{"proc_sorting",		"#* Processes sorting, \"pid\" \"program\" \"arguments\" \"threads\" \"user\" \"memory\" \"cpu lazy\" \"cpu direct\" \"footprint\" (macOS),\n"
 								"#* \"cpu lazy\" sorts top process over time (easier to follow), \"cpu direct\" updates top process directly."},
 
 		{"proc_reversed",		"#* Reverse sorting order, True or False."},
@@ -136,6 +136,8 @@ namespace Config {
 		{"proc_per_core", 		"#* If process cpu usage should be of the core it's running on or usage of the total available cpu power."},
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
+
+		{"proc_mem_footprint", 	"#* (macOS) Show a physical footprint column (includes compressed memory) next to resident memory, and a memory breakdown in the process info box."},
 
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
@@ -324,6 +326,7 @@ namespace Config {
 		{"proc_gradient", true},
 		{"proc_per_core", false},
 		{"proc_mem_bytes", true},
+		{"proc_mem_footprint", false},
 		{"proc_cpu_graphs", true},
 		{"proc_info_smaps", false},
 		{"proc_left", false},
