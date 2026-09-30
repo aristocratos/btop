@@ -1,0 +1,92 @@
+name: Continuous Build Anolis
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches: main
+    tags-ignore: '*.*'
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/netbsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-anolis.yml'
+  pull_request:
+    branches: main
+    paths:
+      - 'src/**'
+      - '!src/osx/**'
+      - '!src/freebsd/**'
+      - '!src/netbsd/**'
+      - '!src/openbsd/**'
+      - 'include/**'
+      - 'Makefile'
+      - '.github/workflows/continuous-build-anolis.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Start loong64 container
+        run: |
+          docker run --platform linux/loong64 \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            --name loong64-builder \
+            -d openanolis/anolisos:23.4 \
+            sleep infinity
+
+      - name: Install dependencies
+        run: |
+          docker exec loong64-builder bash -c '
+            set -e
+            dnf install -y git cmake gcc-toolset-14 gcc-toolset-14-gcc-c++ ninja-build
+          '
+
+      - name: Configure
+        run: |
+          docker exec loong64-builder bash -c '
+            set -e
+            source /opt/rh/gcc-toolset-14/enable
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          '
+
+      - name: Compile
+        run: |
+          docker exec loong64-builder bash -c '
+            set -e
+            source /opt/rh/gcc-toolset-14/enable
+            cmake --build build --verbose
+          '
+
+      - name: Create binary artifacts
+        env:
+          GITHUB_SHA: "${{ github.sha }}"
+        run: |
+          GIT_HASH=$(git rev-parse --short "${GITHUB_SHA}")
+          FILENAME=btop-loongarch64-${GIT_HASH}
+          mkdir -p bin
+          cp build/btop bin/${FILENAME}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: btop-loongarch64
+          path: '${{ github.workspace }}/bin/*'
