@@ -348,7 +348,7 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return str + string(max((int)(x - ulen(str)), 0), ' ');
+			return str + string(max((int)(x - ulen(str, wide)), 0), ' ');
 		}
 		else {
 			if (limit and str.size() > x) {
@@ -364,7 +364,7 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return string(max((int)(x - ulen(str)), 0), ' ') + str;
+			return string(max((int)(x - ulen(str, wide)), 0), ' ') + str;
 		}
 		else {
 			if (limit and str.size() > x) {
@@ -380,7 +380,7 @@ namespace Tools {
 			if (limit and ulen(str, wide) > x)
 				return uresize(str, x, wide);
 
-			return string(max((int)ceil((double)(x - ulen(str)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str)) / 2), 0), ' ');
+			return string(max((int)ceil((double)(x - ulen(str, wide)) / 2), 0), ' ') + str + string(max((int)floor((double)(x - ulen(str, wide)) / 2), 0), ' ');
 		}
 		else {
 			if (limit and str.size() > x) {
