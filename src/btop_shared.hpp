@@ -115,6 +115,14 @@ namespace Gpu {
 	extern int width, total_height, min_width, min_height;
 	extern vector<int> x_vec, y_vec;
 	extern vector<bool> redraw;
+	//* GPU boxes can be laid out side by side; cols/rows describe that grid and
+	//* width_vec/b_width_vec hold the per-box outer width and stats panel width.
+	extern int cols, rows, box_min_width;
+	extern vector<int> width_vec, b_width_vec;
+	//* Adaptive column count for the GPU boxes given the available width
+	extern int fit_columns(int boxes, int term_width);
+	extern int min_total_width(int boxes, int term_width);
+	extern int min_total_height(int boxes, int term_width);
 	extern int shown;
 	extern int count;
 	extern vector<int> shown_panels;

@@ -1033,6 +1033,11 @@ namespace Gpu {
 	int width = 41, total_height;
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;
+	//* Side-by-side GPU layout: cols boxes per row, rows rows in total.
+	//* box_min_width is the narrowest a GPU box may become and still show
+	//* something useful (the Minimal detail level).
+	int cols = 1, rows = 0, box_min_width = 34;
+	vector<int> width_vec = {}, b_width_vec = {};
 	vector<int> b_x_vec = {}, b_y_vec = {};
 	vector<bool> redraw = {};
 	int shown = 0;
@@ -1047,8 +1052,76 @@ namespace Gpu {
 	vector<Draw::Meter> enc_meter_vec = {};
 	vector<string> box = {};
 
+	//* How much of a GPU box is drawn. Narrow boxes drop the less important
+	//* sections instead of overflowing, so a box can stay small yet readable.
+	enum class Detail { Full, Compact, Minimal };
+
+	Detail detail_for_width(int box_width) {
+		if (box_width >= 56) return Detail::Full;
+		if (box_width >= 44) return Detail::Compact;
+		return Detail::Minimal;
+	}
+
+	//* Width of the stats panel on the right hand side of a GPU box
+	int detail_panel_width(Detail detail, int box_width) {
+		switch (detail) {
+			case Detail::Full: return clamp(box_width/2, 41, 55);
+			case Detail::Compact: return clamp(box_width/2, 26, 40);
+			default: return clamp(box_width - 10, 24, 32);
+		}
+	}
+
+	//* Rows a GPU box needs at a given detail level (offset = hardware sections)
+	int detail_height(int offset, Detail detail) {
+		switch (detail) {
+			case Detail::Full: return offset + 4;
+			case Detail::Compact: return min(offset, 3) + 4;
+			default: return min(offset, 1) + 4;
+		}
+	}
+
+	//* Number of GPU boxes to place in one row. Honours the gpu_box_columns
+	//* setting, but never asks for more columns than the terminal can show
+	//* without squeezing a box below box_min_width (the Minimal detail width).
+	int fit_columns(int boxes, int term_width) {
+		if (boxes <= 0) return 1;
+		const int max_fit = max(1, term_width / (box_min_width + 1));
+		int want = max_fit;
+		const auto& setting = Config::getS("gpu_box_columns");
+		if (setting != "Auto" and isint(setting))
+			want = max(1, min(6, stoi(setting)));
+		return max(1, min(boxes, min(want, max_fit)));
+	}
+
+	//* Total width the GPU boxes need at the current terminal width
+	int min_total_width(int boxes, int term_width) {
+		if (boxes <= 0) return 0;
+		const int columns = fit_columns(boxes, term_width);
+		return columns * box_min_width + (columns - 1);
+	}
+
+	//* Total height the GPU boxes need at the current terminal width
+	int min_total_height(int boxes, int term_width) {
+		if (boxes <= 0) return 0;
+		const int columns = fit_columns(boxes, term_width);
+		const int rows = (boxes + columns - 1) / columns;
+		const int box_width = max(box_min_width, (term_width - (columns - 1)) / columns);
+		const Detail detail = detail_for_width(box_width);
+		int needed = 0;
+		for (const auto& offset : gpu_b_height_offsets)
+			needed = max(needed, detail_height(offset, detail));
+		return rows * needed;
+	}
+
     string draw(const gpu_info& gpu, unsigned long index, bool force_redraw, bool data_same) {
 		if (Runner::stopping) return "";
+
+		//* Each GPU box carries its own geometry, so pull this box's values into
+		//* the namespace-scope members the drawing code below works with.
+		if (index < width_vec.size()) {
+			width = width_vec[index];
+			b_width = b_width_vec[index];
+		}
 
 		auto& b_x = b_x_vec[index];
 		auto& b_y = b_y_vec[index];
@@ -1065,7 +1138,20 @@ namespace Gpu {
 		auto& enc_meter = enc_meter_vec[index];
 
 		if (force_redraw) redraw[index] = true;
-        bool show_temps = gpu.supported_functions.temp_info and (Config::getB("check_temp"));
+
+		//* Narrow GPU boxes drop sections rather than drawing outside their box
+		const Detail detail = detail_for_width(width);
+		gpu_info_supported sf = gpu.supported_functions;
+		if (detail != Detail::Full) {
+			sf.encoder_utilization = sf.decoder_utilization = false;
+			sf.pcie_txrx = false;
+			sf.mem_total = sf.mem_used = sf.mem_utilization = sf.mem_clock = false;
+		}
+		if (detail == Detail::Minimal) {
+			sf.pwr_usage = sf.pwr_state = false;
+		}
+
+        bool show_temps = sf.temp_info and (Config::getB("check_temp"));
         auto tty_mode = Config::getB("tty_mode");
 		auto& temp_scale = Config::getS("temp_scale");
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_gpu"));
@@ -1082,36 +1168,40 @@ namespace Gpu {
 			graph_up_height = single_graph ? b_height_vec[index] : (b_height_vec[index] + 1) / 2;
 			int graph_low_height = single_graph ? 0 : b_height_vec[index] - graph_up_height;
 
-			if (gpu.supported_functions.gpu_utilization) {
-				graph_upper = Draw::Graph{x + width - b_width - 3, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
+			if (sf.gpu_utilization) {
+				//* Width of the graph area: from the box's left border up to the
+				//* stats panel. Must not depend on x, or a box placed further right
+				//* would draw a graph wide enough to spill into its neighbours.
+				const int graph_width = max(1, width - b_width - 2);
+				graph_upper = Draw::Graph{graph_width, graph_up_height, "cpu", safeVal(gpu.gpu_percent, "gpu-totals"s), graph_symbol, false, true}; // TODO cpu -> gpu
             	if (not single_graph) {
                 	graph_lower = Draw::Graph{
-                    	x + width - b_width - 3,
+                    	graph_width,
                     	graph_low_height, "cpu",
                     	safeVal(gpu.gpu_percent, "gpu-totals"s),
                     	graph_symbol,
                     	Config::getB("cpu_invert_lower"), true
                 	};
             	}
-				gpu_meter = Draw::Meter{b_width - (show_temps ? 25 : 12), "cpu"};
+				gpu_meter = Draw::Meter{max(1, b_width - (show_temps ? 25 : 12)), "cpu"};
 			}
-			if (gpu.supported_functions.temp_info)
+			if (sf.temp_info)
 				temp_graph = Draw::Graph{6, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23};
-			if (gpu.supported_functions.pwr_usage)
-				pwr_meter = Draw::Meter{b_width - (gpu.supported_functions.pwr_state and gpu.pwr_state != 32 ? 25 : 12), "cached"};
-			if (gpu.supported_functions.mem_utilization)
+			if (sf.pwr_usage)
+				pwr_meter = Draw::Meter{max(1, b_width - (sf.pwr_state and gpu.pwr_state != 32 ? 25 : 12)), "cached"};
+			if (sf.mem_utilization)
 				mem_util_graph = Draw::Graph{b_width/2 - 1, 2, "free", gpu.mem_utilization_percent, graph_symbol, 0, 0, 100, 4}; // offset so the graph isn't empty at 0-5% utilization
-			if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total)
-				mem_used_graph = Draw::Graph{b_width/2 - 2, 2 + 2*(gpu.supported_functions.mem_utilization), "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol};
-			if (gpu.supported_functions.encoder_utilization)
-				enc_meter = Draw::Meter{b_width/2 - 10, "cpu"};
+			if (sf.mem_used and sf.mem_total)
+				mem_used_graph = Draw::Graph{b_width/2 - 2, 2 + 2*(sf.mem_utilization), "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol};
+			if (sf.encoder_utilization)
+				enc_meter = Draw::Meter{max(1, b_width/2 - 10), "cpu"};
 		}
 
 
 		//* General GPU info
 		int rows_used = 1;
 		//? Gpu graph, meter & clock speed
-		if (gpu.supported_functions.gpu_utilization) {
+		if (sf.gpu_utilization) {
 			out += Fx::ub + Mv::to(y + rows_used, x + 1) + graph_upper(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
 			if (not single_graph)
 				out += Mv::to(y + rows_used + graph_up_height, x + 1) + graph_lower(safeVal(gpu.gpu_percent, "gpu-totals"s), (data_same or redraw[index]));
@@ -1130,24 +1220,24 @@ namespace Gpu {
 			rows_used++;
 		}
 
-		if (gpu.supported_functions.gpu_clock) {
+		if (sf.gpu_clock) {
 			string clock_speed_string = to_string(gpu.gpu_clock_speed);
-			out += Mv::to(b_y, b_x + b_width - 12) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
+			out += Mv::to(b_y, b_x + b_width - 12) + Theme::c("div_line") + Symbols::h_line*max(0, 5-(int)clock_speed_string.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 		}
 
 		//? Power usage meter, power state
-		if (gpu.supported_functions.pwr_usage) {
+		if (sf.pwr_usage) {
 			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back())
 				+ Theme::g("cached").at(clamp(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back(), 0ll, 100ll))
 				+ fmt::format("{:>5.{}f}", gpu.pwr_usage / 1000.0, gpu.pwr_usage < 10'000 ? 2 : gpu.pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
-			if (gpu.supported_functions.pwr_state and gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
+			if (sf.pwr_state and gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
 				out += std::string(" P-state: ") + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(clamp(gpu.pwr_state, 0ll, 100ll)) + to_string(gpu.pwr_state);
 			rows_used++;
 		}
 
 		//? Encode and Decode meters
-		bool drawnEncDec = gpu.supported_functions.encoder_utilization and gpu.supported_functions.decoder_utilization;
+		bool drawnEncDec = sf.encoder_utilization and sf.decoder_utilization;
 		if (drawnEncDec) {
 			out += Mv::to(b_y + rows_used, b_x +1) + Theme::c("main_fg") + Fx::b + "ENC " + enc_meter(gpu.encoder_utilization)
 				+ Theme::g("cpu").at(clamp(gpu.encoder_utilization, 0ll, 100ll)) + rjust(to_string(gpu.encoder_utilization), 4) + Theme::c("main_fg") + '%'
@@ -1156,42 +1246,42 @@ namespace Gpu {
 			rows_used++;
 		}
 
-		if (gpu.supported_functions.mem_total or gpu.supported_functions.mem_used) {
+		if (sf.mem_total or sf.mem_used) {
 			out += Mv::to(b_y + rows_used, b_x);
-			if (gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) {
+			if (sf.mem_total and sf.mem_used) {
 				string used_memory_string = floating_humanizer(gpu.mem_used);
 
-				auto offset = (gpu.supported_functions.mem_total or gpu.supported_functions.mem_used)
-					* (1 + 2*(gpu.supported_functions.mem_total and gpu.supported_functions.mem_used) + 2*gpu.supported_functions.mem_utilization);
+				auto offset = (sf.mem_total or sf.mem_used)
+					* (1 + 2*(sf.mem_total and sf.mem_used) + 2*sf.mem_utilization);
 
 				//? Used graph, memory section header, total vram
 				out += Theme::c("div_line") + Symbols::div_left + Symbols::h_line + Symbols::title_left + Fx::b + Theme::c("title") + "vram" + Theme::c("div_line") + Fx::ub + Symbols::title_right
-					+  Symbols::h_line*(b_width/2-8) + Symbols::div_up + Mv::d(offset)+Mv::l(1) + Symbols::div_down + Mv::l(1)+Mv::u(1) + (Symbols::v_line + Mv::l(1)+Mv::u(1))*(offset-1) + Symbols::div_up
+					+  Symbols::h_line*max(0, b_width/2-8) + Symbols::div_up + Mv::d(offset)+Mv::l(1) + Symbols::div_down + Mv::l(1)+Mv::u(1) + (Symbols::v_line + Mv::l(1)+Mv::u(1))*(offset-1) + Symbols::div_up
 					+  Symbols::h_line + Theme::c("title") + "Used:" + Theme::c("div_line")
-					+  Symbols::h_line*(b_width/2+b_width%2-9-used_memory_string.size()) + Theme::c("title") + used_memory_string + Theme::c("div_line") + Symbols::h_line + Symbols::div_right
+					+  Symbols::h_line*max(0, b_width/2+b_width%2-9-(int)used_memory_string.size()) + Theme::c("title") + used_memory_string + Theme::c("div_line") + Symbols::h_line + Symbols::div_right
 					+  Mv::d(1) + Mv::l(b_width/2-1) + mem_used_graph(safeVal(gpu.gpu_percent, "gpu-vram-totals"s), (data_same or redraw[index]))
-					+  Mv::l(b_width-3) + Mv::u(1+2*gpu.supported_functions.mem_utilization) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.mem_total), b_width/2-9) + Fx::ub
+					+  Mv::l(b_width-3) + Mv::u(1+2*sf.mem_utilization) + Theme::c("main_fg") + Fx::b + "Total:" + rjust(floating_humanizer(gpu.mem_total), b_width/2-9) + Fx::ub
 					+  Mv::r(3) + rjust(to_string(safeVal(gpu.gpu_percent, "gpu-vram-totals"s).back()), 3) + '%';
 
 				//? Memory utilization
-				if (gpu.supported_functions.mem_utilization)
-					out += Mv::l(b_width/2+6) + Mv::d(1) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "Utilization:" + Theme::c("div_line") + Symbols::h_line*(b_width/2-14) + Symbols::div_right
+				if (sf.mem_utilization)
+					out += Mv::l(b_width/2+6) + Mv::d(1) + Theme::c("div_line") + Symbols::div_left+Symbols::h_line + Theme::c("title") + "Utilization:" + Theme::c("div_line") + Symbols::h_line*max(0, b_width/2-14) + Symbols::div_right
 						+  Mv::l(b_width/2)   + Mv::d(1) + mem_util_graph(gpu.mem_utilization_percent, (data_same or redraw[index]))
 						+  Mv::l(b_width/2-1) + Mv::u(1) + rjust(to_string(gpu.mem_utilization_percent.back()), 3) + '%';
 
 				//? Memory clock speed
-				if (gpu.supported_functions.mem_clock) {
+				if (sf.mem_clock) {
 					string clock_speed_string = to_string(gpu.mem_clock_speed);
-					out += Mv::to(b_y + rows_used, b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
+					out += Mv::to(b_y + rows_used, b_x + b_width/2 - 11) + Theme::c("div_line") + Symbols::h_line*max(0, 5-(int)clock_speed_string.size())
 						+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 				}
 			} else {
 				out += Theme::c("main_fg") + Mv::r(1);
-				if (gpu.supported_functions.mem_total)
-					out += "VRAM total:" + rjust(floating_humanizer(gpu.mem_total), b_width/(1 + gpu.supported_functions.mem_clock)-14);
-				else out += "VRAM usage:" + rjust(floating_humanizer(gpu.mem_used), b_width/(1 + gpu.supported_functions.mem_clock)-14);
+				if (sf.mem_total)
+					out += "VRAM total:" + rjust(floating_humanizer(gpu.mem_total), b_width/(1 + sf.mem_clock)-14);
+				else out += "VRAM usage:" + rjust(floating_humanizer(gpu.mem_used), b_width/(1 + sf.mem_clock)-14);
 
-				if (gpu.supported_functions.mem_clock)
+				if (sf.mem_clock)
 					out += "   VRAM clock:" + rjust(to_string(gpu.mem_clock_speed) + " MHz", b_width/2-13);
 			}
 		}
@@ -1202,13 +1292,13 @@ namespace Gpu {
 
 		//? PCIe link throughput
 		// Negative RX/TX means that they are manually disabled, not that they are unsupported
-		if (gpu.supported_functions.pcie_txrx and not (gpu.pcie_rx < 0 or gpu.pcie_tx < 0)) {
+		if (sf.pcie_txrx and not (gpu.pcie_rx < 0 or gpu.pcie_tx < 0)) {
 			string tx_string = floating_humanizer(gpu.pcie_tx, 0, 1, 0, 1);
 			string rx_string = floating_humanizer(gpu.pcie_rx, 0, 1, 0, 1);
 			out += Mv::to(b_y + height - 3, b_x+2) + Theme::c("div_line")
-				+ Symbols::title_left_down + Theme::c("title") + Fx::b + "TX:" + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*(b_width/2-9-tx_string.size())
-				+ Symbols::title_left_down + Theme::c("title") + Fx::b + tx_string + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + (gpu.supported_functions.mem_total and gpu.supported_functions.mem_used ? Symbols::div_down : Symbols::h_line)
-				+ Symbols::title_left_down + Theme::c("title") + Fx::b + "RX:" + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*(b_width/2+b_width%2-9-rx_string.size())
+				+ Symbols::title_left_down + Theme::c("title") + Fx::b + "TX:" + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*max(0, b_width/2-9-(int)tx_string.size())
+				+ Symbols::title_left_down + Theme::c("title") + Fx::b + tx_string + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + (sf.mem_total and sf.mem_used ? Symbols::div_down : Symbols::h_line)
+				+ Symbols::title_left_down + Theme::c("title") + Fx::b + "RX:" + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::h_line*max(0, b_width/2+b_width%2-9-(int)rx_string.size())
 				+ Symbols::title_left_down + Theme::c("title") + Fx::b + rx_string + Fx::ub + Theme::c("div_line") + Symbols::title_right_down + Symbols::round_right_down;
 		}
 
@@ -2291,12 +2381,19 @@ namespace Draw {
 		}
 		Gpu::shown = Gpu::shown_panels.size();
 
+		//* Arrange the GPU boxes side by side, fitting as many columns as the
+		//* terminal width comfortably allows, and stack into rows only when needed.
+		Gpu::cols = (Gpu::shown > 0) ? Gpu::fit_columns(Gpu::shown, Term::width) : 1;
+		Gpu::rows = (Gpu::shown > 0) ? (Gpu::shown + Gpu::cols - 1) / Gpu::cols : 0;
+
 		// Calculate the minimum possible GPU height, store in total_height
 		// The actual total_height value will of course be overwritten later
 		Gpu::total_height = 0;
-		for (int i = 0; i < Gpu::shown; i++) {
-			using namespace Gpu;
-			total_height += 4 + gpu_b_height_offsets[shown_panels[i]];
+		if (Gpu::shown > 0) {
+			int min_box_height = 0;
+			for (int i = 0; i < Gpu::shown; i++)
+				min_box_height = max(min_box_height, 4 + Gpu::gpu_b_height_offsets[Gpu::shown_panels[i]]);
+			Gpu::total_height = Gpu::rows * min_box_height;
 		}
 	#endif
 		Mem::shown = boxes.contains("mem");
@@ -2319,7 +2416,7 @@ namespace Draw {
 			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
 				height = Term::height - Gpu::total_height - gpus_extra_height;
 			} else {
-				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::shown+1) + (Gpu::shown != 0)*5) / 100));
+				height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p/(Gpu::rows+1) + (Gpu::rows != 0)*5) / 100));
 			}
 			if (height <= Term::height-gpus_extra_height) height += gpus_extra_height;
 		#else
@@ -2382,7 +2479,7 @@ namespace Draw {
 			using namespace Gpu;
 			x_vec.resize(shown); y_vec.resize(shown);
 			b_x_vec.resize(shown); b_y_vec.resize(shown);
-			b_height_vec.resize(shown);
+			b_height_vec.resize(shown); width_vec.resize(shown); b_width_vec.resize(shown);
 			box.resize(shown);
 			graph_upper_vec.resize(shown); graph_lower_vec.resize(shown);
 			temp_graph_vec.resize(shown);
@@ -2391,39 +2488,60 @@ namespace Draw {
 			pwr_meter_vec.resize(shown);
 			enc_meter_vec.resize(shown);
 			redraw.resize(shown);
-			total_height = 0;
+
+			const bool others = (Mem::shown or Net::shown or Proc::shown);
+
+			//* Columns are laid out edge to edge with a single blank column between
+			//* them, and the resulting box width decides how much detail fits.
+			const int box_w = max(box_min_width, (Term::width - (Gpu::cols - 1)) / Gpu::cols);
+			const Detail detail = detail_for_width(box_w);
+			const int panel_w = detail_panel_width(detail, box_w);
+
+			//* Every GPU box shares one height so that boxes sitting next to each
+			//* other in a row line up, and so that a row costs a single box height.
+			//* The height a row needs depends on how much detail it shows.
+			int row_need = 0;
+			for (auto i = 0; i < shown; ++i)
+				row_need = max(row_need, detail_height(gpu_b_height_offsets[shown_panels[i]], detail));
+
+			int box_height;
+			if (Cpu::shown)
+				box_height = others ? Cpu::height : min_height;
+			else if (others)
+				box_height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::rows / 100));
+			else
+				box_height = max(min_height, Term::height / max(1, Gpu::rows));
+
+			box_height = min(box_height, max(min_height, row_need));
+
+			const int top = (not Config::getB("cpu_bottom")) * Cpu::shown * Cpu::height;
+			width = Term::width;
+
 			for (auto i = 0; i < shown; ++i) {
 				redraw[i] = true;
-				int height = 0;
-				width = Term::width;
-				if (Cpu::shown)
-					if (not (Mem::shown or Net::shown or Proc::shown))
-						height = min_height;
-					else height = Cpu::height;
-				else
-					if (not (Mem::shown or Net::shown or Proc::shown))
-						height = (Term::height - total_height) / (Gpu::shown - i) + (i == 0) * ((Term::height - total_height) % (Gpu::shown - i));
-					else
-						height = max(min_height, (int)ceil((double)Term::height * height_p/Gpu::shown / 100));
+				const int height = box_height;
+				const int col = i % Gpu::cols;
+				const int row = i / Gpu::cols;
 
-				b_height_vec[i] = gpu_b_height_offsets[shown_panels[i]] + 2;
-				height += (height+Cpu::height == Term::height-1);
-				height = max(height, b_height_vec[i] + 2);
-				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
-				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
-				b_width = clamp(width/2, min_width, 65);
-				total_height += height;
+				//* The stats panel only needs room for the sections this detail level shows
+				b_height_vec[i] = min(box_height - 2, max(2, detail_height(gpu_b_height_offsets[shown_panels[i]], detail) - 2));
+				width_vec[i] = box_w;
+				b_width_vec[i] = panel_w;
+				x_vec[i] = 1 + col * (box_w + 1);
+				y_vec[i] = 1 + top + row * height;
+				box[i] = createBox(x_vec[i], y_vec[i], box_w, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
 
 				//? Main statistics box
-				b_x_vec[i] = x_vec[i] + width - b_width - 1;
+				b_x_vec[i] = x_vec[i] + box_w - b_width_vec[i] - 1;
 				b_y_vec[i] = y_vec[i] + ceil((double)(height - 2 - b_height_vec[i]) / 2) + 1;
 
 				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
 				if (name.empty()) name = gpu_names[shown_panels[i]];
 
-				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
+				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width_vec[i], b_height_vec[i], "", false, name.substr(0, b_width_vec[i]-5));
 				b_height_vec[i] = height - 2;
 			}
+			total_height = Gpu::rows * box_height;
 		}
 	#endif
 
