@@ -19,6 +19,7 @@ tab-size = 4
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -2313,6 +2314,7 @@ namespace Mem {
 
 	//?* Collect total ZFS pool io stats
 	bool zfs_collect_pool_total_stats(struct disk_info &disk);
+	bool zfs_collect_pool_space_stats(std::string_view pool_name, struct disk_info &disk);
 
 	mem_info current_mem {};
 
@@ -2605,15 +2607,18 @@ namespace Mem {
 						disk.used_percent = updated_stats.used_percent;
 						disk.free_percent = updated_stats.free_percent;
 					}
-					disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, free_priv]() -> pair<disk_info, int> {
+				disks_stats_promises[mountpoint] = async(std::launch::async, [mountpoint, free_priv,
+						pool_name = disk.dev.string(), collect_pool_space = disk.fstype == "zfs" and zfs_hide_datasets]() -> pair<disk_info, int> {
 						struct statvfs vfs;
 						disk_info disk;
-						if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-							return pair{disk, errno};
+						if (not collect_pool_space or not zfs_collect_pool_space_stats(pool_name, disk)) {
+							if (statvfs(mountpoint.c_str(), &vfs) < 0) {
+								return pair{disk, errno};
+							}
+							disk.total = vfs.f_blocks * vfs.f_frsize;
+							disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
+							disk.used = disk.total - disk.free;
 						}
-						disk.total = vfs.f_blocks * vfs.f_frsize;
-						disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
-						disk.used = disk.total - disk.free;
 						if (disk.total != 0) {
 							disk.used_percent = round((double)disk.used * 100 / disk.total);
 							disk.free_percent = 100 - disk.used_percent;
@@ -2795,6 +2800,38 @@ namespace Mem {
 
 		Logger::debug("Could not read directory: {}", zfs_pool_stat_path);
 		return "";
+	}
+
+	bool zfs_collect_pool_space_stats(std::string_view pool_name, struct disk_info &disk) {
+		FILE* zfs_list = popen("zfs list -d 0 -Hp -o name,used,avail 2>/dev/null", "r");
+		if (zfs_list == nullptr) return false;
+
+		bool found = false;
+		char line[1024];
+		while (fgets(line, sizeof(line), zfs_list) != nullptr) {
+			if (found) continue;
+			const std::string_view entry(line);
+			const auto name_end = entry.find('\t');
+			if (name_end == entry.npos or entry.substr(0, name_end) != pool_name) continue;
+			const auto used_end = entry.find('\t', name_end + 1);
+			if (used_end == entry.npos) continue;
+
+			uint64_t used, available;
+			const auto used_text = entry.substr(name_end + 1, used_end - name_end - 1);
+			const auto available_text = entry.substr(used_end + 1);
+			const auto used_result = std::from_chars(used_text.data(), used_text.data() + used_text.size(), used);
+			const auto available_result = std::from_chars(available_text.data(), available_text.data() + available_text.size(), available);
+			if (used_result.ec == std::errc{} and used_result.ptr == used_text.data() + used_text.size()
+				and available_result.ec == std::errc{} and (*available_result.ptr == '\n' or *available_result.ptr == '\0')
+				and available <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())
+				and used <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) - available) {
+				disk.used = used;
+				disk.free = available;
+				disk.total = used + available;
+				found = true;
+			}
+		}
+		return pclose(zfs_list) == 0 and found;
 	}
 
 	bool zfs_collect_pool_total_stats(struct disk_info &disk) {
