@@ -991,7 +991,7 @@ namespace Cpu {
 						out += ' ';
 				}
 				if (gpus[i].supported_functions.mem_used and gpus[i].supported_functions.mem_total and b_columns > 1) {
-					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("used").at(safeVal(gpus[i].gpu_percent, "gpu-vram-totals"s).back())
+					out += ' ' + Theme::c("inactive_fg") + graph_bg * 5 + Mv::l(5) + Theme::g("used").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-vram-totals"s).back(), 0ll, 100ll))
 						+ gpu_mem_graphs[i](safeVal(gpus[i].gpu_percent, "gpu-vram-totals"s), data_same or redraw);
 				}
 				if (gpus[i].supported_functions.mem_used) {
