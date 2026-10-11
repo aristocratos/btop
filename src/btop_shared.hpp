@@ -359,6 +359,29 @@ namespace Net {
 	string draw(const net_info& net, bool force_redraw = false, bool data_same = false);
 }
 
+namespace Sensors {
+	extern string box;
+	extern int x, y, width, height, min_width, min_height;
+	extern bool shown, redraw, supported;
+
+	//* Container for information of a single temperature sensor
+	struct sensor_info {
+		string name{};
+		deque<long long> temp{};
+		long long crit{};
+	};
+
+	//* All detected temperature sensors with temperature history
+	extern vector<sensor_info> current_sensors;
+
+	//* Collect temperature sensors and values
+	auto collect(bool no_update = false) -> vector<sensor_info>&;
+
+	//* Draw contents of sensors box using <sensors> as data source
+	string draw(const vector<sensor_info>& sensors, bool force_redraw = false, bool data_same = false);
+
+}
+
 namespace Proc {
 	extern atomic<int> numpids;
 

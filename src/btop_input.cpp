@@ -259,6 +259,19 @@ namespace Input {
 					Runner::run("all", false, true);
 					return;
 				}
+				else if (key == "s" and Sensors::supported) {
+					atomic_wait(Runner::active);
+
+					if (not Config::toggle_box("sensors")) {
+						Menu::show(Menu::Menus::SizeError);
+						return;
+					}
+					Config::current_preset.reset();
+					Draw::calcSizes();
+					Draw::update_clock(true);
+					Runner::run("all", false, true);
+					return;
+				}
 				else if (is_in(key, "p", "P") and Config::getS("disable_presets") != "All") {
 					if (Config::getS("disable_presets") == "Default" and Config::preset_list.size() <= 1) return;
 					atomic_wait(Runner::active);
