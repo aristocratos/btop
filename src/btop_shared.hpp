@@ -388,6 +388,7 @@ namespace Proc {
 		int name_offset{};
 		string user{};          // defaults to ""
 		uint64_t mem{};
+		uint64_t swap{};
 		double cpu_p{};         // defaults to = 0.0
 		double cpu_c{};         // defaults to = 0.0
 		char state = '0';
@@ -433,6 +434,9 @@ namespace Proc {
 
 	//* Change priority (nice) of pid, returns true on success otherwise false
 	bool set_priority(pid_t pid, int priority);
+
+	//* Whether per-process swap usage can be shown
+	bool proc_swap_available();
 
 	//* Sort vector of proc_info's
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
