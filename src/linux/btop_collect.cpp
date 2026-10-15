@@ -285,8 +285,7 @@ namespace Gpu {
 
 	//? Intel data collection
 	namespace Intel {
-		const char* device = "i915";
-		struct engines *engines = nullptr;
+		vector<struct engines*> engines_list;
 
 		bool initialized = false;
 		bool init();
@@ -1911,116 +1910,150 @@ namespace Gpu {
 		bool init() {
 			if (initialized) return false;
 
-			char *gpu_path = find_intel_gpu_dir();
-			if (!gpu_path) {
+			char gpu_dirs[MAX_INTEL_GPUS][256];
+			int num_dirs = find_intel_gpu_dirs(gpu_dirs, MAX_INTEL_GPUS);
+			if (num_dirs <= 0) {
 				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
 				return false;
 			}
 
-			char *gpu_device_id = get_intel_device_id(gpu_path);
-			if (!gpu_device_id) {
-				Logger::debug("Failed to find Intel GPU device ID, Intel GPUs will not be detected");
+			vector<string> names;
+
+			//? Probe every Intel-vendor DRM card (not just the first) so an iGPU and a
+			//? discrete Arc card can be reported at the same time.
+			for (int i = 0; i < num_dirs; i++) {
+				string gpu_name = "Intel GPU";
+				char *gpu_device_id = get_intel_device_id(gpu_dirs[i]);
+
+				if (gpu_device_id) {
+					char *gpu_device_name = get_intel_device_name(gpu_device_id);
+
+					if (gpu_device_name) {
+						gpu_name = string(gpu_device_name);
+						free(gpu_device_name);
+					} else {
+						Logger::warning("Failed to find Intel GPU device name in internal database");
+					}
+
+					free(gpu_device_id);
+				} else {
+					Logger::debug("Failed to find Intel GPU device ID for {}", gpu_dirs[i]);
+				}
+
+				char *pmu_device = get_intel_pmu_device_name(gpu_dirs[i]);
+				if (!pmu_device) {
+					Logger::debug("Intel GPU at {} is not managed by i915/xe, skipping", gpu_dirs[i]);
+
+					continue;
+				}
+
+				struct engines *eng = discover_engines(pmu_device);
+				if (!eng) {
+					Logger::debug("Failed to find Intel GPU engines for {}, skipping", gpu_dirs[i]);
+					free(pmu_device);
+
+					continue;
+				}
+
+				int ret = pmu_init(eng);
+				free(pmu_device); //? engines->device is only read during pmu_init(), safe to free now
+				if (ret) {
+					Logger::warning("Intel GPU: Failed to initialize PMU for {}", gpu_dirs[i]);
+					free_engines(eng);
+
+					continue;
+				}
+
+				pmu_sample(eng);
+
+				engines_list.push_back(eng);
+				names.push_back(gpu_name);
+			}
+
+			device_count = (uint32_t)engines_list.size();
+			if (device_count == 0) {
+				Logger::debug("No usable Intel GPUs found, Intel GPUs will not be detected");
+
 				return false;
 			}
 
-			char *gpu_device_name = get_intel_device_name(gpu_device_id);
-			if (!gpu_device_name) {
-				Logger::warning("Failed to find Intel GPU device name in internal database");
-			}
-
-			free(gpu_device_id);
-
-			engines = discover_engines(device);
-			if (!engines) {
-				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
-				free(gpu_device_name);
-				return false;
-			}
-
-			int ret = pmu_init(engines);
-			if (ret) {
-				Logger::warning("Intel GPU: Failed to initialize PMU");
-				free(gpu_device_name);
-				free_engines(engines);
-				engines = nullptr;
-				return false;
-			}
-
-			pmu_sample(engines);
-
-			device_count = 1;
-
+			const size_t base_index = Nvml::device_count + Rsmi::device_count + Asysfs::device_count;
 			gpus.resize(gpus.size() + device_count);
-			gpu_names.resize(gpus.size() + device_count);
-
-			if (gpu_device_name) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = string(gpu_device_name);
-			} else {
-				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] = "Intel GPU";
-			}
-
-			free(gpu_device_name);
+			gpu_names.resize(base_index + device_count);
+			for (uint32_t i = 0; i < device_count; i++)
+				gpu_names[base_index + i] = names[i];
 
 			initialized = true;
-			Intel::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
+			Intel::collect<1>(gpus.data() + base_index);
 
 			return true;
 		}
 
 		bool shutdown() {
 			if (!initialized) return false;
-			if (engines) {
-				free_engines(engines);
-				engines = nullptr;
+
+			for (auto* eng : engines_list) {
+				if (eng)
+					free_engines(eng);
 			}
+
+			engines_list.clear();
+			device_count = 0;
 			initialized = false;
+
 			return true;
 		}
 
 		template <bool is_init> bool collect(gpu_info* gpus_slice) {
 			if (!initialized) return false;
 
-			if constexpr(is_init) {
-				gpus_slice->supported_functions = {
-					.gpu_utilization = true,
-					.mem_utilization = false,
-					.gpu_clock = true,
-					.mem_clock = false,
-					.pwr_usage = true,
-					.pwr_state = false,
-					.temp_info = false,
-					.mem_total = false,
-					.mem_used = false,
-					.pcie_txrx = false,
-					.encoder_utilization = false,
-					.decoder_utilization = false
-				};
+			for (uint32_t d = 0; d < device_count; d++) {
+				gpu_info& gpu = gpus_slice[d];
+				struct engines *eng = engines_list[d];
 
-				gpus_slice->pwr_max_usage = 10'000; //? 10W
-			}
+				if constexpr(is_init) {
+					gpu.supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = false,
+						.gpu_clock = true,
+						.mem_clock = false,
+						.pwr_usage = true,
+						.pwr_state = false,
+						.temp_info = false,
+						.mem_total = false,
+						.mem_used = false,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false
+					};
 
-			pmu_sample(engines);
-			double t = (double)(engines->ts.cur - engines->ts.prev) / 1e9;
-
-			double max_util = 0;
-			for (unsigned int i = 0; i < engines->num_engines; i++) {
-				struct engine *engine = &(&engines->engine)[i];
-				double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
-				if (util > max_util) {
-					max_util = util;
+					gpu.pwr_max_usage = 10'000; //? 10W
 				}
+
+				pmu_sample(eng);
+				double t = (double)(eng->ts.cur - eng->ts.prev) / 1e9;
+
+				double max_util = 0;
+				for (unsigned int i = 0; i < eng->num_engines; i++) {
+					struct engine *engine = &(&eng->engine)[i];
+					double util = pmu_calc(&engine->busy.val, 1e9, t, 100);
+					if (util > max_util) {
+						max_util = util;
+					}
+				}
+				gpu.gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
+
+				double pwr = pmu_calc(&eng->r_gpu.val, 1, t, eng->r_gpu.scale); // in Watts
+
+				gpu.pwr_usage = (long long)round(pwr * 1000);
+				if (gpu.pwr_usage > gpu.pwr_max_usage)
+					gpu.pwr_max_usage = gpu.pwr_usage;
+
+				gpu.gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0ll, 100ll));
+
+				double freq = pmu_calc(&eng->freq_act.val, 1, t, 1); // in MHz
+				gpu.gpu_clock_speed = (unsigned int)round(freq);
 			}
-			gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)round(max_util));
-
-			double pwr = pmu_calc(&engines->r_gpu.val, 1, t, engines->r_gpu.scale); // in Watts
-			gpus_slice->pwr_usage = (long long)round(pwr * 1000);
-			if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
-				gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
-
-			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
-
-			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
-			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
 
 			return true;
 		}

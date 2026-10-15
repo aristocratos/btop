@@ -88,7 +88,11 @@ int pmu_init(struct engines *engines);
 void pmu_sample(struct engines *engines);
 double pmu_calc(struct pmu_pair *p, double d, double t, double s);
 
+#define MAX_INTEL_GPUS 8 // Increase if mainboards with more slots should exist in the future
+
 char* find_intel_gpu_dir();
+int find_intel_gpu_dirs(char dirs[][256], int max_count);
+char *get_intel_pmu_device_name(const char *gpu_dir);
 char* get_intel_device_id(const char* vendor_path);
 char *get_intel_device_name(const char *device_id);
 
