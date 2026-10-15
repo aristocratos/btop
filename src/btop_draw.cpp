@@ -2136,14 +2136,17 @@ namespace Proc {
 				out += string(max(0, width_left), ' ') + Mv::to(y+2+lc, x+2+tree_size);
 			}
 			//? Common end of line
-			string cpu_str = fmt::format("{:.2f}", p.cpu_p);
-			if (p.cpu_p < 10 or (p.cpu_p >= 100 and p.cpu_p < 1000)) cpu_str.resize(3);
-			else if (p.cpu_p >= 10'000) {
+			//? Use the same 4 column format ladder as the detailed cpu view, e.g. 7.25 -> "7.25", 123.4 -> " 123", 1234.6 -> "1235"
+			string cpu_str = fmt::format("{:>4.{}f}", p.cpu_p, p.cpu_p < 9.995f ? 2 : p.cpu_p < 99.95f ? 1 : 0);
+			if (p.cpu_p >= 10'000) {
 				cpu_str = fmt::format("{:.2f}", p.cpu_p / 1000);
 				cpu_str.resize(3);
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
+			else if (cpu_str.size() > 4)
+				//? Rounding would need 5 columns, e.g. 9999.99 -> "10000", show the truncated integer part instead
+				cpu_str = to_string((long long)p.cpu_p);
 			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
 			if (not mem_bytes) {
 				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
