@@ -123,9 +123,11 @@ namespace Term {
         bool proc = boxes.find("proc") != string::npos;
 	#ifdef GPU_SUPPORT
 		int gpu = 0;
-        if (Gpu::count > 0)
-        	for (char i = '0'; i <= '5'; i++)
+        if (Gpu::count > 0) {
+        	for (char i = '0'; i <= '5'; i++) {
         		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
+        	}
+		}
 	#endif
         int width = 0;
 		if (mem) width = Mem::min_width;
@@ -133,15 +135,19 @@ namespace Term {
 		width += (proc ? Proc::min_width : 0);
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
 	#ifdef GPU_SUPPORT
-		if (gpu != 0 and width < Gpu::min_width) width = Gpu::min_width;
+		if (gpu > 0) {
+			//* The GPU boxes arrange themselves side by side, so how much width
+			//* they need depends on how many columns fit and their detail level
+			const int gpu_min_width = Gpu::min_total_width(gpu, Term::width);
+			if (width < gpu_min_width) width = gpu_min_width;
+		}
 	#endif
 
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
 	#ifdef GPU_SUPPORT
-		for (int i = 0; i < gpu; i++)
-			height += Gpu::gpu_b_height_offsets[i] + 4;
+		height += Gpu::min_total_height(gpu, Term::width);
 	#endif
 
 		return { width, height };
