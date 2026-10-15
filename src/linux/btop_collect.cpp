@@ -1261,17 +1261,6 @@ namespace Gpu {
 				"libnvidia-ml.so.1",
 			};
 
-			for (const auto& l : libNvAlts) {
-				nvml_dl_handle = dlopen(l, RTLD_LAZY);
-				if (nvml_dl_handle != nullptr) {
-					break;
-				}
-			}
- 			if (!nvml_dl_handle) {
-				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: {}", dlerror());
- 				return false;
- 			}
-
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
 				auto err = dlerror();
@@ -1281,6 +1270,7 @@ namespace Gpu {
 				} else return sym;
 			};
 
+			auto load_nvml_syms = [&]() {
             #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
 
 		    LOAD_SYM(nvmlErrorString);
@@ -1302,13 +1292,36 @@ namespace Gpu {
 			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
 
             #undef LOAD_SYM
+				return true;
+			};
 
-			//? Function calls
-			nvmlReturn_t result = nvmlInit();
-    		if (result != NVML_SUCCESS) {
-    			Logger::debug("Failed to initialize NVML, NVIDIA GPUs will not be detected: {}", nvmlErrorString(result));
-    			return false;
-    		}
+			//? A library that loads can still fail to initialize, e.g. on WSL2 where libnvidia-ml.so
+			//? can resolve to the native Linux driver library instead of the WSL one in /usr/lib/wsl/lib,
+			//? so unload it and try the next candidate
+			nvmlReturn_t result = NVML_SUCCESS;
+			string load_error, init_error;
+			for (const auto& l : libNvAlts) {
+				nvml_dl_handle = dlopen(l, RTLD_LAZY);
+				if (nvml_dl_handle == nullptr) {
+					if (auto err = dlerror(); err != nullptr) load_error = err;
+					continue;
+				}
+				if (load_nvml_syms()) {
+					result = nvmlInit();
+					if (result == NVML_SUCCESS) break;
+					init_error = nvmlErrorString(result);
+					Logger::debug("NVML: Failed to initialize {}: {}", l, init_error);
+				}
+				dlclose(nvml_dl_handle);
+				nvml_dl_handle = nullptr;
+			}
+			if (!nvml_dl_handle) {
+				if (not init_error.empty())
+					Logger::debug("Failed to initialize NVML, NVIDIA GPUs will not be detected: {}", init_error);
+				else if (not load_error.empty())
+					Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: {}", load_error);
+				return false;
+			}
 
 			//? Device count
 			result = nvmlDeviceGetCount(&device_count);
