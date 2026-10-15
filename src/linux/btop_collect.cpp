@@ -3213,6 +3213,7 @@ namespace Proc {
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
+		const auto mem_mode = (proc_swap_available() ? Config::getI("proc_mem_mode") : 0);
 		const size_t detailed_pid = Config::getI("detailed_pid");
 		bool should_filter = current_filter != filter;
 		if (should_filter) current_filter = filter;
@@ -3461,6 +3462,30 @@ namespace Proc {
 					pread.close();
 				}
 
+				//? Get swap usage from /proc/[pid]/status, only when swap is available and shown
+				//  (the Vm* fields of status files belonging to other users are hidden by the kernel)
+				new_proc.swap = 0;
+				if (mem_mode != 0) {
+					pread.open(d.path() / "status");
+					if (pread.good()) {
+						try {
+							string line;
+							while (pread.good()) {
+								getline(pread, line, ':');
+								if (line == "VmSwap") {
+									uint64_t swap_kb = 0;
+									if (pread >> swap_kb) new_proc.swap = swap_kb * 1024;
+									break;
+								}
+								pread.ignore(SSmax, '\n');
+							}
+						}
+						catch (const std::invalid_argument&) {}
+						catch (const std::out_of_range&) {}
+						pread.close();
+					}
+				}
+
 				//? Process cpu usage since last update
 				new_proc.cpu_p = clamp(round(cmult * 1000 * (cpu_t - new_proc.cpu_t) / max((uint64_t)1, cputimes - old_cputimes)) / 10.0, 0.0, 100.0 * Shared::coreCount);
 
@@ -3493,6 +3518,7 @@ namespace Proc {
 						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
+							r.swap = 0;
 						}
 					}
 				}
