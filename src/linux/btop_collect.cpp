@@ -27,6 +27,7 @@ tab-size = 4
 #include <numeric>
 #include <optional>
 #include <ranges>
+#include <sstream>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -3330,9 +3331,6 @@ namespace Proc {
 					if (not pread.good()) continue;
 					getline(pread, new_proc.name);
 					pread.close();
-					//? Check for whitespace characters in name and set offset to get correct fields from stat file
-					new_proc.name_offset = rng::count(new_proc.name, ' ');
-
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
@@ -3386,18 +3384,25 @@ namespace Proc {
 				//? Parse /proc/[pid]/stat
 				pread.open(d.path() / "stat");
 				if (not pread.good()) continue;
+				getline(pread, long_string, '\0');
+				pread.close();
+				//? The name can change between samples (or between reading comm and stat).
+				//? Find its final ')' in this record; names may contain spaces, ')' and newlines.
+				const auto name_end = long_string.rfind(')');
+				if (name_end == string::npos or name_end + 2 >= long_string.size()) continue;
+				std::istringstream stat_fields(std::move(long_string));
+				stat_fields.seekg(name_end + 2);
 
-				const auto& offset = new_proc.name_offset;
 				short_str.clear();
-				int x = 0, next_x = 3;
+				int x = 2, next_x = 3;
 				uint64_t cpu_t = 0;
 				try {
 					for (;;) {
-						while (pread.good() and ++x < next_x + offset) pread.ignore(SSmax, ' ');
-						if (not pread.good()) break;
-						else getline(pread, short_str, ' ');
+						while (stat_fields.good() and ++x < next_x) stat_fields.ignore(SSmax, ' ');
+						if (not stat_fields.good()) break;
+						else getline(stat_fields, short_str, ' ');
 
-						switch (x-offset) {
+						switch (x) {
 							case 3: //? Process state
 								new_proc.state = short_str.at(0);
 								if (new_proc.ppid != 0) next_x = 14;
@@ -3442,14 +3447,12 @@ namespace Proc {
 				catch (const std::invalid_argument&) { continue; }
 				catch (const std::out_of_range&) { continue; }
 
-				pread.close();
-
 				if (should_filter_kernel and new_proc.ppid == KTHREADD) {
 					kernels_procs.emplace(new_proc.pid);
 					found.pop_back();
 				}
 
-				if (x-offset < 24) continue;
+				if (x < 24) continue;
 
 				//? Get RSS memory from /proc/[pid]/statm if value from /proc/[pid]/stat looks wrong
 				if (new_proc.mem >= totalMem) {
