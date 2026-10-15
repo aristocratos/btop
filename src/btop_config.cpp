@@ -137,6 +137,9 @@ namespace Config {
 
 		{"proc_mem_bytes", 		"#* Show process memory as bytes instead of percent."},
 
+		{"proc_mem_mode",		"#* Process memory column mode: 0 = memory, 1 = swap, 2 = memory + swap.\n"
+								"#* Swap values are only shown if the system has swap available, otherwise memory is shown."},
+
 		{"proc_cpu_graphs",     "#* Show cpu graph for each process."},
 
 		{"proc_info_smaps",		"#* Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate)"},
@@ -395,6 +398,7 @@ namespace Config {
 		{"proc_selected", 0},
 		{"proc_last_selected", 0},
 		{"proc_followed", 0},
+		{"proc_mem_mode", 0},
 	};
 	std::unordered_map<std::string_view, int> intsTmp;
 
@@ -585,6 +589,9 @@ namespace Config {
 
 		else if (name == "proc_tree_auto_collapse" and i_value > 10000)
 			validError = "Config value proc_tree_auto_collapse set too high (>10000).";
+
+		else if (name == "proc_mem_mode" and (i_value < 0 or i_value > 2))
+			validError = "Config value proc_mem_mode must be between 0 and 2.";
 
 		else
 			return true;
