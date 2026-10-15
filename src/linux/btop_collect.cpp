@@ -37,6 +37,7 @@ tab-size = 4
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netdb.h>
+#include <sys/inotify.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 
@@ -1908,6 +1909,66 @@ namespace Gpu {
 	}
 
 	namespace Intel {
+		//? GPU memory is the resident memory of the GPU's DRM clients, see https://docs.kernel.org/gpu/drm-usage-stats.html
+		struct drm_client { size_t pid; string fd; long long resident; };
+		std::unordered_map<uint64_t, drm_client> clients;
+		string pdev;
+		int dri_watch = -1;
+		unsigned int updates_since_scan = 0;
+
+		static pair<uint64_t, long long> read_fdinfo(const fs::path& path) {
+			uint64_t id = 0;
+			long long resident = -1;
+			ifstream file(path);
+			for (string line; getline(file, line);) {
+				const auto colon = line.find(':');
+				const auto start = line.find_first_not_of(" \t", colon + 1);
+				if (colon == string::npos or start == string::npos) continue;
+				const string_view key{line.data(), colon}, value{line.data() + start, line.size() - start};
+				if ((key == "drm-driver" and value != "i915") or (key == "drm-pdev" and value != pdev)) return {0, 0};
+				long long num = 0;
+				std::from_chars(value.data(), value.data() + value.size(), num);
+				if (key == "drm-client-id") id = num;
+				else if (key.starts_with("drm-resident-"))
+					resident = max(resident, 0ll) + (value.ends_with("MiB") ? num << 20 : value.ends_with("KiB") ? num << 10 : num);
+			}
+			return {resident < 0 ? 0 : id, resident};
+		}
+
+		static void scan() {
+			clients.clear();
+			updates_since_scan = 0;
+			std::error_code ec;
+			constexpr string_view dri = "/dev/dri/";
+			for (auto proc = fs::directory_iterator(Shared::procPath, ec); proc != fs::directory_iterator(); proc.increment(ec)) {
+				const string pid = proc->path().filename();
+				if (not isdigit(pid[0])) continue;
+				for (auto fd = fs::directory_iterator(proc->path() / "fd", ec); fd != fs::directory_iterator(); fd.increment(ec)) {
+					char link[dri.size()] {};
+					if (readlink(fd->path().c_str(), link, sizeof link) == -1 and errno == EACCES) break;
+					if (string_view{link, sizeof link} != dri) continue;
+					const auto [id, resident] = read_fdinfo(proc->path() / "fdinfo" / fd->path().filename());
+					if (id != 0) clients[id] = {stoul(pid), fd->path().filename(), resident};
+				}
+			}
+		}
+
+		static long long collect_mem() {
+			bool opened = false;
+			for (char events[4096]; read(dri_watch, events, sizeof events) > 0;) opened = true;
+			if (opened or ++updates_since_scan >= 60)
+				scan();
+			else if (updates_since_scan % 5 == 0) {
+				std::erase_if(clients, [](auto& client) {
+					auto& [pid, fd, resident] = client.second;
+					const auto [id, size] = read_fdinfo(Shared::procPath / std::to_string(pid) / "fdinfo" / fd);
+					resident = size;
+					return id != client.first;
+				});
+			}
+			return std::accumulate(clients.begin(), clients.end(), 0ll, [](long long sum, const auto& client) { return sum + client.second.resident; });
+		}
+
 		bool init() {
 			if (initialized) return false;
 
@@ -1916,6 +1977,9 @@ namespace Gpu {
 				Logger::debug("Failed to find Intel GPU sysfs path, Intel GPUs will not be detected");
 				return false;
 			}
+
+			std::error_code ec;
+			pdev = fs::read_symlink(fs::path(gpu_path) / "device", ec).filename();
 
 			char *gpu_device_id = get_intel_device_id(gpu_path);
 			if (!gpu_device_id) {
@@ -1997,6 +2061,14 @@ namespace Gpu {
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
+
+				scan();
+				if (not clients.empty()) {
+					gpus_slice->supported_functions.mem_total = gpus_slice->supported_functions.mem_used = true;
+					gpus_slice->mem_total = Mem::get_totalMem();
+					dri_watch = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+					inotify_add_watch(dri_watch, "/dev/dri", IN_OPEN);
+				}
 			}
 
 			pmu_sample(engines);
@@ -2021,6 +2093,11 @@ namespace Gpu {
 
 			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
 			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
+
+			if (gpus_slice->supported_functions.mem_used) {
+				gpus_slice->mem_used = collect_mem();
+				gpus_slice->gpu_percent.at("gpu-vram-totals").push_back(clamp((long long)round((double)gpus_slice->mem_used * 100.0 / (double)gpus_slice->mem_total), 0ll, 100ll));
+			}
 
 			return true;
 		}
