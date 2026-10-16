@@ -88,3 +88,6 @@ CMakeUserPresets.json
 
 # CLion
 cmake-build-*
+build*.log
+obj/
+bin/

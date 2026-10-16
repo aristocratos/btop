@@ -74,6 +74,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_sources(libbtop PRIVATE src/openbsd/btop_collect.cpp src/openbsd/sysctlbyname.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   target_sources(libbtop PRIVATE src/netbsd/btop_collect.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+  # illumos (OpenIndiana and other distributions) and Solaris; CMAKE_SYSTEM_NAME reports "SunOS"
+  # on all of them, the same value uname -s returns.
+  target_sources(libbtop PRIVATE src/sunos/btop_collect.cpp)
 elseif(LINUX)
   target_sources(libbtop PRIVATE src/linux/btop_collect.cpp)
   if(BTOP_GPU)
@@ -247,6 +251,14 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   find_package(kvm REQUIRED)
   find_package(proplib REQUIRED)
   target_link_libraries(libbtop kvm::kvm proplib::proplib)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+  # Deliberately NOT unconditionally adding -static-libstdc++ the way the OpenBSD/NetBSD branches
+  # above do: Oracle Solaris ships no static libstdc++ at all, so doing that here would break a
+  # native build there the same way it did in the Makefile before that was fixed. Native builds on
+  # illumos/Solaris link dynamically, same as the Makefile's default (no S10) target.
+  target_compile_options(libbtop PUBLIC -m64)
+  target_link_options(libbtop PUBLIC -m64)
+  target_link_libraries(libbtop kstat socket nsl)
 endif()
 
 # Check if lowdown is installed
