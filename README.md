@@ -287,7 +287,7 @@ Any support is greatly appreciated!
 For the best experience run within a terminal with support for:
 
 * 24-bit truecolor ([See list of terminals with truecolor support](https://github.com/termstandard/colors))
-* 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" arguments.
+* 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-l/--low-color" arguments.
 * 16 color TTY mode will be activated if a real tty device is detected. Can be forced with "-t/--tty" arguments.
 * Wide characters (Are sometimes problematic in web-based terminals)
 
