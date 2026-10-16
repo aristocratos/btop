@@ -646,26 +646,6 @@ namespace Cpu {
 		}
 	}
 
-	static string normalize_frequency(double hz) {
-		string str;
-		if (hz > 999999) {
-			str = fmt::format("{:.1f}", hz / 1'000'000);
-			str.resize(3);
-			if (str.back() == '.') str.pop_back();
-			str += " THz";
-		}
-		else if (hz > 999) {
-			str = fmt::format("{:.1f}", hz / 1'000);
-			str.resize(3);
-			if (str.back() == '.') str.pop_back();
-			str += " GHz";
-		}
-		else {
-			str = fmt::format("{:.0f} MHz", hz);
-		}
-		return str;
-	}
-
 	string get_cpuHz() {
 		static int failed{};
 
@@ -714,8 +694,8 @@ namespace Cpu {
 
 					// Format as range
 					string min_str, max_str;
-					min_str = normalize_frequency(*min_hz);
-					max_str = normalize_frequency(*max_hz);
+					min_str = format_frequency_mhz(*min_hz);
+					max_str = format_frequency_mhz(*max_hz);
 
 					return min_str + " - " + max_str;
 				}
@@ -742,7 +722,7 @@ namespace Cpu {
 			if (hz <= 1 or hz >= 999999999)
 				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
-			cpuhz = normalize_frequency(hz);
+			cpuhz = format_frequency_mhz(hz);
 
 		}
 		catch (const std::exception& e) {
