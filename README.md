@@ -1581,6 +1581,7 @@ Options:
   -l, --low-color         Disable true color, 256 colors only
   -p, --preset <id>       Start with a preset (0-9)
   -t, --tty               Force tty mode with ANSI graph symbols and 16 colors only
+      --themes-dir <dir>  Path to a custom themes directory
       --no-tty            Force disable tty mode
   -u, --update <ms>       Set an initial update rate in milliseconds
       --default-config    Print default config to standard output
