@@ -335,6 +335,9 @@ namespace Net {
 		bool connected{};
 	};
 
+	//* Calculate a graph scale from recent samples without clipping retained history.
+	auto calculate_graph_max(const net_info& netif, const string& dir, bool scale_down, bool net_sync) -> uint64_t;
+
 	class IfAddrsPtr {
 		struct ifaddrs* ifaddr;
 		int status;
