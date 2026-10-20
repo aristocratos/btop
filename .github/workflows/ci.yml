@@ -94,7 +94,7 @@ jobs:
       - name: Build
         run: make
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
@@ -122,7 +122,7 @@ jobs:
       - name: Build
         run: make GPU_SUPPORT=true
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
@@ -149,7 +149,7 @@ jobs:
           export CXX="$(brew --prefix gcc@16)/bin/g++-16"
           make
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
@@ -178,7 +178,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/freebsd-vm@a2f9a41fa97f6848b8c3b791087dfcdaa5b473ff # v1.5.8
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
           arch: x86_64
           release: "15.1"
@@ -194,7 +194,7 @@ jobs:
             fi
             gmake
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
@@ -221,7 +221,7 @@ jobs:
             pkg_add coreutils gmake
             gmake
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
@@ -250,7 +250,7 @@ jobs:
             export CXX="/usr/pkg/gcc15/bin/g++"
             gmake
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: btop
           path: bin/btop
