@@ -1453,6 +1453,9 @@ show_uptime = true
 #* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo.
 show_cpu_watts = true
 
+#* Show a pixelated animated CPU die in the cpu box (replaces the cpu graphs). Core tiles light up by usage, colour follows average temperature and flames appear when hot.
+cpu_animation = false
+
 #* Show cpu temperature.
 check_temp = true
 
@@ -1508,6 +1511,9 @@ show_swap = true
 
 #* Show swap as a disk, ignores show_swap value above, inserts itself after first disk.
 swap_disk = true
+
+#* Show an animated DDR5 RAM stick with a stream of random addresses in the mem box (replaces the memory meters when there is room).
+mem_animation = false
 
 #* If mem box should be split to also show disks info.
 show_disks = true

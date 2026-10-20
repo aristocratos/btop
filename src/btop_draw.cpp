@@ -28,6 +28,7 @@ tab-size = 4
 
 #include <fmt/format.h>
 
+#include "btop_anim.hpp"
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
 #include "btop_input.hpp"
@@ -613,6 +614,33 @@ namespace Cpu {
 		string out;
 		out.reserve(width * height);
 
+		//? Animated CPU die replaces the graphs when enabled and there is room
+		bool use_anim = false;
+		if (Anim::cpu_enabled()) {
+			vector<int> core_percent;
+			core_percent.reserve(cpu.core_percent.size());
+			for (const auto& core : cpu.core_percent) core_percent.push_back(core.empty() ? 0 : static_cast<int>(core.back()));
+
+			//? Average of the per core temps, falls back to the package temp
+			double temp_sum = 0;
+			int temp_count = 0;
+			if (show_temps) {
+				for (const auto& core_temp : cpu.temp | std::views::drop(1)) {
+					if (core_temp.empty()) continue;
+					temp_sum += core_temp.back();
+					temp_count++;
+				}
+				if (temp_count == 0 and not cpu.temp.empty() and not cpu.temp.front().empty()) {
+					temp_sum = cpu.temp.front().back();
+					temp_count = 1;
+				}
+			}
+			use_anim = Anim::cpu_set(x + 1, y + 1, x + width - b_width - 3, height - 2, core_percent, temp_count > 0 ? temp_sum / temp_count : -1.0);
+		}
+		else {
+			Anim::cpu_clear();
+		}
+
 		//* Redraw elements not needed to be updated every cycle
 		if (redraw) {
 			mid_line = (not single_graph and graph_up_field != graph_lo_field);
@@ -737,7 +765,7 @@ namespace Cpu {
 
 			cpu_meter = Draw::Meter{cpu_meter_width, "cpu"};
 
-			if (mid_line) {
+			if (mid_line and not use_anim) {
 				out += Mv::to(y + graph_up_height + 1, x) + Fx::ub + Theme::c("cpu_box") + Symbols::div_left + Theme::c("div_line")
 					+ Symbols::h_line * (width - b_width - 2) + Symbols::div_right
 					+ Mv::to(y + graph_up_height + 1, x + ((width - b_width) / 2) - ((graph_up_field.size() + graph_lo_field.size()) / 2) - 4)
@@ -843,14 +871,19 @@ namespace Cpu {
 					out += graphs[0](safeVal(cpu.cpu_percent, graph_field), (data_same or redraw));
 			};
 
-			draw_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field);
-			if (not single_graph) {
-				out += Mv::to(y + graph_up_height + 1 + mid_line, x + 1);
-				draw_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field);
+			if (use_anim) {
+				out += Anim::cpu_render();
+			}
+			else {
+				draw_graphs(graphs_upper, graph_up_height, graph_up_width, graph_up_field);
+				if (not single_graph) {
+					out += Mv::to(y + graph_up_height + 1 + mid_line, x + 1);
+					draw_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field);
+				}
 			}
 
 			//? Uptime
-			if (Config::getB("show_uptime")) {
+			if (Config::getB("show_uptime") and not use_anim) {
 				string upstr = sec_to_dhms(system_uptime());
 				if (upstr.size() > 8) {
 					upstr.resize(upstr.size() - 3);
@@ -1352,6 +1385,42 @@ namespace Mem {
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
+
+		//? Animated DDR5 stick replaces the meters when enabled and there is room
+		const int anim_height = min(9, height - 5);
+		const int anim_width = (show_disks ? mem_width - 3 : width - 3);
+		bool mem_anim = false;
+		if (Anim::mem_enabled()) {
+			const auto& used_percent = safeVal(mem.percent, "used"s);
+			mem_anim = Anim::mem_set(x + 2, y + 2, anim_width, anim_height, used_percent.empty() ? 0 : static_cast<int>(used_percent.back()));
+		}
+		else {
+			Anim::mem_clear();
+		}
+		if (mem_anim) {
+			comb_names.clear();
+			out += Anim::mem_render();
+
+			//? Used/available/cached/free legend below the stick
+			auto stat = [&](const string& name, bool with_percent) {
+				const auto& percent = safeVal(mem.percent, name);
+				return fmt::format("{}{}", floating_humanizer(safeVal(mem.stats, name), true),
+					with_percent ? fmt::format(" {}%", percent.empty() ? 0 : percent.back()) : "");
+			};
+			auto legend_line = [&](const int row, const string& left_title, const string& left_value, const string& right_title, const string& right_value) {
+				const int padding = max(1, anim_width - static_cast<int>(left_title.size() + left_value.size() + right_title.size() + right_value.size()) - 2);
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{} {}{}{}{}{}{} {}",
+					Mv::to(y + row, x + 2), Theme::c("title"), Fx::b, left_title, Fx::ub, Theme::c("main_fg"), left_value,
+					string(padding, ' '), Theme::c("title") + Fx::b, right_title, Fx::ub + Theme::c("main_fg"), right_value);
+			};
+			if (anim_width >= 26) {
+				legend_line(2 + anim_height, "Used:", stat("used", true), "Avail:", stat("available", true));
+				legend_line(3 + anim_height, "Cached:", stat("cached", true), "Free:", stat("free", true));
+			}
+			else {
+				legend_line(2 + anim_height, "Used:", stat("used", true), "Free:", stat("free", false));
+			}
+		}
 		for (const auto& name : comb_names) {
 			if (cy > height - 4) break;
 			string title;
@@ -1388,7 +1457,7 @@ namespace Mem {
 				cy += (graph_height == 0 ? 1 : graph_height);
 			}
 		}
-		if (graph_height > 0 and cy < height - 2)
+		if (graph_height > 0 and cy < height - 2 and not mem_anim)
 			out += Mv::to(y+1+cy, x+1+cx) + divider;
 
 		//? Disks
@@ -2253,6 +2322,7 @@ namespace Draw {
 		auto mem_below_net = Config::getB("mem_below_net");
 		auto proc_left = Config::getB("proc_left");
 
+		Anim::reset();
 		Cpu::box.clear();
 
 		Mem::box.clear();

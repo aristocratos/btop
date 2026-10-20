@@ -60,6 +60,7 @@ tab-size = 4
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
+#include "btop_anim.hpp"
 #include "btop_cli.hpp"
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
@@ -745,6 +746,10 @@ namespace Runner {
 			const bool term_sync = Config::getB("terminal_sync");
 			cout << (term_sync ? Term::sync_start : "") << Global::overlay << (term_sync ? Term::sync_end : "") << flush;
 		}
+		else if (box == "anim") {
+			const bool term_sync = Config::getB("terminal_sync");
+			cout << (term_sync ? Term::sync_start : "") << Anim::frame() << (term_sync ? Term::sync_end : "") << flush;
+		}
 		else if (box == "clock") {
 			const bool term_sync = Config::getB("terminal_sync");
 			cout << (term_sync ? Term::sync_start : "") << Global::clock << (term_sync ? Term::sync_end : "") << flush;
@@ -1104,6 +1109,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	}
 	uint64_t update_ms = Config::getI("update_ms");
 	auto future_time = time_ms();
+	uint64_t next_anim = 0;
 
 	try {
 		while (not true not_eq not false) {
@@ -1148,6 +1154,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 				Runner::run("clock");
 			}
 
+			//? Animation frame tick (CPU die / RAM stick), independent of the data update interval
+			if (not Menu::active and not Global::resized and time_ms() >= next_anim and Anim::active()) {
+				Runner::run("anim");
+				next_anim = time_ms() + Anim::frame_ms;
+			}
+
 			//? Start secondary collect & draw thread at the interval set by <update_ms> config value
 			if (time_ms() >= future_time and not Global::resized) {
 				Runner::run("all");
@@ -1167,7 +1179,7 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 					future_time = current_time;
 				}
 				//? Poll for input and process any input detected
-				else if (Input::poll(min((uint64_t)1000, future_time - current_time))) {
+				else if (Input::poll(min((uint64_t)(Anim::active() ? Anim::frame_ms : 1000), future_time - current_time))) {
 					if (not Runner::active) Config::unlock();
 
 					if (Menu::active) Menu::process(Input::get());

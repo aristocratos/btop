@@ -47,6 +47,7 @@ endif()
 add_executable(btop src/main.cpp)
 add_library(libbtop OBJECT
   src/btop.cpp
+  src/btop_anim.cpp
   src/btop_cli.cpp
   src/btop_config.cpp
   src/btop_draw.cpp

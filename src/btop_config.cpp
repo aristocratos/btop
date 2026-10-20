@@ -170,6 +170,8 @@ namespace Config {
 
 		{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
 
+		{"cpu_animation",		"#* Show a pixelated animated CPU die in the cpu box (replaces the cpu graphs). Core tiles light up by usage, colour follows average temperature and flames appear when hot."},
+
 		{"show_cpu_watts",		"#* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo."},
 
 		{"check_temp", 			"#* Show cpu temperature."},
@@ -208,6 +210,8 @@ namespace Config {
 		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
 
 		{"show_swap", 			"#* If swap memory should be shown in memory box."},
+
+		{"mem_animation", 		"#* Show an animated DDR5 RAM stick with a stream of random addresses in the mem box (replaces the memory meters when there is room)."},
 
 		{"swap_disk", 			"#* Show swap as a disk, ignores show_swap value above, inserts itself after first disk."},
 
@@ -333,6 +337,7 @@ namespace Config {
 		{"cpu_bottom", false},
 		{"show_uptime", true},
 		{"show_cpu_watts", true},
+		{"cpu_animation", false},
 		{"check_temp", true},
 		{"show_coretemp", true},
 		{"show_cpu_freq", true},
@@ -342,6 +347,7 @@ namespace Config {
 		{"zfs_arc_cached", true},
 		{"show_swap", true},
 		{"swap_disk", true},
+		{"mem_animation", false},
 		{"show_disks", true},
 		{"only_physical", true},
 		{"use_fstab", true},
