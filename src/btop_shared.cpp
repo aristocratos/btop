@@ -193,6 +193,26 @@ bool set_priority(pid_t pid, int priority) {
 					 s_contains_ic(proc.cmd, filter) || s_contains_ic(proc.user, filter);
 	}
 
+	auto strip_cmd(const string& cmd, const string& pattern) -> string {
+		if (pattern.empty()) return cmd;
+
+		//? Cache the compiled regex, so it's only rebuilt when the pattern changes and not for every process
+		static string cached_pattern;
+		static std::optional<std::regex> cached_regex;
+		if (pattern != cached_pattern) {
+			cached_pattern = pattern;
+			// An invalid regex throws, leave commands unchanged in that case
+			try {
+				cached_regex.emplace(pattern, std::regex::extended);
+			} catch (std::regex_error& /* unused */) {
+				cached_regex.reset();
+			}
+		}
+
+		if (not cached_regex) return cmd;
+		return std::regex_replace(cmd, *cached_regex, "");
+	}
+
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 		int cur_depth, bool collapsed, const string& filter, bool found, bool no_update, bool should_filter) {
 		bool filtering = false;
