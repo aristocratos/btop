@@ -1368,13 +1368,13 @@ graph_symbol = "braille"
 # Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
 graph_symbol_cpu = "default"
 
-# Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
+# Graph symbol to use for graphs in mem box, "default", "braille", "block" or "tty".
 graph_symbol_mem = "default"
 
-# Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
+# Graph symbol to use for graphs in net box, "default", "braille", "block" or "tty".
 graph_symbol_net = "default"
 
-# Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
+# Graph symbol to use for graphs in proc box, "default", "braille", "block" or "tty".
 graph_symbol_proc = "default"
 
 #* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
