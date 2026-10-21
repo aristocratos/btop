@@ -41,6 +41,9 @@ tab-size = 4
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 # include <kvm.h>
 #endif
+#ifdef __APPLE__
+struct vm_statistics64;
+#endif
 
 using std::array;
 using std::atomic;
@@ -296,6 +299,10 @@ namespace Mem {
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
+		#ifdef __APPLE__
+		//? Returns false without changing stats when the kernel snapshot lacks required counters.
+		bool set_activity_monitor_memory(const vm_statistics64& vm, uint32_t count, uint64_t total_mem, uint64_t page_size);
+		#endif
 	};
 
 	//?* Get total system memory

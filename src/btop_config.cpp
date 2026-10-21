@@ -204,6 +204,11 @@ namespace Config {
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 
 		{"mem_below_net",		"#* Show mem box below net box instead of above."},
+	#ifdef __APPLE__
+		{"macos_activity_monitor", "#* Use Activity Monitor memory accounting on macOS instead of the default active + wired calculation.\n"
+									"#* Available includes free memory and reclaimable file-backed/purgeable cache, not immediately free RAM.\n"
+									"#* Falls back to the default calculation with a warning if required kernel counters are unavailable."},
+	#endif
 
 		{"zfs_arc_cached",		"#* Count ZFS ARC in cached and available memory."},
 
@@ -339,6 +344,9 @@ namespace Config {
 		{"background_update", true},
 		{"mem_graphs", true},
 		{"mem_below_net", false},
+	#ifdef __APPLE__
+		{"macos_activity_monitor", false},
+	#endif
 		{"zfs_arc_cached", true},
 		{"show_swap", true},
 		{"swap_disk", true},
