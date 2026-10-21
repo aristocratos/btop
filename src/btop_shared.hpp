@@ -304,6 +304,9 @@ namespace Mem {
 	//* Collect mem & disks stats
 	auto collect(bool no_update = false) -> mem_info&;
 
+	//* Reorder mem.disks_order to match the "disks_order" config option (no-op if the option is empty)
+	void apply_disks_order(mem_info& mem);
+
 	//* Draw contents of mem box using <mem> as source
 	string draw(const mem_info& mem, bool force_redraw = false, bool data_same = false);
 

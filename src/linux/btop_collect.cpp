@@ -2649,6 +2649,9 @@ namespace Mem {
 						if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
 					#endif
 
+				//? Apply user-defined disk order from the "disks_order" config option
+				apply_disks_order(mem);
+
 				//? Get disks IO
 				int64_t sectors_read, sectors_write, io_ticks, io_ticks_temp;
 				disk_ios = 0;
