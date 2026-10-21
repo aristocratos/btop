@@ -1612,6 +1612,7 @@ namespace Proc {
 	string selected_name;
 	std::unordered_map<size_t, Draw::Graph> p_graphs;
 	std::unordered_map<size_t, bool> p_wide_cmd;
+	string last_cmd_strip;
 	std::unordered_map<size_t, int> p_counters;
 	int counter = 0;
 	Draw::TextEdit filter;
@@ -1721,6 +1722,7 @@ namespace Proc {
 		int followed_pid = Config::getI("followed_pid");
 		int followed = Config::getI("proc_followed");
 		bool should_selection_return_to_followed = Config::getB("should_selection_return_to_followed");
+		const auto& cmd_strip = Config::getS("proc_cmd_strip");
 		auto proc_banner_shown = pause_proc_list or follow_process;
 		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
@@ -1732,6 +1734,11 @@ namespace Proc {
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
+		//? Cached wide character flags are for the previously shown commands, reset them if the strip pattern changed
+		if (cmd_strip != last_cmd_strip) {
+			last_cmd_strip = cmd_strip;
+			p_wide_cmd.clear();
+		}
 		string out;
 		out.reserve(width * height);
 
@@ -2105,7 +2112,7 @@ namespace Proc {
 				}
 			}
 
-			const auto san_cmd = replace_ascii_control(p.cmd);
+			const auto san_cmd = replace_ascii_control(strip_cmd(p.cmd, cmd_strip));
 
 			if (not p_wide_cmd.contains(p.pid)) p_wide_cmd[p.pid] = ulen(san_cmd) != ulen(san_cmd, true);
 
