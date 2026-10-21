@@ -687,6 +687,13 @@ namespace Menu {
 				"If swap memory should be shown in memory box.",
 				"",
 				"True or False."},
+		#ifdef __linux__
+			{"show_zswap",
+				"If zswap usage should be shown in memory box.",
+				"Displays the compressed size stored in RAM.",
+				"",
+				"True or False."},
+		#endif
 			{"swap_disk",
 				"Show swap as a disk.",
 				"",
