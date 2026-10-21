@@ -342,13 +342,21 @@ namespace Cpu {
 			has_battery = false;
 		} else {
 			has_battery = true;
-			size_t size = sizeof(seconds);
-			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, nullptr, 0) < 0) {
+			//? hw.acpi.battery.time is an int in minutes, -1 when unknown
+			int minutes;
+			size_t size = sizeof(minutes);
+			if (sysctlbyname("hw.acpi.battery.time", &minutes, &size, nullptr, 0) < 0 or minutes < 0) {
 				seconds = 0;
+			} else {
+				seconds = minutes * 60L;
 			}
-			size = sizeof(watts);
-			if (sysctlbyname("hw.acpi.battery.rate", &watts, &size, nullptr, 0) < 0) {
+			//? hw.acpi.battery.rate is the discharge rate as an int in mW, 0 when not discharging
+			int rate;
+			size = sizeof(rate);
+			if (sysctlbyname("hw.acpi.battery.rate", &rate, &size, nullptr, 0) < 0 or rate <= 0) {
 				watts = -1;
+			} else {
+				watts = rate / 1000.0f;
 			}
 			int state;
 			size = sizeof(state);
