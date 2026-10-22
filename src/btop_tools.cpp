@@ -37,6 +37,7 @@ tab-size = 4
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
+#include "btop_layout.hpp"
 
 using std::cout;
 using std::floor;
@@ -48,6 +49,53 @@ using std::to_string;
 using namespace std::literals; // to use operator""s
 
 namespace fs = std::filesystem;
+
+namespace Layout {
+	auto visible_gpus(const string& boxes, int count) -> std::vector<int> {
+		std::vector<int> ids;
+		for (const auto& box : Tools::ssplit(boxes)) {
+			if (box.size() == 4 and box.starts_with("gpu") and box[3] >= '0' and box[3] <= '5') {
+				const int id = box[3] - '0';
+				if (id < count and std::ranges::find(ids, id) == ids.end()) ids.push_back(id);
+			}
+		}
+		return ids;
+	}
+
+	auto horizontal_row(const string& boxes) -> std::optional<HorizontalRow> {
+	#ifdef GPU_SUPPORT
+		HorizontalInput in;
+		in.enabled = Config::getB("cpu_gpu_horizontal");
+		if (not in.enabled) return {};
+		in.width = Term::width;
+		in.height = Term::height;
+		in.cores = Shared::coreCount;
+		in.cpu = boxes.contains("cpu");
+		in.mem = boxes.contains("mem");
+		in.net = boxes.contains("net");
+		in.proc = boxes.contains("proc");
+		in.bottom = Config::getB("cpu_bottom");
+		in.mem_below_net = Config::getB("mem_below_net");
+		in.core_temps = Config::getB("check_temp") and Cpu::got_sensors;
+		in.gpu_ids = visible_gpus(boxes, Gpu::count);
+		in.gpu_offsets = Gpu::gpu_b_height_offsets;
+		const auto& info = Config::getS("show_gpu_info");
+		in.inline_gpus = info == "On" ? Gpu::count : info == "Auto" ? Gpu::count - static_cast<int>(in.gpu_ids.size()) : 0;
+		in.cpu_min_width = Cpu::min_width;
+		in.gpu_min_width = Gpu::min_width;
+		in.cpu_min_height = Cpu::min_height;
+		in.gpu_min_height = Gpu::min_height;
+		in.remaining_min_width = (in.mem or in.net ? Mem::min_width : 0) + (in.proc ? Proc::min_width : 0);
+		in.mem_min_height = Mem::min_height;
+		in.net_min_height = Net::min_height;
+		in.proc_min_height = Proc::min_height;
+		return horizontal_row(in);
+	#else
+		(void)boxes;
+		return {};
+	#endif
+	}
+}
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -117,15 +165,15 @@ namespace Term {
 	}
 
 	auto get_min_size(const string& boxes) -> array<int, 2> {
+		if (const auto row = Layout::horizontal_row(boxes))
+			return {Term::width, row->height + std::max(Proc::min_height * boxes.contains("proc"),
+				Mem::min_height * boxes.contains("mem") + Net::min_height * boxes.contains("net"))};
         bool cpu = boxes.find("cpu") != string::npos;
         bool mem = boxes.find("mem") != string::npos;
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
 	#ifdef GPU_SUPPORT
-		int gpu = 0;
-        if (Gpu::count > 0)
-        	for (char i = '0'; i <= '5'; i++)
-        		gpu += (boxes.contains("gpu"s + i) ? 1 : 0);
+		const auto gpu_ids = Layout::visible_gpus(boxes, Gpu::count);
 	#endif
         int width = 0;
 		if (mem) width = Mem::min_width;
@@ -133,15 +181,15 @@ namespace Term {
 		width += (proc ? Proc::min_width : 0);
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
 	#ifdef GPU_SUPPORT
-		if (gpu != 0 and width < Gpu::min_width) width = Gpu::min_width;
+		if (not gpu_ids.empty() and width < Gpu::min_width) width = Gpu::min_width;
 	#endif
 
 		int height = (cpu ? Cpu::min_height : 0);
 		if (proc) height += Proc::min_height;
 		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
 	#ifdef GPU_SUPPORT
-		for (int i = 0; i < gpu; i++)
-			height += Gpu::gpu_b_height_offsets[i] + 4;
+		for (const int id : gpu_ids)
+			height += Gpu::gpu_b_height_offsets.at(id) + 4;
 	#endif
 
 		return { width, height };
