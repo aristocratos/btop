@@ -391,18 +391,24 @@ namespace Shared {
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
-		auto shown_gpus = Config::getS("shown_gpus");
-		if (shown_gpus.contains("nvidia")) {
-		    Gpu::Nvml::init();
-		}
+		const auto shown_gpus = Config::getS("shown_gpus");
+		const auto shown_boxes = Config::getS("shown_boxes");
+		const auto show_gpu_info = Config::getS("show_gpu_info");
+		const bool gpu_needed = shown_boxes.contains("gpu") || show_gpu_info != "Off";
 
-		if (shown_gpus.contains("amd")) {
-			Gpu::Rsmi::init();
-			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
-		}
+		if (gpu_needed) {
+			if (shown_gpus.contains("nvidia")) {
+				Gpu::Nvml::init();
+			}
 
-		if (shown_gpus.contains("intel")) {
-			Gpu::Intel::init();
+			if (shown_gpus.contains("amd")) {
+				Gpu::Rsmi::init();
+				Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
+			}
+
+			if (shown_gpus.contains("intel")) {
+				Gpu::Intel::init();
+			}
 		}
 
 		if (not Gpu::gpu_names.empty()) {
