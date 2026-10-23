@@ -59,7 +59,15 @@ namespace Symbols {
 	extern const string enter;
 }
 
+#ifdef GPU_SUPPORT
+namespace Gpu { struct gpu_info; }
+#endif
+
 namespace Draw {
+	#ifdef GPU_SUPPORT
+	// A bounded, single-line summary of shared GPU RAM, independent of VRAM.
+	string gpu_shared_memory(const Gpu::gpu_info& gpu, int width);
+	#endif
 
 	//* Generate if needed and return the btop++ banner
 	string banner_gen(int y=0, int x=0, bool centered=false, bool redraw=false);
