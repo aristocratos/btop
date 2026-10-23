@@ -3376,7 +3376,7 @@ namespace Proc {
 								new_proc.user = uid;
 							}
 						}
-						catch (...) { new_proc.user = uid; }
+						catch (const std::exception&) { new_proc.user = uid; }
 					#else
 						new_proc.user = uid;
 					#endif
