@@ -93,7 +93,7 @@ endif
 override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
 
 #? GPU Support
-ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
+ifneq ($(filter $(PLATFORM_LC)$(ARCH),linuxx86_64 linuxaarch64 linuxarm64),)
 	ifneq ($(STATIC),true)
 		GPU_SUPPORT := true
 		INTEL_GPU_SUPPORT := true

@@ -457,11 +457,11 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    ### GPU compatibility
 
-   Btop++ supports Nvidia and AMD GPUs and Intel IGPUs out of the box on Linux x86_64, provided you have the correct drivers and libraries.
+   Btop++ supports Nvidia and AMD GPUs and Intel IGPUs out of the box on Linux x86_64 and ARM64, provided you have the correct drivers and libraries.
 
    Gpu support for Nvidia or AMD will not work when static linking glibc (or musl, etc.)!
 
-   For x86_64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
+   For x86_64 and ARM64 Linux the flag `GPU_SUPPORT` is automatically set to `true`, to manually disable gpu support set the flag to false, like:
 
    `make GPU_SUPPORT=false` (or `cmake -DBTOP_GPU=false` with CMake)
 
@@ -516,7 +516,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
    | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
    | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
    | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
+   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on x86_64 & ARM64 Linux) |
    | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
    | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
    | `CXX=<compiler>`                | Manually set which compiler to use                                       |
