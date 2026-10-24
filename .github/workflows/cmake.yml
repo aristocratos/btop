@@ -22,7 +22,7 @@ jobs:
     name: Detect file changes
     runs-on: ubuntu-26.04
     outputs:
-      shared: ${{ steps.filter.outputs.shared }}
+      shared: ${{ steps.filter.outputs.cmake }}
       freebsd: ${{ steps.filter.outputs.freebsd }}
       linux: ${{ steps.filter.outputs.linux }}
       netbsd: ${{ steps.filter.outputs.netbsd }}
@@ -38,20 +38,7 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
-          filters: |
-            shared:
-              - ".github/workflows/cmake.yml"
-              - "cmake/**"
-              - "CMakeLists.txt"
-              - "include/**"
-              - "src/*.cpp"
-              - "src/*.hpp"
-              - "tests/**"
-            freebsd: "src/freebsd/**"
-            linux: "src/linux/**"
-            netbsd: "src/netbsd/**"
-            openbsd: "src/openbsd/**"
-            osx: "src/osx/**"
+          filters: .github/filters.yml
 
   linux:
     name: Linux (${{ matrix.cxx }}-${{ matrix.version }})
@@ -87,7 +74,7 @@ jobs:
           persist-credentials: false
 
       - name: Install mold
-        uses: rui314/setup-mold@7e4f20ad28a2e8ca6fd0892ccf72e2abb706b9c3 # v1
+        uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
 
       - name: Install gcc
         if: matrix.cxx == 'g++' && contains(matrix.version, '16')
@@ -145,7 +132,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/freebsd-vm@8b0f1a8fc0ea0def307835c258940ca358fe6480 # v1.5.6
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
           arch: x86_64
           release: "15.1"
@@ -168,7 +155,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/openbsd-vm@86cdc08415d9d0865267e686561e276c52d62530 # v1.4.7
+        uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1.4.9
         with:
           arch: x86_64
           release: "7.9"
@@ -191,7 +178,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/netbsd-vm@20ee93a005c9fc78743e6e05269f4cb023b87413 # v1.5.0
+        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92 # v1.5.2
         with:
           arch: x86_64
           release: "11.0"
