@@ -532,6 +532,27 @@ namespace Input {
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
 				}
+				else if (key == "J") {
+					if (
+						Config::getB("show_detailed") and
+						Config::getI("proc_selected") == 0 and
+						Proc::detailed.status != "Dead" and
+						Proc::detailed.entry.ppid > 0
+					) {
+						const int parent_pid = static_cast<int>(Proc::detailed.entry.ppid);
+
+						const bool following_detailed =
+							Config::getB("follow_process") and
+							Config::getI("followed_pid") == Config::getI("detailed_pid");
+
+						Config::set("detailed_pid", parent_pid);
+
+						if (following_detailed)
+							Config::set("followed_pid", parent_pid);
+
+						Config::set("update_following", true);
+					}
+				}
 				else keep_going = true;
 
 				if (not keep_going) {
