@@ -443,8 +443,6 @@ namespace Gpu {
 				gpus_slice[0].gpu_percent.at("gpu-totals").push_back(0);
 				gpus_slice[0].gpu_percent.at("gpu-pwr-totals").push_back(0);
 				gpus_slice[0].gpu_percent.at("gpu-vram-totals").push_back(0);
-				gpus_slice[0].mem_utilization_percent.push_back(0);
-				gpus_slice[0].temp.push_back(0);
 			}
 
 			//? Take new IOReport sample and compute delta
