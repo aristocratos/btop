@@ -295,10 +295,42 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-		//? TODO: illumos CPU frequency reporting not yet ported.
-		return "";
+
+	    //? DOING: illumos CPU frequency reporting, needs on diverse systems.
+		std::string cpuHz;
+
+		Logger::debug("get_cpuHz:");
+		
+	    kstat_ctl_t *kc = kstat_open();
+	    if (!kc) {
+			Logger::warning("    kstat_open() failed.");
+			return "";
+		}
+		
+		//? Same rationale as the cpu_stat chain-walk in Cpu::collect(): find whatever "cpu_info"
+		//? kstat actually exists rather than assuming a particular instance number is present.
+		kstat_t *ksp = kstat_lookup(kc, "cpu_info", 0, "cpu_info0");
+		if (ksp && kstat_read(kc, ksp, NULL) != -1) {
+			Logger::debug("\t *ksp:");
+			Logger::debug("\t\t ks_module {}",  ksp->ks_module);
+			Logger::debug("\t\t ks_name: {}", ksp->ks_name);
+				
+			kstat_named_t *kn = (kstat_named_t *)kstat_data_lookup(ksp, "clock_MHz");
+			if (kn) {
+				cpuHz = std::to_string(kn->value.i32);
+				Logger::debug("\t *kn:");
+				Logger::debug("\t\t *kn->name: {}", kn->name);
+				Logger::debug("\t\t *kn->value.i32: {}", kn->value.i32);
+			} else {
+				return "";
+			}
+		}
+		
+		kstat_close(kc);
+		return cpuHz;
 	}
 
+		
 	auto get_core_mapping() -> std::unordered_map<int, int> {
 		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
