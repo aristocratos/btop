@@ -604,7 +604,10 @@ namespace Menu {
 				"",
 				"\"active\" reports time outside idle states.",
 				"\"normalized\" also weights active time",
-				"by GPU frequency relative to its maximum."},
+				"by GPU frequency relative to its maximum.",
+				"",
+				"Normalized percentages are not directly",
+				"comparable to other tools' utilization."},
 		#endif
 			{"shown_gpus",
 				"Manually set which gpu vendors to show.",

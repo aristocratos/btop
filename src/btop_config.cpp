@@ -265,7 +265,8 @@ namespace Config {
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
 	#ifdef __APPLE__
 		{"gpu_utilization_mode",
-							"#* Apple Silicon GPU utilization mode. \"active\" reports non-idle residency; \"normalized\" also weights residency by GPU frequency."},
+							"#* Apple Silicon GPU utilization mode. \"active\" reports non-idle residency; \"normalized\" also weights residency by GPU frequency.\n"
+							"#* Normalized percentages are not directly comparable to utilization reported by other tools."},
 	#endif
 		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel apple\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
