@@ -277,14 +277,11 @@ namespace Tools {
 				return uresize(str, len, false);
 			vector<wchar_t> w_str(w_len);
 			std::mbstowcs(&w_str[0], str_data, w_len);
+			w_str.pop_back();
 
 			while (wide_ulen(w_str) > len) w_str.pop_back();
 
-			string n_str;
-			n_str.resize(w_str.size());
-			std::wcstombs(&n_str[0], &w_str[0], w_str.size());
-
-			return n_str;
+			return uresize(str, w_str.size());
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {
