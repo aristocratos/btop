@@ -1629,8 +1629,10 @@ namespace Proc {
 		auto selected = Config::getI("proc_selected");
 		auto last_selected = Config::getI("proc_last_selected");
 		bool changed = false;
-		int select_max = (Config::getB("show_detailed") ? (Config::getB("proc_banner_shown") ? Proc::select_max - 9 : Proc::select_max - 8) :
-																(Config::getB("proc_banner_shown") ? Proc::select_max - 1 : Proc::select_max));
+		const bool show_cwd = !detailed.cwd.empty() && Proc::height >= Proc::min_height + cwd_height;
+		const int cwd_h = show_cwd ? cwd_height : 0;
+		const int detail_h = base_detailed_height + cwd_h;
+		int select_max = Proc::select_max - (Config::getB("show_detailed") ? detail_h : 0) - (Config::getB("proc_banner_shown") ? 1 : 0);
 
 		// Return the selection from the detailed view to the followed process before moving the selection
 		// Disengage following mode when moving the selection unless paused
@@ -1725,9 +1727,12 @@ namespace Proc {
 		Config::set("proc_banner_shown", proc_banner_shown);
 		start = Config::getI("proc_start");
 		selected = Config::getI("proc_selected");
-		const int y = show_detailed ? Proc::y + 8 : Proc::y;
-		const int height = show_detailed ? Proc::height - 8 : Proc::height;
-		int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) :
+		const bool show_cwd = !detailed.cwd.empty() && Proc::height >= Proc::min_height + cwd_height;
+		const int cwd_h = show_cwd ? cwd_height : 0;
+		const int detail_h = base_detailed_height + cwd_h;
+		const int y = show_detailed ? Proc::y + detail_h : Proc::y;
+		const int height = show_detailed ? Proc::height - detail_h : Proc::height;
+		int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - detail_h - 1 : Proc::select_max - detail_h) :
 												(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max);
 		auto totalMem = Mem::get_totalMem();
 		int numpids = Proc::numpids;
@@ -1825,7 +1830,7 @@ namespace Proc {
 
 				//? Create cpu and mem graphs if process is alive
 				if (alive or pause_proc_list) {
-					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, 7, "cpu", detailed.cpu_percent, graph_symbol, false, true};
+					detailed_cpu_graph = Draw::Graph{dgraph_width - 1, detail_h - 1, "cpu", detailed.cpu_percent, graph_symbol, false, true};
 					detailed_mem_graph = Draw::Graph{d_width / 3, 1, "", detailed.mem_bytes, graph_symbol, false, false, detailed.first_mem};
 				}
 
@@ -1838,7 +1843,7 @@ namespace Proc {
 					+ title_left + Fx::b + Theme::c("title") + uresize(detailed.entry.name, dgraph_width - pid_str.size() - 7, true) + Fx::ub + title_right;
 
 				out += Mv::to(d_y, d_x - 1) + Theme::c("proc_box") + Symbols::div_up + Mv::to(y, d_x - 1) + Symbols::div_down + Theme::c("div_line");
-				for (const int& i : iota(1, 8)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
+				for (const int& i : iota(1, detail_h)) out += Mv::to(d_y + i, d_x - 1) + Symbols::v_line;
 
 				const string t_color = (not alive or selected > 0 ? Theme::c("inactive_fg") : Theme::c("title"));
 				const string hi_color = (not alive or selected > 0 ? t_color : Theme::c("hi_fg"));
@@ -1884,7 +1889,7 @@ namespace Proc {
 
 				//? Command line
 				for (int i = 0; const auto& l : {'C', 'M', 'D'})
-				out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
+					out += Mv::to(d_y + 5 + i++, d_x + 1) + l;
 
 				out += Theme::c("main_fg") + Fx::ub;
 				const auto san_cmd = replace_ascii_control(detailed.entry.cmd);
@@ -1894,6 +1899,21 @@ namespace Proc {
 						+ cjust(luresize(san_cmd, cmd_size - (d_width - 5) * i, true), d_width - 5, true, true);
 				}
 
+				//? Current working directory
+				if (show_cwd) {
+					const int cwd_y = d_y + detail_h - 3;
+
+					for (int i = 0; const auto& l : {'C', 'W', 'D'})
+						out += Mv::to(cwd_y + i++, d_x + 1) + l;
+
+					out += Theme::c("main_fg") + Fx::ub;
+					const auto san_cwd = replace_ascii_control(detailed.cwd);
+					const int cwd_size = ulen(san_cwd, true);
+					for (int num_lines = min(3, (int)ceil((double)cwd_size / (d_width - 5))), i = 0; i < num_lines; i++) {
+						out += Mv::to(cwd_y + (num_lines == 1 ? 1 : i), d_x + 3)
+							+ cjust(luresize(san_cwd, cwd_size - (d_width - 5) * i, true), d_width - 5, true, true);
+					}
+				}
 			}
 
 			//? Filter

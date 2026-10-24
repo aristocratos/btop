@@ -393,8 +393,11 @@ namespace Input {
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
 					const auto& [col, line] = mouse_pos;
-					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
-					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
+					const bool show_cwd = not Proc::detailed.cwd.empty() && Proc::height >= Proc::min_height + Proc::cwd_height;
+					const int cwd_h = show_cwd ? Proc::cwd_height : 0;
+					const int detail_h = Proc::base_detailed_height + cwd_h;
+					const int y = (Config::getB("show_detailed") ? Proc::y + detail_h : Proc::y);
+					const int height = (Config::getB("show_detailed") ? Proc::height - detail_h : Proc::height);
 					const auto in_proc_box = col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1;
 					if (key == "mouse_click") {
 						if (in_proc_box) {
