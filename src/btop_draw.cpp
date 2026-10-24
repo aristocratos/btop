@@ -1805,7 +1805,7 @@ namespace Proc {
 			const string title_right = Theme::c("proc_box") + Symbols::title_right;
 			const string title_left_down = Theme::c("proc_box") + Symbols::title_left_down;
 			const string title_right_down = Theme::c("proc_box") + Symbols::title_right_down;
-			for (const auto& key : {"t", "K", "k", "s", "N", "F", "enter", "info_enter"})
+			for (const auto& key : {"t", "K", "k", "s", "J", "N", "F", "enter", "info_enter"})
 				if (Input::mouse_mappings.contains(key)) Input::mouse_mappings.erase(key);
 
 			//? Adapt sizes of text fields
@@ -1864,6 +1864,21 @@ namespace Proc {
 				    mouse_x += 9;
 					Input::mouse_mappings["N"] = {d_y, mouse_x, 1, 5};
 				    mouse_x += 7;
+				}
+				if (width > 90) {
+					const bool can_jump_parent = alive and selected == 0 and detailed.entry.ppid > 0;
+					const string parent_t_color = can_jump_parent ? t_color : Theme::c("inactive_fg");
+					const string parent_hi_color = can_jump_parent ? hi_color : Theme::c("inactive_fg");
+
+					out += title_left + Fx::b
+						+ parent_hi_color + 'J'
+						+ parent_t_color + "ump parent"
+						+ Fx::ub + title_right;
+
+					if (can_jump_parent)
+						Input::mouse_mappings["J"] = {d_y, mouse_x, 1, 11};
+
+					mouse_x += 13;
 				}
 				if (width > 77) {
 				    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}",
