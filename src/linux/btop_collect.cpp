@@ -24,6 +24,7 @@ tab-size = 4
 #include <fstream>
 #include <future>
 #include <iterator>
+#include <map>
 #include <numeric>
 #include <optional>
 #include <ranges>
@@ -304,6 +305,7 @@ namespace Gpu {
 			struct engine_info {
 				zes_engine_handle_t handle;
 				zes_engine_group_t type;
+				uint32_t tile;
 				zes_engine_stats_t stats;
 			};
 
@@ -2029,7 +2031,12 @@ namespace Gpu {
 				const auto activity_result = zesEngineGetActivity(handle, &stats);
 				if (properties_result == ZE_RESULT_SUCCESS
 					and activity_result == ZE_RESULT_SUCCESS) {
-					engines.push_back({handle, properties.type, stats});
+					engines.push_back({
+						handle,
+						properties.type,
+						properties.onSubdevice ? properties.subdeviceId : 0,
+						stats
+					});
 				}
 			}
 
@@ -2200,6 +2207,7 @@ namespace Gpu {
 			if (not engines.empty()) {
 				struct engine_sample {
 					zes_engine_group_t type;
+					uint32_t tile;
 					double utilization;
 				};
 				vector<engine_sample> samples;
@@ -2215,6 +2223,7 @@ namespace Gpu {
 						const double elapsed = current.timestamp - engine.stats.timestamp;
 						samples.push_back({
 							engine.type,
+							engine.tile,
 							clamp(active * 100.0 / elapsed, 0.0, 100.0)
 						});
 						engine.stats = current;
@@ -2225,44 +2234,78 @@ namespace Gpu {
 					}
 				}
 
-				const auto aggregate_priority = [](const zes_engine_group_t type) {
+				//* Level Zero averages the busyness of the members of an engine group, so
+				//* the broader the group the more a single busy engine is diluted: on a
+				//* nine-engine device ZES_ENGINE_GROUP_ALL reports ~11% while the one
+				//* engine doing the work is at 100%. Report the busiest engine instead,
+				//* matching xpu-smi's GPU utilization: within an engine class only the
+				//* narrowest group the driver exposes counts (per-engine counters win over
+				//* the class aggregate that averages them), the busiest class defines the
+				//* utilization, and ZES_ENGINE_GROUP_ALL is only a fallback for tiles on
+				//* which no individual class reported anything.
+				enum class engine_class_t : int {
+					compute, render, three_d, render_compute, media, copy, device_wide, unknown
+				};
+				enum class engine_tier_t : int { instance, group, device };
+
+				struct engine_kind_t { engine_class_t engine_class; engine_tier_t tier; };
+
+				const auto engine_kind = [](const zes_engine_group_t type) -> engine_kind_t {
 					switch (type) {
-						case ZES_ENGINE_GROUP_ALL: return 3;
-						case ZES_ENGINE_GROUP_RENDER_ALL: return 2;
-						case ZES_ENGINE_GROUP_COMPUTE_ALL: return 1;
-						default: return 0;
+						case ZES_ENGINE_GROUP_COMPUTE_SINGLE: return {engine_class_t::compute, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_COMPUTE_ALL: return {engine_class_t::compute, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_RENDER_SINGLE: return {engine_class_t::render, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_RENDER_ALL: return {engine_class_t::render, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_3D_SINGLE: return {engine_class_t::three_d, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_3D_ALL: return {engine_class_t::three_d, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_3D_RENDER_COMPUTE_ALL: return {engine_class_t::render_compute, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_MEDIA_DECODE_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_ENCODE_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_ENHANCEMENT_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_CODEC_SINGLE:
+							return {engine_class_t::media, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_MEDIA_ALL: return {engine_class_t::media, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_COPY_SINGLE: return {engine_class_t::copy, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_COPY_ALL: return {engine_class_t::copy, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_ALL: return {engine_class_t::device_wide, engine_tier_t::device};
+						default: return {engine_class_t::unknown, engine_tier_t::device};
 					}
 				};
 
-				std::optional<double> selected_utilization;
-				int selected_priority = 0;
+				//* Best reading per (tile, class): the narrowest tier wins, ties in tier
+				//* take the maximum across handles.
+				std::map<std::pair<uint32_t, engine_class_t>, std::pair<engine_tier_t, double>> per_class;
 				for (const auto& sample : samples) {
-					const int priority = aggregate_priority(sample.type);
-					if (priority > selected_priority) {
-						selected_utilization = sample.utilization;
-						selected_priority = priority;
-					}
+					const auto kind = engine_kind(sample.type);
+					const auto key = std::make_pair(sample.tile, kind.engine_class);
+					const auto [entry, inserted] = per_class.try_emplace(key, kind.tier, sample.utilization);
+					if (inserted) continue;
+					if (kind.tier < entry->second.first)
+						entry->second = {kind.tier, sample.utilization};
+					else if (kind.tier == entry->second.first)
+						entry->second.second = max(entry->second.second, sample.utilization);
 				}
 
-				if (not selected_utilization) {
-					double maximum = -1.0;
-					for (const auto& sample : samples) {
-						switch (sample.type) {
-							case ZES_ENGINE_GROUP_COMPUTE_SINGLE:
-							case ZES_ENGINE_GROUP_RENDER_SINGLE:
-							case ZES_ENGINE_GROUP_COPY_SINGLE:
-							case ZES_ENGINE_GROUP_MEDIA_DECODE_SINGLE:
-							case ZES_ENGINE_GROUP_MEDIA_ENCODE_SINGLE:
-							case ZES_ENGINE_GROUP_MEDIA_ENHANCEMENT_SINGLE:
-							case ZES_ENGINE_GROUP_MEDIA_CODEC_SINGLE:
-							case ZES_ENGINE_GROUP_3D_SINGLE:
-								maximum = max(maximum, sample.utilization);
-								break;
-							default:
-								break;
-						}
-					}
-					if (maximum >= 0.0) selected_utilization = maximum;
+				//* Busiest class per tile; device-wide groups only fill tiles without any
+				//* class-level reading. A multi-tile device reports the tile average.
+				std::map<uint32_t, double> per_tile, per_tile_fallback;
+				for (const auto& [key, tier_utilization] : per_class) {
+					const bool device_wide = key.second == engine_class_t::device_wide
+						or key.second == engine_class_t::unknown;
+					auto& target = device_wide ? per_tile_fallback : per_tile;
+					const auto [entry, inserted] = target.try_emplace(key.first, tier_utilization.second);
+					if (not inserted)
+						entry->second = max(entry->second, tier_utilization.second);
+				}
+				for (const auto& [tile, utilization] : per_tile_fallback)
+					per_tile.try_emplace(tile, utilization);
+
+				std::optional<double> selected_utilization;
+				if (not per_tile.empty()) {
+					double utilization_sum = 0.0;
+					for (const auto& [tile, utilization] : per_tile)
+						utilization_sum += utilization;
+					selected_utilization = utilization_sum / per_tile.size();
 				}
 
 				if (selected_utilization) {
