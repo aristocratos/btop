@@ -17,8 +17,10 @@ tab-size = 4
 */
 
 #include <sys/resource.h>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <ranges>
 #include <regex>
 #include <string>
@@ -77,6 +79,30 @@ namespace Cpu {
 		}
 
 		return name;
+	}
+}
+
+namespace Net {
+	auto calculate_graph_max(const net_info& netif, const string& dir, const bool scale_down, const bool net_sync) -> uint64_t {
+		const auto& bandwidth = netif.bandwidth.at(dir);
+		const long long avg_speed = (bandwidth.size() > 5
+			? std::accumulate(bandwidth.rbegin(), bandwidth.rbegin() + 5, 0ll) / 5
+			: netif.stat.at(dir).speed);
+		uint64_t new_max = std::max(uint64_t(avg_speed * (scale_down ? 3.0 : 1.3)), (uint64_t)10 << 10);
+
+		auto history_max = [&netif](const string& history_dir) -> uint64_t {
+			const auto& history = netif.bandwidth.at(history_dir);
+			if (history.empty()) return 0;
+			return static_cast<uint64_t>(std::max(0ll, *std::max_element(history.begin(), history.end())));
+		};
+
+		uint64_t retained_max = history_max(dir);
+		if (net_sync) {
+			const string other = (dir == "upload" ? "download" : "upload");
+			retained_max = std::max(retained_max, history_max(other));
+		}
+		new_max = std::max(new_max, uint64_t(retained_max * 1.3));
+		return new_max;
 	}
 }
 
