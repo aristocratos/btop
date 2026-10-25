@@ -246,8 +246,8 @@ jobs:
           envs: "STATIC STRIP"
           run: |
             pkg_add -u pkgin
-            pkgin -y install coreutils gcc15 gmake
-            export CXX="/usr/pkg/gcc15/bin/g++"
+            pkgin -y install coreutils gcc14 gmake
+            export CXX="/usr/pkg/gcc14/bin/g++"
             gmake
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
