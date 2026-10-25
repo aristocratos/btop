@@ -54,25 +54,25 @@ using namespace Tools;
 using namespace std::literals; // for operator""s
 namespace rng = std::ranges;
 
-const string Symbols::h_line			= "─";
-const string Symbols::v_line			= "│";
-const string Symbols::dotted_v_line		= "╎";
-const string Symbols::left_up			= "┌";
-const string Symbols::right_up			= "┐";
-const string Symbols::left_down			= "└";
-const string Symbols::right_down		= "┘";
-const string Symbols::round_left_up		= "╭";
-const string Symbols::round_right_up	= "╮";
-const string Symbols::round_left_down	= "╰";
-const string Symbols::round_right_down	= "╯";
-const string Symbols::title_left_down	= "┘";
-const string Symbols::title_right_down	= "└";
-const string Symbols::title_left		= "┐";
-const string Symbols::title_right		= "┌";
-const string Symbols::div_right			= "┤";
-const string Symbols::div_left			= "├";
-const string Symbols::div_up			= "┬";
-const string Symbols::div_down			= "┴";
+string Symbols::h_line				= "─";
+string Symbols::v_line				= "│";
+const string Symbols::dotted_v_line	= "╎";
+string Symbols::left_up				= "┌";
+string Symbols::right_up			= "┐";
+string Symbols::left_down			= "└";
+string Symbols::right_down			= "┘";
+string Symbols::round_left_up		= "╭";
+string Symbols::round_right_up		= "╮";
+string Symbols::round_left_down		= "╰";
+string Symbols::round_right_down	= "╯";
+string Symbols::title_left_down		= "┘";
+string Symbols::title_right_down	= "└";
+string Symbols::title_left			= "┐";
+string Symbols::title_right			= "┌";
+string Symbols::div_right			= "┤";
+string Symbols::div_left			= "├";
+string Symbols::div_up				= "┬";
+string Symbols::div_down			= "┴";
 
 
 const string Symbols::up = "↑";
