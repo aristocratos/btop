@@ -369,7 +369,7 @@ namespace Shared {
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
 
 		for (int i = 0; i < Shared::coreCount; ++i) {
-			Cpu::core_freq.push_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
+			Cpu::core_freq.emplace_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
 			if (not fs::exists(Cpu::core_freq.back()) or access(Cpu::core_freq.back().c_str(), R_OK) == -1) {
 				Cpu::core_freq.pop_back();
 			}
@@ -2116,7 +2116,7 @@ namespace Gpu {
 					continue;
 				}
 
-				devices.push_back(std::move(d));
+				devices.emplace_back(std::move(d));
 			}
 
 			device_count = (uint32_t)devices.size();
@@ -2472,7 +2472,7 @@ namespace Mem {
 							if (not instr.starts_with('#')) {
 								diskread >> instr;
 								#ifdef SNAPPED
-									if (instr == "/") fstab.push_back("/mnt");
+									if (instr == "/") fstab.emplace_back("/mnt");
 									else if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
 								#else
 									if (not is_in(instr, "none", "swap")) fstab.push_back(instr);
@@ -2563,7 +2563,7 @@ namespace Mem {
 					}
 
 					//? Remove disks no longer mounted or filtered out
-					if (swap_disk and has_swap) found.push_back("swap");
+					if (swap_disk and has_swap) found.emplace_back("swap");
 					for (auto it = disks.begin(); it != disks.end();) {
 						if (not v_contains(found, it->first))
 							it = disks.erase(it);
@@ -2629,12 +2629,12 @@ namespace Mem {
 				//? Setup disks order in UI and add swap if enabled
 				mem.disks_order.clear();
 				#ifdef SNAPPED
-					if (disks.contains("/mnt")) mem.disks_order.push_back("/mnt");
+					if (disks.contains("/mnt")) mem.disks_order.emplace_back("/mnt");
 				#else
-					if (disks.contains("/")) mem.disks_order.push_back("/");
+					if (disks.contains("/")) mem.disks_order.emplace_back("/");
 				#endif
 				if (swap_disk and has_swap) {
-					mem.disks_order.push_back("swap");
+					mem.disks_order.emplace_back("swap");
 					if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
 					disks.at("swap").total = mem.stats.at("swap_total");
 					disks.at("swap").used = mem.stats.at("swap_used");
@@ -2920,7 +2920,7 @@ namespace Net {
 
 				//? Update available interfaces vector and get status of interface
 				if (not v_contains(interfaces, iface)) {
-					interfaces.push_back(iface);
+					interfaces.emplace_back(iface);
 					net[iface].connected = (ifa->ifa_flags & IFF_RUNNING);
 
 					// An interface can have more than one IP of the same family associated with it,
