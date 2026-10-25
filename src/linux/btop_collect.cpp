@@ -24,6 +24,7 @@ tab-size = 4
 #include <fstream>
 #include <future>
 #include <iterator>
+#include <map>
 #include <numeric>
 #include <optional>
 #include <ranges>
@@ -74,6 +75,10 @@ extern "C" {
 	#if defined(__clang__)
 		#pragma clang diagnostic pop
 	#endif // __clang__
+
+	#if defined(USE_LEVELZERO)
+		#include <level_zero/zes_api.h>
+	#endif
 #endif
 
 using std::abs;
@@ -293,6 +298,39 @@ namespace Gpu {
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
+
+	#if defined(USE_LEVELZERO)
+		//? Intel Level Zero data collection
+		namespace LevelZero {
+			struct engine_info {
+				zes_engine_handle_t handle;
+				zes_engine_group_t type;
+				uint32_t tile;
+				zes_engine_stats_t stats;
+			};
+
+			struct memory_info {
+				zes_mem_handle_t handle;
+				uint64_t physical_size;
+				uint64_t size;
+				uint64_t free;
+			};
+
+			zes_device_handle_t device = nullptr;
+			vector<engine_info> engines;
+			vector<memory_info> memory_modules;
+			zes_pwr_handle_t power_handle = nullptr;
+			zes_power_energy_counter_t power_stats{};
+			long long power_limit = 0;
+			zes_freq_handle_t frequency_handle = nullptr;
+
+			bool initialized = false;
+			bool init();
+			bool shutdown();
+			template <bool is_init> bool collect(gpu_info* gpus_slice);
+			uint32_t device_count = 0;
+		}
+	#endif
 	}
 
 	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
@@ -402,7 +440,11 @@ namespace Shared {
 		}
 
 		if (shown_gpus.contains("intel")) {
+		#if defined(USE_LEVELZERO)
+			Gpu::Intel::LevelZero::init();
+		#else
 			Gpu::Intel::init();
+		#endif
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -1907,6 +1949,432 @@ namespace Gpu {
 		}
 	}
 
+	#if defined(USE_LEVELZERO)
+	namespace Intel::LevelZero {
+		bool init() {
+			if (initialized) return false;
+
+			const auto init_result = zesInit(0);
+			if (init_result != ZE_RESULT_SUCCESS) {
+				Logger::debug("Intel GPU: zesInit failed ({})", static_cast<uint32_t>(init_result));
+				return false;
+			}
+
+			const auto enumerate_handles = []<typename handle_t>(vector<handle_t>& handles, const auto& query) {
+				handles.clear();
+
+				uint32_t count{};
+				if (query(&count, nullptr) != ZE_RESULT_SUCCESS or count == 0)
+					return false;
+
+				handles.resize(count);
+				if (query(&count, handles.data()) != ZE_RESULT_SUCCESS) {
+					handles.clear();
+					return false;
+				}
+
+				handles.resize(count);
+				return true;
+			};
+
+			vector<zes_driver_handle_t> drivers;
+			if (not enumerate_handles(drivers, [](uint32_t* count, zes_driver_handle_t* handles) {
+					return zesDriverGet(count, handles);
+				})) {
+				Logger::debug("Intel GPU: Level Zero did not report any drivers");
+				return false;
+			}
+
+			zes_device_properties_t device_properties{};
+			const auto property_string = [](const auto& value) {
+				return string(std::begin(value), std::find(std::begin(value), std::end(value), '\0'));
+			};
+			vector<zes_device_handle_t> devices;
+			for (const auto driver : drivers) {
+				enumerate_handles(devices, [driver](uint32_t* count, zes_device_handle_t* handles) {
+					return zesDeviceGet(driver, count, handles);
+				});
+				for (const auto candidate : devices) {
+					zes_device_properties_t properties{};
+					properties.stype = ZES_STRUCTURE_TYPE_DEVICE_PROPERTIES;
+					properties.core.stype = ZE_STRUCTURE_TYPE_DEVICE_PROPERTIES;
+					const auto properties_result = zesDeviceGetProperties(candidate, &properties);
+					if (properties_result != ZE_RESULT_SUCCESS) {
+						Logger::debug("Intel GPU Level Zero API: zesDeviceGetProperties failed ({})",
+							static_cast<uint32_t>(properties_result));
+						continue;
+					}
+
+					if (properties.core.type == ZE_DEVICE_TYPE_GPU
+						and properties.core.vendorId == 0x8086) {
+						device = candidate;
+						device_properties = properties;
+						break;
+					}
+				}
+				if (device != nullptr) break;
+			}
+			if (device == nullptr) {
+				Logger::debug("Intel GPU: Level Zero did not report an Intel GPU");
+				return false;
+			}
+
+			vector<zes_engine_handle_t> engine_handles;
+			enumerate_handles(engine_handles, [](uint32_t* count, zes_engine_handle_t* handles) {
+				return zesDeviceEnumEngineGroups(device, count, handles);
+			});
+			for (const auto handle : engine_handles) {
+				zes_engine_properties_t properties{};
+				properties.stype = ZES_STRUCTURE_TYPE_ENGINE_PROPERTIES;
+				const auto properties_result = zesEngineGetProperties(handle, &properties);
+				zes_engine_stats_t stats{};
+				const auto activity_result = zesEngineGetActivity(handle, &stats);
+				if (properties_result == ZE_RESULT_SUCCESS
+					and activity_result == ZE_RESULT_SUCCESS) {
+					engines.push_back({
+						handle,
+						properties.type,
+						properties.onSubdevice ? properties.subdeviceId : 0,
+						stats
+					});
+				}
+			}
+
+			vector<zes_mem_handle_t> memory_handles;
+			enumerate_handles(memory_handles, [](uint32_t* count, zes_mem_handle_t* handles) {
+				return zesDeviceEnumMemoryModules(device, count, handles);
+			});
+			for (const auto handle : memory_handles) {
+				zes_mem_properties_t properties{};
+				properties.stype = ZES_STRUCTURE_TYPE_MEM_PROPERTIES;
+				zesMemoryGetProperties(handle, &properties);
+
+				zes_mem_state_t state{};
+				state.stype = ZES_STRUCTURE_TYPE_MEM_STATE;
+				const auto state_result = zesMemoryGetState(handle, &state);
+				const uint64_t total = state.size > 0 ? state.size : properties.physicalSize;
+
+				if (state_result == ZE_RESULT_SUCCESS and total > 0) {
+					memory_modules.push_back({
+						handle,
+						properties.physicalSize,
+						total,
+						min(state.free, total)
+					});
+				}
+			}
+
+			vector<zes_pwr_handle_t> power_handles;
+			enumerate_handles(power_handles, [](uint32_t* count, zes_pwr_handle_t* handles) {
+				return zesDeviceEnumPowerDomains(device, count, handles);
+			});
+			for (const auto handle : power_handles) {
+				zes_power_energy_counter_t stats{};
+				if (zesPowerGetEnergyCounter(handle, &stats) == ZE_RESULT_SUCCESS) {
+					zes_power_properties_t properties{};
+					properties.stype = ZES_STRUCTURE_TYPE_POWER_PROPERTIES;
+					const auto properties_result = zesPowerGetProperties(handle, &properties);
+
+					zes_power_sustained_limit_t sustained{};
+					const auto limits_result = zesPowerGetLimits(handle, &sustained, nullptr, nullptr);
+					if (limits_result == ZE_RESULT_SUCCESS and sustained.power > 0)
+						power_limit = sustained.power;
+					else if (properties_result == ZE_RESULT_SUCCESS and properties.defaultLimit > 0)
+						power_limit = properties.defaultLimit;
+
+					power_handle = handle;
+					power_stats = stats;
+					break;
+				}
+			}
+
+			vector<zes_freq_handle_t> frequency_handles;
+			enumerate_handles(frequency_handles, [](uint32_t* count, zes_freq_handle_t* handles) {
+				return zesDeviceEnumFrequencyDomains(device, count, handles);
+			});
+			for (const auto handle : frequency_handles) {
+				zes_freq_properties_t properties{};
+				properties.stype = ZES_STRUCTURE_TYPE_FREQ_PROPERTIES;
+				if (zesFrequencyGetProperties(handle, &properties) == ZE_RESULT_SUCCESS
+					and properties.type == ZES_FREQ_DOMAIN_GPU) {
+					frequency_handle = handle;
+					break;
+				}
+			}
+
+			if (engines.empty() and memory_modules.empty()
+				and power_handle == nullptr and frequency_handle == nullptr) {
+				Logger::debug("Intel GPU: Level Zero Sysman telemetry is unavailable");
+				device = nullptr;
+				return false;
+			}
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(gpus.size());
+			const auto gpu_index = Nvml::device_count + Rsmi::device_count + Asysfs::device_count;
+			const string core_name = property_string(device_properties.core.name);
+			const string model_name = property_string(device_properties.modelName);
+			const auto usable_name = [](const string& name) {
+				return not name.empty() and name != "unknown"
+					and name != "Unknown" and name != "(unknown)";
+			};
+
+			if (usable_name(model_name))
+				gpu_names[gpu_index] = model_name;
+			else if (usable_name(core_name))
+				gpu_names[gpu_index] = core_name;
+			else
+				gpu_names[gpu_index] = fmt::format("Intel GPU [0x{:04x}]", device_properties.core.deviceId);
+
+			uint64_t total_memory = 0;
+			for (const auto& memory : memory_modules)
+				total_memory += memory.size;
+
+			Logger::info(
+				"Intel GPU Level Zero initialized: core.name=\"{}\", modelName=\"{}\", "
+				"displayName=\"{}\", brandName=\"{}\", vendorName=\"{}\", "
+				"driverVersion=\"{}\", serialNumber=\"{}\", boardNumber=\"{}\", "
+				"vendorId=0x{:04x}, deviceId=0x{:04x}, integrated={}, "
+				"engines={}/{}, memoryModules={}/{}, memoryTotal={} bytes, "
+				"powerAvailable={}, powerLimit={}mW, frequencyAvailable={}",
+				core_name,
+				model_name,
+				gpu_names[gpu_index],
+				property_string(device_properties.brandName),
+				property_string(device_properties.vendorName),
+				property_string(device_properties.driverVersion),
+				property_string(device_properties.serialNumber),
+				property_string(device_properties.boardNumber),
+				device_properties.core.vendorId,
+				device_properties.core.deviceId,
+				(device_properties.core.flags & ZE_DEVICE_PROPERTY_FLAG_INTEGRATED) != 0,
+				engines.size(),
+				engine_handles.size(),
+				memory_modules.size(),
+				memory_handles.size(),
+				total_memory,
+				power_handle != nullptr,
+				power_limit,
+				frequency_handle != nullptr);
+
+			initialized = true;
+			Intel::LevelZero::collect<1>(gpus.data() + gpu_index);
+
+			return true;
+		}
+
+		bool shutdown() {
+			if (!initialized) return false;
+			engines.clear();
+			memory_modules.clear();
+			power_handle = nullptr;
+			power_limit = 0;
+			frequency_handle = nullptr;
+			device = nullptr;
+			device_count = 0;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (!initialized) return false;
+
+			if constexpr(is_init) {
+				gpus_slice->supported_functions = {
+					.gpu_utilization = not engines.empty(),
+					.mem_utilization = false,
+					.gpu_clock = frequency_handle != nullptr,
+					.mem_clock = false,
+					.pwr_usage = power_handle != nullptr,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = not memory_modules.empty(),
+					.mem_used = not memory_modules.empty(),
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false
+				};
+
+				gpus_slice->gpu_clock_speed = 0;
+				gpus_slice->pwr_usage = 0;
+				if (power_limit > 0)
+					gpus_slice->pwr_max_usage = power_limit;
+				if (power_handle != nullptr)
+					gpu_pwr_total_max += gpus_slice->pwr_max_usage;
+			}
+
+			if (not engines.empty()) {
+				struct engine_sample {
+					zes_engine_group_t type;
+					uint32_t tile;
+					double utilization;
+				};
+				vector<engine_sample> samples;
+				samples.reserve(engines.size());
+
+				for (auto& engine : engines) {
+					zes_engine_stats_t current{};
+					if (zesEngineGetActivity(engine.handle, &current) != ZE_RESULT_SUCCESS) continue;
+
+					if (current.timestamp > engine.stats.timestamp
+						and current.activeTime >= engine.stats.activeTime) {
+						const double active = current.activeTime - engine.stats.activeTime;
+						const double elapsed = current.timestamp - engine.stats.timestamp;
+						samples.push_back({
+							engine.type,
+							engine.tile,
+							clamp(active * 100.0 / elapsed, 0.0, 100.0)
+						});
+						engine.stats = current;
+					} else if (current.timestamp < engine.stats.timestamp
+						or current.activeTime < engine.stats.activeTime) {
+						//? Counter reset: establish a new baseline without emitting a false 0% sample.
+						engine.stats = current;
+					}
+				}
+
+				//* Level Zero averages the busyness of the members of an engine group, so
+				//* the broader the group the more a single busy engine is diluted: on a
+				//* nine-engine device ZES_ENGINE_GROUP_ALL reports ~11% while the one
+				//* engine doing the work is at 100%. Report the busiest engine instead,
+				//* matching xpu-smi's GPU utilization: within an engine class only the
+				//* narrowest group the driver exposes counts (per-engine counters win over
+				//* the class aggregate that averages them), the busiest class defines the
+				//* utilization, and ZES_ENGINE_GROUP_ALL is only a fallback for tiles on
+				//* which no individual class reported anything.
+				enum class engine_class_t : int {
+					compute, render, three_d, render_compute, media, copy, device_wide, unknown
+				};
+				enum class engine_tier_t : int { instance, group, device };
+
+				struct engine_kind_t { engine_class_t engine_class; engine_tier_t tier; };
+
+				const auto engine_kind = [](const zes_engine_group_t type) -> engine_kind_t {
+					switch (type) {
+						case ZES_ENGINE_GROUP_COMPUTE_SINGLE: return {engine_class_t::compute, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_COMPUTE_ALL: return {engine_class_t::compute, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_RENDER_SINGLE: return {engine_class_t::render, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_RENDER_ALL: return {engine_class_t::render, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_3D_SINGLE: return {engine_class_t::three_d, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_3D_ALL: return {engine_class_t::three_d, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_3D_RENDER_COMPUTE_ALL: return {engine_class_t::render_compute, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_MEDIA_DECODE_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_ENCODE_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_ENHANCEMENT_SINGLE:
+						case ZES_ENGINE_GROUP_MEDIA_CODEC_SINGLE:
+							return {engine_class_t::media, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_MEDIA_ALL: return {engine_class_t::media, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_COPY_SINGLE: return {engine_class_t::copy, engine_tier_t::instance};
+						case ZES_ENGINE_GROUP_COPY_ALL: return {engine_class_t::copy, engine_tier_t::group};
+						case ZES_ENGINE_GROUP_ALL: return {engine_class_t::device_wide, engine_tier_t::device};
+						default: return {engine_class_t::unknown, engine_tier_t::device};
+					}
+				};
+
+				//* Best reading per (tile, class): the narrowest tier wins, ties in tier
+				//* take the maximum across handles.
+				std::map<std::pair<uint32_t, engine_class_t>, std::pair<engine_tier_t, double>> per_class;
+				for (const auto& sample : samples) {
+					const auto kind = engine_kind(sample.type);
+					const auto key = std::make_pair(sample.tile, kind.engine_class);
+					const auto [entry, inserted] = per_class.try_emplace(key, kind.tier, sample.utilization);
+					if (inserted) continue;
+					if (kind.tier < entry->second.first)
+						entry->second = {kind.tier, sample.utilization};
+					else if (kind.tier == entry->second.first)
+						entry->second.second = max(entry->second.second, sample.utilization);
+				}
+
+				//* Busiest class per tile; device-wide groups only fill tiles without any
+				//* class-level reading. A multi-tile device reports the tile average.
+				std::map<uint32_t, double> per_tile, per_tile_fallback;
+				for (const auto& [key, tier_utilization] : per_class) {
+					const bool device_wide = key.second == engine_class_t::device_wide
+						or key.second == engine_class_t::unknown;
+					auto& target = device_wide ? per_tile_fallback : per_tile;
+					const auto [entry, inserted] = target.try_emplace(key.first, tier_utilization.second);
+					if (not inserted)
+						entry->second = max(entry->second, tier_utilization.second);
+				}
+				for (const auto& [tile, utilization] : per_tile_fallback)
+					per_tile.try_emplace(tile, utilization);
+
+				std::optional<double> selected_utilization;
+				if (not per_tile.empty()) {
+					double utilization_sum = 0.0;
+					for (const auto& [tile, utilization] : per_tile)
+						utilization_sum += utilization;
+					selected_utilization = utilization_sum / per_tile.size();
+				}
+
+				if (selected_utilization) {
+					gpus_slice->gpu_percent.at("gpu-totals").push_back(
+						(long long)round(*selected_utilization));
+				} else if constexpr(is_init) {
+					//? Seed the graph for callers that expect a value immediately after init.
+					gpus_slice->gpu_percent.at("gpu-totals").push_back(0);
+				}
+			}
+
+			if (not memory_modules.empty()) {
+				uint64_t total_memory = 0;
+				uint64_t free_memory = 0;
+				bool has_memory_sample = false;
+
+				for (auto& memory : memory_modules) {
+					zes_mem_state_t state{};
+					state.stype = ZES_STRUCTURE_TYPE_MEM_STATE;
+					if (zesMemoryGetState(memory.handle, &state) == ZE_RESULT_SUCCESS) {
+						const uint64_t module_total = state.size > 0 ? state.size : memory.physical_size;
+						if (module_total > 0) {
+							memory.size = module_total;
+							memory.free = min(state.free, module_total);
+						}
+					}
+
+					total_memory += memory.size;
+					free_memory += memory.free;
+					has_memory_sample = true;
+				}
+
+				if (has_memory_sample and total_memory > 0) {
+					gpus_slice->mem_total = static_cast<long long>(total_memory);
+					gpus_slice->mem_used = static_cast<long long>(total_memory - free_memory);
+					gpus_slice->gpu_percent.at("gpu-vram-totals").push_back(
+						clamp((long long)round((double)gpus_slice->mem_used * 100.0
+							/ (double)gpus_slice->mem_total), 0ll, 100ll));
+				}
+			}
+
+			if (power_handle != nullptr) {
+				zes_power_energy_counter_t current{};
+				if (zesPowerGetEnergyCounter(power_handle, &current) == ZE_RESULT_SUCCESS) {
+					if (current.timestamp > power_stats.timestamp and current.energy >= power_stats.energy) {
+						//? microjoules / microseconds = watts
+						const double power = (double)(current.energy - power_stats.energy)
+							/ (double)(current.timestamp - power_stats.timestamp);
+						gpus_slice->pwr_usage = (long long)round(power * 1000);
+					}
+					power_stats = current;
+				}
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(
+					clamp((long long)round((double)gpus_slice->pwr_usage * 100.0
+						/ (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
+			}
+
+			if (frequency_handle != nullptr) {
+				zes_freq_state_t state{};
+				state.stype = ZES_STRUCTURE_TYPE_FREQ_STATE;
+				if (zesFrequencyGetState(frequency_handle, &state) == ZE_RESULT_SUCCESS and state.actual >= 0)
+					gpus_slice->gpu_clock_speed = (unsigned int)round(state.actual);
+			}
+
+			return true;
+		}
+	}
+	#endif
+
 	namespace Intel {
 		bool init() {
 			if (initialized) return false;
@@ -2221,7 +2689,11 @@ namespace Gpu {
 		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
+	#if defined(USE_LEVELZERO)
+		Intel::LevelZero::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::LevelZero::device_count
+	#else
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+	#endif
 
 		//* Calculate average usage
 		long long avg = 0;
