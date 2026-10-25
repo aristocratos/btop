@@ -295,42 +295,52 @@ namespace Cpu {
 	}
 
 	string get_cpuHz() {
-
-	    //? DOING: illumos CPU frequency reporting, needs on diverse systems.
-		std::string cpuHz;
-
-		Logger::debug("get_cpuHz:");
-		
-	    kstat_ctl_t *kc = kstat_open();
-	    if (!kc) {
-			Logger::warning("    kstat_open() failed.");
+		kstat_ctl_t *kc = kstat_open();
+		if (!kc) {
+			Logger::warning("get_cpuHz: kstat_open() failed");
 			return "";
 		}
-		
-		//? Same rationale as the cpu_stat chain-walk in Cpu::collect(): find whatever "cpu_info"
-		//? kstat actually exists rather than assuming a particular instance number is present.
-		kstat_t *ksp = kstat_lookup(kc, "cpu_info", 0, "cpu_info0");
-		if (ksp && kstat_read(kc, ksp, NULL) != -1) {
-			Logger::debug("\t *ksp:");
-			Logger::debug("\t\t ks_module {}",  ksp->ks_module);
-			Logger::debug("\t\t ks_name: {}", ksp->ks_name);
-				
-			kstat_named_t *kn = (kstat_named_t *)kstat_data_lookup(ksp, "clock_MHz");
-			if (kn) {
-				cpuHz = std::to_string(kn->value.i32);
-				Logger::debug("\t *kn:");
-				Logger::debug("\t\t *kn->name: {}", kn->name);
-				Logger::debug("\t\t *kn->value.i32: {}", kn->value.i32);
-			} else {
-				return "";
+
+		auto kn_value = [](const kstat_named_t *kn) -> double {
+			switch (kn->data_type) {
+				case KSTAT_DATA_INT32:  return kn->value.i32;
+				case KSTAT_DATA_UINT32: return kn->value.ui32;
+				case KSTAT_DATA_INT64:  return kn->value.i64;
+				case KSTAT_DATA_UINT64: return kn->value.ui64;
+				default: return 0;
 			}
+		};
+
+		//? Walk the kstat chain for the first "cpu_info" kstat instead of assuming instance 0
+		//? exists: CPU ids aren't guaranteed to start at 0 (e.g. 64-127 on a SPARC T8-1), same as
+		//? Cpu::collect() and get_cpuName(). Prefer current_clock_Hz (the actual current speed,
+		//? which changes with power management) and fall back to clock_MHz (the fixed nominal
+		//? speed) where the former isn't provided.
+		double mhz = 0;
+		string source = "none";
+		for (kstat_t *ksp = kc->kc_chain; ksp != nullptr; ksp = ksp->ks_next) {
+			if (strcmp(ksp->ks_module, "cpu_info") != 0) continue;
+			if (kstat_read(kc, ksp, NULL) == -1) continue;
+
+			if (auto *kn = (kstat_named_t *)kstat_data_lookup(ksp, "current_clock_Hz"); kn and kn_value(kn) > 0) {
+				mhz = kn_value(kn) / 1'000'000.0;
+				source = "current_clock_Hz";
+			} else if (auto *kn2 = (kstat_named_t *)kstat_data_lookup(ksp, "clock_MHz"); kn2 and kn_value(kn2) > 0) {
+				mhz = kn_value(kn2);
+				source = "clock_MHz";
+			}
+			Logger::debug("get_cpuHz: {} -> {:.0f} MHz ({})", source, mhz, ksp->ks_name);
+			break; //? one CPU is enough
 		}
-		
-		kstat_close(kc);
-		return cpuHz;
+		kstat_close(kc); //? always closed: this runs on every refresh
+
+		if (mhz <= 0) return "";
+		//? Same formatting as the Linux backend, which fits the 7-character slot the CPU box reserves
+		if (mhz >= 10000) return fmt::format("{:.0f} GHz", mhz / 1000);
+		if (mhz >= 1000) return fmt::format("{:.1f} GHz", mhz / 1000);
+		return fmt::format("{:.0f} MHz", mhz);
 	}
 
-		
 	auto get_core_mapping() -> std::unordered_map<int, int> {
 		std::unordered_map<int, int> core_map;
 		if (cpu_temp_only) return core_map;
