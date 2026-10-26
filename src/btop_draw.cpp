@@ -1714,6 +1714,11 @@ namespace Proc {
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto mem_bytes = Config::getB("proc_mem_bytes");
+	#ifdef __APPLE__
+		const bool show_footprint = Config::getB("proc_mem_footprint") and width > 55;
+	#else
+		const bool show_footprint = false;
+	#endif
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
@@ -1812,6 +1817,10 @@ namespace Proc {
 			if (not show_graphs) {
 				cmd_size += 5;
 				tree_size += 5;
+			}
+			if (show_footprint) {
+				cmd_size -= 6;
+				tree_size -= 6;
 			}
 
 			//? Detailed box
@@ -1992,6 +2001,7 @@ namespace Proc {
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
 					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
+					+ (show_footprint ? rjust((mem_bytes ? "FootB" : "Foot%"), 5) + ' ' : "")
 					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
 		}
 		//* End of redraw block
@@ -2031,6 +2041,36 @@ namespace Proc {
 				+ Theme::c("inactive_fg") + Fx::ub + graph_bg * (d_width / 3) + Mv::l(d_width / 3)
 				+ Theme::c("proc_misc") + detailed_mem_graph(detailed.mem_bytes, (redraw or data_same or not alive)) + ' '
 				+ Theme::c("title") + Fx::b + detailed.memory;
+
+			//? Memory breakdown on the otherwise empty row between the info and memory rows
+			if (show_footprint) {
+				vector<string> parts;
+				auto add_part = [&](const string& label, int64_t bytes) {
+					parts.push_back(label + (bytes >= 0 ? floating_humanizer(bytes, true) : "-"));
+				};
+				add_part("Resident: ", detailed.entry.mem);
+				add_part("Compressed: ", detailed.mem_compressed);
+				add_part("Footprint: ", detailed.entry.footprint > 0 ? (int64_t)detailed.entry.footprint : -1);
+				//? The list row sums child processes when aggregated or collapsed, show that total too so the two can be compared
+				if (proc_tree) {
+					auto listed = rng::find(plist, detailed.entry.pid, &proc_info::pid);
+					if (listed != plist.end() and listed->footprint > detailed.entry.footprint) {
+						add_part("Tree: ", listed->footprint);
+					}
+				}
+				add_part("Peak: ", detailed.mem_footprint_peak);
+
+				//? Drop whole items that don't fit instead of cutting the last one off
+				string breakdown;
+				for (const auto& part : parts) {
+					const string next = breakdown.empty() ? part : breakdown + "   " + part;
+					if (ulen(next) > (size_t)(d_width - 2)) {
+						break;
+					}
+					breakdown = next;
+				}
+				out += Mv::to(d_y + 3, d_x + 1) + Theme::c("main_fg") + Fx::ub + cjust(breakdown, d_width - 2, true);
+			}
 		}
 
 		//? Check bounds of current selection and view
@@ -2144,14 +2184,17 @@ namespace Proc {
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
-			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
-			if (not mem_bytes) {
-				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
-				mem_str = mem_p < 0.01 ? "0" : fmt::format("{:.1f}", mem_p);
-				if (mem_str.size() > 3) mem_str.resize(3);
-				if (mem_str.ends_with('.')) mem_str.pop_back();
-				mem_str += '%';
-			}
+			auto format_mem = [&](uint64_t bytes) {
+				if (mem_bytes) return floating_humanizer(bytes, true);
+				double mem_p = clamp((double)bytes * 100 / totalMem, 0.0, 100.0);
+				string str = mem_p < 0.01 ? "0" : fmt::format("{:.1f}", mem_p);
+				if (str.size() > 3) str.resize(3);
+				if (str.ends_with('.')) str.pop_back();
+				return str + '%';
+			};
+			const string mem_str = format_mem(p.mem);
+			//? Footprint is 0 when unavailable (other users' processes when not root)
+			const string footprint_str = (show_footprint ? (p.footprint > 0 ? format_mem(p.footprint) : "-") : "");
 
 			// Shorten process thread representation when larger than 5 digits: 10000 -> 10K ...
 			const std::string proc_threads_string = [&] {
@@ -2165,6 +2208,7 @@ namespace Proc {
 			out += (thread_size > 0 ? t_color + rjust(proc_threads_string, thread_size) + ' ' + end : "" )
 				+ g_color + ljust((cmp_greater(p.user.size(), user_size) ? p.user.substr(0, user_size - 1) + '+' : p.user), user_size) + ' '
 				+ m_color + rjust(mem_str, 5) + end + ' '
+				+ (show_footprint ? m_color + rjust(footprint_str, 5) + end + ' ' : "")
 				+ (is_selected or is_followed ? "" : Theme::c("inactive_fg")) + (show_graphs ? graph_bg * 5: "")
 				+ (p_graphs.contains(p.pid) ? Mv::l(5) + c_color + p_graphs.at(p.pid)({(p.cpu_p >= 0.1 and p.cpu_p < 5 ? 5ll : (long long)round(p.cpu_p))}, data_same) : "") + end + ' '
 				+ c_color + rjust(cpu_str, 4) + "  " + end;
