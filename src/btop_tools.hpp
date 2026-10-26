@@ -339,7 +339,7 @@ namespace Tools {
 			Logger::error("safeVal() called with invalid key: [{}] in file: {} on line: {}", key, loc.file_name(), loc.line());
 			return fallback;
 		}
-	};
+	}
 #else
 	const T& safeVal(const std::unordered_map<K, T>& map, const K& key, const T& fallback = T{}) {
 		if (auto it = map.find(key); it != map.end()) {
@@ -348,7 +348,7 @@ namespace Tools {
 			Logger::error("safeVal() called with invalid key: [{}] (Compile btop with DEBUG=true for more extensive logging!)", key);
 			return fallback;
 		}
-	};
+	}
 #endif
 
 	template <typename T>
@@ -360,7 +360,7 @@ namespace Tools {
 			Logger::error("safeVal() called with invalid index: [{}] in file: {} on line: {}", index, loc.file_name(), loc.line());
 			return fallback;
 		}
-	};
+	}
 #else
 	const T& safeVal(const std::vector<T>& vec, const size_t& index, const T& fallback = T{}) {
 		if (index < vec.size()) {
@@ -369,7 +369,7 @@ namespace Tools {
 			Logger::error("safeVal() called with invalid index: [{}] (Compile btop with DEBUG=true for more extensive logging!)", index);
 			return fallback;
 		}
-	};
+	}
 #endif
 
 
@@ -459,8 +459,8 @@ namespace Tools {
 		void stop_rename_reset(const string& new_name, bool report = true, bool restart = true);
 		void report();
 		void force_report();
-		uint64_t elapsed();
-		bool is_running();
+		[[nodiscard]] uint64_t elapsed() const;
+		[[nodiscard]] bool is_running() const;
 	};
 
 }
