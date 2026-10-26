@@ -87,7 +87,7 @@ namespace Symbols {
 	const array<string, 10> superscript = { "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹" };
 
 	const std::unordered_map<string, vector<string>> graph_symbols = {
-		{ "braille_up", {
+		{"braille_up", {
 			" ", "⢀", "⢠", "⢰", "⢸",
 			"⡀", "⣀", "⣠", "⣰", "⣸",
 			"⡄", "⣄", "⣤", "⣴", "⣼",
@@ -114,6 +114,21 @@ namespace Symbols {
 			"▘", "▀", "▀", "▜", "▜",
 			"▌", "▛", "▛", "█", "█",
 			"▌", "▛", "▛", "█", "█"
+		}},
+		// The size of all charts is assumed to be 5x5, so pad with spaces.
+		{"block2_up", {
+			" ", "🬞", "🬦", "▐", " ",
+			"🬏", "🬭", "🬵", "🬷", " ",
+			"🬓", "🬱", "🬹", "🬻", " ",
+			"▌", "🬲", "🬺", "█", " ",
+			" ", " ", " ", " ", " "
+		}},
+		{"block2_down", {
+			" ", "🬁", "🬉", "▐", " ",
+			"🬀", "🬂", "🬊", "🬨", " ",
+			"🬄", "🬆", "🬎", "🬬", " ",
+			"▌", "🬕", "🬝", "█", " ",
+			 " ", " ", " ", " ", " ",
 		}},
 		{"tty_up", {
 			" ", "░", "░", "▒", "▒",
@@ -420,16 +435,20 @@ namespace Draw {
 
 	//* Graph class ------------------------------------------------------------------------------------------------------------>
 	void Graph::_create(const deque<long long>& data, int data_offset) {
-		bool mult = (data.size() - data_offset > 1);
 		const auto& graph_symbol = Symbols::graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
-		array<int, 2> result;
-		const float mod = (height == 1) ? 0.3 : 0.1;
+		const int clamp_max = (symbol == "block2") ? 3 : 4;
+		const float mod = (symbol == "block2") 
+                    ? ((height == 1) ? 0.6f : 0.2f)
+                    : ((height == 1) ? 0.3f : 0.1f);
+		bool mult = (data.size() - data_offset > 1);
+
 		long long data_value = 0;
 		if (mult and data_offset > 0) {
 			last = data.at(data_offset - 1);
 			if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
 		}
-
+		
+		array<int, 2> result;
 		//? Horizontal iteration over values in <data>
 		for (const int& i : iota(data_offset, (int)data.size())) {
 			// if (tty_mode and mult and i % 2 != 0) continue;
@@ -444,37 +463,35 @@ namespace Draw {
 			}
 
 			//? Vertical iteration over height of graph
-			for (const int& horizon : iota(0, height)) {
-				const int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
-				const int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+			for (const int& vert : iota(0, height)) {
+				const int cur_high = (height > 1) ? round(100.0 * (height - vert) / height) : 100;
+				const int cur_low = (height > 1) ? round(100.0 * (height - (vert + 1)) / height) : 0;
 				//? Calculate previous + current value to fit two values in 1 braille character
 				for (int ai = 0; const auto& value : {last, data_value}) {
-					const int clamp_min = (no_zero and horizon == height - 1 and not (mult and i == data_offset and ai == 0)) ? 1 : 0;
+					const int clamp_min = (no_zero and vert == height - 1 and not (mult and i == data_offset and ai == 0)) ? 1 : 0;
 					if (value >= cur_high)
-						result[ai++] = 4;
+						result[ai++] = clamp_max;
 					else if (value <= cur_low)
 						result[ai++] = clamp_min;
 					else {
-						result[ai++] = clamp((int)round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod), clamp_min, 4);
+						result[ai++] = clamp((int)round((float)(value - cur_low) * clamp_max / (cur_high - cur_low) + mod), clamp_min, clamp_max);
 					}
 				}
-				//? Generate graph symbol from 5x5 2D vector
+				//? Select graph symbol from 5x5 or 4x4 vector
 				if (height == 1) {
-					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(horizon) += Mv::r(1);
+					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(vert) += Mv::r(1);
 					else {
-						if (not color_gradient.empty()) graphs.at(current).at(horizon) += Theme::g(color_gradient).at(clamp(max(last, data_value), 0ll, 100ll));
-						graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
+						if (not color_gradient.empty()) graphs.at(current).at(vert) += Theme::g(color_gradient).at(clamp(max(last, data_value), 0ll, 100ll));
+						graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 					}
 				}
-				else graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
+				else graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 			}
 			if (mult and i >= 0) last = data_value;
 		}
 		last = data_value;
 		out.clear();
 		if (height == 1) {
-			//if (not color_gradient.empty())
-			//	out += (last < 1 ? Theme::c("inactive_fg") : Theme::g(color_gradient).at(clamp(last, 0ll, 100ll)));
 			out += graphs.at(current).at(0);
 		}
 		else {
@@ -524,12 +541,23 @@ namespace Draw {
 		//? Make room for new characters on graph
 		if (not tty_mode) current = not current;
 		for (const int& i : iota(0, height)) {
-			if (height == 1 and graphs.at(current).at(i).at(1) == '[') {
-				if (graphs.at(current).at(i).at(3) == 'C') graphs.at(current).at(i).erase(0, 4);
-				else graphs.at(current).at(i).erase(0, graphs.at(current).at(i).find_first_of('m') + 4);
-			}
-			else if (graphs.at(current).at(i).at(0) == ' ') graphs.at(current).at(i).erase(0, 1);
-			else graphs.at(current).at(i).erase(0, 3);
+			string &row = graphs.at(current).at(i);
+			if (height == 1 and row.at(1) == '[') {
+					if (row.at(3) == 'C') {
+						row.erase(0, 4);
+						continue;
+					}
+					row.erase(0, row.find_first_of("m") + 1);
+			} 
+
+			if (row.empty()) continue;
+
+			uint8_t ch = row.at(0);
+			if ((ch & 0x80) == 0) row.erase(0, 1);
+			else if ((ch & 0xE0) == 0xC0) row.erase(0, 2);
+			else if ((ch & 0xF0) == 0xE0) row.erase(0, 3);
+			else if ((ch & 0xF8) == 0xF0) row.erase(0, 4);
+			else row.erase(0, 1);
 		}
 		this->_create(data, (int)data.size() - 1);
 		return out;
@@ -564,7 +592,7 @@ namespace Cpu {
 	vector<Draw::Graph> gpu_temp_graphs;
 	vector<Draw::Graph> gpu_mem_graphs;
 
-    string draw(
+  string draw(
 		const cpu_info& cpu,
 #if defined(GPU_SUPPORT)
 		const vector<Gpu::gpu_info>& gpus,
