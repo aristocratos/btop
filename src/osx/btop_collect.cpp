@@ -1152,13 +1152,6 @@ namespace Mem {
 		return "";
 	}
 
-	bool isWhole(io_registry_entry_t volumeRef) {
-		CFBooleanRef isWhole = (CFBooleanRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Whole"), kCFAllocatorDefault, 0);
-		Boolean val = CFBooleanGetValue(isWhole);
-		CFRelease(isWhole);
-		return bool(val);
-	}
-
 	class IOObject {
 		public:
 			IOObject(string name, io_object_t& obj) : name(name), object(obj) {}
@@ -1167,6 +1160,33 @@ namespace Mem {
 			string name;
 			io_object_t &object;
 	};
+
+	//? Fallback for volumes without APFS per-volume statistics (HFS+, ExFAT, FAT, ... including filesystems
+	//? written directly on a whole disk, e.g. SoftRAID volumes): use the counters of the nearest IOBlockStorageDriver.
+	//? These count the whole physical/virtual disk, so a partition reports the activity of its entire disk.
+	bool getBlockDriverIO(io_registry_entry_t media, int64_t &readBytes, int64_t &writeBytes) {
+		io_registry_entry_t entry = media;
+		IOObjectRetain(entry);
+		bool found = false;
+		for (int depth = 0; depth < 8; depth++) {
+			io_registry_entry_t parent;
+			if (IORegistryEntryGetParentEntry(entry, kIOServicePlane, &parent) != KERN_SUCCESS) break;
+			IOObjectRelease(entry);
+			entry = parent;
+			if (IOObjectConformsTo(entry, "IOBlockStorageDriver")) {
+				CFDictionaryRef statistics = (CFDictionaryRef)IORegistryEntryCreateCFProperty(entry, CFSTR("Statistics"), kCFAllocatorDefault, 0);
+				if (statistics) {
+					readBytes = getCFNumber(statistics, CFSTR("Bytes (Read)"));
+					writeBytes = getCFNumber(statistics, CFSTR("Bytes (Write)"));
+					CFRelease(statistics);
+					found = true;
+				}
+				break;
+			}
+		}
+		IOObjectRelease(entry);
+		return found;
+	}
 
 	void collect_disk(std::unordered_map<string, disk_info> &disks, std::unordered_map<string, string> &mapping) {
 		// Lock mutex to prevent concurrent IOKit access
@@ -1185,54 +1205,57 @@ namespace Mem {
 		while ((drive = IOIteratorNext(drive_list)) != 0) {
 			auto dr = IOObject("drive", drive);
 			io_registry_entry_t volumeRef;
-			IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef);
-			if (volumeRef) {
-				if (!isWhole(volumeRef)) {
-					string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
-					string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
-					if (!mapping.contains(device)) {
-						device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have VolGroupMntFromName property
-					}
-					if (device != "") {
-						if (mapping.contains(device)) {
-							string mountpoint = mapping.at(device);
-							if (disks.contains(mountpoint)) {
-								auto& disk = disks.at(mountpoint);
-								CFDictionaryRef properties = nullptr;
-								if (IORegistryEntryCreateCFProperties(volumeRef, (CFMutableDictionaryRef *)&properties, kCFAllocatorDefault, 0) == KERN_SUCCESS and properties != nullptr) {
-									CFDictionaryRef statistics = (CFDictionaryRef)CFDictionaryGetValue(properties, CFSTR("Statistics"));
-									if (statistics) {
-										disk_ios++;
-										int64_t readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
-										if (disk.io_read.empty())
-											disk.io_read.push_back(0);
-										else
-											disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
-										disk.old_io.at(0) = readBytes;
-										while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
-
-										int64_t writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
-										if (disk.io_write.empty())
-											disk.io_write.push_back(0);
-										else
-											disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
-										disk.old_io.at(1) = writeBytes;
-										while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
-
-										// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being 100% to get some activity indication)
-										if (disk.io_activity.empty())
-											disk.io_activity.push_back(0);
-										else
-											disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
-										while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
-									}
-									CFRelease(properties);
-								}
-							}
-						}
-					}
-				}
+			if (IORegistryEntryGetParentEntry(drive, kIOServicePlane, &volumeRef) != KERN_SUCCESS) continue;
+			auto vr = IOObject("volume", volumeRef);
+			string bsdName = getCFString(volumeRef, CFSTR("BSD Name"));
+			string device = getCFString(volumeRef, CFSTR("VolGroupMntFromName"));
+			if (not mapping.contains(device)) {
+				device = "/dev/" + bsdName; // try again with BSD name - not all volumes seem to have VolGroupMntFromName property
 			}
+			if (bsdName.empty() or not mapping.contains(device)) continue;
+			string mountpoint = mapping.at(device);
+			if (not disks.contains(mountpoint)) continue;
+			auto& disk = disks.at(mountpoint);
+
+			int64_t readBytes = 0, writeBytes = 0;
+			bool have_io = false;
+			io_name_t className = "";
+			IOObjectGetClass(volumeRef, className);
+			if (std::string_view(className).starts_with("AppleAPFS")) {
+				//? APFS volumes and snapshots carry their own per-volume statistics
+				CFDictionaryRef statistics = (CFDictionaryRef)IORegistryEntryCreateCFProperty(volumeRef, CFSTR("Statistics"), kCFAllocatorDefault, 0);
+				if (statistics) {
+					readBytes = getCFNumber(statistics, CFSTR("Bytes read from block device"));
+					writeBytes = getCFNumber(statistics, CFSTR("Bytes written to block device"));
+					CFRelease(statistics);
+					have_io = true;
+				}
+			} else {
+				have_io = getBlockDriverIO(volumeRef, readBytes, writeBytes);
+			}
+			if (not have_io) continue;
+
+			disk_ios++;
+			if (disk.io_read.empty())
+				disk.io_read.push_back(0);
+			else
+				disk.io_read.push_back(max((int64_t)0, (readBytes - disk.old_io.at(0))));
+			disk.old_io.at(0) = readBytes;
+			while (cmp_greater(disk.io_read.size(), width * 2)) disk.io_read.pop_front();
+
+			if (disk.io_write.empty())
+				disk.io_write.push_back(0);
+			else
+				disk.io_write.push_back(max((int64_t)0, (writeBytes - disk.old_io.at(1))));
+			disk.old_io.at(1) = writeBytes;
+			while (cmp_greater(disk.io_write.size(), width * 2)) disk.io_write.pop_front();
+
+			// IOKit does not give us IO times, (use IO read + IO write with 1 MiB being 100% to get some activity indication)
+			if (disk.io_activity.empty())
+				disk.io_activity.push_back(0);
+			else
+				disk.io_activity.push_back(clamp((long)round((double)(disk.io_write.back() + disk.io_read.back()) / (1 << 20)), 0l, 100l));
+			while (cmp_greater(disk.io_activity.size(), width * 2)) disk.io_activity.pop_front();
 		}
 	}
 
