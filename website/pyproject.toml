@@ -1,0 +1,7 @@
+[project]
+name = "website"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+  "zensical>=0.0.39",
+]
