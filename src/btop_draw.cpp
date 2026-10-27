@@ -1223,13 +1223,14 @@ namespace Mem {
 	int width_p = 45, height_p = 40;
 	int min_width = 36, min_height = 10;
 	int x = 1, y, width = 20, height;
-	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, disk_meter;
+	int mem_width, disks_width, divider, item_height, mem_size, mem_meter, graph_height, graph_extra, disk_meter;
 	int disks_io_h = 0;
 	int disks_io_half = 0;
 	bool shown = true, redraw = true;
 	string box;
 	std::unordered_map<string, Draw::Meter> mem_meters;
 	std::unordered_map<string, Draw::Graph> mem_graphs;
+	std::unordered_map<string, int> mem_graph_heights;
 	std::unordered_map<string, Draw::Meter> disk_meters_used;
 	std::unordered_map<string, Draw::Meter> disk_meters_free;
 	std::unordered_map<string, Draw::Graph> io_graphs;
@@ -1256,9 +1257,18 @@ namespace Mem {
 			out += box;
 			mem_meters.clear();
 			mem_graphs.clear();
+			mem_graph_heights.clear();
 			disk_meters_free.clear();
 			disk_meters_used.clear();
 			io_graphs.clear();
+
+			//? Rows left over after sizing go one each to the top graphs, so the box is filled
+			int extra = graph_extra;
+			auto next_height = [&](const string& name) {
+				const int h = graph_height + (extra > 0 ? 1 : 0);
+				if (extra > 0) extra--;
+				return mem_graph_heights[name] = h;
+			};
 
 			//? Mem graphs and meters
 			for (const auto& name : mem_names) {
@@ -1267,14 +1277,14 @@ namespace Mem {
 				const string& gradient = (name == "compressed" ? "used"s : name);
 
 				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, gradient, safeVal(mem.percent, name), graph_symbol};
+					mem_graphs[name] = Draw::Graph{mem_meter, next_height(name), gradient, safeVal(mem.percent, name), graph_symbol};
 				else
 					mem_meters[name] = Draw::Meter{mem_meter, gradient};
 			}
 			if (show_swap and has_swap) {
 				for (const auto& name : swap_names) {
 					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), safeVal(mem.percent, name), graph_symbol};
+						mem_graphs[name] = Draw::Graph{mem_meter, next_height(name), name.substr(5), safeVal(mem.percent, name), graph_symbol};
 					else
 						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
 				}
@@ -1349,7 +1359,6 @@ namespace Mem {
 		int cx = 1, cy = 1;
 		string divider = (graph_height > 0 ? Mv::l(2) + Theme::c("mem_box") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * (mem_width - 1)
 						+ (show_disks ? "" : Theme::c("mem_box")) + Symbols::div_right + Mv::l(mem_width - 1) + Theme::c("main_fg") : "");
-		string up = (graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(graph_height - 1) : "");
 		bool big_mem = mem_width > 21;
 
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
@@ -1384,10 +1393,12 @@ namespace Mem {
 				: mem_meters.contains(name) ? mem_meters.at(name)(safeVal(mem.percent, name).back())
 				: "");
 			if (mem_size > 2) {
+				const int item_graph_height = mem_graph_heights.contains(name) ? mem_graph_heights.at(name) : graph_height;
+				const string up = (item_graph_height >= 2 ? Mv::l(mem_width - 2) + Mv::u(item_graph_height - 1) : "");
 				out += Mv::to(y+1+cy, x+1+cx) + divider + title.substr(0, big_mem ? 10 : 5) + ":"
 					+ Mv::to(y+1+cy, x+cx + mem_width - 2 - humanized.size()) + (divider.empty() ? Mv::l(offset) + string(" ") * offset + humanized : trans(humanized))
 					+ Mv::to(y+2+cy, x+cx + (graph_height >= 2 ? 0 : 1)) + graphics + up + rjust(to_string(safeVal(mem.percent, name).back()) + "%", 4);
-				cy += (graph_height == 0 ? 2 : graph_height + 1);
+				cy += (graph_height == 0 ? 2 : item_graph_height + 1);
 			}
 			else {
 				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
@@ -2480,8 +2491,16 @@ namespace Draw {
 			mem_meter = max(0, mem_width - (mem_size > 2 ? 7 : 17));
 			if (mem_size == 1) mem_meter += 6;
 
-			if (mem_graphs) {
-				graph_height = max(1, (int)round((double)((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
+			graph_extra = 0;
+			if (mem_graphs and mem_size == 3) {
+				//? Each item is a title row plus its graph, in the rows left after Total, the borders and the swap header
+				const int item_rows = height - 3 - (has_swap and not swap_disk ? 2 : 0);
+				graph_height = max(1, item_rows / item_height - 1);
+				if (graph_height >= 2) graph_extra = item_rows - item_height * (graph_height + 1);
+				if (graph_height > 1) mem_meter += 6;
+			}
+			else if (mem_graphs) {
+				graph_height = max(1, (int)round((double)((height - (has_swap and not swap_disk ? 2 : 1)) - item_height) / item_height));
 				if (graph_height > 1) mem_meter += 6;
 			}
 			else
