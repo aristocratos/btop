@@ -68,6 +68,7 @@ tab-size = 4
 	#define class class_
 extern "C" {
 	#include "intel_gpu_top/intel_gpu_top.h"
+	#include "intel_gpu_top/igt_perf.h"
 }
 	#undef class
 
@@ -285,8 +286,20 @@ namespace Gpu {
 
 	//? Intel data collection
 	namespace Intel {
-		const char* device = "i915";
+		string device = "i915"; //? resolved perf PMU name, "i915" or "xe_<pci address>"
 		struct engines *engines = nullptr;
+
+		//? xe driver PMU state — xe exposes no i915-style "*-busy" engine counters,
+		//? utilization is derived from the engine-active/engine-total tick pair instead.
+		bool xe_mode = false;
+		int xe_active_fd = -1;
+		int xe_total_fd = -1;
+		int xe_freq_fd = -1;
+		uint64_t xe_prev_active = 0, xe_prev_total = 0, xe_prev_freq = 0;
+		long long xe_prev_ts = 0;
+		long long rapl_prev = 0;
+		long long rapl_prev_ts = 0;
+		bool rapl_supported = false;
 
 		bool initialized = false;
 		bool init();
@@ -1908,6 +1921,22 @@ namespace Gpu {
 	}
 
 	namespace Intel {
+		//? Read the 3 u64 values of a PERF_FORMAT_TOTAL_TIME_ENABLED counter.
+		static uint64_t xe_read(int fd) {
+			struct { uint64_t val; uint64_t time_enabled; uint64_t time_running; } c = {0};
+			if (fd >= 0 and ::read(fd, &c, sizeof(c)) == (ssize_t)sizeof(c))
+				return c.val;
+			return 0;
+		}
+
+		//? Package (CPU+GPU) energy from RAPL in µJ, -1 when unavailable.
+		static long long rapl_energy_uj() {
+			long long v = -1;
+			std::ifstream f("/sys/class/powercap/intel-rapl:0/energy_uj");
+			if (f.good()) f >> v;
+			return v;
+		}
+
 		bool init() {
 			if (initialized) return false;
 
@@ -1930,7 +1959,64 @@ namespace Gpu {
 
 			free(gpu_device_id);
 
-			engines = discover_engines(device);
+			//? Resolve the perf PMU name: the xe driver registers "xe_<pci address>"
+			//? (e.g. "xe_0000_00_02.0"), legacy i915 registers "i915".
+			{
+				char link[256] = {0};
+				string linkpath = string(gpu_path) + "/device";
+				ssize_t len = readlink(linkpath.c_str(), link, sizeof(link) - 1);
+				if (len > 0) {
+					link[len] = '\0';
+					string pci_addr = string(link).substr(string(link).find_last_of('/') + 1);
+					string cand = "xe_";
+					for (char c : pci_addr) cand += (c == ':') ? '_' : c;
+					string pmu_type = string("/sys/devices/") + cand + "/type";
+					if (access(pmu_type.c_str(), F_OK) == 0)
+						device = cand;
+				}
+			}
+
+			if (device.starts_with("xe_")) {
+				//? xe PMU — read engine-active/total ticks and gt-actual-frequency directly,
+				//? the i915 engine-counter machinery does not apply to xe.
+				xe_mode = true;
+				Logger::debug("Intel xe: using PMU {}", device);
+				uint64_t type = igt_perf_type_id(device.c_str());
+				if (type == 0) {
+					Logger::warning("Intel GPU: could not determine xe PMU type");
+					return false;
+				}
+				xe_active_fd = igt_perf_open(type, 0x02); //? engine-active-ticks
+				xe_total_fd = igt_perf_open(type, 0x03);  //? engine-total-ticks
+				xe_freq_fd = igt_perf_open(type, 0x04);   //? gt-actual-frequency
+				if (xe_active_fd < 0 or xe_total_fd < 0) {
+					Logger::warning("Intel GPU: failed to open xe PMU counters ({}); opening global perf events needs root or CAP_PERFMON, e.g. setcap cap_perfmon+ep <btop binary>", strerror(errno));
+					return false;
+				}
+
+				Logger::debug("Intel xe: counters opened (active={}, total={}, freq={})", xe_active_fd, xe_total_fd, xe_freq_fd);
+				device_count = 1;
+				gpus.resize(gpus.size() + device_count);
+				gpu_names.resize(gpus.size() + device_count);
+				gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count] =
+						(gpu_device_name ? string(gpu_device_name) : string("Intel GPU"));
+				free(gpu_device_name);
+
+				//? baseline sample
+				xe_prev_active = xe_read(xe_active_fd);
+				xe_prev_total = xe_read(xe_total_fd);
+				xe_prev_freq = xe_read(xe_freq_fd);
+				xe_prev_ts = get_monotonicTimeUSec();
+				rapl_prev = rapl_energy_uj();
+				rapl_prev_ts = get_monotonicTimeUSec();
+				rapl_supported = rapl_prev > 0;
+
+				initialized = true;
+				collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count);
+				return true;
+			}
+
+			engines = discover_engines(device.c_str());
 			if (!engines) {
 				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
 				free(gpu_device_name);
@@ -1969,6 +2055,12 @@ namespace Gpu {
 
 		bool shutdown() {
 			if (!initialized) return false;
+			if (xe_mode) {
+				if (xe_active_fd >= 0) close(xe_active_fd);
+				if (xe_total_fd >= 0) close(xe_total_fd);
+				if (xe_freq_fd >= 0) close(xe_freq_fd);
+				xe_active_fd = xe_total_fd = xe_freq_fd = -1;
+			}
 			if (engines) {
 				free_engines(engines);
 				engines = nullptr;
@@ -1986,7 +2078,9 @@ namespace Gpu {
 					.mem_utilization = false,
 					.gpu_clock = true,
 					.mem_clock = false,
-					.pwr_usage = true,
+					//? xe power comes from RAPL — expose the power UI only when the
+					//? baseline energy read worked, the i915 path gets power from the PMU.
+					.pwr_usage = xe_mode ? rapl_supported : true,
 					.pwr_state = false,
 					.temp_info = false,
 					.mem_total = false,
@@ -1997,6 +2091,51 @@ namespace Gpu {
 				};
 
 				gpus_slice->pwr_max_usage = 10'000; //? 10W
+			}
+
+			if (xe_mode) {
+				uint64_t active = xe_read(xe_active_fd);
+				uint64_t total = xe_read(xe_total_fd);
+				uint64_t freq = xe_read(xe_freq_fd);
+
+				long long now_ts = get_monotonicTimeUSec();
+				double t = (double)(now_ts - xe_prev_ts) / 1e6; //? seconds
+				xe_prev_ts = now_ts;
+
+				if (t > 0) {
+					double d_act = (double)(active - xe_prev_active);
+					double d_tot = (double)(total - xe_prev_total);
+					double util = d_tot > 0 ? (d_act / d_tot) * 100.0 : 0.0;
+					gpus_slice->gpu_percent.at("gpu-totals").push_back((long long)clamp(round(util), 0.0, 100.0));
+				} else {
+					gpus_slice->gpu_percent.at("gpu-totals").push_back(0);
+				}
+				xe_prev_active = active;
+				xe_prev_total = total;
+				xe_prev_freq = freq;
+
+				//? gt-actual-frequency accumulates MHz·s, so dividing by elapsed s gives avg MHz
+				double mhz = (t > 0) ? (double)(freq - xe_prev_freq) / t : 0.0;
+				gpus_slice->gpu_clock_speed = (unsigned int)round(mhz);
+
+				//? Package power from RAPL (µJ / µs = W)
+				long long rapl = rapl_energy_uj();
+				if (rapl_supported and rapl > 0 and now_ts > rapl_prev_ts) {
+					double pwr = (double)(rapl - rapl_prev) / (double)(now_ts - rapl_prev_ts);
+					gpus_slice->pwr_usage = (long long)round(pwr * 1000); //? mW
+					if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
+						gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
+				} else
+					gpus_slice->pwr_usage = -1;
+				rapl_prev = rapl;
+				rapl_prev_ts = now_ts;
+				//? Always push so the deque is never empty when the power UI is shown —
+				//? Cpu::draw() unconditionally reads .back() of every enabled metric.
+				gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(
+					gpus_slice->pwr_usage > 0
+						? clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll)
+						: 0ll);
+				return true;
 			}
 
 			pmu_sample(engines);
