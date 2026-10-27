@@ -783,11 +783,37 @@ namespace Cpu {
 				}
 				cpuinfo.ignore(SSmax, '\n');
 			}
-			if (not cpu_to_core.empty())
-				//? Divide core ID space evenly across sensors (handles AMD multi-CCD, e.g. 5950x: IDs 0-7 -> Tccd1, 8-15 -> Tccd2)
-				for (const auto& [cpu_id, core_id] : cpu_to_core) {
-					core_map[cpu_id] = core_id * num_sensors / (max_core + 1);
+			if (not cpu_to_core.empty()) {
+				//? Map physical core IDs to sensor indices when labels permit, otherwise use equal distribution fallback.
+				std::unordered_map<int, int> sensor_by_core;
+				for (int i = 0; i < num_sensors; ++i) {
+					const auto& sensor = core_sensors[i];
+					const auto slash = sensor.find_last_of('/');
+					const auto label = sensor.substr(slash == string::npos ? 0 : slash + 1);
+					if (label.starts_with("Core ")) {
+						sensor_by_core[std::stoi(label.substr(5))] = i;
+					}
 				}
+
+				bool exact_mapping = sensor_by_core.size() == core_sensors.size();
+				for (const auto& [cpu_id, core_id] : cpu_to_core) {
+					if (not sensor_by_core.contains(core_id)) {
+						exact_mapping = false;
+						break;
+					}
+				}
+				if (exact_mapping) {
+					for (const auto& [cpu_id, core_id] : cpu_to_core) {
+						core_map[cpu_id] = sensor_by_core.at(core_id);
+					}
+				}
+				else {
+				//? Fallback: Divide core ID space evenly across sensors (handles AMD multi-CCD, e.g. 5950x: IDs 0-7 -> Tccd1, 8-15 -> Tccd2)
+					for (const auto& [cpu_id, core_id] : cpu_to_core) {
+						core_map[cpu_id] = core_id * num_sensors / (max_core + 1);
+					}
+				}
+			}
 		}
 
 		//? If core mapping from cpuinfo was incomplete try to guess remainder, if missing completely, map 0-0 1-1 2-2 etc.
