@@ -145,7 +145,14 @@ namespace Gpu {
 				 mem_used = true,
 				 pcie_txrx = true,
 				 encoder_utilization = true,
-				 decoder_utilization = true;
+				 decoder_utilization = true,
+				 //? EMC (external memory controller) clock. Drawn beside the GPU clock,
+				 //? because Tegra has no dedicated VRAM block where mem_clock is shown.
+				 emc_clock = false,
+				 //? Extra Jetson rows. Sysfs nodes are listed on Gpu::Jetson.
+				 jetson_detail = false,
+				 jetson_fan = false,
+				 jetson_engines = false;
 	};
 
 	//* Per-device container for GPU info
@@ -156,6 +163,17 @@ namespace Gpu {
 			{"gpu-pwr-totals", {}},
 		};
 		unsigned int gpu_clock_speed; // MHz
+		unsigned int gpu_clock_min = 0; // MHz, Jetson devfreq min_freq
+		unsigned int gpu_clock_max = 0; // MHz, Jetson devfreq max_freq
+		string gpu_governor;
+		string power_control;
+		bool railgate = false;
+		bool tpc_pg = false;
+		bool has_3d_scaling = false;
+		bool scaling_3d = false;
+		int fan_percent = -1;
+		int fan_rpm = -1;
+		string engine_clocks;
 
 		long long pwr_usage; // mW
 		long long pwr_max_usage = 255000;
@@ -168,6 +186,7 @@ namespace Gpu {
 		long long mem_used = 0;
 		deque<long long> mem_utilization_percent = {0}; // TODO: properly handle GPUs that can't report some stats
 		long long mem_clock_speed = 0; // MHz
+		long long emc_clock_speed = 0; // MHz, Jetson EMC; 0 when emc_clock is false
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;

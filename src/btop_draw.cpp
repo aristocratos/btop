@@ -1136,6 +1136,18 @@ namespace Gpu {
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
 		}
 
+		//? EMC shares the title line with the GPU clock. mem_clock is drawn only inside the VRAM block, which Tegra does not have.
+		if (gpu.supported_functions.emc_clock) {
+			const string emc_text = fmt::format("EMC {} MHz", gpu.emc_clock_speed);
+			const int badge = static_cast<int>(emc_text.size()) + 2;
+			const int right = gpu.supported_functions.gpu_clock ? 12 : 0;
+			const int start = b_width - right - badge;
+			if (start >= 2) {
+				out += Mv::to(b_y, b_x + start) + Theme::c("div_line") + Symbols::title_left
+					+ Fx::b + Theme::c("title") + emc_text + Fx::ub + Theme::c("div_line") + Symbols::title_right;
+			}
+		}
+
 		//? Power usage meter, power state
 		if (gpu.supported_functions.pwr_usage) {
 			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + "PWR " + pwr_meter(safeVal(gpu.gpu_percent, "gpu-pwr-totals"s).back())
@@ -1143,6 +1155,51 @@ namespace Gpu {
 				+ fmt::format("{:>5.{}f}", gpu.pwr_usage / 1000.0, gpu.pwr_usage < 10'000 ? 2 : gpu.pwr_usage < 100'000 ? 1 : 0) + Theme::c("main_fg") + 'W';
 			if (gpu.supported_functions.pwr_state and gpu.pwr_state != 32) // NVML_PSTATE_UNKNOWN; unsupported or non-nvidia card
 				out += std::string(" P-state: ") + (gpu.pwr_state > 9 ? "" : " ") + 'P' + Theme::g("cached").at(clamp(gpu.pwr_state, 0ll, 100ll)) + to_string(gpu.pwr_state);
+			rows_used++;
+		}
+
+		//? Jetson status row. Sources are listed on Gpu::Jetson in btop_collect.cpp.
+		if (gpu.supported_functions.jetson_detail) {
+			fmt::memory_buffer line;
+			if (gpu.gpu_clock_min > 0 and gpu.gpu_clock_max > 0
+					and (gpu.gpu_clock_min != gpu.gpu_clock_speed or gpu.gpu_clock_max != gpu.gpu_clock_speed))
+				fmt::format_to(std::back_inserter(line), "{}-{}  ", gpu.gpu_clock_min, gpu.gpu_clock_max);
+			if (not gpu.gpu_governor.empty())
+				fmt::format_to(std::back_inserter(line), "{}", gpu.gpu_governor);
+			if (gpu.has_3d_scaling)
+				fmt::format_to(std::back_inserter(line), "{}", gpu.scaling_3d ? "  3D on" : "  3D off");
+			fmt::format_to(std::back_inserter(line), "{}", gpu.railgate ? "  rail on" : "  rail off");
+			fmt::format_to(std::back_inserter(line), "{}", gpu.tpc_pg ? "  TPC on" : "  TPC off");
+			if (not gpu.power_control.empty())
+				fmt::format_to(std::back_inserter(line), "  {}", gpu.power_control);
+			string text(line.data(), line.size());
+			if (static_cast<int>(text.size()) > b_width - 2)
+				text.resize(static_cast<size_t>(std::max(0, b_width - 2)));
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + text;
+			rows_used++;
+		}
+
+		//? Fan duty and RPM from the pwmfan and pwm_tach hwmon nodes.
+		if (gpu.supported_functions.jetson_fan) {
+			string line = "fan";
+			if (gpu.fan_percent >= 0 and gpu.fan_rpm >= 0)
+				line = fmt::format("fan {}% {}rpm", gpu.fan_percent, gpu.fan_rpm);
+			else if (gpu.fan_percent >= 0)
+				line = fmt::format("fan {}%", gpu.fan_percent);
+			else if (gpu.fan_rpm >= 0)
+				line = fmt::format("fan {}rpm", gpu.fan_rpm);
+			if (static_cast<int>(line.size()) > b_width - 2)
+				line.resize(static_cast<size_t>(std::max(0, b_width - 2)));
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + Fx::b + line + Fx::ub;
+			rows_used++;
+		}
+
+		//? NVDEC/NVENC/VIC/OFA/NVJPG clocks from devfreq, without the jtop debugfs service.
+		if (gpu.supported_functions.jetson_engines and not gpu.engine_clocks.empty()) {
+			string line = gpu.engine_clocks;
+			if (static_cast<int>(line.size()) > b_width - 2)
+				line.resize(static_cast<size_t>(std::max(0, b_width - 2)));
+			out += Mv::to(b_y + rows_used, b_x + 1) + Theme::c("main_fg") + line;
 			rows_used++;
 		}
 

@@ -109,6 +109,8 @@ endif
 ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
 	ifeq ($(PLATFORM_LC),linux)
+		# Linux GPU collection references the Intel helpers on every architecture.
+		INTEL_GPU_SUPPORT := true
 		override LDFLAGS += -ldl
 	endif
 endif

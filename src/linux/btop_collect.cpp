@@ -295,6 +295,35 @@ namespace Gpu {
 		uint32_t device_count = 0;
 	}
 
+	//? Tegra board metrics from sysfs. See the comment on the implementation below.
+	namespace Jetson {
+		struct device_paths {
+			std::filesystem::path load, frequency, temperature, emc, devfreq, hw;
+			size_t index = 0;
+			bool has_temp = false;
+			bool has_power = false;
+			bool has_emc = false;
+			bool temp_seen = false;
+			bool has_detail = false;
+			bool has_3d = false;
+		};
+		//? INA3221 rails are mV * mA. INA238 exposes power directly in µW.
+		struct power_rail {
+			std::filesystem::path volt, curr, power;
+		};
+		struct engine_input {
+			string label;
+			std::filesystem::path freq;
+		};
+		vector<device_paths> devices;
+		vector<power_rail> rails;
+		vector<engine_input> engines;
+		std::filesystem::path fan_pwm, fan_rpm;
+		void init();
+		void collect();
+		bool owns(size_t index);
+	}
+
 	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
 	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
 	//? Reads only standard amdgpu DRM sysfs nodes; no library dependency.
@@ -405,6 +434,10 @@ namespace Shared {
 			Gpu::Intel::init();
 		}
 
+		//? Jetson iGPU uses the same sysfs layout as jetson_stats. "jetson" is the
+		//? explicit switch; "nvidia" still enables it so an existing config keeps working.
+		if (shown_gpus.contains("jetson") or shown_gpus.contains("nvidia")) Gpu::Jetson::init();
+
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -417,6 +450,9 @@ namespace Shared {
 			for (size_t i = 0; i < gpu_b_height_offsets.size(); ++i)
 				gpu_b_height_offsets[i] = gpus[i].supported_functions.gpu_utilization
 					   + gpus[i].supported_functions.pwr_usage
+					   + gpus[i].supported_functions.jetson_detail
+					   + gpus[i].supported_functions.jetson_fan
+					   + gpus[i].supported_functions.jetson_engines
 					   + (gpus[i].supported_functions.encoder_utilization or gpus[i].supported_functions.decoder_utilization)
 					   + (gpus[i].supported_functions.mem_total or gpus[i].supported_functions.mem_used)
 						* (1 + 2*(gpus[i].supported_functions.mem_total and gpus[i].supported_functions.mem_used) + 2*gpus[i].supported_functions.mem_utilization);
@@ -1351,6 +1387,9 @@ namespace Gpu {
 			join_thread pcie_rx_thread;
 			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
+				//? Jetson sysfs owns this device after init. Retrying NVML here spams
+				//? warnings and would overwrite the sysfs sample with a failed read.
+				if (Jetson::owns(i)) continue;
 				if constexpr(is_init) {
 					//? Device Handle
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
@@ -2211,6 +2250,438 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	//? Tegra metrics from sysfs. The layout is the one published by jetson_stats
+	//? (https://github.com/rbonghi/jetson_stats, Raffaello Bonghi, AGPL-3.0).
+	//? None of that code is included here: btop does not spawn jtop, open
+	//? /run/jtop.sock, or link the Python package. Only world-readable sysfs is used.
+	//?
+	//?   jtop/core/gpu.py      devfreq of_node gpu, gp10b, gv11b, ga10b, gb10b, gk20a.
+	//?                         device/load is per-mille, so divide by 10.
+	//?                         cur_freq, min_freq, max_freq and governor are on the devfreq node.
+	//?                         railgate_enable, tpc_pg_mask and power/control are on device/.
+	//?                         enable_3d_scaling is read only when the file exists (absent on JetPack 7).
+	//?   jtop/core/power.py    hwmon name ina3221: mW = inN_input (mV) * currN_input (mA) / 1000.
+	//?                         Channel 7 and labels containing "NC" are skipped, matching jtop.
+	//?                         hwmon name ina238: power1_input is µW, divided by 1000.
+	//?                         The PWR row is the sum of those rails, not VDD_GPU_SOC alone.
+	//?   jtop/core/fan.py      PWM 0..255 on the hwmon named pwmfan, RPM on the hwmon named pwm_tach.
+	//?                         Duty is pwm * 100 / 255.
+	//?   jtop/core/memory.py   EMC. jtop prefers debugfs bpmp/debug/clk/emc.
+	//?                         The unprivileged path it also accepts is devfreq of_node bwmgr, cur_freq.
+	//?                         That path is used here. The value is Hz and is shown as MHz.
+	//?   thermal zones         /sys/class/thermal type gpu-thermal, then tj-thermal, then soc0..2.
+	//?                         Values are millidegree Celsius. An empty read keeps the previous sample.
+	//?
+	//? Left out, because jtop reads them from debugfs as root:
+	//?   jtop/core/engine.py     /sys/kernel/debug/clk for NVDEC, NVENC, VIC, OFA, NVJPG.
+	//?                           The clocks drawn here are those same engines from devfreq cur_freq.
+	//?   jtop/core/gpu.py        /sys/kernel/debug/bpmp/debug/clk/nafll_gpcN/pto_counter.
+	//?   jtop/core/processes.py  /sys/kernel/debug/nvmap/iovmm/maps (shared GPU RAM).
+	//? System RAM is not reported as dedicated VRAM.
+	namespace Jetson {
+		//? An unreadable or malformed sample must not replace a valid reading.
+		std::optional<long long> read_value(const std::filesystem::path& path) {
+			long long value;
+			if (ifstream input(path); input >> value and value >= 0) return value;
+			return std::nullopt;
+		}
+
+		string read_text(const std::filesystem::path& path) {
+			string text = readfile(path);
+			while (not text.empty() and (text.back() == '\0' or text.back() == '\n' or text.back() == '\r' or text.back() == ' '))
+				text.pop_back();
+			return text;
+		}
+
+		bool skip_rail_label(const string& label) {
+			if (label.find("NC") != string::npos) return true;
+			string lower = label;
+			for (char& c : lower)
+				if (c >= 'A' and c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+			return lower.find("sum of shunt") != string::npos;
+		}
+
+		bool numeric_channel(const string& text) {
+			return not text.empty() and std::ranges::all_of(text, [](unsigned char c) { return c >= '0' and c <= '9'; });
+		}
+
+		std::optional<std::filesystem::path> find_thermal() {
+			static const array<string, 5> preferred = {
+				"gpu-thermal", "tj-thermal", "soc0-thermal", "soc1-thermal", "soc2-thermal"
+			};
+			const std::filesystem::path root = "/sys/class/thermal";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(root, ec)) return std::nullopt;
+			std::unordered_map<string, std::filesystem::path> found;
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				if (not entry.path().filename().string().starts_with("thermal_zone")) continue;
+				const auto temp = entry.path() / "temp";
+				const string type = read_text(entry.path() / "type");
+				if (type.empty() or not read_value(temp)) continue;
+				found.emplace(type, temp);
+			}
+			for (const auto& type : preferred)
+				if (const auto it = found.find(type); it != found.end()) return it->second;
+			return std::nullopt;
+		}
+
+		std::optional<std::filesystem::path> find_emc() {
+			const std::filesystem::path root = "/sys/class/devfreq";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(root, ec)) return std::nullopt;
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				string node;
+				std::getline(ifstream(entry.path() / "device/of_node/name"), node, '\0');
+				const string dir = entry.path().filename().string();
+				if (node != "bwmgr" and node != "tegra_bwmgr" and dir != "bwmgr" and dir != "tegra_bwmgr") continue;
+				const auto freq = entry.path() / "cur_freq";
+				if (read_value(freq)) return freq;
+			}
+			return std::nullopt;
+		}
+
+		void discover_rails() {
+			rails.clear();
+			const std::filesystem::path root = "/sys/class/hwmon";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(root, ec)) return;
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				const string chip = read_text(entry.path() / "name");
+				if (chip == "ina238") {
+					const auto power = entry.path() / "power1_input";
+					if (read_value(power)) {
+						rails.push_back({{}, {}, power});
+						Logger::debug("Jetson: INA238 power at {}", power.string());
+					} else {
+						const auto volt = entry.path() / "in1_input";
+						const auto curr = entry.path() / "curr1_input";
+						if (read_value(volt) and read_value(curr)) {
+							rails.push_back({volt, curr, {}});
+							Logger::debug("Jetson: INA238 volt*curr at {}", entry.path().string());
+						}
+					}
+					continue;
+				}
+				if (chip != "ina3221") continue;
+				for (const auto& node : std::filesystem::directory_iterator(entry.path(),
+						std::filesystem::directory_options::skip_permission_denied, ec)) {
+					const string fname = node.path().filename().string();
+					if (not fname.starts_with("in") or not fname.ends_with("_label")) continue;
+					const auto underscore = fname.find('_');
+					if (underscore == string::npos or underscore <= 2) continue;
+					const string channel = fname.substr(2, underscore - 2);
+					if (not numeric_channel(channel) or channel == "7") continue;
+					const string label = read_text(node.path());
+					if (label.empty() or skip_rail_label(label)) {
+						Logger::debug("Jetson: skip power rail '{}' at {}", label, node.path().string());
+						continue;
+					}
+					const auto volt = entry.path() / fmt::format("in{}_input", channel);
+					const auto curr = entry.path() / fmt::format("curr{}_input", channel);
+					if (not read_value(volt) or not read_value(curr)) continue;
+					rails.push_back({volt, curr, {}});
+					Logger::debug("Jetson: power rail {} at {}", label, entry.path().string());
+				}
+			}
+		}
+
+		std::optional<long long> read_power_mw() {
+			long long sum = 0;
+			bool any = false;
+			for (const auto& rail : rails) {
+				if (not rail.power.empty()) {
+					if (const auto microwatts = read_value(rail.power)) {
+						sum += *microwatts / 1000;
+						any = true;
+					}
+					continue;
+				}
+				const auto millivolts = read_value(rail.volt);
+				const auto milliamps = read_value(rail.curr);
+				if (millivolts and milliamps) {
+					sum += (*millivolts) * (*milliamps) / 1000;
+					any = true;
+				}
+			}
+			if (not any) return std::nullopt;
+			return sum;
+		}
+
+		bool pwm_channel(const string& name) {
+			if (not name.starts_with("pwm") or name.find('_') != string::npos) return false;
+			return numeric_channel(name.substr(3));
+		}
+
+		//? jetson_stats pairs a pwmfan hwmon node with a separate pwm_tach RPM node.
+		void discover_fan() {
+			fan_pwm.clear();
+			fan_rpm.clear();
+			const std::filesystem::path root = "/sys/class/hwmon";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(root, ec)) return;
+			std::filesystem::path preferred_pwm, fallback_pwm, tach_rpm, any_rpm;
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				const string chip = read_text(entry.path() / "name");
+				std::filesystem::path pwm, rpm;
+				for (const auto& node : std::filesystem::directory_iterator(entry.path(),
+						std::filesystem::directory_options::skip_permission_denied, ec)) {
+					const string fname = node.path().filename().string();
+					if (pwm.empty() and pwm_channel(fname)) pwm = node.path();
+					if (rpm.empty() and (fname == "rpm" or fname == "rpm_measured" or fname == "fan1_input"))
+						rpm = node.path();
+				}
+				if (not pwm.empty()) {
+					if (chip == "pwmfan") preferred_pwm = pwm;
+					else if (fallback_pwm.empty()) fallback_pwm = pwm;
+				}
+				if (not rpm.empty()) {
+					if (chip == "pwm_tach") tach_rpm = rpm;
+					else if (any_rpm.empty()) any_rpm = rpm;
+				}
+			}
+			fan_pwm = preferred_pwm.empty() ? fallback_pwm : preferred_pwm;
+			fan_rpm = tach_rpm.empty() ? any_rpm : tach_rpm;
+		}
+
+		//? Same engines as jtop/core/engine.py, from devfreq instead of debugfs clk.
+		void discover_engines() {
+			engines.clear();
+			const std::filesystem::path root = "/sys/class/devfreq";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(root, ec)) return;
+			std::unordered_map<string, int> seen;
+			vector<std::pair<string, std::filesystem::path>> found;
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				string node;
+				std::getline(ifstream(entry.path() / "device/of_node/name"), node, '\0');
+				string kind;
+				if (node == "nvdec") kind = "DEC";
+				else if (node == "nvenc") kind = "ENC";
+				else if (node == "vic") kind = "VIC";
+				else if (node == "ofa") kind = "OFA";
+				else if (node == "nvjpg") kind = "JPG";
+				else continue;
+				const auto freq = entry.path() / "cur_freq";
+				if (not read_value(freq)) continue;
+				found.push_back({kind, freq});
+			}
+			std::ranges::sort(found, [](const auto& a, const auto& b) {
+				if (a.first != b.first) return a.first < b.first;
+				return a.second.string() < b.second.string();
+			});
+			for (const auto& [kind, freq] : found) {
+				const int n = seen[kind]++;
+				engines.push_back({n == 0 ? kind : fmt::format("{}{}", kind, n), freq});
+			}
+		}
+
+		bool owns(size_t index) {
+			for (const auto& device : devices)
+				if (device.index == index) return true;
+			return false;
+		}
+
+		void init() {
+			if (not devices.empty()) return;
+			//? Some Jetson NVML drivers enumerate the GPU but expose no load/clock.
+			const bool supplement_nvml = Nvml::device_count == 1
+				and not gpus.empty()
+				and not gpus[0].supported_functions.gpu_utilization
+				and not gpus[0].supported_functions.gpu_clock;
+			if (Nvml::device_count > 0 and not supplement_nvml) return;
+			std::error_code ec;
+			const std::filesystem::path root = "/sys/class/devfreq";
+			if (not std::filesystem::is_directory(root, ec)) return;
+
+			const auto temperature = find_thermal();
+			const auto emc = find_emc();
+			discover_rails();
+			discover_fan();
+			discover_engines();
+			const bool board_temp = temperature.has_value();
+			const bool board_emc = emc.has_value();
+			const bool board_power = not rails.empty();
+			const bool board_fan = not fan_pwm.empty() or not fan_rpm.empty();
+			const bool board_engines = not engines.empty();
+
+			for (const auto& entry : std::filesystem::directory_iterator(root,
+					std::filesystem::directory_options::skip_permission_denied, ec)) {
+				const auto base = entry.path();
+				string name;
+				std::getline(ifstream(base / "device/of_node/name"), name, '\0');
+				if (name != "gpu" and name != "gp10b" and name != "gv11b"
+						and name != "ga10b" and name != "gb10b" and name != "gk20a") continue;
+				auto load = base / "device/load";
+				if (not read_value(load)) load = base / "load";
+				const auto frequency = base / "cur_freq";
+				const bool has_load = read_value(load).has_value();
+				const bool has_frequency = read_value(frequency).has_value();
+				if (not has_load and not has_frequency) continue;
+				const bool first = devices.empty();
+				const auto index = supplement_nvml ? size_t{0} : gpus.size();
+				if (not supplement_nvml) gpus.emplace_back();
+				auto& gpu = gpus[index];
+				gpu.gpu_clock_speed = 0;
+				gpu.pwr_usage = gpu.pwr_state = 0;
+				if (not supplement_nvml) gpu.supported_functions = {
+					.gpu_utilization = has_load,
+					.mem_utilization = false,
+					.gpu_clock = has_frequency,
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = false,
+					.mem_total = false,
+					.mem_used = false,
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false,
+				};
+				//? Tegra uses shared RAM; do not report system RAM as dedicated VRAM.
+				gpu.gpu_percent.at("gpu-totals").push_back(0);
+				gpu.supported_functions.gpu_utilization = has_load;
+				gpu.supported_functions.gpu_clock = has_frequency;
+				//? Module sensors are shared. Only the first iGPU displays them, so the power total is not counted twice.
+				if (first and board_temp) gpu.supported_functions.temp_info = true;
+				if (first and board_power) {
+					gpu.supported_functions.pwr_usage = true;
+					gpu.pwr_max_usage = 0;
+				}
+				if (first and board_emc) gpu.supported_functions.emc_clock = true;
+				const auto hw = base / "device";
+				const bool has_3d = read_value(hw / "enable_3d_scaling").has_value();
+				const bool detail = not read_text(base / "governor").empty()
+					or read_value(hw / "railgate_enable").has_value()
+					or read_value(hw / "tpc_pg_mask").has_value()
+					or not read_text(hw / "power/control").empty();
+				if (detail) gpu.supported_functions.jetson_detail = true;
+				if (first and board_fan) gpu.supported_functions.jetson_fan = true;
+				if (first and board_engines) gpu.supported_functions.jetson_engines = true;
+				const string label = name == "gpu" ? "Jetson iGPU"s : fmt::format("Jetson {}", name);
+				if (supplement_nvml) gpu_names[index] = label;
+				else gpu_names.push_back(label);
+				devices.push_back({
+					load, frequency,
+					first and board_temp ? *temperature : std::filesystem::path{},
+					first and board_emc ? *emc : std::filesystem::path{},
+					base,
+					hw,
+					index,
+					first and board_temp,
+					first and board_power,
+					first and board_emc,
+					false,
+					detail,
+					has_3d,
+				});
+				Logger::debug("Jetson: detected {} at {}", name, base.string());
+				if (supplement_nvml) break;
+			}
+			collect();
+			if (not devices.empty()) {
+				const auto& gpu = gpus[devices[0].index];
+				const auto load = gpu.gpu_percent.at("gpu-totals").empty() ? 0 : gpu.gpu_percent.at("gpu-totals").back();
+				const auto temp = gpu.temp.empty() ? 0 : gpu.temp.back();
+				Logger::info("Jetson iGPU: {}% {} MHz, {} C, {} mW, EMC {} MHz ({} power rails)",
+					load, gpu.gpu_clock_speed, devices[0].has_temp ? temp : -1, gpu.pwr_usage, gpu.emc_clock_speed, rails.size());
+			}
+		}
+
+		void collect() {
+			for (auto& device : devices) {
+				auto& gpu = gpus[device.index];
+				if (gpu.supported_functions.gpu_utilization) {
+					auto& history = gpu.gpu_percent.at("gpu-totals");
+					const auto load = read_value(device.load);
+					history.push_back(load ? std::clamp(*load / 10, 0LL, 100LL) : history.back());
+				}
+				if (gpu.supported_functions.gpu_clock)
+					if (const auto frequency = read_value(device.frequency))
+						gpu.gpu_clock_speed = static_cast<unsigned int>(*frequency / 1'000'000);
+
+				if (device.has_temp) {
+					std::optional<long long> celsius;
+					if (const auto raw = read_value(device.temperature))
+						celsius = *raw / 1000;
+					else if (device.temp_seen and not gpu.temp.empty())
+						celsius = gpu.temp.back();
+					if (celsius) {
+						if (not device.temp_seen and gpu.temp.size() == 1)
+							gpu.temp.back() = *celsius;
+						else
+							gpu.temp.push_back(*celsius);
+						device.temp_seen = true;
+					}
+				}
+
+				if (device.has_power) {
+					if (const auto milliwatts = read_power_mw()) {
+						gpu.pwr_usage = *milliwatts;
+						gpu.pwr_max_usage = std::max(gpu.pwr_max_usage, gpu.pwr_usage);
+						if (gpu.pwr_max_usage > gpu_pwr_total_max)
+							gpu_pwr_total_max = gpu.pwr_max_usage;
+					}
+					const auto& history = gpu.gpu_percent.at("gpu-pwr-totals");
+					if (gpu.pwr_max_usage > 0)
+						gpu.gpu_percent.at("gpu-pwr-totals").push_back(
+							std::clamp((long long)std::round((double)gpu.pwr_usage * 100.0 / (double)gpu.pwr_max_usage), 0LL, 100LL));
+					else
+						gpu.gpu_percent.at("gpu-pwr-totals").push_back(history.empty() ? 0 : history.back());
+				}
+
+				if (device.has_emc)
+					if (const auto frequency = read_value(device.emc))
+						gpu.emc_clock_speed = *frequency / 1'000'000;
+
+				if (device.has_detail) {
+					if (const auto minimum = read_value(device.devfreq / "min_freq"))
+						gpu.gpu_clock_min = static_cast<unsigned int>(*minimum / 1'000'000);
+					if (const auto maximum = read_value(device.devfreq / "max_freq"))
+						gpu.gpu_clock_max = static_cast<unsigned int>(*maximum / 1'000'000);
+					if (const string governor = read_text(device.devfreq / "governor"); not governor.empty())
+						gpu.gpu_governor = governor;
+					if (const auto railgate = read_value(device.hw / "railgate_enable"))
+						gpu.railgate = *railgate == 1;
+					if (const auto tpc = read_value(device.hw / "tpc_pg_mask"))
+						gpu.tpc_pg = *tpc == 1;
+					if (const string control = read_text(device.hw / "power/control"); not control.empty())
+						gpu.power_control = control;
+					//? enable_3d_scaling exists on older JetPack. JetPack 7 leaves the file absent and
+					//? reports 3D scaling through the governor, which is already on this line.
+					if (device.has_3d)
+						if (const auto scaling = read_value(device.hw / "enable_3d_scaling")) {
+							gpu.has_3d_scaling = true;
+							gpu.scaling_3d = *scaling == 1;
+						}
+				}
+
+				if (gpu.supported_functions.jetson_fan) {
+					if (const auto pwm = read_value(fan_pwm))
+						gpu.fan_percent = static_cast<int>(std::clamp(*pwm * 100 / 255, 0LL, 100LL));
+					if (const auto rpm = read_value(fan_rpm))
+						gpu.fan_rpm = static_cast<int>(*rpm);
+				}
+				if (gpu.supported_functions.jetson_engines) {
+					fmt::memory_buffer clocks;
+					for (const auto& engine : engines) {
+						const auto hz = read_value(engine.freq);
+						if (not hz) continue;
+						if (clocks.size() != 0)
+							fmt::format_to(std::back_inserter(clocks), " ");
+						fmt::format_to(std::back_inserter(clocks), "{} {}", engine.label, *hz / 1'000'000);
+					}
+					if (clocks.size() != 0)
+						gpu.engine_clocks.assign(clocks.data(), clocks.size());
+				}
+			}
+		}
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2222,6 +2693,8 @@ namespace Gpu {
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+
+		Jetson::collect();
 
 		//* Calculate average usage
 		long long avg = 0;
