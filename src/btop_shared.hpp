@@ -144,6 +144,7 @@ namespace Gpu {
 				 mem_total = true,
 				 mem_used = true,
 				 pcie_txrx = true,
+				 pcie_link = true,
 				 encoder_utilization = true,
 				 decoder_utilization = true;
 	};
@@ -171,6 +172,9 @@ namespace Gpu {
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;
+
+		unsigned int pcie_link_gen = 0;
+		unsigned int pcie_link_width = 0;
 
 		long long encoder_utilization = 0;
 		long long decoder_utilization = 0;
