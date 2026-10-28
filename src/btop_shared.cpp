@@ -32,6 +32,28 @@ namespace fs = std::filesystem;
 namespace rng = std::ranges;
 using namespace Tools;
 
+#ifdef GPU_SUPPORT
+namespace Gpu {
+	auto gpu_info::shared_mem_percent() const -> std::optional<int> {
+		if (shared_mem_total <= 0 or not shared_mem_used or *shared_mem_used < 0)
+			return std::nullopt;
+		// Use floating point before multiplication to avoid overflowing large counters.
+		return static_cast<int>(std::clamp(100.0L * *shared_mem_used / shared_mem_total, 0.0L, 100.0L));
+	}
+
+	int brief_info_rows(const vector<gpu_info>& gpus, std::string_view mode,
+		const vector<int>& shown_panels, bool show_shared) {
+		if (mode == "Off") return 0;
+		int rows = 0;
+		for (size_t i = 0; i < gpus.size(); ++i) {
+			if (mode == "Auto" and v_contains(shown_panels, static_cast<int>(i))) continue;
+			rows += 1 + (show_shared and gpus[i].shared_mem_total > 0);
+		}
+		return rows;
+	}
+}
+#endif
+
 namespace Cpu {
     std::optional<std::string> container_engine;
 
