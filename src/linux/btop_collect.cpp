@@ -1110,6 +1110,11 @@ namespace Cpu {
         return parse_cpu_list(buf);
     }
 
+#if defined(__aarch64__) || defined(__arm__) || defined(__riscv)
+	//? Cores below this fraction of the biggest cpu_capacity count as efficiency cores
+	constexpr double efficiency_core_ratio = 0.8;
+#endif
+
 	auto get_core_types() -> vector<CoreType> {
 		const auto is_hybrid = [](const vector<CoreType>& types) { return rng::contains(types, CoreType::Efficiency); };
 
@@ -1127,6 +1132,23 @@ namespace Cpu {
 			}
 			if (is_hybrid(types)) return types;
 		}
+
+#if defined(__aarch64__) || defined(__arm__) || defined(__riscv)
+		//? Classify cores by cpu_capacity
+		const fs::path cpu_path = "/sys/devices/system/cpu";
+		vector<uint32_t> capacities;
+		for (long i = 0; i < Shared::coreCount; i++) {
+			const auto capacity = to_int(readfile(cpu_path / fmt::format("cpu{}", i) / "cpu_capacity", "0"));
+			if (capacity == 0) return {};
+			capacities.push_back(capacity);
+		}
+
+		const double threshold = rng::max(capacities) * efficiency_core_ratio;
+		auto types = capacities | std::views::transform([&](const auto capacity) {
+			return capacity < threshold ? CoreType::Efficiency : CoreType::Performance;
+		}) | rng::to<vector>();
+		if (is_hybrid(types)) return types;
+#endif
 
 		return {};
 	}
