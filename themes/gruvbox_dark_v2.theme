@@ -96,3 +96,7 @@ theme[upload_end]="#FABF2F"
 theme[process_start]="#8EC07C"
 theme[process_mid]="#FE8019"
 theme[process_end]="#CC241D"
+
+# E cores are very special
+theme[core_p_fg]="#f5a9b8"
+theme[core_e_fg]="#5bcefa"
