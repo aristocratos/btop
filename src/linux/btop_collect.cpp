@@ -386,6 +386,10 @@ namespace Shared {
 			Cpu::available_sensors.push_back(sensor);
 		}
 		Cpu::core_mapping = Cpu::get_core_mapping();
+		Cpu::core_types = Cpu::get_core_types();
+		if (not Cpu::core_types.empty())
+			Logger::debug("Hybrid cpu: {} performance and {} efficiency cores",
+				rng::count(Cpu::core_types, Cpu::CoreType::Performance), rng::count(Cpu::core_types, Cpu::CoreType::Efficiency));
 
 		Cpu::container_engine = detect_container();
 
@@ -1105,6 +1109,27 @@ namespace Cpu {
 
         return parse_cpu_list(buf);
     }
+
+	auto get_core_types() -> vector<CoreType> {
+		const auto is_hybrid = [](const vector<CoreType>& types) { return rng::contains(types, CoreType::Efficiency); };
+
+		//? Intel hybrid cpus register a separate perf PMU per core type
+		const array<pair<fs::path, CoreType>, 2> pmu_cpu_lists {{
+			{"/sys/devices/cpu_core/cpus", CoreType::Performance},
+			{"/sys/devices/cpu_atom/cpus", CoreType::Efficiency},
+		}};
+		if (rng::all_of(pmu_cpu_lists, [](const auto& entry) { return fs::exists(entry.first); })) {
+			vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
+			for (const auto& [path, type] : pmu_cpu_lists) {
+				for (const auto cpu : parse_cpu_list(readfile(path))) {
+					if (cmp_less(cpu, types.size())) types.at(cpu) = type;
+				}
+			}
+			if (is_hybrid(types)) return types;
+		}
+
+		return {};
+	}
 
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
