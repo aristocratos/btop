@@ -1325,6 +1325,22 @@ If you want to disable building tests, pass `-DBUILD_TESTING=OFF` to the configu
 All options changeable from within UI.
 Config and log files stored in `$XDG_CONFIG_HOME/btop` or `$HOME/.config/btop` folder
 
+### macOS memory accounting
+
+On macOS, the optional `macos_activity_monitor` setting (also in Options → Mem)
+uses Activity Monitor-style physical memory accounting. It defaults to `false`,
+preserving the existing active + wired calculation.
+
+When enabled, cached memory includes file-backed and purgeable pages. Free memory
+excludes speculative pages, which Mach also counts as free but which belong to
+the file-backed cache. Used memory is total physical memory minus free and cached
+memory, including compressed and system memory in the residual.
+
+Available memory means free plus reclaimable cache, not immediately unused RAM or
+a guarantee that an application can allocate that amount without swapping.
+If the kernel returns too few counters, btop logs a warning and uses the default
+calculation. Process memory reporting is unchanged.
+
 #### btop.conf: (auto generated if not found)
 
 ```toml
