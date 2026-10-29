@@ -926,8 +926,13 @@ namespace Cpu {
 		if (Shared::coreCount >= 100) core_width++;
 		for (const auto& n : iota(0, Shared::coreCount)) {
 			auto enabled = is_cpu_enabled(n);
-			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + core_label(n) + Fx::ub : "")
-				+ ljust(to_string(n), core_width);
+			const char label = core_label(n);
+			const auto& label_color = not enabled ? Theme::c("inactive_fg")
+				: label == 'P' ? Theme::c("core_p_fg")
+				: label == 'E' ? Theme::c("core_e_fg")
+				: Theme::c("main_fg");
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + label_color + (Shared::coreCount < 100 ? Fx::b + label + Fx::ub : "")
+				+ Theme::c(enabled ? "main_fg" : "inactive_fg") + ljust(to_string(n), core_width);
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
