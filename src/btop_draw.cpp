@@ -909,8 +909,9 @@ namespace Cpu {
 		};
 
 		//? Label cores P/E on hybrid cpus, C otherwise
+		const bool show_core_type = Config::getB("show_core_type");
 		auto core_label = [&](const int num) -> char {
-			if (cmp_less(num, core_types.size())) {
+			if (show_core_type and cmp_less(num, core_types.size())) {
 				switch (core_types.at(num)) {
 					case CoreType::Performance: return 'P';
 					case CoreType::Efficiency: return 'E';
