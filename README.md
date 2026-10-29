@@ -1419,6 +1419,10 @@ proc_left = false
 #* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop).
 proc_filter_kernel = false
 
+#* Extended regex of text to remove from the shown process commands, e.g. "/nix/store/[^/]+/" for NixOS.
+#* Only affects the command column, filtering still uses the full command. Empty string to disable.
+proc_cmd_strip = ""
+
 #* Should the process list follow the selected process when detailed view is open.
 proc_follow_detailed = true
 
