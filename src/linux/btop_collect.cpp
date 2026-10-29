@@ -1076,15 +1076,9 @@ namespace Cpu {
         return value;
     }
 
-    static constexpr auto detect_active_cpus() {
-        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
-        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
-
-        if (buf.empty()) {
-            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
-        }
-
-        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
+    //* Parse a kernel cpu list
+    static auto parse_cpu_list(std::string_view list) -> std::vector<std::int32_t> {
+        return list | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
                    auto view = std::string_view { range };
                    auto dash = view.find('-');
 
@@ -1099,6 +1093,17 @@ namespace Cpu {
                    return std::views::iota(start, end + 1);
                }) |
                std::views::join | std::ranges::to<std::vector<std::int32_t>>();
+    }
+
+    static constexpr auto detect_active_cpus() {
+        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
+        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
+
+        if (buf.empty()) {
+            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+        }
+
+        return parse_cpu_list(buf);
     }
 
 	auto collect(bool no_update) -> cpu_info& {
