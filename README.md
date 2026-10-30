@@ -16,11 +16,8 @@
 [![Sponsor](https://img.shields.io/badge/-Sponsor-red?logo=github)](https://github.com/sponsors/aristocratos)
 [![Coffee](https://img.shields.io/badge/-Buy%20me%20a%20Coffee-grey?logo=Ko-fi)](https://ko-fi.com/aristocratos)
 [![btop](https://snapcraft.io/btop/badge.svg)](https://snapcraft.io/btop)
-[![Continuous Build Linux](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-linux.yml)
-[![Continuous Build macOS](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-macos.yml)
-[![Continuous Build FreeBSD](https://github.com/aristocratos/btop/actions/workflows/continuous-build-freebsd.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-freebsd.yml)
-[![Continuous Build NetBSD](https://github.com/aristocratos/btop/actions/workflows/continuous-build-netbsd.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-netbsd.yml)
-[![Continuous Build OpenBSD](https://github.com/aristocratos/btop/actions/workflows/continuous-build-openbsd.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/continuous-build-openbsd.yml)
+[![Continuous Build](https://github.com/aristocratos/btop/actions/workflows/ci.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/ci.yml)
+[![Continuous Build CMake](https://github.com/aristocratos/btop/actions/workflows/cmake.yml/badge.svg)](https://github.com/aristocratos/btop/actions/workflows/cmake.yml)
 
 ## Index
 
@@ -426,16 +423,21 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 **Binary release (from native os repo)**
 
-* **openSUSE**
-  * **Tumbleweed:**
+* **Ubuntu/Debian**
     ```bash
-    sudo zypper in btop
-    ```
-  * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
+    sudo apt install btop
+	```
+  * A [PPA supporting Ubuntu 22.04 and newer](https://launchpad.net/~quentiumyt/+archive/ubuntu/btop) is provided by [Quentin Lienhardt](https://github.com/QuentiumYT) that offers an up-to-date version of `btop`.
 * **Fedora**
     ```bash
     sudo dnf install btop
 	```
+* **openSUSE**
+  * **Tumbleweed:**
+    ```bash
+    sudo zypper install btop
+    ```
+  * For all other versions, see [openSUSE Software: btop](https://software.opensuse.org/package/btop)
 * **RHEL/Rocky/AlmaLinux 8+**
     ```bash
     sudo dnf install epel-release
@@ -517,18 +519,18 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Options for make:
 
-   | Flag                            | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
-   | `STATIC=true`                   | For static compilation                                                  |
-   | `QUIET=true`                    | For less verbose output                                                 |
-   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on X86_64 Linux)         |
-   | `RSMI_STATIC=true`              | To statically link the ROCm SMI library used for querying AMDGPU        |
-   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | Flag                        | Description                                                      |
+   |-----------------------------|------------------------------------------------------------------|
+   | `VERBOSE=true`              | To display full compiler/linker commands                         |
+   | `STATIC=true`               | For static compilation                                           |
+   | `QUIET=true`                | For less verbose output                                          |
+   | `STRIP=true`                | To force stripping of debug symbols (adds `-s` linker flag)      |
+   | `DEBUG=true`                | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging |
+   | `ARCH=<architecture>`       | To manually set the target architecture                          |
+   | `GPU_SUPPORT=<true\|false>` | Enable/disable GPU support (Enabled by default on X86_64 Linux)  |
+   | `RSMI_STATIC=true`          | To statically link the ROCm SMI library used for querying AMDGPU |
+   | `ADDFLAGS=<flags>`          | For appending flags to both compiler and linker                  |
+   | `CXX=<compiler>`            | Manually set which compiler to use                               |
 
    Example: `make ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -624,13 +626,13 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Some useful options to pass to the configure step:
 
-   | Configure flag                  | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
-   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
-   | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default)         |
-   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+   | Configure flag                  | Description                                                     |
+   |---------------------------------|-----------------------------------------------------------------|
+   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                         |
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                  |
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                              |
+   | `-DBTOP_RSMI_STATIC=<ON\|OFF>`  | Build and link the ROCm SMI library statically (OFF by default) |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)               |
 
    To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
@@ -691,17 +693,17 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Options for make:
 
-   | Flag                            | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
-   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
-   | `QUIET=true`                    | For less verbose output                                                 |
-   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
-   | `GPU_SUPPORT=<true\|false>`     | Enable/disable GPU support (Enabled by default on macOS)                |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | Flag                        | Description                                                      |
+   |-----------------------------|------------------------------------------------------------------|
+   | `VERBOSE=true`              | To display full compiler/linker commands                         |
+   | `STATIC=true`               | For static compilation (only libgcc and libstdc++)               |
+   | `QUIET=true`                | For less verbose output                                          |
+   | `STRIP=true`                | To force stripping of debug symbols (adds `-s` linker flag)      |
+   | `DEBUG=true`                | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging |
+   | `GPU_SUPPORT=<true\|false>` | Enable/disable GPU support (Enabled by default on macOS)         |
+   | `ARCH=<architecture>`       | To manually set the target architecture                          |
+   | `ADDFLAGS=<flags>`          | For appending flags to both compiler and linker                  |
+   | `CXX=<compiler>`            | Manually set which compiler to use                               |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -790,11 +792,11 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Some useful options to pass to the configure step:
 
-   | Configure flag                  | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
-   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+   | Configure flag                  | Description                                       |
+   |---------------------------------|---------------------------------------------------|
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)    |
+   | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default) |
 
    To force any specific compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
@@ -854,16 +856,16 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Options for make:
 
-   | Flag                            | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
-   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
-   | `QUIET=true`                    | For less verbose output                                                 |
-   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | Flag                  | Description                                                      |
+   |-----------------------|------------------------------------------------------------------|
+   | `VERBOSE=true`        | To display full compiler/linker commands                         |
+   | `STATIC=true`         | For static compilation (only libgcc and libstdc++)               |
+   | `QUIET=true`          | For less verbose output                                          |
+   | `STRIP=true`          | To force stripping of debug symbols (adds `-s` linker flag)      |
+   | `DEBUG=true`          | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging |
+   | `ARCH=<architecture>` | To manually set the target architecture                          |
+   | `ADDFLAGS=<flags>`    | For appending flags to both compiler and linker                  |
+   | `CXX=<compiler>`      | Manually set which compiler to use                               |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -947,11 +949,11 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Some useful options to pass to the configure step:
 
-   | Configure flag                  | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
-   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+   | Configure flag                  | Description                                       |
+   |---------------------------------|---------------------------------------------------|
+   | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)           |
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)    |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default) |
 
    _**Note:** Static linking does not work with GCC._
 
@@ -1014,16 +1016,16 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Options for make:
 
-   | Flag                            | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
-   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
-   | `QUIET=true`                    | For less verbose output                                                 |
-   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                      |
+   | Flag                  | Description                                                      |
+   |-----------------------|------------------------------------------------------------------|
+   | `VERBOSE=true`        | To display full compiler/linker commands                         |
+   | `STATIC=true`         | For static compilation (only libgcc and libstdc++)               |
+   | `QUIET=true`          | For less verbose output                                          |
+   | `STRIP=true`          | To force stripping of debug symbols (adds `-s` linker flag)      |
+   | `DEBUG=true`          | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging |
+   | `ARCH=<architecture>` | To manually set the target architecture                          |
+   | `ADDFLAGS=<flags>`    | For appending flags to both compiler and linker                  |
+   | `CXX=<compiler>`      | Manually set which compiler to use                               |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -1108,10 +1110,10 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Some useful options to pass to the configure step:
 
-   | Configure flag                  | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+   | Configure flag                  | Description                                       |
+   |---------------------------------|---------------------------------------------------|
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)    |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default) |
 
    To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
@@ -1169,16 +1171,16 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Options for make:
 
-   | Flag                            | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `VERBOSE=true`                  | To display full compiler/linker commands                                |
-   | `STATIC=true`                   | For static compilation (only libgcc and libstdc++)                      |
-   | `QUIET=true`                    | For less verbose output                                                 |
-   | `STRIP=true`                    | To force stripping of debug symbols (adds `-s` linker flag)             |
-   | `DEBUG=true`                    | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging        |
-   | `ARCH=<architecture>`           | To manually set the target architecture                                 |
-   | `ADDFLAGS=<flags>`              | For appending flags to both compiler and linker                         |
-   | `CXX=<compiler>`                | Manually set which compiler to use                                       |
+   | Flag                  | Description                                                      |
+   |-----------------------|------------------------------------------------------------------|
+   | `VERBOSE=true`        | To display full compiler/linker commands                         |
+   | `STATIC=true`         | For static compilation (only libgcc and libstdc++)               |
+   | `QUIET=true`          | For less verbose output                                          |
+   | `STRIP=true`          | To force stripping of debug symbols (adds `-s` linker flag)      |
+   | `DEBUG=true`          | Sets OPTFLAGS to `-O0 -g` and enables more verbose debug logging |
+   | `ARCH=<architecture>` | To manually set the target architecture                          |
+   | `ADDFLAGS=<flags>`    | For appending flags to both compiler and linker                  |
+   | `CXX=<compiler>`      | Manually set which compiler to use                               |
 
    Example: `gmake ADDFLAGS=-march=native` might give a performance boost if compiling only for your own system.
 
@@ -1264,10 +1266,10 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    Some useful options to pass to the configure step:
 
-   | Configure flag                  | Description                                                             |
-   |---------------------------------|-------------------------------------------------------------------------|
-   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
+   | Configure flag                  | Description                                       |
+   |---------------------------------|---------------------------------------------------|
+   | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)    |
+   | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default) |
 
    To force any other compiler, run `CXX=<compiler> cmake -B build -G Ninja`
 
