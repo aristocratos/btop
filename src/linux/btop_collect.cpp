@@ -1930,6 +1930,7 @@ namespace Gpu {
 
 			free(gpu_device_id);
 
+			device = get_intel_pmu_name(gpu_path);
 			engines = discover_engines(device);
 			if (!engines) {
 				Logger::debug("Failed to find Intel GPU engines, Intel GPUs will not be detected");
