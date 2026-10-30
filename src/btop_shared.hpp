@@ -383,6 +383,7 @@ namespace Proc {
 		size_t pid{};
 		string name{};          // defaults to ""
 		string cmd{};           // defaults to ""
+		size_t cmd_basename_offset{};
 		string short_cmd{};     // defaults to ""
 		size_t threads{};
 		int name_offset{};
