@@ -1147,7 +1147,8 @@ namespace Cpu {
 		};
 
 		//? Sort unique rankings to find the gap
-		std::vector<int> ranks(rankings.size());
+		std::vector<int> ranks;
+		ranks.reserve(rankings.size());
 		for (const auto& [cpu_id, rank] : rankings) ranks.push_back(rank);
 		std::sort(ranks.begin(), ranks.end());
 		auto last = std::unique(ranks.begin(), ranks.end());
@@ -1157,9 +1158,13 @@ namespace Cpu {
 
 		//? Find largest gap between consecutive unique rankings
 		int split_threshold = -1;
+		int largest_gap = 0;
 		for (size_t i = 0; i + 1 < ranks.size(); ++i) {
-			if ((ranks[i + 1] - ranks[i]) > (split_threshold < 0 ? -1 : ranks[i + 1] - ranks[i] - 1))
+			const int gap = ranks[i + 1] - ranks[i];
+			if (gap > largest_gap) {
+				largest_gap = gap;
 				split_threshold = ranks[i];
+			}
 		}
 
 		if (split_threshold < 0) return {};
