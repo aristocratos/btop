@@ -713,7 +713,9 @@ namespace Cpu {
 					auto& gpu = gpus[i];
 
 					//? GPU graphs/meters
-					auto width_left = b_width - 10 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0);
+					auto width_left = b_width - 5 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0);
+					if (gpu.supported_functions.gpu_utilization)
+						width_left -= 5 + (b_columns == 1 ? 1 : 0);
 					if (gpu.supported_functions.temp_info and show_temps) {
 						if (b_columns > 1) {
 							gpu_temp_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
@@ -724,13 +726,13 @@ namespace Cpu {
 					}
 					if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total and b_columns > 1) {
 						gpu_mem_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol };
-						width_left -= 5;
+						width_left -= 6;
 					}
 					width_left -= (gpu.supported_functions.mem_used ? 5 : 0);
-					width_left -= (gpu.supported_functions.mem_total ? 6 : 0);
+					width_left -= (gpu.supported_functions.mem_total ? 5 : 0);
 					width_left -= (gpu.supported_functions.pwr_usage ? 6 : 0);
 					if (gpu.supported_functions.gpu_utilization) {
-						gpu_meters[i] = Draw::Meter{width_left, "cpu" };
+						gpu_meters[i] = Draw::Meter{max(0, width_left), "cpu" };
 					}
 				}
 			}
