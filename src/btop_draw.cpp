@@ -713,7 +713,7 @@ namespace Cpu {
 					auto& gpu = gpus[i];
 
 					//? GPU graphs/meters
-					auto width_left = b_width - 10 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0);
+					auto width_left = b_width - 10 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0) - (b_columns == 1 ? 1 : 0);
 					if (gpu.supported_functions.temp_info and show_temps) {
 						if (b_columns > 1) {
 							gpu_temp_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
