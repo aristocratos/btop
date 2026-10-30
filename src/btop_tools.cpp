@@ -477,10 +477,12 @@ namespace Tools {
 			}
 		}
 
-		if (value_d >= 10)
+		if (value_d >= 10) {
 			out = fmt::format("{:.1f}", value_d);
-		else
+		}
+		else {
 			out = fmt::format("{:.2f}", value_d);
+		}
 
 		if (out.empty()) {
 			out = "0";
