@@ -697,9 +697,11 @@ namespace Cpu {
             	init_graphs(graphs_lower, graph_low_height, graph_low_width, graph_lo_field, Config::getB("cpu_invert_lower"));
 
 			#ifdef GPU_SUPPORT
-			if (show_gpu and b_columns > 1) {
-				gpu_temp_graphs.resize(gpus.size());
-				gpu_mem_graphs.resize(gpus.size());
+			if (show_gpu) {
+				if (b_columns > 1) {
+					gpu_temp_graphs.resize(gpus.size());
+					gpu_mem_graphs.resize(gpus.size());
+				}
 				gpu_meters.resize(gpus.size());
 
 				// Shrink gpu graph width in small boxes to prevent line width extending past box border
@@ -713,8 +715,12 @@ namespace Cpu {
 					//? GPU graphs/meters
 					auto width_left = b_width - 10 - (gpus.size() > 9 ? 2 : gpus.size() > 1 ? 1 : 0);
 					if (gpu.supported_functions.temp_info and show_temps) {
-						gpu_temp_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
-						width_left -= 11;
+						if (b_columns > 1) {
+							gpu_temp_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "temp", gpu.temp, graph_symbol, false, false, gpu.temp_max, -23 };
+							width_left -= 11;
+						} else {
+							width_left -= 5;
+						}
 					}
 					if (gpu.supported_functions.mem_used and gpu.supported_functions.mem_total and b_columns > 1) {
 						gpu_mem_graphs[i] = Draw::Graph{ gpu_graph_width, 1, "used", safeVal(gpu.gpu_percent, "gpu-vram-totals"s), graph_symbol };
@@ -982,10 +988,8 @@ namespace Cpu {
 				if (gpus.size() > 1) out += rjust(to_string(i), 1 + (gpus.size() > 9));
 				if (gpus[i].supported_functions.gpu_utilization) {
 					out += ' ';
-					if (b_columns > 1) {
 					out += gpu_meters[i](safeVal(gpus[i].gpu_percent, "gpu-totals"s).back())
 						+ Theme::g("cpu").at(clamp(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back(), 0ll, 100ll));
-					}
 					out += rjust(to_string(safeVal(gpus[i].gpu_percent, "gpu-totals"s).back()), 3) + Theme::c("main_fg") + '%';
 					if (b_columns == 1)
 						out += ' ';
@@ -2329,7 +2333,7 @@ namespace Draw {
 			y = cpu_bottom ? Term::height - height + 1 : 1;
 
 		#ifdef GPU_SUPPORT
-			b_columns = max(2, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - 5)));
+			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - gpus_extra_height - 5)));
 		#else
 			b_columns = max(1, (int)ceil((double)(Shared::coreCount + 1) / (height - 5)));
 		#endif
