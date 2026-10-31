@@ -386,6 +386,10 @@ namespace Shared {
 			Cpu::available_sensors.push_back(sensor);
 		}
 		Cpu::core_mapping = Cpu::get_core_mapping();
+		Cpu::core_types = Cpu::get_core_types();
+		if (not Cpu::core_types.empty())
+			Logger::debug("Hybrid cpu: {} performance and {} efficiency cores",
+				rng::count(Cpu::core_types, Cpu::CoreType::Performance), rng::count(Cpu::core_types, Cpu::CoreType::Efficiency));
 
 		Cpu::container_engine = detect_container();
 
@@ -1076,15 +1080,9 @@ namespace Cpu {
         return value;
     }
 
-    static constexpr auto detect_active_cpus() {
-        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
-        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
-
-        if (buf.empty()) {
-            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
-        }
-
-        return buf | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
+    //* Parse a kernel cpu list
+    static auto parse_cpu_list(std::string_view list) -> std::vector<std::int32_t> {
+        return list | std::views::split(',') | std::views::transform([](auto&& range) -> auto {
                    auto view = std::string_view { range };
                    auto dash = view.find('-');
 
@@ -1100,6 +1098,121 @@ namespace Cpu {
                }) |
                std::views::join | std::ranges::to<std::vector<std::int32_t>>();
     }
+
+    static constexpr auto detect_active_cpus() {
+        auto stream = std::ifstream { "/sys/fs/cgroup/cpuset.cpus.effective" };
+        auto buf = std::string { std::istreambuf_iterator<char> { stream }, {} };
+
+        if (buf.empty()) {
+            return std::views::iota(0, Shared::coreCount) | std::ranges::to<std::vector<std::int32_t>>();
+        }
+
+        return parse_cpu_list(buf);
+    }
+
+#if defined(__aarch64__) || defined(__arm__) || defined(__riscv)
+	//? Cores below this fraction of the biggest cpu_capacity count as efficiency cores
+	constexpr double efficiency_core_ratio = 0.8;
+#endif
+
+	auto get_core_types() -> vector<CoreType> {
+		
+		//? AMD Zen 5 / Zen 5c hybrid cpus expose ranking in sysfs: cpuN/cpufreq/amd_pstate_prefcore_ranking
+		//? Detect by finding the largest gap between unique ranking values
+		Logger::debug("AMD detection: starting");
+		const fs::path amd_root = "/sys/devices/system/cpu";
+		std::unordered_map<int, int> rankings;
+		Logger::debug("AMD: scanning for ranking files...");
+		for (int i = 0; i < Shared::coreCount; ++i) {
+			fs::path cpu_dir = amd_root / "cpu"; cpu_dir += to_string(i);
+			fs::path rank_file = cpu_dir / "cpufreq/amd_pstate_prefcore_ranking";
+			Logger::debug("AMD: checking cpu{} (file={}))", i, rank_file);
+			if (not fs::exists(rank_file)) {
+				Logger::debug("AMD: cpu{} missing rank file, skipping", i);
+				continue;
+			}
+			try {
+				const auto rank = to_int(readfile(rank_file, "-1"));
+				Logger::debug("AMD: cpu{} rank={}, adding to map", i, rank);
+				if (rank != -1U) rankings[i] = rank;
+				else Logger::debug("AMD: cpu{} rank=-1 (invalid)", i);
+			} catch (const std::exception& e) {
+				Logger::debug("AMD: cpu{} read exception: {}", i, e.what());
+			}
+		}
+
+		if (rankings.size() >= 2) {
+			//? Sort unique rankings to find the gap
+			std::vector<int> ranks;
+			ranks.reserve(rankings.size());
+			for (const auto& [cpu_id, rank] : rankings) ranks.push_back(rank);
+			std::sort(ranks.begin(), ranks.end());
+			auto last = std::unique(ranks.begin(), ranks.end());
+			ranks.erase(last, ranks.end());
+
+			//? Find largest gap between consecutive unique rankings
+			int split_threshold = -1;
+			int largest_gap = 0;
+			for (size_t i = 0; i + 1 < ranks.size(); ++i) {
+				const int gap = ranks[i + 1] - ranks[i];
+				if (gap > largest_gap) {
+					largest_gap = gap;
+					split_threshold = ranks[i];
+				}
+			}
+
+			if (split_threshold >= 0) {
+				//? Classify each core based on ranking (higher = Performance, lower = Efficiency)
+				vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
+				for (const auto& [cpu_id, rank] : rankings) {
+					if (cpu_id >= Shared::coreCount) continue;
+					if (rank > split_threshold) types[cpu_id] = CoreType::Performance;
+					else types[cpu_id] = CoreType::Efficiency;
+				}
+				if (rng::contains(types, CoreType::Efficiency)) return types;
+			}
+		} else {
+			Logger::debug("AMD: insufficient rankings ({})", rankings.size());
+		}
+
+		const auto is_hybrid = [](const vector<CoreType>& types) {
+			return rng::contains(types, CoreType::Efficiency);
+		};
+
+		//? Intel hybrid cpus register a separate perf PMU per core type
+		const array<pair<fs::path, CoreType>, 2> pmu_cpu_lists {{
+			{"/sys/devices/cpu_core/cpus", CoreType::Performance},
+			{"/sys/devices/cpu_atom/cpus", CoreType::Efficiency},
+		}};
+		if (rng::all_of(pmu_cpu_lists, [](const auto& entry) { return fs::exists(entry.first); })) {
+			vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
+			for (const auto& [path, type] : pmu_cpu_lists) {
+				for (const auto cpu : parse_cpu_list(readfile(path))) {
+					if (cmp_less(cpu, types.size())) types.at(cpu) = type;
+				}
+			}
+			if (is_hybrid(types)) return types;
+		}
+
+#if defined(__aarch64__) || defined(__arm__) || defined(__riscv)
+		//? Classify cores by cpu_capacity
+		const fs::path cpu_path = "/sys/devices/system/cpu";
+		vector<uint32_t> capacities;
+		for (long i = 0; i < Shared::coreCount; i++) {
+			const auto capacity = to_int(readfile(cpu_path / fmt::format("cpu{}", i) / "cpu_capacity", "0"));
+			if (capacity == 0) return {};
+			capacities.push_back(capacity);
+		}
+
+		const double threshold = rng::max(capacities) * efficiency_core_ratio;
+		auto risc_types = capacities | std::views::transform([&](const auto capacity) {
+			return capacity < threshold ? CoreType::Efficiency : CoreType::Performance;
+		}) | rng::to<vector>();
+		if (is_hybrid(risc_types)) return risc_types;
+#endif
+
+		return {};
+	}
 
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
