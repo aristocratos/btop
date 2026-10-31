@@ -1206,10 +1206,10 @@ const auto is_hybrid = [](const vector<CoreType>& types) { return rng::contains(
 		}
 
 		const double threshold = rng::max(capacities) * efficiency_core_ratio;
-		auto types = capacities | std::views::transform([&](const auto capacity) {
+		auto risc_types = capacities | std::views::transform([&](const auto capacity) {
 			return capacity < threshold ? CoreType::Efficiency : CoreType::Performance;
 		}) | rng::to<vector>();
-		if (is_hybrid(types)) return types;
+		if (is_hybrid(risc_types)) return risc_types;
 #endif
 
 		return {};
