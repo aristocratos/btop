@@ -1141,44 +1141,43 @@ namespace Cpu {
 			}
 		}
 
-		if (rankings.size() < 2) {
-			Logger::debug("AMD: insufficient rankings ({})", rankings.size());
-			return {};
-		};
+		if (rankings.size() >= 2) {
+			//? Sort unique rankings to find the gap
+			std::vector<int> ranks;
+			ranks.reserve(rankings.size());
+			for (const auto& [cpu_id, rank] : rankings) ranks.push_back(rank);
+			std::sort(ranks.begin(), ranks.end());
+			auto last = std::unique(ranks.begin(), ranks.end());
+			ranks.erase(last, ranks.end());
 
-		//? Sort unique rankings to find the gap
-		std::vector<int> ranks;
-		ranks.reserve(rankings.size());
-		for (const auto& [cpu_id, rank] : rankings) ranks.push_back(rank);
-		std::sort(ranks.begin(), ranks.end());
-		auto last = std::unique(ranks.begin(), ranks.end());
-		ranks.erase(last, ranks.end());
-
-		if (ranks.size() < 2) return {};
-
-		//? Find largest gap between consecutive unique rankings
-		int split_threshold = -1;
-		int largest_gap = 0;
-		for (size_t i = 0; i + 1 < ranks.size(); ++i) {
-			const int gap = ranks[i + 1] - ranks[i];
-			if (gap > largest_gap) {
-				largest_gap = gap;
-				split_threshold = ranks[i];
+			//? Find largest gap between consecutive unique rankings
+			int split_threshold = -1;
+			int largest_gap = 0;
+			for (size_t i = 0; i + 1 < ranks.size(); ++i) {
+				const int gap = ranks[i + 1] - ranks[i];
+				if (gap > largest_gap) {
+					largest_gap = gap;
+					split_threshold = ranks[i];
+				}
 			}
+
+			if (split_threshold >= 0) {
+				//? Classify each core based on ranking (higher = Performance, lower = Efficiency)
+				vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
+				for (const auto& [cpu_id, rank] : rankings) {
+					if (cpu_id >= Shared::coreCount) continue;
+					if (rank > split_threshold) types[cpu_id] = CoreType::Performance;
+					else types[cpu_id] = CoreType::Efficiency;
+				}
+				if (rng::contains(types, CoreType::Efficiency)) return types;
+			}
+		} else {
+			Logger::debug("AMD: insufficient rankings ({})", rankings.size());
 		}
 
-		if (split_threshold < 0) return {};
-
-		//? Classify each core based on ranking (higher = Performance, lower = Efficiency)
-		vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
-		for (const auto& [cpu_id, rank] : rankings) {
-			if (cpu_id >= Shared::coreCount) continue;
-			if (rank > split_threshold) types[cpu_id] = CoreType::Performance;
-			else types[cpu_id] = CoreType::Efficiency;
-		}
-
-		return types;
-const auto is_hybrid = [](const vector<CoreType>& types) { return rng::contains(types, CoreType::Efficiency); };
+		const auto is_hybrid = [](const vector<CoreType>& types) {
+			return rng::contains(types, CoreType::Efficiency);
+		};
 
 		//? Intel hybrid cpus register a separate perf PMU per core type
 		const array<pair<fs::path, CoreType>, 2> pmu_cpu_lists {{
