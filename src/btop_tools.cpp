@@ -477,36 +477,27 @@ namespace Tools {
 			}
 		}
 
-		if (value_d >= 10) {
-			out = fmt::format("{:.1f}", value_d);
-		}
-		else {
-			out = fmt::format("{:.2f}", value_d);
-		}
-
-		if (out.empty()) {
-			out = "0";
-		}
-
 		if (shorten) {
-			auto has_sep = out.find(".") != string::npos;
-			if (has_sep) {
+			if (round(value_d*100)/100.0 >= 10) {
+				out = fmt::format("{:.0f}", value_d);
+			}
+			else {
 				out = fmt::format("{:.1f}", value_d);
 			}
-			if (out.size() > 3) {
-				// if out is of the form xy.z
-				if (has_sep) {
-					out = fmt::format("{:.0f}", value_d);
-				}
-				// if out is of the form xyzw (only when not using base 10)
-				else {
-					out = fmt::format("{:d}.0", out[0] - '0');
-					start++;
-				}
-			}
-			out.push_back(units[start][0]);
+			out += units[start][0];
 		}
-		else out += " " + units[start];
+		else {
+			if (round(value_d*10)/10.0 >= 100) {
+				out = fmt::format("{:.0f}", value_d);
+			}
+			else if (round(value_d*100)/100.0 >= 10) {
+				out = fmt::format("{:.1f}", value_d);
+			}
+			else {
+				out = fmt::format("{:.2f}", value_d);
+			}
+			out += " " + units[start];
+		}
 
 		if (per_second) out += (bit) ? "ps" : "/s";
 		return out;
