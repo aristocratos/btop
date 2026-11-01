@@ -423,7 +423,7 @@ namespace Tools {
 		bool mega = Config::getB("base_10_sizes");
 
 		// Bitrates
-	    if(bit && per_second) {
+		if(bit && per_second) {
 			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
 			if(base_10_bitrate == "True") {
 				mega = true;
@@ -465,20 +465,20 @@ namespace Tools {
 		value_d *= mult;
 
 		if (mega) {
-			while (value_d >= 1000) {
+			while (value_d >= 999.5) {
 				value_d /= 1000;
 				start++;
 			}
 		}
 		else {
-			while (value_d >= 1024) {
+			while (value_d >= 1023.5) {
 				value_d /= 1024;
 				start++;
 			}
 		}
 
 		if (shorten) {
-			if (round(value_d*100)/100.0 >= 10) {
+			if (round(value_d*100)/100.0 >= 9.95) {
 				out = fmt::format("{:.0f}", value_d);
 			}
 			else {
@@ -487,10 +487,10 @@ namespace Tools {
 			out += units[start][0];
 		}
 		else {
-			if (round(value_d*10)/10.0 >= 100) {
+			if (round(value_d*10)/10.0 >= 99.95) {
 				out = fmt::format("{:.0f}", value_d);
 			}
-			else if (round(value_d*100)/100.0 >= 10) {
+			else if (round(value_d*100)/100.0 >= 9.995) {
 				out = fmt::format("{:.1f}", value_d);
 			}
 			else {
