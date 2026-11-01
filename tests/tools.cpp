@@ -109,7 +109,7 @@ const std::array humanizer_rounding_points{
 	HumanizerRoundingPoint{ 1494,  "14.9" ,  "15"  },
 	HumanizerRoundingPoint{ 1496,  "15.0" ,  "15"  },
 	HumanizerRoundingPoint{ 1994,  "19.9" ,  "20"  },
-	HumanizerRoundingPoint{ 1995,  "19.9" ,  "20"  },
+	HumanizerRoundingPoint{ 1996,  "20.0" ,  "20"  },
 	HumanizerRoundingPoint{ 9984,  "99.8" , "100"  },
 	HumanizerRoundingPoint{ 9986,  "99.9" , "100"  },
 	HumanizerRoundingPoint{ 9994,  "99.9" , "100"  },
