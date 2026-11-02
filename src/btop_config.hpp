@@ -41,25 +41,21 @@ namespace Config {
 	extern std::unordered_map<std::string_view, int> ints;
 	extern std::unordered_map<std::string_view, int> intsTmp;
 
-	const vector<string> valid_graph_symbols = { "braille", "block", "tty" };
-	const vector<string> valid_graph_symbols_def = { "default", "braille", "block", "tty" };
-	const vector<string> valid_boxes = {
-		"cpu", "mem", "net", "proc"
-#ifdef GPU_SUPPORT
-		,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
-#endif
-		};
-	const vector<string> temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
+	extern const vector<string> valid_graph_symbols;
+	extern const vector<string> valid_graph_symbols_def;
+	extern const vector<string> valid_boxes;
+
+	extern const vector<string> temp_scales;
 #ifdef __linux__
-	const vector<string> freq_modes = { "first", "range", "lowest", "highest", "average" };
+	extern const vector<string> freq_modes;
 #endif
 #ifdef GPU_SUPPORT
-	const vector<string> show_gpu_values = { "Auto", "On", "Off" };
+	extern const  vector<string> show_gpu_values;
 #endif
-    const vector<string> base_10_bitrate_values = { "Auto", "True", "False" };
+    extern const vector<string> base_10_bitrate_values;
 	extern vector<string> current_boxes;
 	extern vector<string> preset_list;
-	const vector<string> disable_preset_options = { "Off", "Default", "Custom", "All" };
+	extern const vector<string> disable_preset_options;
 	extern vector<string> available_batteries;
 	extern std::optional<int> current_preset;
 

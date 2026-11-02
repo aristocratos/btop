@@ -47,6 +47,24 @@ namespace rng = std::ranges;
 using namespace std::literals;
 using namespace Tools;
 
+const vector<string> Config::valid_graph_symbols = { "braille", "block", "tty" };
+const vector<string> Config::valid_graph_symbols_def = { "default", "braille", "block", "tty" };
+const vector<string> Config::valid_boxes = {
+	"cpu", "mem", "net", "proc"
+#ifdef GPU_SUPPORT
+	,"gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5"
+#endif
+};
+const vector<string> Config::temp_scales = { "celsius", "fahrenheit", "kelvin", "rankine" };
+#ifdef __linux__
+const vector<string> Config::freq_modes = { "first", "range", "lowest", "highest", "average" };
+#endif
+#ifdef GPU_SUPPORT
+const vector<string> Config::show_gpu_values = { "Auto", "On", "Off" };
+#endif
+const vector<string> Config::base_10_bitrate_values = { "Auto", "True", "False" };
+const vector<string> Config::disable_preset_options = { "Off", "Default", "Custom", "All" };
+
 //* Functions and variables for reading and writing the btop config file
 namespace Config {
 
@@ -181,7 +199,7 @@ namespace Config {
 		{"custom_cpu_name", 	"#* Custom cpu model name, empty string to disable."},
 
 		{"disks_filter", 		"#* Optional filter for shown disks, should be full path of a mountpoint, separate multiple values with whitespace \" \".\n"
-									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disk_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
+									"#* Only disks matching the filter will be shown. Prepend exclude= to only show disks not matching the filter. Examples: disks_filter=\"/boot /home/user\", disks_filter=\"exclude=/boot /home/user\""},
 
 		{"mem_graphs", 			"#* Show graphs instead of meters for memory values."},
 

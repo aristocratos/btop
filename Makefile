@@ -108,6 +108,9 @@ endif
 
 ifeq ($(GPU_SUPPORT),true)
 	override ADDFLAGS += -DGPU_SUPPORT
+	ifeq ($(PLATFORM_LC),linux)
+		override LDFLAGS += -ldl
+	endif
 endif
 
 #? Compiler and Linker

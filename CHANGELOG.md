@@ -1,3 +1,22 @@
+## v1.4.8
+
+References | Description | Author(s)
+--- | --- | ---
+#1390 | themes: load/save by name if possible | @katexochen
+#1649 | Fix atomic issues and data races in btop | @ItsMeSamey
+#1641 | fix: gate Apple Silicon GPU support to unbreak intel Mac builds | @NLagwal
+#1661 | AMD APU/iGPU sysfs backend for GPU monitoring | @mgajda
+#1663 | fix: use ISO 8601 format for log timestamps | @jsquyres
+#1662 | Fix possible thread deadlocks and power-event-based false stall detections | @jsquyres
+#1674 | fix: defer SIGWINCH resize handling | @jsquyres
+#1652 | Fix btop with amd gpu on rocm 7 as in Ubuntu 26.04 | @chiluk
+#1658 | Fix: Macos SIGABRT Crash during SMB TimeMachine Backups | @DerPlayer2001
+#1690 | fix: avoid macOS swap disk crash | @jsquyres
+#1709 | Fix -/+ key binding | @ebignumber
+#1805 | fix: ignore missing config dir if config file is present | @imnotpoz
+#1751 | fix: make background consistent in the Terminal is too small dialogue | @mint-tube
+--- | Maintenance | @deckstose
+
 ## v1.4.7
 
 References | Description | Author(s)

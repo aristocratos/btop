@@ -21,7 +21,7 @@ namespace Logger {
 		DEBUG = 4,
 	};
 
-	const std::vector<std::string> log_levels { "DISABLED", "ERROR", "WARNING", "INFO", "DEBUG" };
+	extern const std::vector<std::string> log_levels;
 
 	namespace detail {
 		auto is_enabled(Level level) -> bool;

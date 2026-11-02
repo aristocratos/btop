@@ -1,0 +1,257 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request_number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  STATIC: "true"
+  STRIP: "true"
+  VERBOSE: "true"
+
+jobs:
+  changes:
+    name: Detect file changes
+    runs-on: ubuntu-26.04
+    outputs:
+      shared: ${{ steps.filter.outputs.make }}
+      freebsd: ${{ steps.filter.outputs.freebsd }}
+      linux: ${{ steps.filter.outputs.linux }}
+      netbsd: ${{ steps.filter.outputs.netbsd }}
+      openbsd: ${{ steps.filter.outputs.openbsd }}
+      osx: ${{ steps.filter.outputs.osx }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters.yml
+
+  linux:
+    name: Linux (${{ matrix.toolchain }})
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.toolchain }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        toolchain:
+          - aarch64-unknown-linux-musl
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+          - armv7-unknown-linux-musleabi
+          - armv7-unknown-linux-musleabihf
+          - i586-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - m68k-unknown-linux-musl
+          - mips-unknown-linux-musl
+          - mips-unknown-linux-muslsf
+          - mips64-unknown-linux-musl
+          - mips64el-unknown-linux-musl
+          - mipsel-unknown-linux-musl
+          - mipsel-unknown-linux-muslsf
+          - powerpc-unknown-linux-musl
+          - powerpc64-unknown-linux-musl
+          - powerpc64le-unknown-linux-musl
+          - powerpcle-unknown-linux-musl
+          - riscv32-unknown-linux-musl
+          - riscv64-unknown-linux-musl
+          - s390x-ibm-linux-musl
+          - x86_64-unknown-linux-musl
+    env:
+      CXX: /opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++
+      RELEASE: "20260823"
+      TOOLCHAIN: ${{ matrix.toolchain }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        run: |
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/${RELEASE}/${TOOLCHAIN}.tar.xz.sha256
+          echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
+          mkdir -p /opt/x-tools/
+          tar -xf /tmp/${TOOLCHAIN}.tar.xz -C /opt/x-tools
+
+      - name: Build
+        run: make
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  linux-gpu:
+    name: Linux GPU
+    runs-on: ubuntu-26.04
+    container: alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    env:
+      CXX: g++
+      LDFLAGS: -fuse-ld=mold
+      STATIC: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: apk add --update --no-cache g++ linux-headers make mold
+
+      - name: Build
+        run: make GPU_SUPPORT=true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  osx:
+    name: macOS 26
+    runs-on: macos-26
+    needs: changes
+    if: needs.changes.outputs.osx == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install gcc
+        run: |
+          brew update --quiet
+          brew install --force --overwrite --quiet gcc@16
+
+      - name: Build
+        run: |
+          export CXX="$(brew --prefix gcc@16)/bin/g++-16"
+          make
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.freebsd == 'true' || needs.changes.outputs.shared == 'true'
+    strategy:
+      matrix:
+        include:
+          - vendor: llvm
+            version: 23
+          - vendor: gcc
+            version: 16
+    env:
+      COMPILER: ${{ matrix.vendor }}${{ matrix.version }}
+      VENDOR: ${{ matrix.vendor }}
+      VERSION: ${{ matrix.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        with:
+          arch: x86_64
+          release: "15.1"
+          envs: "COMPILER VENDOR VERSION STATIC STRIP"
+          run: |
+            pkg install -y coreutils gmake ${COMPILER}
+            if [ "${VENDOR}" == "llvm" ]; then
+              export CXX="clang++${VERSION}"
+              export LDFLAGS="-fuse-ld=lld"
+            else
+              export CXX="g++${VERSION}"
+              export LDFLAGS="-Wl,-rpath=/usr/local/lib/${COMPILER}"
+            fi
+            gmake
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.openbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1.4.9
+        with:
+          arch: x86_64
+          release: "7.9"
+          envs: "STATIC STRIP"
+          run: |
+            pkg_add coreutils gmake
+            gmake
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-26.04
+    needs: changes
+    if: needs.changes.outputs.netbsd == 'true' || needs.changes.outputs.shared == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enter VM
+        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92 # v1.5.2
+        with:
+          arch: x86_64
+          release: "11.0"
+          envs: "STATIC STRIP"
+          run: |
+            pkg_add -u pkgin
+            pkgin -y install coreutils gcc14 gmake
+            export CXX="/usr/pkg/gcc14/bin/g++"
+            gmake
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: btop
+          path: bin/btop
+          if-no-files-found: error

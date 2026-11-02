@@ -249,7 +249,7 @@ bool set_priority(pid_t pid, int priority) {
 				filter_found++;
 				p.filtered = true;
 			}
-			else if (Config::getB("proc_aggregate") and p.state != 'X') {
+			else if (not no_update and Config::getB("proc_aggregate") and p.state != 'X') {
 				cur_proc.cpu_p += p.cpu_p;
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;
@@ -329,3 +329,32 @@ auto detect_container() -> std::optional<std::string> {
 
     return std::nullopt;
 }
+
+#if defined(GPU_SUPPORT)
+const array<string, 2> Gpu::mem_names { "used", "free" };
+#endif
+
+const vector<string> Proc::sort_vector = {
+	"pid",
+	"name",
+	"command",
+	"threads",
+	"user",
+	"memory",
+	"cpu direct",
+	"cpu lazy",
+};
+
+const std::unordered_map<char, string> Proc::proc_states = {
+	{'R', "Running"},
+	{'S', "Sleeping"},
+	{'D', "Waiting"},
+	{'Z', "Zombie"},
+	{'T', "Stopped"},
+	{'t', "Tracing"},
+	{'X', "Dead"},
+	{'x', "Dead"},
+	{'K', "Wakekill"},
+	{'W', "Unknown"},
+	{'P', "Parked"}
+};

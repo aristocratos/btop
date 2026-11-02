@@ -1,0 +1,20 @@
+shared: &shared
+  - "include/**"
+  - "src/*.cpp"
+  - "src/*.hpp"
+  - "tests/**"
+cmake:
+  - ".github/workflows/cmake.yml"
+  - "cmake/**"
+  - "CMakeLists.txt"
+  - *shared
+make:
+  - ".github/workflows/ci.yml"
+  - "Makefile"
+  - *shared
+
+freebsd: "src/freebsd/**"
+linux: "src/linux/**"
+netbsd: "src/netbsd/**"
+openbsd: "src/openbsd/**"
+osx: "src/osx/**"

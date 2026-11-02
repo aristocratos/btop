@@ -94,16 +94,15 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.7";
+	const string Version = "1.4.8";
 
 	int coreCount;
 	string overlay;
 	string clock;
 
-	string bg_black = "\x1b[0;40m";
 	string fg_white = "\x1b[1;97m";
 	string fg_green = "\x1b[1;92m";
-	string fg_red = "\x1b[0;91m";
+	string fg_red = "\x1b[1;91m";
 
 	uid_t real_uid, set_uid;
 
@@ -160,12 +159,12 @@ void term_resize(bool force) {
 		sleep_ms(100);
 		if (Term::width < minWidth or Term::height < minHeight) {
 			int width = Term::width, height = Term::height;
-			cout << fmt::format("{clear}{bg_black}{fg_white}"
+			cout << fmt::format("{clear}{fg_white}"
 					"{mv1}Terminal size too small:"
 					"{mv2} Width = {fg_width}{width} {fg_white}Height = {fg_height}{height}"
 					"{mv3}{fg_white}Needed for current config:"
 					"{mv4}Width = {minWidth} Height = {minHeight}",
-					"clear"_a = Term::clear, "bg_black"_a = Global::bg_black, "fg_white"_a = Global::fg_white,
+					"clear"_a = Term::clear, "fg_white"_a = Global::fg_white,
 					"mv1"_a = Mv::to((height / 2) - 2, (width / 2) - 11),
 					"mv2"_a = Mv::to((height / 2) - 1, (width / 2) - 10),
 						"fg_width"_a = (width < minWidth ? Global::fg_red : Global::fg_green),
@@ -862,13 +861,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	{
 		const auto config_dir = Config::get_config_dir();
-		if (config_dir.has_value()) {
+
+		if (cli.config_file.has_value()) {
+			Config::conf_file = cli.config_file.value();
+		} else if (config_dir.has_value()) {
 			Config::conf_dir = config_dir.value();
-			if (cli.config_file.has_value()) {
-				Config::conf_file = cli.config_file.value();
-			} else {
-				Config::conf_file = Config::conf_dir / "btop.conf";
-			}
+			Config::conf_file = Config::conf_dir / "btop.conf";
 
 			auto log_file = Config::get_log_file();
 			if (log_file.has_value()) {
