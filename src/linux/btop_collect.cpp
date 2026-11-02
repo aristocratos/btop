@@ -2441,6 +2441,9 @@ namespace Mem {
 				}
 			}
 		}
+		//? Use the same source for zram usage, percentages and compression stats
+		if (mem.stats.at("zram_original") > 0)
+			mem.stats.at("zram_used") = mem.stats.at("zram_original");
 		mem.stats.at("zram_free") = mem.stats.at("zram_total") - mem.stats.at("zram_used");
 		mem.stats.at("disk_swap_free") = mem.stats.at("disk_swap_total") - mem.stats.at("disk_swap_used");
 		has_zram = mem.stats.at("zram_total") > 0;
