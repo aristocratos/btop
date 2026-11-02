@@ -37,7 +37,7 @@ using namespace Tools;
 namespace fs = std::filesystem;
 
 string Term::fg, Term::bg;
-string Fx::reset = reset_base;
+string Fx::reset = concat(Fx::reset_base);
 
 namespace Theme {
 
@@ -174,7 +174,7 @@ namespace Theme {
 					return "";
 				}
 			}
-			string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+			string pre = concat(Fx::e, (depth == "fg" ? "38" : "48"), ";", (t_to_256 ? "5;" : "2;"));
 
 			if (hexa.size() == 2) {
 				int h_int = stoi(hexa, nullptr, 16);
@@ -205,12 +205,12 @@ namespace Theme {
 	}
 
 	string dec_to_color(int r, int g, int b, bool t_to_256, const string& depth) {
-		string pre = Fx::e + (depth == "fg" ? "38" : "48") + ";" + (t_to_256 ? "5;" : "2;");
+		string pre = concat(Fx::e, (depth == "fg" ? "38" : "48"), ";", (t_to_256 ? "5;" : "2;"));
 		r = std::clamp(r, 0, 255);
 		g = std::clamp(g, 0, 255);
 		b = std::clamp(b, 0, 255);
-		if (t_to_256) return pre + to_string(truecolor_to_256(r, g, b)) + "m";
-		else return pre + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m";
+		if (t_to_256) return concat(pre, to_string(truecolor_to_256(r, g, b)), "m");
+		else return concat(pre, to_string(r), ";", to_string(g), ";", to_string(b), "m");
 	}
 
 	namespace {
@@ -467,7 +467,7 @@ namespace Theme {
 		}
 		Term::fg = colors.at("main_fg");
 		Term::bg = colors.at("main_bg");
-		Fx::reset = Fx::reset_base + Term::fg + Term::bg;
+		Fx::reset = concat(Fx::reset_base, Term::fg, Term::bg);
 	}
 
 }
