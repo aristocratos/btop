@@ -1256,9 +1256,10 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 			//? Try possible library names for libnvidia-ml.so
+			//? The runtime SONAME goes first, the unversioned name is usually only a development symlink
 			const array libNvAlts = {
-				"libnvidia-ml.so",
 				"libnvidia-ml.so.1",
+				"libnvidia-ml.so",
 			};
 
 			auto load_nvml_sym = [&](const char sym_name[]) {
@@ -1270,8 +1271,9 @@ namespace Gpu {
 				} else return sym;
 			};
 
-			auto load_nvml_syms = [&]() {
-            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+			//? With reset = true, every function pointer is set back to nullptr instead of being loaded
+			auto load_nvml_syms = [&](bool reset) {
+            #define LOAD_SYM(NAME)  if (reset) NAME = nullptr; else if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
 
 		    LOAD_SYM(nvmlErrorString);
 		    LOAD_SYM(nvmlInit);
@@ -1295,7 +1297,7 @@ namespace Gpu {
 				return true;
 			};
 
-			//? A library that loads can still fail to initialize, e.g. on WSL2 where libnvidia-ml.so
+			//? A library that loads can still fail to initialize, e.g. on WSL2 where a candidate name
 			//? can resolve to the native Linux driver library instead of the WSL one in /usr/lib/wsl/lib,
 			//? so unload it and try the next candidate
 			nvmlReturn_t result = NVML_SUCCESS;
@@ -1306,12 +1308,14 @@ namespace Gpu {
 					if (auto err = dlerror(); err != nullptr) load_error = err;
 					continue;
 				}
-				if (load_nvml_syms()) {
+				if (load_nvml_syms(false)) {
 					result = nvmlInit();
 					if (result == NVML_SUCCESS) break;
 					init_error = nvmlErrorString(result);
 					Logger::debug("NVML: Failed to initialize {}: {}", l, init_error);
 				}
+				//? Don't leave any function pointer pointing into the library that is unloaded below
+				load_nvml_syms(true);
 				dlclose(nvml_dl_handle);
 				nvml_dl_handle = nullptr;
 			}
