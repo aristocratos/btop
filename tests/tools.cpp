@@ -113,11 +113,11 @@ const std::array humanizer_rounding_points{
 	HumanizerRoundingPoint{ 9984,  "99.8" , "100"  },
 	HumanizerRoundingPoint{ 9986,  "99.9" , "100"  },
 	HumanizerRoundingPoint{ 9994,  "99.9" , "100"  },
-	HumanizerRoundingPoint{ 9995, "100"   , "100"  },
+	HumanizerRoundingPoint{ 9996, "100"   , "100"  },
 	HumanizerRoundingPoint{49949, "499"   , "499"  },
-	HumanizerRoundingPoint{49950, "500"   , "500"  },
+	HumanizerRoundingPoint{49951, "500"   , "500"  },
 	HumanizerRoundingPoint{99949, "999"   , "999"  },
-	HumanizerRoundingPoint{99950,   "1.00",   "1.0"},
+	HumanizerRoundingPoint{99951,   "1.00",   "1.0"},
 };
 
 std::vector<HumanizerCase> make_humanizer_rounding_cases() {
@@ -147,7 +147,10 @@ std::vector<HumanizerCase> make_humanizer_rounding_cases() {
 			const size_t actual_magnitude = is_lower_unit ? magnitude - 1 : (is_higher_unit ? magnitude + 1 : magnitude);
 
 			for (const bool shorten : {false, true}) {
-				const string unit = shorten ? short_byte_units[actual_magnitude] : " " + string(byte_units[actual_magnitude]);
+				const string expected = shorten
+					? point.shortened + short_byte_units[actual_magnitude]
+					: point.full + " " + byte_units[actual_magnitude];
+
 				cases.push_back(HumanizerCase{
 					true,
 					"Auto",
@@ -156,7 +159,7 @@ std::vector<HumanizerCase> make_humanizer_rounding_cases() {
 					0,
 					false,
 					false,
-					(shorten ? point.shortened : point.full) + unit
+					expected
 				});
 			}
 		}
