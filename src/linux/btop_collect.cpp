@@ -1117,15 +1117,15 @@ namespace Cpu {
 
 	auto get_core_types() -> vector<CoreType> {
 		
-		//? AMD Zen 5 / Zen 5c hybrid cpus expose ranking in sysfs: cpuN/cpufreq/amd_pstate_prefcore_ranking
+		//? AMD Zen 5 / Zen 5c hybrid cpus expose ranking in sysfs: cpuN/cpufreq/amd_pstate_highest_perf
 		//? Detect by finding the largest gap between unique ranking values
 		Logger::debug("AMD detection: starting");
 		const fs::path amd_root = "/sys/devices/system/cpu";
 		std::unordered_map<int, int> rankings;
 		Logger::debug("AMD: scanning for ranking files...");
 		for (int i = 0; i < Shared::coreCount; ++i) {
-			fs::path cpu_dir = amd_root / "cpu"; cpu_dir += to_string(i);
-			fs::path rank_file = cpu_dir / "cpufreq/amd_pstate_prefcore_ranking";
+			fs::path cpu_dir = fmt::format("{}/cpu{}", amd_root.string(), i);
+			fs::path rank_file = cpu_dir / "cpufreq/amd_pstate_highest_perf";
 			Logger::debug("AMD: checking cpu{} (file={}))", i, rank_file);
 			if (not fs::exists(rank_file)) {
 				Logger::debug("AMD: cpu{} missing rank file, skipping", i);
