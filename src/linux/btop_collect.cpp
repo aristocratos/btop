@@ -19,6 +19,7 @@ tab-size = 4
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -132,7 +133,7 @@ struct join_thread
 	}
 
 	void join() {
-		t.join();
+		if (t.joinable()) t.join();
 	}
 
 };
@@ -180,6 +181,8 @@ namespace Gpu {
 		//? NVML defines, structs & typedefs
 		#define NVML_DEVICE_NAME_BUFFER_SIZE        64
 		#define NVML_SUCCESS                         0
+		#define NVML_ERROR_NOT_SUPPORTED             3
+		#define NVML_MAX_PROBED_DEVICES              32
 		#define NVML_TEMPERATURE_THRESHOLD_SHUTDOWN  0
 		#define NVML_CLOCK_GRAPHICS                  0
 		#define NVML_CLOCK_MEM                       2
@@ -225,6 +228,7 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		vector<nvmlDevice_t> devices;
 		unsigned int device_count = 0;
+		vector<bool> shared_mem; //? True for devices without dedicated VRAM (UMA platforms like GB10/DGX Spark)
 	}
 
 	//? AMD data collection
@@ -1256,9 +1260,11 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 			//? Try possible library names for libnvidia-ml.so
+			//? The runtime SONAME (libnvidia-ml.so.1) comes first: the unversioned .so is a
+			//? development symlink that can point at a library unusable on the system (see nvtop)
 			const array libNvAlts = {
-				"libnvidia-ml.so",
 				"libnvidia-ml.so.1",
+				"libnvidia-ml.so",
 			};
 
 			for (const auto& l : libNvAlts) {
@@ -1281,27 +1287,31 @@ namespace Gpu {
 				} else return sym;
 			};
 
-            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+            #define LOAD_REQUIRED(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+            //? Some NVML builds (Tegra/GB10 SoC drivers) don't export every function,
+            //? treat those as optional and disable the corresponding features instead of failing init
+            #define LOAD_OPTIONAL(NAME)  NAME = (decltype(NAME))load_nvml_sym(#NAME)
 
-		    LOAD_SYM(nvmlErrorString);
-		    LOAD_SYM(nvmlInit);
-		    LOAD_SYM(nvmlShutdown);
-		    LOAD_SYM(nvmlDeviceGetCount);
-		    LOAD_SYM(nvmlDeviceGetHandleByIndex);
-		    LOAD_SYM(nvmlDeviceGetName);
-		    LOAD_SYM(nvmlDeviceGetPowerManagementLimit);
-		    LOAD_SYM(nvmlDeviceGetTemperatureThreshold);
-		    LOAD_SYM(nvmlDeviceGetUtilizationRates);
-		    LOAD_SYM(nvmlDeviceGetClockInfo);
-		    LOAD_SYM(nvmlDeviceGetPowerUsage);
-		    LOAD_SYM(nvmlDeviceGetPowerState);
-		    LOAD_SYM(nvmlDeviceGetTemperature);
-		    LOAD_SYM(nvmlDeviceGetMemoryInfo);
-		    LOAD_SYM(nvmlDeviceGetPcieThroughput);
-			LOAD_SYM(nvmlDeviceGetEncoderUtilization);
-			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
+		    LOAD_REQUIRED(nvmlErrorString);
+		    LOAD_REQUIRED(nvmlInit);
+		    LOAD_REQUIRED(nvmlShutdown);
+		    LOAD_REQUIRED(nvmlDeviceGetHandleByIndex);
+		    LOAD_REQUIRED(nvmlDeviceGetName);
+		    LOAD_OPTIONAL(nvmlDeviceGetCount);
+		    LOAD_OPTIONAL(nvmlDeviceGetPowerManagementLimit);
+		    LOAD_OPTIONAL(nvmlDeviceGetTemperatureThreshold);
+		    LOAD_OPTIONAL(nvmlDeviceGetUtilizationRates);
+		    LOAD_OPTIONAL(nvmlDeviceGetClockInfo);
+		    LOAD_OPTIONAL(nvmlDeviceGetPowerUsage);
+		    LOAD_OPTIONAL(nvmlDeviceGetPowerState);
+		    LOAD_OPTIONAL(nvmlDeviceGetTemperature);
+		    LOAD_OPTIONAL(nvmlDeviceGetMemoryInfo);
+		    LOAD_OPTIONAL(nvmlDeviceGetPcieThroughput);
+		    LOAD_OPTIONAL(nvmlDeviceGetEncoderUtilization);
+		    LOAD_OPTIONAL(nvmlDeviceGetDecoderUtilization);
 
-            #undef LOAD_SYM
+            #undef LOAD_REQUIRED
+            #undef LOAD_OPTIONAL
 
 			//? Function calls
 			nvmlReturn_t result = nvmlInit();
@@ -1311,16 +1321,29 @@ namespace Gpu {
     		}
 
 			//? Device count
-			result = nvmlDeviceGetCount(&device_count);
-    		if (result != NVML_SUCCESS) {
-    			Logger::warning("NVML: Failed to get device count: {}", nvmlErrorString(result));
-    			return false;
-    		}
+			//? nvmlDeviceGetCount is unsupported on some Tegra/SoC platforms (and might not
+			//? even be exported), fall back to probing for device handles by index (as done by nvtop)
+			if (nvmlDeviceGetCount != nullptr) {
+				result = nvmlDeviceGetCount(&device_count);
+				if (result != NVML_SUCCESS) {
+					Logger::debug("NVML: Failed to get device count: {}, probing for devices...", nvmlErrorString(result));
+					device_count = 0;
+				}
+			} else {
+				Logger::debug("NVML: nvmlDeviceGetCount not available, probing for devices...");
+			}
+
+			if (device_count == 0) {
+				nvmlDevice_t probe_handle;
+				while (device_count < NVML_MAX_PROBED_DEVICES and nvmlDeviceGetHandleByIndex(device_count, &probe_handle) == NVML_SUCCESS)
+					++device_count;
+			}
 
 			if (device_count > 0) {
 				devices.resize(device_count);
 				gpus.resize(device_count);
 				gpu_names.resize(device_count);
+				shared_mem.assign(device_count, false);
 
 				initialized = true;
 
@@ -1342,6 +1365,28 @@ namespace Gpu {
 			return !initialized;
 		}
 
+		//? On UMA platforms (e.g. GB10 in DGX Spark/Ascent GX10) the GPU has no dedicated framebuffer
+		//? and shares system memory with the host, report system memory stats instead (as done by nvtop)
+		static bool get_unified_mem(long long& total, long long& used) {
+			std::ifstream meminfo("/proc/meminfo");
+			if (not meminfo.is_open()) return false;
+
+			long long total_kb = -1, available_kb = -1;
+			char line[256];
+			while (meminfo.getline(line, sizeof(line))) {
+				long long value;
+				if (std::sscanf(line, "MemTotal: %lld kB", &value) == 1)
+					total_kb = value;
+				else if (std::sscanf(line, "MemAvailable: %lld kB", &value) == 1)
+					available_kb = value;
+			}
+
+			if (total_kb <= 0 or available_kb < 0 or available_kb > total_kb) return false;
+			total = total_kb * 1024;
+			used = (total_kb - available_kb) * 1024;
+			return true;
+		}
+
 		template <bool is_init> // collect<1> is called in Nvml::init(), and populates gpus.supported_functions
 		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count
 			if (!initialized) return false;
@@ -1352,11 +1397,36 @@ namespace Gpu {
 			// DebugTimer nvTotalTimer("Nvidia Total");
 			for (unsigned int i = 0; i < device_count; ++i) {
 				if constexpr(is_init) {
+					//? Disable features not provided by this NVML implementation (e.g. Tegra/GB10 SoC drivers)
+					auto& supported = gpus_slice[i].supported_functions;
+					if (nvmlDeviceGetUtilizationRates == nullptr) { supported.gpu_utilization = false; supported.mem_utilization = false; }
+					if (nvmlDeviceGetClockInfo == nullptr) { supported.gpu_clock = false; supported.mem_clock = false; }
+					if (nvmlDeviceGetPowerUsage == nullptr) supported.pwr_usage = false;
+					if (nvmlDeviceGetPowerState == nullptr) supported.pwr_state = false;
+					if (nvmlDeviceGetTemperature == nullptr) supported.temp_info = false;
+					if (nvmlDeviceGetPcieThroughput == nullptr) supported.pcie_txrx = false;
+					if (nvmlDeviceGetEncoderUtilization == nullptr) supported.encoder_utilization = false;
+					if (nvmlDeviceGetDecoderUtilization == nullptr) supported.decoder_utilization = false;
+					if (nvmlDeviceGetMemoryInfo == nullptr) shared_mem[i] = true;
+				}
+
+				if constexpr(is_init) {
 					//? Device Handle
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
     					Logger::warning("NVML: Failed to get device handle: {}", nvmlErrorString(result));
-						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
+						gpus[i].supported_functions.gpu_utilization = false;
+						gpus[i].supported_functions.mem_utilization = false;
+						gpus[i].supported_functions.gpu_clock = false;
+						gpus[i].supported_functions.mem_clock = false;
+						gpus[i].supported_functions.pwr_usage = false;
+						gpus[i].supported_functions.pwr_state = false;
+						gpus[i].supported_functions.temp_info = false;
+						gpus[i].supported_functions.mem_total = false;
+						gpus[i].supported_functions.mem_used = false;
+						gpus[i].supported_functions.pcie_txrx = false;
+						gpus[i].supported_functions.encoder_utilization = false;
+						gpus[i].supported_functions.decoder_utilization = false;
     					continue;
         			}
 
@@ -1375,20 +1445,28 @@ namespace Gpu {
 
     				//? Power usage
     				unsigned int max_power;
-    				result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
-    				if (result != NVML_SUCCESS)
-						Logger::warning("NVML: Failed to get maximum GPU power draw, defaulting to 225W: {}", nvmlErrorString(result));
+    				if (nvmlDeviceGetPowerManagementLimit == nullptr)
+						Logger::debug("NVML: nvmlDeviceGetPowerManagementLimit not available, defaulting to 225W");
 					else {
-						gpus[i].pwr_max_usage = max_power; // RSMI reports power in microWatts
-						gpu_pwr_total_max += max_power;
+						result = nvmlDeviceGetPowerManagementLimit(devices[i], &max_power);
+						if (result != NVML_SUCCESS)
+							Logger::warning("NVML: Failed to get maximum GPU power draw, defaulting to 225W: {}", nvmlErrorString(result));
+						else {
+							gpus[i].pwr_max_usage = max_power; // RSMI reports power in microWatts
+							gpu_pwr_total_max += max_power;
+						}
 					}
 
 					//? Get temp_max
 					unsigned int temp_max;
-    				result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
-        			if (result != NVML_SUCCESS)
-    					Logger::warning("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: {}", nvmlErrorString(result));
-    				else gpus[i].temp_max = (long long)temp_max;
+					if (nvmlDeviceGetTemperatureThreshold == nullptr)
+						Logger::debug("NVML: nvmlDeviceGetTemperatureThreshold not available, defaulting to 110°C");
+					else {
+						result = nvmlDeviceGetTemperatureThreshold(devices[i], NVML_TEMPERATURE_THRESHOLD_SHUTDOWN, &temp_max);
+						if (result != NVML_SUCCESS)
+							Logger::warning("NVML: Failed to get maximum GPU temperature, defaulting to 110°C: {}", nvmlErrorString(result));
+						else gpus[i].temp_max = (long long)temp_max;
+					}
 				}
 
 				//? PCIe link speeds, the data collection takes >=20ms each call so they run on separate threads
@@ -1490,19 +1568,47 @@ namespace Gpu {
 				// nvTimer.stop_rename_reset("Nv mem");
 				//? Memory info
 				if (gpus_slice[i].supported_functions.mem_total) {
-					nvmlMemory_t memory;
-					result = nvmlDeviceGetMemoryInfo(devices[i], &memory);
-    				if (result != NVML_SUCCESS) {
-						Logger::warning("NVML: Failed to get VRAM info: {}", nvmlErrorString(result));
-						if constexpr(is_init) gpus_slice[i].supported_functions.mem_total = false;
-						if constexpr(is_init) gpus_slice[i].supported_functions.mem_used = false;
-					} else {
-						gpus_slice[i].mem_total = memory.total;
-						gpus_slice[i].mem_used = memory.used;
-						//gpu.mem_free = memory.free;
+					auto set_mem = [&](long long total, long long used) {
+						gpus_slice[i].mem_total = total;
+						gpus_slice[i].mem_used = used;
 
-						auto used_percent = (long long)round((double)memory.used * 100.0 / (double)memory.total);
+						auto used_percent = (long long)round((double)used * 100.0 / (double)total);
 						gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back(used_percent);
+					};
+					auto disable_mem = [&]() {
+						if constexpr(is_init) {
+							gpus_slice[i].supported_functions.mem_total = false;
+							gpus_slice[i].supported_functions.mem_used = false;
+						}
+					};
+
+					if (shared_mem[i]) {
+						//? UMA platform (e.g. GB10/DGX Spark): GPU shares system memory with the host
+						long long total, used;
+						if (get_unified_mem(total, used))
+							set_mem(total, used);
+						else {
+							Logger::warning("NVML: Failed to read unified memory info from /proc/meminfo");
+							disable_mem();
+						}
+					} else {
+						nvmlMemory_t memory;
+						result = nvmlDeviceGetMemoryInfo(devices[i], &memory);
+						if (result == NVML_ERROR_NOT_SUPPORTED or (result == NVML_SUCCESS and memory.total == 0)) {
+							//? NVML reports no dedicated framebuffer on UMA platforms (e.g. GB10), as noted by nvtop
+							Logger::info("NVML: No dedicated VRAM reported, falling back to unified system memory stats");
+							shared_mem[i] = true;
+							long long total, used;
+							if (get_unified_mem(total, used))
+								set_mem(total, used);
+							else {
+								Logger::warning("NVML: Failed to read unified memory info from /proc/meminfo");
+								disable_mem();
+							}
+						} else if (result != NVML_SUCCESS) {
+							Logger::warning("NVML: Failed to get VRAM info: {}", nvmlErrorString(result));
+							disable_mem();
+						} else set_mem(memory.total, memory.used);
 					}
 				}
 
