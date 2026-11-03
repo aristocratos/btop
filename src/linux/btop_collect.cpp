@@ -259,6 +259,9 @@ namespace Gpu {
 		rsmi_status_t (*rsmi_version_get)(rsmi_version_t*);
 		rsmi_status_t (*rsmi_num_monitor_devices)(uint32_t*);
 		rsmi_status_t (*rsmi_dev_name_get)(uint32_t, char*, size_t);
+		rsmi_status_t (*rsmi_dev_market_name_get)(uint32_t, char*, uint32_t);
+		rsmi_status_t (*rsmi_dev_id_get)(uint32_t, uint16_t*);
+		rsmi_status_t (*rsmi_dev_revision_get)(uint32_t, uint16_t*);
 		rsmi_status_t (*rsmi_dev_power_cap_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_temp_metric_get)(uint32_t, uint32_t, rsmi_temperature_metric_t, int64_t*);
 		rsmi_status_t (*rsmi_dev_busy_percent_get)(uint32_t, uint32_t*);
@@ -304,6 +307,7 @@ namespace Gpu {
 			std::filesystem::path hwmon;
 			std::filesystem::path power;            //? empty if no power sensor
 			uint32_t pci_device_id;
+			uint32_t pci_revision_id;
 			bool has_temp;
 			bool has_freq;
 			bool has_busy;
@@ -1556,6 +1560,69 @@ namespace Gpu {
 		}
     }
 
+	//? Look up AMD GPU marketing name from amdgpu.ids using device_id and revision_id
+	static string get_amdgpu_name(uint32_t device_id, uint32_t revision_id) {
+		auto trim_sv = [](string_view s) -> string_view {
+			size_t first = s.find_first_not_of(" \t\r\n");
+			if (first == string_view::npos) return {};
+			size_t last = s.find_last_not_of(" \t\r\n");
+			return s.substr(first, last - first + 1);
+		};
+
+		const std::array<std::filesystem::path, 4> ids_paths = {
+			"/usr/share/libdrm/amdgpu.ids",
+			"/usr/local/share/libdrm/amdgpu.ids",
+			"/opt/rocm/current/lib/rocm_sysdeps/share/libdrm/amdgpu.ids",
+			"/opt/rocm/lib/rocm_sysdeps/share/libdrm/amdgpu.ids"
+		};
+
+		for (const auto& path : ids_paths) {
+			std::error_code ec;
+			if (not std::filesystem::exists(path, ec)) continue;
+
+			std::ifstream file(path);
+			if (not file.is_open()) continue;
+
+			string line;
+			string fallback_name;
+
+			while (std::getline(file, line)) {
+				string_view sv = trim_sv(line);
+				if (sv.empty() or sv.front() == '#') continue;
+
+				size_t c1 = sv.find(',');
+				if (c1 == string_view::npos) continue;
+				size_t c2 = sv.find(',', c1 + 1);
+				if (c2 == string_view::npos) continue;
+
+				string dev_str(trim_sv(sv.substr(0, c1)));
+				string rev_str(trim_sv(sv.substr(c1 + 1, c2 - c1 - 1)));
+				string prod_name(trim_sv(sv.substr(c2 + 1)));
+
+				try {
+					uint32_t d_id = (uint32_t)std::stoul(dev_str, nullptr, 16);
+					if (d_id == device_id) {
+						if (rev_str.empty()) {
+							if (fallback_name.empty()) fallback_name = prod_name;
+						} else {
+							uint32_t r_id = (uint32_t)std::stoul(rev_str, nullptr, 16);
+							if (r_id == revision_id) {
+								return prod_name;
+							}
+							if (fallback_name.empty()) fallback_name = prod_name;
+						}
+					}
+				} catch (...) {
+					continue;
+				}
+			}
+
+			if (not fallback_name.empty()) return fallback_name;
+		}
+
+		return {};
+	}
+
 	//? AMD
 	namespace Rsmi {
 		bool init() {
@@ -1602,6 +1669,9 @@ namespace Gpu {
 			LOAD_SYM(rsmi_version_get);
 		    LOAD_SYM(rsmi_num_monitor_devices);
 		    LOAD_SYM(rsmi_dev_name_get);
+		    rsmi_dev_market_name_get = (decltype(rsmi_dev_market_name_get))load_rsmi_sym("rsmi_dev_market_name_get");
+		    rsmi_dev_id_get = (decltype(rsmi_dev_id_get))load_rsmi_sym("rsmi_dev_id_get");
+		    rsmi_dev_revision_get = (decltype(rsmi_dev_revision_get))load_rsmi_sym("rsmi_dev_revision_get");
 		    LOAD_SYM(rsmi_dev_power_cap_get);
 		    LOAD_SYM(rsmi_dev_temp_metric_get);
 		    LOAD_SYM(rsmi_dev_busy_percent_get);
@@ -1699,10 +1769,43 @@ namespace Gpu {
 				if constexpr(is_init) {
 					//? Device name
 					char name[RSMI_DEVICE_NAME_BUFFER_SIZE];
-    				result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
-        			if (result != RSMI_STATUS_SUCCESS)
-    					Logger::warning("ROCm SMI: Failed to get device name");
-        			else gpu_names[Nvml::device_count + i] = string(name);
+					bool got_name = false;
+
+#if !defined(RSMI_STATIC)
+					if (rsmi_dev_market_name_get != nullptr)
+#endif
+					{
+						result = rsmi_dev_market_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
+						if (result == RSMI_STATUS_SUCCESS and name[0] != '\0') {
+							gpu_names[Nvml::device_count + i] = string(name);
+							got_name = true;
+						}
+					}
+
+#if !defined(RSMI_STATIC)
+					if (not got_name and rsmi_dev_id_get != nullptr and rsmi_dev_revision_get != nullptr)
+#else
+					if (not got_name)
+#endif
+					{
+						uint16_t dev_id = 0, rev_id = 0;
+						if (rsmi_dev_id_get(i, &dev_id) == RSMI_STATUS_SUCCESS and
+							rsmi_dev_revision_get(i, &rev_id) == RSMI_STATUS_SUCCESS) {
+							string m_name = get_amdgpu_name(dev_id, rev_id);
+							if (not m_name.empty()) {
+								gpu_names[Nvml::device_count + i] = m_name;
+								got_name = true;
+							}
+						}
+					}
+
+					if (not got_name) {
+						result = rsmi_dev_name_get(i, name, RSMI_DEVICE_NAME_BUFFER_SIZE);
+						if (result != RSMI_STATUS_SUCCESS)
+							Logger::warning("ROCm SMI: Failed to get device name");
+						else
+							gpu_names[Nvml::device_count + i] = string(name);
+					}
 
     				//? Power usage
     				uint64_t max_power;
@@ -2093,6 +2196,12 @@ namespace Gpu {
 				} catch (const std::exception&) {
 					d.pci_device_id = 0;
 				}
+				try {
+					//? "revision" file holds e.g. "0xc1\n"
+					d.pci_revision_id = (uint32_t)std::stoul(readfile(device_link / "revision", "0"), nullptr, 0);
+				} catch (const std::exception&) {
+					d.pci_revision_id = 0;
+				}
 				d.hwmon = find_hwmon(device_link);
 
 				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
@@ -2128,8 +2237,11 @@ namespace Gpu {
 			gpus.resize(gpus.size() + device_count);
 			gpu_names.resize(Nvml::device_count + Rsmi::device_count + device_count);
 			for (uint32_t i = 0; i < device_count; ++i) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + i] =
-					fmt::format("AMD GPU (1002:{:04x})", devices[i].pci_device_id);
+				string name = get_amdgpu_name(devices[i].pci_device_id, devices[i].pci_revision_id);
+				if (name.empty()) {
+					name = fmt::format("AMD GPU (1002:{:04x})", devices[i].pci_device_id);
+				}
+				gpu_names[Nvml::device_count + Rsmi::device_count + i] = name;
 			}
 
 			initialized = true;
