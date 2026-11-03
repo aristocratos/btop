@@ -271,6 +271,15 @@ Process following attributes:
 * followed_bg: background color of the followed process in the list.
 * followed_fg: foreground color of the followed process in the list.
 
+Box drawing attributes replace the characters used to draw boxes, e.g. `theme[title_left]="╴"`.
+Each value must be exactly one character wide. Attributes that are missing or invalid keep their default. TTY mode always uses the defaults.
+* h_line (`─`), v_line (`│`): horizontal and vertical box lines
+* left_up (`┌`), right_up (`┐`), left_down (`└`), right_down (`┘`): box corners when "rounded_corners" is off
+* round_left_up (`╭`), round_right_up (`╮`), round_left_down (`╰`), round_right_down (`╯`): box corners when "rounded_corners" is on
+* title_left (`┐`), title_right (`┌`): left and right of titles in the top line of a box
+* title_left_down (`┘`), title_right_down (`└`): left and right of titles in the bottom line of a box
+* div_left (`├`), div_right (`┤`), div_up (`┬`), div_down (`┴`): where a divider line meets the box border
+
 ## Support and funding
 
 You can sponsor this project through GitHub. See [my sponsors page](https://github.com/sponsors/aristocratos) for options.

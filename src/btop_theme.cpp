@@ -22,6 +22,7 @@ tab-size = 4
 #include <algorithm>
 
 #include "btop_config.hpp"
+#include "btop_draw.hpp"
 #include "btop_log.hpp"
 #include "btop_theme.hpp"
 #include "btop_tools.hpp"
@@ -149,6 +150,27 @@ namespace Theme {
 		{ "proc_banner_fg", "\x1b[97m" },
 		{ "followed_bg", "\x1b[44m" },
 		{ "followed_fg", "\x1b[97m" },
+	};
+
+	const std::unordered_map<string, string*> Box_symbols = {
+		{ "h_line", &Symbols::h_line },
+		{ "v_line", &Symbols::v_line },
+		{ "left_up", &Symbols::left_up },
+		{ "right_up", &Symbols::right_up },
+		{ "left_down", &Symbols::left_down },
+		{ "right_down", &Symbols::right_down },
+		{ "round_left_up", &Symbols::round_left_up },
+		{ "round_right_up", &Symbols::round_right_up },
+		{ "round_left_down", &Symbols::round_left_down },
+		{ "round_right_down", &Symbols::round_right_down },
+		{ "title_left", &Symbols::title_left },
+		{ "title_right", &Symbols::title_right },
+		{ "title_left_down", &Symbols::title_left_down },
+		{ "title_right_down", &Symbols::title_right_down },
+		{ "div_left", &Symbols::div_left },
+		{ "div_right", &Symbols::div_right },
+		{ "div_up", &Symbols::div_up },
+		{ "div_down", &Symbols::div_down },
 	};
 
 	namespace {
@@ -404,7 +426,7 @@ namespace Theme {
 					if (themefile.eof()) break;
 					string name, value;
 					getline(themefile, name, ']');
-					if (not Default_theme.contains(name)) {
+					if (not Default_theme.contains(name) and not Box_symbols.contains(name)) {
 						themefile.ignore(SSmax, '\n');
 						continue;
 					}
@@ -423,6 +445,24 @@ namespace Theme {
 				return theme_out;
 			}
 			return Default_theme;
+		}
+
+		//* Set box drawing symbols from theme
+		void setSymbols(const std::unordered_map<string, string>& source) {
+			static const auto defaults = [] {
+				std::unordered_map<string, string> out;
+				for (const auto& [name, symbol] : Box_symbols) out[name] = *symbol;
+				return out;
+			}();
+
+			for (const auto& [name, symbol] : Box_symbols) {
+				*symbol = defaults.at(name);
+				if (not source.contains(name)) continue;
+				if (ulen(source.at(name), true) == 1)
+					*symbol = source.at(name);
+				else
+					Logger::error("Invalid symbol for \"{}\": \"{}\", must be one character wide", name, source.at(name));
+			}
 		}
 	}
 
@@ -459,11 +499,16 @@ namespace Theme {
 				break;
 			}
 		}
-		if (theme == "TTY" or Config::getB("tty_mode"))
+		//? TTY mode keeps the default symbols
+		if (theme == "TTY" or Config::getB("tty_mode")) {
 			generateTTYColors();
+			setSymbols({});
+		}
 		else {
-			generateColors((theme == "Default" or theme_path.empty() ? Default_theme : loadFile(theme_path)));
+			const auto source = (theme == "Default" or theme_path.empty() ? Default_theme : loadFile(theme_path));
+			generateColors(source);
 			generateGradients();
+			setSymbols(source);
 		}
 		Term::fg = colors.at("main_fg");
 		Term::bg = colors.at("main_bg");

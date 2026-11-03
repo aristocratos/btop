@@ -31,25 +31,25 @@ using std::string;
 using std::vector;
 
 namespace Symbols {
-	extern const string h_line;
-	extern const string v_line;
+	extern string h_line;
+	extern string v_line;
 	extern const string dotted_v_line;
-	extern const string left_up;
-	extern const string right_up;
-	extern const string left_down;
-	extern const string right_down;
-	extern const string round_left_up;
-	extern const string round_right_up;
-	extern const string round_left_down;
-	extern const string round_right_down;
-	extern const string title_left_down;
-	extern const string title_right_down;
-	extern const string title_left;
-	extern const string title_right;
-	extern const string div_right;
-	extern const string div_left;
-	extern const string div_up;
-	extern const string div_down;
+	extern string left_up;
+	extern string right_up;
+	extern string left_down;
+	extern string right_down;
+	extern string round_left_up;
+	extern string round_right_up;
+	extern string round_left_down;
+	extern string round_right_down;
+	extern string title_left_down;
+	extern string title_right_down;
+	extern string title_left;
+	extern string title_right;
+	extern string div_right;
+	extern string div_left;
+	extern string div_up;
+	extern string div_down;
 
 
 	extern const string up;
