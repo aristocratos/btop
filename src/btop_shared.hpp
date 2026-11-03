@@ -443,6 +443,9 @@ namespace Proc {
 
 	auto matches_filter(const proc_info& proc, const std::string& filter) -> bool;
 
+	//* Remove all matches of extended regex <pattern> from <cmd>, returns <cmd> unchanged if <pattern> is empty or invalid
+	auto strip_cmd(const string& cmd, const string& pattern) -> string;
+
 	//* Generate process tree list
 	void _tree_gen(proc_info& cur_proc, vector<proc_info>& in_procs, vector<tree_proc>& out_procs,
 				   int cur_depth, bool collapsed, const string& filter,

@@ -145,6 +145,9 @@ namespace Config {
 
 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
 
+		{"proc_cmd_strip",		"#* Extended regex of text to remove from the shown process commands, e.g. \"/nix/store/[^/]+/\" for NixOS.\n"
+								"#* Only affects the command column, filtering still uses the full command. Empty string to disable."},
+
 		{"proc_follow_detailed",	"#* Should the process list follow the selected process when detailed view is open."},
 
 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
@@ -300,6 +303,7 @@ namespace Config {
 		{"log_level", "WARNING"},
 		{"proc_filter", ""},
 		{"proc_command", ""},
+		{"proc_cmd_strip", ""},
 		{"selected_name", ""},
 	#ifdef GPU_SUPPORT
 		{"custom_gpu_name0", ""},
@@ -625,6 +629,16 @@ namespace Config {
 
 		else if (name == "presets" and not presetsValid(value))
 			return false;
+
+		else if (name == "proc_cmd_strip" and not value.empty()) {
+			try {
+				std::regex test_regex { value, std::regex::extended };
+				return true;
+			} catch (std::regex_error& /* unused */) {
+				validError = "Invalid regex for proc_cmd_strip: " + value;
+				return false;
+			}
+		}
 
 		else if (name == "cpu_core_map") {
 			const auto maps = ssplit(value);
