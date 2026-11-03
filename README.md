@@ -989,7 +989,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
    ```bash
    /usr/sbin/pkg_add pkgin
-   pkgin install -y coregutils gcc14 git gmake
+   pkgin install -y coreutils gcc14 git gmake
    ```
 
 2. **Clone repository**
