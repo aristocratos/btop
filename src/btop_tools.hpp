@@ -29,6 +29,7 @@ tab-size = 4
 #include <condition_variable>
 #include <cstdint>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <limits.h>
 #include <mutex>
@@ -372,7 +373,13 @@ namespace Tools {
 	};
 #endif
 
-
+	//* Return last element of <d>, or a default value (0 for numbers) if <d> is empty
+	template <typename T>
+	T safeBack(const std::deque<T>& d) {
+		if (d.empty()) 
+			return T{};
+		return d.back();
+	}
 
 	//* Return current time in <strf> format
 	string strf_time(const string& strf);
