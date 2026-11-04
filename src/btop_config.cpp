@@ -178,6 +178,8 @@ namespace Config {
 
 		{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
 
+		{"show_core_type", 		"#* Label cores as P (performance) or E (efficiency) instead of C on hybrid cpus."},
+
 		{"cpu_core_map",		"#* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.\n"
 								"#* Use lm-sensors or similar to see which cores are reporting temperatures on your machine.\n"
 								"#* Format \"x:y\" x=core with wrong temp, y=core with correct temp, use space as separator between multiple entries.\n"
@@ -335,6 +337,7 @@ namespace Config {
 		{"show_cpu_watts", true},
 		{"check_temp", true},
 		{"show_coretemp", true},
+		{"show_core_type", true},
 		{"show_cpu_freq", true},
 		{"background_update", true},
 		{"mem_graphs", true},
