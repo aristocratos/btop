@@ -623,6 +623,26 @@ namespace Runner {
 					}
 				}
 
+				//? SENSORS
+				if (v_contains(conf.boxes, "sensors")) {
+					try {
+						if (Global::debug) debug_timer("sensors", collect_begin);
+
+						//? Start collect
+						auto sensors = Sensors::collect(conf.no_update);
+
+						if (Global::debug) debug_timer("sensors", draw_begin);
+
+						//? Draw box
+						if (not pause_output) output += Sensors::draw(sensors, conf.force_redraw, conf.no_update);
+
+						if (Global::debug) debug_timer("sensors", draw_done);
+					}
+					catch (const std::exception& e) {
+						throw std::runtime_error("Sensors:: -> " + string{e.what()});
+					}
+				}
+
 				//? PROC
 				if (v_contains(conf.boxes, "proc")) {
 					try {
@@ -674,8 +694,9 @@ namespace Runner {
 						"{mv4}{hiFg}3 {mainFg}| Show NET box"
 						"{mv5}{hiFg}4 {mainFg}| Show PROC box"
 						"{mv6}{hiFg}5-0 {mainFg}| Show GPU boxes"
-						"{mv7}{hiFg}esc {mainFg}| Show menu"
-						"{mv8}{hiFg}q {mainFg}| Quit",
+						"{mv7}{hiFg}s {mainFg}| Show SENSORS box"
+						"{mv8}{hiFg}esc {mainFg}| Show menu"
+						"{mv9}{hiFg}q {mainFg}| Quit",
 						"banner"_a = Draw::banner_gen(y, 0, true),
 						"titleFg"_a = Theme::c("title"), "b"_a = Fx::b, "hiFg"_a = Theme::c("hi_fg"), "mainFg"_a = Theme::c("main_fg"),
 						"mv1"_a = Mv::to(y+6, x),
@@ -685,7 +706,8 @@ namespace Runner {
 						"mv5"_a = Mv::to(y+11, x),
 						"mv6"_a = Mv::to(y+12, x-2),
 						"mv7"_a = Mv::to(y+13, x-2),
-						"mv8"_a = Mv::to(y+14, x)
+						"mv8"_a = Mv::to(y+14, x),
+						"mv9"_a = Mv::to(y+15, x)
 					);
 				}
 				output += empty_bg;
