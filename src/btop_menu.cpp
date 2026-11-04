@@ -415,6 +415,14 @@ namespace Menu {
 				"",
 				"Show cpu box at bottom of screen instead",
 				"of top."},
+		#ifdef GPU_SUPPORT
+			{"cpu_gpu_horizontal",
+				"Show CPU and one GPU side by side.",
+				"",
+				"Uses a shared row when all readings fit.",
+				"Follows cpu_bottom; falls back to stacked",
+				"panels when space or visibility changes."},
+		#endif
 			{"graph_symbol_cpu",
 				"Graph symbol to use for graphs in cpu box.",
 				"",
@@ -1726,10 +1734,17 @@ static int optionsMenu(const string& key) {
 		}
 		if (screen_redraw) {
 			auto overlay_bkp = std::move(Global::overlay);
-			auto clock_bkp = std::move(Global::clock);
+			Config::unlock();
+			const auto minimum = Term::get_min_size(Config::getS("shown_boxes"));
+			if (Term::width < minimum[0] or Term::height < minimum[1]) {
+				// Let the main resize path handle an undersized terminal before drawing.
+				Global::resized = true;
+				Global::overlay = std::move(overlay_bkp);
+				return Changed;
+			}
 			Draw::calcSizes();
+			Draw::update_clock(true);
 			Global::overlay = std::move(overlay_bkp);
-			Global::clock = std::move(clock_bkp);
 			recollect = true;
 		}
 		if (recollect) {
@@ -1933,6 +1948,7 @@ static int optionsMenu(const string& key) {
 		}
 
 		auto retCode = menuFunc.at(currentMenu)(key.data());
+		if (Global::resized) return;
 		if (retCode == Closed) {
 			menuMask.reset(currentMenu);
 			mouse_mappings.clear();
