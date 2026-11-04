@@ -161,6 +161,9 @@ namespace Config {
 								"#* Select from a list of detected attributes from the options menu."},
 	#ifdef GPU_SUPPORT
 		{"show_gpu_info",		"#* If gpu info should be shown in the cpu box. Available values = \"Auto\", \"On\" and \"Off\"."},
+
+		{"gpu_box_columns",		"#* How many gpu boxes to place side by side instead of stacking them vertically.\n"
+								"#* \"Auto\" uses as many columns as the terminal width allows, or set a number (1-6) to force it."},
 	#endif
 		{"cpu_invert_lower", 	"#* Toggles if the lower CPU graph should be inverted."},
 
@@ -309,6 +312,7 @@ namespace Config {
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
 		{"show_gpu_info", "Auto"},
+		{"gpu_box_columns", "Auto"},
 		{"shown_gpus", "nvidia amd intel apple"}
 	#endif
 	};
@@ -621,6 +625,10 @@ namespace Config {
 	#ifdef GPU_SUPPORT
 		else if (name == "show_gpu_info" and not v_contains(show_gpu_values, value))
 			validError = "Invalid value for show_gpu_info: " + value;
+
+		else if (name == "gpu_box_columns" and value != "Auto"
+			and (not isint(value) or stoi(value) < 1 or stoi(value) > 6))
+			validError = "Invalid value for gpu_box_columns, must be \"Auto\" or a number between 1 and 6";
 	#endif
 
 		else if (name == "presets" and not presetsValid(value))
