@@ -190,6 +190,12 @@ namespace Tools {
 	//* Replace ascii control characters with <replacement> in <str> and return new string
 	string replace_ascii_control(string str, const char replacement = ' ');
 
+	//* Find the basename within argv[0], before it is joined with the remaining arguments.
+	inline size_t command_basename_offset(const string_view executable) {
+		const auto slash = executable.find_last_of('/');
+		return slash == string_view::npos or slash + 1 == executable.size() ? 0 : slash + 1;
+	}
+
 	//* Capitalize <str>
 	inline string capitalize(string str) {
 		str.at(0) = toupper(str.at(0));

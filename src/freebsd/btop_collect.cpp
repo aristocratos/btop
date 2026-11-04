@@ -1163,6 +1163,7 @@ namespace Proc {
 					char** argv = kvm_getargv(kd.get(), kproc, 0);
 					if (argv) {
 						for (int i = 0; argv[i] and cmp_less(new_proc.cmd.size(), 1000); i++) {
+							if (i == 0) new_proc.cmd_basename_offset = command_basename_offset(argv[i]);
 							new_proc.cmd += argv[i] + " "s;
 						}
 						if (not new_proc.cmd.empty()) new_proc.cmd.pop_back();

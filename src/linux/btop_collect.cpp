@@ -3336,7 +3336,8 @@ namespace Proc {
 					pread.open(d.path() / "cmdline");
 					if (not pread.good()) continue;
 					long_string.clear();
-					while(getline(pread, long_string, '\0')) {
+					for (bool first_arg = true; getline(pread, long_string, '\0'); first_arg = false) {
+						if (first_arg) new_proc.cmd_basename_offset = command_basename_offset(long_string);
 						new_proc.cmd += long_string + ' ';
 						if (new_proc.cmd.size() > 1000) {
 							new_proc.cmd.resize(1000);
