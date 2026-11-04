@@ -1235,6 +1235,21 @@ namespace Mem {
 			}
 		}
 	}
+	bool mem_info::set_activity_monitor_memory(const vm_statistics64& vm, uint32_t count, uint64_t total_mem, uint64_t page_size) {
+		constexpr auto required_count = (offsetof(vm_statistics64, external_page_count)
+			+ sizeof(vm.external_page_count)) / sizeof(integer_t);
+		if (count < required_count or page_size == 0) return false;
+
+		//? Speculative pages are included in both free_count and file-backed cache; do not count them twice.
+		const uint64_t free_pages = vm.free_count - min(vm.free_count, vm.speculative_count);
+		const uint64_t cached_pages = static_cast<uint64_t>(vm.external_page_count) + vm.purgeable_count;
+		stats.at("cached") = min(total_mem, cached_pages * page_size);
+		stats.at("free") = min(total_mem - stats.at("cached"), free_pages * page_size);
+		stats.at("available") = stats.at("free") + stats.at("cached");
+		stats.at("used") = total_mem - stats.at("available");
+		return true;
+	}
+
 
 	auto collect(bool no_update) -> mem_info & {
 		if (Runner::stopping or (no_update and not current_mem.percent.at("used").empty()))
@@ -1246,13 +1261,21 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		vm_statistics64 p;
+		vm_statistics64 p{};
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
-			mem.stats.at("free") = p.free_count * Shared::pageSize;
-			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
-			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+			const bool use_activity_monitor = Config::getB("macos_activity_monitor");
+			if (not use_activity_monitor or not mem.set_activity_monitor_memory(p, info_size, Shared::totalMem, Shared::pageSize)) {
+				mem.stats.at("free") = p.free_count * Shared::pageSize;
+				mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
+				mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
+				mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+				static bool warned_missing_counters = false;
+				if (use_activity_monitor and not warned_missing_counters) {
+					Logger::warning("Activity Monitor memory accounting is unavailable for this kernel snapshot; using default accounting.");
+					warned_missing_counters = true;
+				}
+			}
 		}
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
