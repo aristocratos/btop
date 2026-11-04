@@ -388,6 +388,7 @@ namespace Proc {
 		int name_offset{};
 		string user{};          // defaults to ""
 		uint64_t mem{};
+		uint64_t footprint{};    // (macOS) physical footprint, 0 if unavailable
 		double cpu_p{};         // defaults to = 0.0
 		double cpu_c{};         // defaults to = 0.0
 		char state = '0';
@@ -410,6 +411,7 @@ namespace Proc {
 		proc_info entry;
 		string elapsed, parent, status, io_read, io_write, memory;
 		long long first_mem = -1;
+		int64_t mem_compressed = -1, mem_footprint_peak = -1; // (macOS) -1 if unavailable
 		deque<long long> cpu_percent;
 		deque<long long> mem_bytes;
 	};
