@@ -1988,7 +1988,7 @@ namespace Gpu {
 					.mem_clock = false,
 					.pwr_usage = true,
 					.pwr_state = false,
-					.temp_info = false,
+					.temp_info = engines->hwmon_present,
 					.mem_total = false,
 					.mem_used = false,
 					.pcie_txrx = false,
@@ -2017,10 +2017,36 @@ namespace Gpu {
 			if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
 				gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
 
-			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
-
 			double freq = pmu_calc(&engines->freq_act.val, 1, t, 1); // in MHz
 			gpus_slice->gpu_clock_speed = (unsigned int)round(freq);
+
+			//* Power: energy1_input is a cumulative microjoule counter, so
+			//* power (W) = dE(µJ) / dt(s) / 1e6. Fall back to the i915 hwmon
+			//* energy when the RAPL GPU PMU is absent (r_gpu.present is false),
+			//* which is the case on the DG1; GPUs with a working energy-gpu keep
+			//* using RAPL unchanged. `t` is the perf-sampled interval shared with
+			//* the other rate counters, so the energy delta lines up with the
+			//* same instant-to-instant window.
+			if (engines->hwmon_present && !engines->r_gpu.present && t > 0.0) {
+				double dE = (double)(engines->hwmon_energy.val.cur
+					- engines->hwmon_energy.val.prev); // µJ
+				double watts = dE / t / 1e6;
+				if (watts < 0.0) watts = 0.0; // counter wrap / stall
+				gpus_slice->pwr_usage = (long long)round(watts * 1000.0); // mW
+				if (gpus_slice->pwr_usage > gpus_slice->pwr_max_usage)
+					gpus_slice->pwr_max_usage = gpus_slice->pwr_usage;
+			}
+
+			//* Meter bar, computed from the final (hwmon-overridden) power value.
+			gpus_slice->gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice->pwr_usage * 100.0 / (double)gpus_slice->pwr_max_usage), 0ll, 100ll));
+
+			//* Temperature: temp1_input is milli-Celsius, gpu.temp is Celsius.
+			//* push_back (not clear+push) so the graph keeps its history,
+			//* matching how Nvml/Rsmi populate temp.
+			if (engines->hwmon_present && engines->temp_milli > 0) {
+				gpus_slice->temp.push_back((long long)(engines->temp_milli / 1000));
+				gpus_slice->temp_max = 100; // DG1 thermal ceiling
+			}
 
 			return true;
 		}
