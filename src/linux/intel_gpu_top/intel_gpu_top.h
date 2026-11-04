@@ -91,5 +91,6 @@ double pmu_calc(struct pmu_pair *p, double d, double t, double s);
 char* find_intel_gpu_dir();
 char* get_intel_device_id(const char* vendor_path);
 char *get_intel_device_name(const char *device_id);
+char* get_intel_pmu_name(const char* gpu_dir);
 
 #endif
