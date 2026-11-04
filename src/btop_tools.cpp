@@ -121,6 +121,7 @@ namespace Term {
         bool mem = boxes.find("mem") != string::npos;
         bool net = boxes.find("net") != string::npos;
         bool proc = boxes.find("proc") != string::npos;
+        bool ctr = boxes.find("ctr") != string::npos;
 	#ifdef GPU_SUPPORT
 		int gpu = 0;
         if (Gpu::count > 0)
@@ -130,15 +131,16 @@ namespace Term {
         int width = 0;
 		if (mem) width = Mem::min_width;
 		else if (net) width = Mem::min_width;
-		width += (proc ? Proc::min_width : 0);
+		width += (proc ? Proc::min_width : ctr ? Ctr::min_width : 0);
 		if (cpu and width < Cpu::min_width) width = Cpu::min_width;
 	#ifdef GPU_SUPPORT
 		if (gpu != 0 and width < Gpu::min_width) width = Gpu::min_width;
 	#endif
 
 		int height = (cpu ? Cpu::min_height : 0);
-		if (proc) height += Proc::min_height;
-		else height += (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0);
+		//? Container box shares a column with the proc box
+		if (proc) height += Proc::min_height + (ctr ? Ctr::min_height : 0);
+		else height += max((ctr ? Ctr::min_height : 0), (mem ? Mem::min_height : 0) + (net ? Net::min_height : 0));
 	#ifdef GPU_SUPPORT
 		for (int i = 0; i < gpu; i++)
 			height += Gpu::gpu_b_height_offsets[i] + 4;
