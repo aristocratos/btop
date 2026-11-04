@@ -13,19 +13,41 @@
 #define VENDOR_FILE "vendor"
 #define DEVICE_FILE "device"
 
+static bool is_card_node(const char *name) {
+    if (strncmp(name, "card", 4) != 0) return false;
+    const char *p = name + 4;
+    if (*p == '\0') return false;
+    for (; *p; p++) {
+        if (*p < '0' || *p > '9') return false;
+    }
+    return true;
+}
+
 char* find_intel_gpu_dir() {
+    static char path[256];
+    char dirs[1][256];
+
+    if (find_intel_gpu_dirs(dirs, 1) < 1) return NULL;
+
+    snprintf(path, sizeof(path), "%s", dirs[0]);
+    return path;
+}
+
+int find_intel_gpu_dirs(char dirs[][256], int max_count) {
     DIR *dir;
     struct dirent *entry;
-    static char path[256];
     char vendor_path[256];
     char vendor_id[16];
+    int count = 0;
 
     if ((dir = opendir(SYSFS_PATH)) == NULL) {
         perror("opendir");
-        return NULL;
+        return 0;
     }
 
-    while ((entry = readdir(dir)) != NULL) {
+    while (count < max_count && (entry = readdir(dir)) != NULL) {
+        if (!is_card_node(entry->d_name)) continue;
+
         // Construct the path to the vendor file
         snprintf(vendor_path, sizeof(vendor_path), "%s/%s/device/%s", SYSFS_PATH, entry->d_name, VENDOR_FILE);
 
@@ -38,11 +60,9 @@ char* find_intel_gpu_dir() {
                     vendor_id[strcspn(vendor_id, "\n")] = 0;
 
                     if (strcmp(vendor_id, VENDOR_ID) == 0) {
-                        // Return the parent directory (i.e., /sys/class/drm/card*)
-                        snprintf(path, sizeof(path), "%s/%s", SYSFS_PATH, entry->d_name);
-                        fclose(file);
-                        closedir(dir);
-                        return path;
+                        // Record the parent directory (i.e., /sys/class/drm/card*)
+                        snprintf(dirs[count], 256, "%s/%s", SYSFS_PATH, entry->d_name);
+                        count++;
                     }
                 }
                 fclose(file);
@@ -51,7 +71,57 @@ char* find_intel_gpu_dir() {
     }
 
     closedir(dir);
-    return NULL;  // Intel GPU not found
+    return count;  // Number of Intel GPUs found (0 if none)
+}
+
+static bool pmu_exists(const char *pmu_name) {
+    char path[256];
+    snprintf(path, sizeof(path), "/sys/bus/event_source/devices/%s/type", pmu_name);
+    return access(path, F_OK) == 0;
+}
+
+char *get_intel_pmu_device_name(const char *gpu_dir) {
+    char device_path[300];
+    char link_target[512];
+    char driver_path[300];
+    char driver_link[256];
+    char pmu_name[160];
+    ssize_t len;
+
+    // Resolve <gpu_dir>/device -> .../<pci bus id>, e.g. .../0000:03:00.0
+    snprintf(device_path, sizeof(device_path), "%s/device", gpu_dir);
+    len = readlink(device_path, link_target, sizeof(link_target) - 1);
+    if (len < 0) return NULL;
+    link_target[len] = '\0';
+
+    char *bus_id = strrchr(link_target, '/');
+    bus_id = bus_id ? bus_id + 1 : link_target;
+
+    // Resolve <gpu_dir>/device/driver -> .../i915 or .../xe
+    snprintf(driver_path, sizeof(driver_path), "%s/device/driver", gpu_dir);
+    len = readlink(driver_path, driver_link, sizeof(driver_link) - 1);
+    if (len < 0) return NULL;
+    driver_link[len] = '\0';
+
+    char *driver_name = strrchr(driver_link, '/');
+    driver_name = driver_name ? driver_name + 1 : driver_link;
+
+    // Only i915 is supported: the collector uses i915 PMU event encodings, which xe
+    // does not understand (and some of which alias valid but unrelated xe events).
+    if (strcmp(driver_name, "i915") != 0) return NULL;
+
+    // Discrete GPUs register as i915_<bus id> with colons replaced by underscores,
+    // e.g. 0000:03:00.0 -> i915_0000_03_00.0
+    snprintf(pmu_name, sizeof(pmu_name), "i915_%s", bus_id);
+    for (char *s = pmu_name; *s; s++) {
+        if (*s == ':') *s = '_';
+    }
+    if (pmu_exists(pmu_name)) return strdup(pmu_name);
+
+    // Integrated GPUs keep the legacy bare name
+    if (pmu_exists("i915")) return strdup("i915");
+
+    return NULL;
 }
 
 char* get_intel_device_id(const char* gpu_dir) {
