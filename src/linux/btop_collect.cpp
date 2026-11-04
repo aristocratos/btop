@@ -238,6 +238,7 @@ namespace Gpu {
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
 		#define RSMI_MEM_TYPE_VRAM            0
+		#define RSMI_MEM_TYPE_GTT             2
 		#define RSMI_TEMP_CURRENT             0
 		#define RSMI_TEMP_TYPE_EDGE           0
 		#define RSMI_CLK_TYPE_MEM             4
@@ -1884,6 +1885,21 @@ namespace Gpu {
 						if (gpus_slice[i].supported_functions.mem_total)
 							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
 					}
+				}
+
+				//? Shared system memory (GTT). A failed sample must not look like zero usage.
+				if constexpr (is_init) {
+					uint64_t total = 0;
+					if (rsmi_dev_memory_total_get(i, RSMI_MEM_TYPE_GTT, &total) == RSMI_STATUS_SUCCESS
+						and total <= static_cast<uint64_t>(numeric_limits<long long>::max()))
+						gpus_slice[i].shared_mem_total = static_cast<long long>(total);
+				}
+				if (gpus_slice[i].shared_mem_total > 0) {
+					uint64_t used = 0;
+					gpus_slice[i].shared_mem_used.reset();
+					if (rsmi_dev_memory_usage_get(i, RSMI_MEM_TYPE_GTT, &used) == RSMI_STATUS_SUCCESS
+						and used <= static_cast<uint64_t>(numeric_limits<long long>::max()))
+						gpus_slice[i].shared_mem_used = static_cast<long long>(used);
 				}
 
 				//? PCIe link speeds
