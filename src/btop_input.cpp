@@ -384,6 +384,14 @@ namespace Input {
 				else if (key == "c")
 					Config::flip("proc_per_core");
 
+				else if (key == "w") {
+					atomic_wait(Runner::active);
+					if (Proc::proc_swap_available()) {
+						Config::set("proc_mem_mode", (Config::getI("proc_mem_mode") + 1) % 3);
+						no_update = false;
+					}
+				}
+
 				else if (key == "%")
 					Config::flip("proc_mem_bytes");
 

@@ -1714,6 +1714,9 @@ namespace Proc {
 		auto& graph_symbol = (tty_mode ? "tty" : Config::getS("graph_symbol_proc"));
 		auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
 		auto mem_bytes = Config::getB("proc_mem_bytes");
+		//? Swap modes are only usable when per-process swap usage can be read; otherwise fall back to showing memory
+		const bool proc_swap = proc_swap_available();
+		const auto mem_mode = (proc_swap ? Config::getI("proc_mem_mode") : 0);
 		auto vim_keys = Config::getB("vim_keys");
 		auto show_graphs = Config::getB("proc_cpu_graphs");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
@@ -1730,6 +1733,8 @@ namespace Proc {
 		int select_max = show_detailed ? (proc_banner_shown ? Proc::select_max - 9 : Proc::select_max - 8) :
 												(proc_banner_shown ? Proc::select_max - 1 : Proc::select_max);
 		auto totalMem = Mem::get_totalMem();
+		//? total swap for the mem column percentage modes
+		const uint64_t swap_total = (mem_mode != 0 and not mem_bytes ? Mem::collect(true).stats.at("swap_total") : 0);
 		int numpids = Proc::numpids;
 		if (force_redraw) redraw = true;
 		string out;
@@ -1912,17 +1917,30 @@ namespace Proc {
 					Input::mouse_mappings["delete"] = {y, x + 11 + f_len, 1, 3};
 			}
 
-			//? pause, per-core, reverse, tree and sorting
+			//? pause, mem mode, per-core, reverse, tree and sorting
 			const auto& sorting = Config::getS("proc_sorting");
 			const int sort_len = sorting.size();
 			const int sort_pos = x + width - sort_len - 8;
 
-			if (width > 60 + sort_len) {
-			    fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+			if (proc_swap and width > 67 + sort_len) {
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
+					Mv::to(y, sort_pos - 38), title_left, pause_proc_list ? Fx::b : "",
+					Theme::c("title"), "pa", Theme::c("hi_fg"), 'u', Theme::c("title"), "se",
+					Fx::ub, title_right);
+				Input::mouse_mappings["u"] = {y, sort_pos - 37, 1, 5};
+			}
+			else if (not proc_swap and width > 60 + sort_len) {
+				//? Without the swap button the pause button keeps its original position
+				fmt::format_to(std::back_inserter(out), "{}{}{}{}{}{}{}{}{}{}{}",
 					Mv::to(y, sort_pos - 32), title_left, pause_proc_list ? Fx::b : "",
 					Theme::c("title"), "pa", Theme::c("hi_fg"), 'u', Theme::c("title"), "se",
-			    	Fx::ub, title_right);
-			    Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
+					Fx::ub, title_right);
+				Input::mouse_mappings["u"] = {y, sort_pos - 31, 1, 5};
+			}
+			if (proc_swap and width > 61 + sort_len) {
+				out += Mv::to(y, sort_pos - 31) + title_left + (mem_mode != 0 ? Fx::b : "") + Theme::c("title")
+					+ "s" + Theme::c("hi_fg") + 'w' + Theme::c("title") + "ap" + Fx::ub + title_right;
+				Input::mouse_mappings["w"] = {y, sort_pos - 30, 1, 4};
 			}
 			if (width > 55 + sort_len) {
 				out += Mv::to(y, sort_pos - 25) + title_left + (Config::getB("proc_per_core") ? Fx::b : "") + Theme::c("title")
@@ -1991,7 +2009,7 @@ namespace Proc {
 
 			out += (thread_size > 0 ? Mv::l(4) + "Threads: " : "")
 					+ ljust("User:", user_size) + ' '
-					+ rjust((mem_bytes ? "MemB" : "Mem%"), 5) + ' '
+					+ rjust((mem_mode == 1 ? (mem_bytes ? "Swap" : "Swap%") : mem_mode == 2 ? (mem_bytes ? "MemSw" : "MeSw%") : (mem_bytes ? "MemB" : "Mem%")), 5) + ' '
 					+ rjust("Cpu%", (show_graphs ? 10 : 5)) + Fx::ub;
 		}
 		//* End of redraw block
@@ -2144,10 +2162,16 @@ namespace Proc {
 				if (cpu_str.ends_with('.')) cpu_str.pop_back();
 				cpu_str += "k";
 			}
-			string mem_str = (mem_bytes ? floating_humanizer(p.mem, true) : "");
-			if (not mem_bytes) {
-				double mem_p = clamp((double)p.mem * 100 / totalMem, 0.0, 100.0);
-				mem_str = mem_p < 0.01 ? "0" : fmt::format("{:.1f}", mem_p);
+			//? Memory column mode: 1 = swap only, 2 = memory and swap combined;
+			//  the '%' toggle switches the column between bytes and percentage
+			string mem_str;
+			const uint64_t mem_value = (mem_mode == 1 ? p.swap : mem_mode == 2 ? p.mem + p.swap : p.mem);
+			const uint64_t mem_total = (mem_mode == 1 ? swap_total : mem_mode == 2 ? totalMem + swap_total : totalMem);
+			if (mem_bytes)
+				mem_str = floating_humanizer(mem_value, true);
+			else {
+				const double value_p = (mem_total > 0 ? clamp((double)mem_value * 100 / mem_total, 0.0, 100.0) : 0.0);
+				mem_str = value_p < 0.01 ? "0" : fmt::format("{:.1f}", value_p);
 				if (mem_str.size() > 3) mem_str.resize(3);
 				if (mem_str.ends_with('.')) mem_str.pop_back();
 				mem_str += '%';
