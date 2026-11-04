@@ -216,6 +216,8 @@ namespace Gpu {
 		nvmlReturn_t (*nvmlDeviceGetPcieThroughput)(nvmlDevice_t, nvmlPcieUtilCounter_t, unsigned int*);
 		nvmlReturn_t (*nvmlDeviceGetEncoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
 		nvmlReturn_t (*nvmlDeviceGetDecoderUtilization)(nvmlDevice_t, unsigned int*, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetCurrPcieLinkGeneration)(nvmlDevice_t, unsigned int*);
+		nvmlReturn_t (*nvmlDeviceGetCurrPcieLinkWidth)(nvmlDevice_t, unsigned int*);
 
 		//? Data
 		void* nvml_dl_handle;
@@ -252,6 +254,8 @@ namespace Gpu {
 		struct rsmi_version_t {uint32_t major,  minor,  patch; const char* build;};
 		struct rsmi_frequencies_t_v5 {uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V5];};
 		struct rsmi_frequencies_t_v6 {bool has_deep_sleep; uint32_t num_supported, current; uint64_t frequency[RSMI_MAX_NUM_FREQUENCIES_V6];};
+		struct rsmi_pcie_bandwidth_t_v5 {rsmi_frequencies_t_v5 transfer_rate; uint32_t lanes[RSMI_MAX_NUM_FREQUENCIES_V5];};
+		struct rsmi_pcie_bandwidth_t_v6 {rsmi_frequencies_t_v6 transfer_rate; uint32_t lanes[RSMI_MAX_NUM_FREQUENCIES_V6];};
 
 		//? Function pointers
 		rsmi_status_t (*rsmi_init)(uint64_t);
@@ -265,6 +269,8 @@ namespace Gpu {
 		rsmi_status_t (*rsmi_dev_memory_busy_percent_get)(uint32_t, uint32_t*);
 		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v5)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v5*);
 		rsmi_status_t (*rsmi_dev_gpu_clk_freq_get_v6)(uint32_t, rsmi_clk_type_t, rsmi_frequencies_t_v6*);
+		rsmi_status_t (*rsmi_dev_pci_bandwidth_get_v5)(uint32_t, rsmi_pcie_bandwidth_t_v5*);
+		rsmi_status_t (*rsmi_dev_pci_bandwidth_get_v6)(uint32_t, rsmi_pcie_bandwidth_t_v6*);
 		rsmi_status_t (*rsmi_dev_power_ave_get)(uint32_t, uint32_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_total_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
 		rsmi_status_t (*rsmi_dev_memory_usage_get)(uint32_t, rsmi_memory_type_t, uint64_t*);
@@ -308,6 +314,7 @@ namespace Gpu {
 			bool has_freq;
 			bool has_busy;
 			bool has_vram;
+			bool has_pcie;
 		};
 
 		bool initialized = false;
@@ -1300,6 +1307,8 @@ namespace Gpu {
 		    LOAD_SYM(nvmlDeviceGetPcieThroughput);
 			LOAD_SYM(nvmlDeviceGetEncoderUtilization);
 			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
+			LOAD_SYM(nvmlDeviceGetCurrPcieLinkGeneration);
+			LOAD_SYM(nvmlDeviceGetCurrPcieLinkWidth);
 
             #undef LOAD_SYM
 
@@ -1356,7 +1365,7 @@ namespace Gpu {
     				result = nvmlDeviceGetHandleByIndex(i, devices.data() + i);
         			if (result != NVML_SUCCESS) {
     					Logger::warning("NVML: Failed to get device handle: {}", nvmlErrorString(result));
-						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false};
+						gpus[i].supported_functions = {false, false, false, false, false, false, false, false, false, false, false, false, false};
     					continue;
         			}
 
@@ -1412,6 +1421,21 @@ namespace Gpu {
 				} else {
 					gpus_slice[i].pcie_tx = -1;
 					gpus_slice[i].pcie_rx = -1;
+				}
+
+				//? PCIe link generation and width
+				if (gpus_slice[i].supported_functions.pcie_link) {
+					unsigned int gen, width;
+					result = nvmlDeviceGetCurrPcieLinkGeneration(devices[i], &gen);
+					if (result == NVML_SUCCESS)
+						result = nvmlDeviceGetCurrPcieLinkWidth(devices[i], &width);
+					if (result != NVML_SUCCESS) {
+						Logger::warning("NVML: Failed to get PCIe link generation and width: {}", nvmlErrorString(result));
+						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_link = false;
+					} else {
+						gpus_slice[i].pcie_link_gen = gen;
+						gpus_slice[i].pcie_link_width = width;
+					}
 				}
 
 				// DebugTimer nvTimer("Nv utilization");
@@ -1647,9 +1671,13 @@ namespace Gpu {
 			if (effective_major == 5) {
 				if ((rsmi_dev_gpu_clk_freq_get_v5 = (decltype(rsmi_dev_gpu_clk_freq_get_v5))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
 					return false;
+				if ((rsmi_dev_pci_bandwidth_get_v5 = (decltype(rsmi_dev_pci_bandwidth_get_v5))load_rsmi_sym("rsmi_dev_pci_bandwidth_get")) == nullptr)
+					return false;
 			// In the release tarballs of rocm 6.0.0 and 6.0.2 the version queried with rsmi_version_get is 7.0.0.0
 			} else if (effective_major == 6 || effective_major == 7) {
 				if ((rsmi_dev_gpu_clk_freq_get_v6 = (decltype(rsmi_dev_gpu_clk_freq_get_v6))load_rsmi_sym("rsmi_dev_gpu_clk_freq_get")) == nullptr)
+					return false;
+				if ((rsmi_dev_pci_bandwidth_get_v6 = (decltype(rsmi_dev_pci_bandwidth_get_v6))load_rsmi_sym("rsmi_dev_pci_bandwidth_get")) == nullptr)
 					return false;
 			} else {
 				Logger::warning("ROCm SMI: Dynamic loading only supported for version 5 and 6");
@@ -1688,6 +1716,20 @@ namespace Gpu {
 			} else Logger::warning("Failed to shutdown ROCm SMI");
 
 			return true;
+		}
+
+		//? PCIe generation from the link rate in whole GT/s: 2(.5), 5, 8, 16, 32, 64, 128
+		static unsigned int pcie_gen(unsigned long long gts) {
+			return gts >= 128 ? 7 : gts >= 64 ? 6 : gts >= 32 ? 5 : gts >= 16 ? 4 : gts >= 8 ? 3 : gts >= 5 ? 2 : gts >= 2 ? 1 : 0;
+		}
+
+		//? Generation and width of the current entry of a PCIe bandwidth table, {0, 0} if it has none.
+		template <typename bandwidth_t>
+		static std::pair<unsigned int, unsigned int> pcie_link(const bandwidth_t& bandwidth) {
+			const auto& rate = bandwidth.transfer_rate;
+			if (rate.num_supported == 0 or rate.current >= rate.num_supported or rate.num_supported > std::size(bandwidth.lanes))
+				return {0, 0};
+			return {pcie_gen(rate.frequency[rate.current] / 1'000'000'000), bandwidth.lanes[rate.current]};
 		}
 
 		template <bool is_init>
@@ -1901,6 +1943,33 @@ namespace Gpu {
 					gpus_slice[i].pcie_tx = -1;
 					gpus_slice[i].pcie_rx = -1;
 				}
+
+				//? PCIe link generation and width
+				if (gpus_slice[i].supported_functions.pcie_link) {
+					std::pair<unsigned int, unsigned int> link{};
+				#if !defined(RSMI_STATIC)
+					if (version_major == 5) {
+						rsmi_pcie_bandwidth_t_v5 bandwidth{};
+						result = rsmi_dev_pci_bandwidth_get_v5(i, &bandwidth);
+						link = pcie_link(bandwidth);
+					} else if (version_major == 6 || version_major == 7) {
+						rsmi_pcie_bandwidth_t_v6 bandwidth{};
+						result = rsmi_dev_pci_bandwidth_get_v6(i, &bandwidth);
+						link = pcie_link(bandwidth);
+					}
+				#else
+					rsmi_pcie_bandwidth_t bandwidth{};
+					result = rsmi_dev_pci_bandwidth_get(i, &bandwidth);
+					link = pcie_link(bandwidth);
+				#endif
+					if (result != RSMI_STATUS_SUCCESS or link.first == 0) {
+						Logger::warning("ROCm SMI: Failed to get PCIe link generation and width");
+						if constexpr(is_init) gpus_slice[i].supported_functions.pcie_link = false;
+					} else {
+						gpus_slice[i].pcie_link_gen = link.first;
+						gpus_slice[i].pcie_link_width = link.second;
+					}
+				}
     		}
 
 			return true;
@@ -1992,6 +2061,7 @@ namespace Gpu {
 					.mem_total = false,
 					.mem_used = false,
 					.pcie_txrx = false,
+					.pcie_link = false,
 					.encoder_utilization = false,
 					.decoder_utilization = false
 				};
@@ -2034,6 +2104,21 @@ namespace Gpu {
 			} catch (const std::exception&) {
 				return fallback;
 			}
+		}
+
+		//? Current level of pp_dpm_pcie, marked with '*', e.g. "1: 16.0GT/s, x16 1000Mhz *"
+		static std::pair<unsigned int, unsigned int> read_pcie_link(const std::filesystem::path& path) {
+			std::ifstream file(path);
+			for (string line; std::getline(file, line);) {
+				const auto rate = line.find(':'), lanes = line.find(" x");
+				if (line.find('*') == string::npos or rate == string::npos or lanes == string::npos) continue;
+				try {
+					return {Rsmi::pcie_gen(std::stoul(line.substr(rate + 1))), (unsigned int)std::stoul(line.substr(lanes + 2))};
+				} catch (const std::exception&) {
+					break;
+				}
+			}
+			return {0, 0};
 		}
 
 		//? Match /sys/class/drm/cardN (no '-', all digits after "card"). Skips card1-DP-1, renderD*, etc.
@@ -2097,6 +2182,7 @@ namespace Gpu {
 
 				d.has_busy = std::filesystem::exists(device_link / "gpu_busy_percent");
 				d.has_vram = std::filesystem::exists(device_link / "mem_info_vram_total");
+				d.has_pcie = std::filesystem::exists(device_link / "pp_dpm_pcie");
 
 				if (not d.hwmon.empty()) {
 					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
@@ -2165,6 +2251,7 @@ namespace Gpu {
 						.mem_total = d.has_vram,
 						.mem_used = d.has_vram,
 						.pcie_txrx = false,
+						.pcie_link = d.has_pcie,
 						.encoder_utilization = false,
 						.decoder_utilization = false,
 					};
@@ -2201,6 +2288,12 @@ namespace Gpu {
 						gpu.gpu_percent.at("gpu-vram-totals").push_back(
 							std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
 					}
+				}
+
+				if (d.has_pcie) {
+					const auto [gen, width] = read_pcie_link(d.device / "pp_dpm_pcie");
+					gpu.pcie_link_gen = gen;
+					gpu.pcie_link_width = width;
 				}
 			}
 			return true;

@@ -1034,6 +1034,7 @@ namespace Gpu {
 	vector<int> x_vec = {}, y_vec = {}, b_height_vec = {};
 	int b_width;
 	vector<int> b_x_vec = {}, b_y_vec = {};
+	vector<int> link_x_vec = {};
 	vector<bool> redraw = {};
 	int shown = 0;
 	int count = 0;
@@ -1134,6 +1135,16 @@ namespace Gpu {
 			string clock_speed_string = to_string(gpu.gpu_clock_speed);
 			out += Mv::to(b_y, b_x + b_width - 12) + Theme::c("div_line") + Symbols::h_line*(5-clock_speed_string.size())
 				+ Symbols::title_left + Fx::b + Theme::c("title") + clock_speed_string + " MHz" + Fx::ub + Theme::c("div_line") + Symbols::title_right;
+		}
+
+		//? PCIe link generation and width
+		if (gpu.supported_functions.pcie_link and link_x_vec[index] > 0) {
+			out += Mv::to(b_y, link_x_vec[index]) + Theme::c("div_line") + Symbols::h_line;
+			if (gpu.pcie_link_gen > 0) {
+				const string link = fmt::format("PCIe {}.0 x{}", gpu.pcie_link_gen, gpu.pcie_link_width);
+				out += Symbols::title_left + Fx::b + Theme::c("title") + link + Fx::ub + Theme::c("div_line") + Symbols::title_right
+					+ Symbols::h_line * max(0, 12 - (int)link.size());
+			} else out += Symbols::h_line * 14;
 		}
 
 		//? Power usage meter, power state
@@ -2382,6 +2393,7 @@ namespace Draw {
 			using namespace Gpu;
 			x_vec.resize(shown); y_vec.resize(shown);
 			b_x_vec.resize(shown); b_y_vec.resize(shown);
+			link_x_vec.resize(shown);
 			b_height_vec.resize(shown);
 			box.resize(shown);
 			graph_upper_vec.resize(shown); graph_lower_vec.resize(shown);
@@ -2421,7 +2433,10 @@ namespace Draw {
 				string name = Config::getS(std::string("custom_gpu_name") + (char)(shown_panels[i]+'0'));
 				if (name.empty()) name = gpu_names[shown_panels[i]];
 
-				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, name.substr(0, b_width-5));
+				const string title = name.substr(0, b_width-5);
+				box[i] += createBox(b_x_vec[i], b_y_vec[i], b_width, b_height_vec[i], "", false, title);
+				//? The PCIe link goes after the name when it fits before the clock
+				link_x_vec[i] = (int)ulen(title) + 31 <= b_width ? b_x_vec[i] + (int)ulen(title) + 4 : 0;
 				b_height_vec[i] = height - 2;
 			}
 		}
