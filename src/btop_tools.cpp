@@ -731,22 +731,24 @@ namespace Tools {
 	}
 }
 
-const string Fx::e = "\x1b[";		//* Escape sequence start
-const string Fx::b = e + "1m";		//* Bold on/off
-const string Fx::ub = e + "22m";	//* Bold off
-const string Fx::d = e + "2m";		//* Dark on
-const string Fx::ud = e + "22m";	//* Dark off
-const string Fx::i = e + "3m";		//* Italic on
-const string Fx::ui = e + "23m";	//* Italic off
-const string Fx::ul = e + "4m";		//* Underline on
-const string Fx::uul = e + "24m";	//* Underline off
-const string Fx::bl = e + "5m";		//* Blink on
-const string Fx::ubl = e + "25m";	//* Blink off
-const string Fx::s = e + "9m";		//* Strike/crossed-out on
-const string Fx::us = e + "29m";	//* Strike/crossed-out on/off
+#define X "\x1b["
+
+constinit string_view const Fx::e = X;			//* Escape sequence start
+constinit string_view const Fx::b = X "1m";		//* Bold on/off
+constinit string_view const Fx::ub = X "22m";	//* Bold off
+constinit string_view const Fx::d = X "2m";		//* Dark on
+constinit string_view const Fx::ud = X "22m";	//* Dark off
+constinit string_view const Fx::i = X "3m";		//* Italic on
+constinit string_view const Fx::ui = X "23m";	//* Italic off
+constinit string_view const Fx::ul = X "4m";	//* Underline on
+constinit string_view const Fx::uul = X "24m";	//* Underline off
+constinit string_view const Fx::bl = X "5m";	//* Blink on
+constinit string_view const Fx::ubl = X "25m";	//* Blink off
+constinit string_view const Fx::s = X "9m";		//* Strike/crossed-out on
+constinit string_view const Fx::us = X "29m";	//* Strike/crossed-out on/off
 
 //* Reset foreground/background color and text effects
-const string Fx::reset_base = e + "0m";
+constinit string_view const Fx::reset_base = X "0m";
 
 //* Regex for matching color, style and cursor move escape sequences
 const std::regex Fx::escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
@@ -754,16 +756,19 @@ const std::regex Fx::escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C
 //* Regex for matching only color and style escape sequences
 const std::regex Fx::color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
-const string Term::hide_cursor = Fx::e + "?25l";
-const string Term::show_cursor = Fx::e + "?25h";
-const string Term::alt_screen = Fx::e + "?1049h";
-const string Term::normal_screen = Fx::e + "?1049l";
-const string Term::clear = Fx::e + "2J" + Fx::e + "0;0f";
-const string Term::clear_end = Fx::e + "0J";
-const string Term::clear_begin = Fx::e + "1J";
-const string Term::mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //? Enable reporting of mouse position on click and release
-const string Term::mouse_off = Fx::e + "?1002l" + Fx::e + "?1015l" + Fx::e + "?1006l";
-const string Term::mouse_direct_on = Fx::e + "?1003h"; //? Enable reporting of mouse position at any movement
-const string Term::mouse_direct_off = Fx::e + "?1003l";
-const string Term::sync_start = Fx::e + "?2026h"; //? Start of terminal synchronized output
-const string Term::sync_end = Fx::e + "?2026l"; //? End of terminal synchronized output
+constinit string_view const Term::hide_cursor = X "?25l";
+constinit string_view const Term::show_cursor = X "?25h";
+constinit string_view const Term::alt_screen = X "?1049h";
+constinit string_view const Term::normal_screen = X "?1049l";
+constinit string_view const Term::clear = X "2J" X "0;0f";
+constinit string_view const Term::clear_end = X "0J";
+constinit string_view const Term::clear_begin = X "1J";
+constinit string_view const Term::mouse_on = X "?1002h" X "?1015h" X "?1006h"; //? Enable reporting of mouse position on click and release
+constinit string_view const Term::mouse_off = X "?1002l" X "?1015l" X "?1006l";
+constinit string_view const Term::mouse_direct_on = X "?1003h"; //? Enable reporting of mouse position at any movement
+constinit string_view const Term::mouse_direct_off = X "?1003l";
+constinit string_view const Term::sync_start = X "?2026h"; //? Start of terminal synchronized output
+constinit string_view const Term::sync_end = X "?2026l"; //? End of terminal synchronized output
+
+constinit string_view const Mv::save = X "s";
+constinit string_view const Mv::restore = X "u";
