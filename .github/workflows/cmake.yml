@@ -155,7 +155,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/openbsd-vm@5f7b2c933b8846a138361d6843c52af4bef5d945 # v1.4.8
+        uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1.4.9
         with:
           arch: x86_64
           release: "7.9"
@@ -187,7 +187,7 @@ jobs:
           run: |
             pkg_add -u pkgin
             pkgin update
-            pkgin -y install cmake gcc15 ninja-build
-            export CXX="/usr/pkg/gcc15/bin/g++"
+            pkgin -y install cmake gcc14 ninja-build
+            export CXX="/usr/pkg/gcc14/bin/g++"
             cmake -B build -DBUILD_TESTING=OFF
             cmake --build build --verbose
