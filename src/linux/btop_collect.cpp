@@ -56,7 +56,7 @@ tab-size = 4
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
-#if defined(GPU_SUPPORT)
+#if defined(GPU_SUPPORT) && defined(INTEL_GPU_SUPPORT)
 	// Redefining C++ keywords fortunately has a warning in clang, however it's unavoidable here
 	// since the C library uses "class" as a struct member and keywords are not allowed to be used
 	// as identifiers in C++.
@@ -284,6 +284,7 @@ namespace Gpu {
 
 
 	//? Intel data collection
+	#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		const char* device = "i915";
 		struct engines *engines = nullptr;
@@ -294,6 +295,16 @@ namespace Gpu {
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
 	}
+	#else
+	//? Stub when built on a platform without the intel_gpu_top backend (e.g. aarch64/Jetson).
+	namespace Intel {
+		bool initialized = false;
+		uint32_t device_count = 0;
+		bool init() { return false; }
+		bool shutdown() { return false; }
+		template <bool is_init> bool collect(gpu_info*) { return false; }
+	}
+	#endif // INTEL_GPU_SUPPORT
 
 	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
 	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
@@ -317,6 +328,38 @@ namespace Gpu {
 		uint32_t device_count = 0;
 		vector<device_paths> devices;
 	}
+
+	//? NVIDIA Jetson iGPU data collection via sysfs devfreq/thermal — used when NVML isn't
+	//? available (JetPack 4-6), and also as a takeover backend when NVML is present but
+	//? non-functional for the iGPU (observed on some JetPack 7 images: NVML enumerates the
+	//? "Orin (nvgpu)" device but every metric query returns NVML_ERROR_NOT_SUPPORTED).
+	#if defined(JETSON_GPU_SUPPORT)
+	namespace Jetson {
+		bool initialized = false;
+		bool init();
+		bool shutdown();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+
+		//? When true, Jetson feeds data into the existing gpus[0] slot NVML already created
+		//? instead of appending a new device (avoids a duplicate, permanently-empty GPU box).
+		bool takeover_nvml = false;
+
+		fs::path devfreq_path;
+		fs::path device_load_path;
+		fs::path thermal_temp_path;
+		long long thermal_crit = 97;
+	}
+	#else
+	namespace Jetson {
+		bool initialized = false;
+		uint32_t device_count = 0;
+		bool takeover_nvml = false;
+		bool init() { return false; }
+		bool shutdown() { return false; }
+		template <bool is_init> bool collect(gpu_info*) { return false; }
+	}
+	#endif // JETSON_GPU_SUPPORT
 }
 
 #endif // GPU_SUPPORT
@@ -403,6 +446,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+		}
+
+		if (shown_gpus.contains("jetson")) {
+			Gpu::Jetson::init(); //? self-skips when NVML already enumerated devices (JetPack 7+)
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -1907,6 +1954,7 @@ namespace Gpu {
 		}
 	}
 
+	#if defined(INTEL_GPU_SUPPORT)
 	namespace Intel {
 		bool init() {
 			if (initialized) return false;
@@ -2025,6 +2073,7 @@ namespace Gpu {
 			return true;
 		}
 	}
+	#endif // INTEL_GPU_SUPPORT
 
 	namespace Asysfs {
 		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
@@ -2211,6 +2260,190 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	//? NVIDIA Jetson iGPU (Tegra) data collection via sysfs devfreq/thermal — no library
+	//? dependency, used on JetPack 4-6 where NVML doesn't cover the integrated GPU. Ported
+	//? from the well-tested jetson_stats (jtop) detection logic.
+	#if defined(JETSON_GPU_SUPPORT)
+	namespace Jetson {
+		static constexpr array known_gpu_names = {
+			"gv11b"sv, "gp10b"sv, "ga10b"sv, "gb10b"sv, "gpu"sv
+		};
+
+		//? Read a sysfs node containing a single integer; return fallback on missing/parse error.
+		static long long read_ll(const fs::path& path, long long fallback = 0) {
+			try {
+				return std::stoll(readfile(path, std::to_string(fallback)));
+			} catch (const std::exception&) {
+				return fallback;
+			}
+		}
+
+		static string read_trimmed(const fs::path& path) {
+			string s = str_to_lower(string{trim(readfile(path, ""))});
+			std::erase(s, '\0');
+			return s;
+		}
+
+		bool init() {
+			if (initialized) return false;
+
+			//? NVML may already have enumerated a GPU (JetPack 7+ ships NVML). If its metrics
+			//? are actually working, defer to it entirely. But some JetPack 7 images ship an
+			//? NVML that enumerates the "Orin (nvgpu)" iGPU while every metric query returns
+			//? NVML_ERROR_NOT_SUPPORTED — Nvml::collect<1> (run during Nvml::init) already
+			//? recorded that failure by clearing the relevant supported_functions flags, so we
+			//? can detect it here and take over that slot instead of leaving an empty GPU box.
+			if (Nvml::device_count > 0) {
+				const auto& sf = gpus[0].supported_functions;
+				const bool nvml_functional = sf.gpu_utilization or sf.gpu_clock or sf.temp_info
+					or sf.mem_used or sf.pwr_usage;
+				if (nvml_functional) {
+					Logger::debug("Jetson: NVML already initialized and functional, skipping sysfs backend");
+					return false;
+				}
+				Logger::debug("Jetson: NVML initialized but reports no working metrics, trying sysfs takeover");
+			}
+
+			bool is_jetson = fs::exists("/etc/nv_tegra_release");
+			if (not is_jetson) {
+				is_jetson = read_trimmed("/sys/firmware/devicetree/base/model").contains("jetson");
+			}
+			if (not is_jetson) {
+				Logger::debug("Jetson: not a Jetson platform, skipping");
+				return false;
+			}
+
+			//? Find the GPU's devfreq entry by matching its devicetree node name.
+			std::error_code ec;
+			for (const auto& entry : fs::directory_iterator("/sys/class/devfreq", ec)) {
+				const fs::path of_node_name = fs::canonical(entry.path(), ec) / "device" / "of_node" / "name";
+				if (ec or not fs::exists(of_node_name)) continue;
+
+				const string name = read_trimmed(of_node_name);
+				if (not std::ranges::any_of(known_gpu_names, [&](auto known) { return name == known; })) continue;
+
+				devfreq_path = fs::canonical(entry.path(), ec);
+				if (ec) continue;
+				Logger::debug("Jetson: found GPU devfreq at {}", devfreq_path.string());
+				break;
+			}
+
+			if (devfreq_path.empty()) {
+				Logger::debug("Jetson: no GPU devfreq entry found");
+				return false;
+			}
+
+			//? Resolve device load path (GPU busy percentage, in tenths: 0-1000).
+			device_load_path = fs::canonical(devfreq_path / "device", ec) / "load";
+			if (ec or not fs::exists(device_load_path)) device_load_path.clear();
+
+			//? Find the GPU thermal zone and its critical trip point.
+			for (int i = 0; i < 20; ++i) {
+				const fs::path tz = fs::path("/sys/devices/virtual/thermal") / fmt::format("thermal_zone{}", i);
+				if (not fs::exists(tz / "type")) continue;
+				if (not read_trimmed(tz / "type").contains("gpu")) continue;
+
+				thermal_temp_path = tz / "temp";
+				Logger::debug("Jetson: found GPU thermal zone at {}", tz.string());
+
+				for (int t = 0; t < 10; ++t) {
+					const fs::path trip_type = tz / fmt::format("trip_point_{}_type", t);
+					if (not fs::exists(trip_type)) break;
+					if (read_trimmed(trip_type) == "critical") {
+						thermal_crit = read_ll(tz / fmt::format("trip_point_{}_temp", t), thermal_crit * 1000) / 1000;
+						break;
+					}
+				}
+				break;
+			}
+
+			if (Nvml::device_count > 0) {
+				//? Take over the existing (non-functional) NVML slot rather than appending a
+				//? second, duplicate device.
+				takeover_nvml = true;
+				initialized = true;
+				Logger::info("Using Jetson sysfs backend for GPU \"{}\" (NVML present but non-functional)", gpu_names[0]);
+				Jetson::collect<1>(nullptr);
+				return true;
+			}
+
+			//? Prefer the board model from the devicetree (e.g. "NVIDIA Jetson Xavier NX Developer Kit"),
+			//? falling back to the devfreq node's of_node name.
+			string gpu_name;
+			const string model = string{trim(readfile("/sys/firmware/devicetree/base/model", ""))};
+			auto pos = model.find("Jetson");
+			if (pos != string::npos) {
+				gpu_name = string(trim(model.substr(pos)));
+				std::erase(gpu_name, '\0');
+				gpu_name += " GPU";
+			} else {
+				const string of_name = read_trimmed(devfreq_path / "device" / "of_node" / "name");
+				gpu_name = not of_name.empty() ? "Tegra " + of_name + " GPU" : "Tegra GPU";
+			}
+
+			device_count = 1;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count + device_count);
+			gpu_names[Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count] = gpu_name;
+
+			initialized = true;
+			Logger::info("Using Jetson sysfs backend for GPU \"{}\"", gpu_name);
+			Jetson::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count);
+			return true;
+		}
+
+		bool shutdown() {
+			if (not initialized) return false;
+			initialized = false;
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			//? In takeover mode we ignore the offset-based slice the generic dispatcher passes
+			//? (it points past the end of a vector we didn't grow) and write directly into the
+			//? slot NVML created.
+			gpu_info& gpu = takeover_nvml ? gpus[0] : *gpus_slice;
+
+			if constexpr (is_init) {
+				gpu.supported_functions = {
+					.gpu_utilization = not device_load_path.empty(),
+					.mem_utilization = false,
+					.gpu_clock = true,
+					.mem_clock = false,
+					.pwr_usage = false,
+					.pwr_state = false,
+					.temp_info = not thermal_temp_path.empty(),
+					.mem_total = false,
+					.mem_used = false,
+					.pcie_txrx = false,
+					.encoder_utilization = false,
+					.decoder_utilization = false,
+				};
+			}
+
+			if (not device_load_path.empty()) {
+				gpu.gpu_percent.at("gpu-totals").push_back(
+					std::clamp(read_ll(device_load_path) / 10, 0LL, 100LL));
+			}
+
+			gpu.gpu_clock_speed = (unsigned int)(read_ll(devfreq_path / "cur_freq") / 1'000'000); //? Hz → MHz
+
+			if (not thermal_temp_path.empty()) {
+				gpu.temp.push_back(read_ll(thermal_temp_path) / 1000); //? millidegrees → degrees
+				gpu.temp_max = thermal_crit;
+			}
+
+			return true;
+		}
+
+		//? Explicit template instantiations referenced from Shared::init and Gpu::collect.
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+	#endif // JETSON_GPU_SUPPORT
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2218,10 +2451,14 @@ namespace Gpu {
 		// DebugTimer gpu_timer("GPU Total");
 
 		//* Collect data
-		Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
+		//? Skip when Jetson has taken over the NVML slot (see Jetson::init) — Jetson::collect
+		//? below refreshes gpus[0] instead, and re-running Nvml::collect would re-flip
+		//? supported_functions flags Jetson relies on and re-attempt calls known to fail.
+		if (not Jetson::takeover_nvml) Nvml::collect<0>(gpus.data()); // raw pointer to vector data, size == Nvml::device_count
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		Jetson::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count); // size = Jetson::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
