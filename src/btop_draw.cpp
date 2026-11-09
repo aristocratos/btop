@@ -921,11 +921,51 @@ namespace Cpu {
 			return 'C';
 		};
 
+		//? Compute cluster info
+		const int e_cores = rng::count(core_types, CoreType::Efficiency);
+		const int p_cores = rng::count(core_types, CoreType::Performance);
+		const bool cluster_cores = Config::getB("cpu_cluster_cores");
+		const bool has_clusters = cluster_cores and e_cores > 0 and p_cores > 0 and core_types.size() > 0;
+		
 		//? Core text and graphs
 		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
-		for (const auto& n : iota(0, Shared::coreCount)) {
-			auto enabled = is_cpu_enabled(n);
+		
+		//? Draw cluster headers (E-CPU then P-CPU)
+		if (has_clusters) {
+			//? Helper lambda to calculate average utilization for a core range
+			auto cluster_avg = [&](int start, int end) -> double {
+				long long sum = 0;
+				int count = 0;
+				for (int i = start; i < end; i++) {
+					if (i < (int)cpu.core_percent.size()) {
+						sum += safeVal(cpu.core_percent, i).back();
+						count++;
+					}
+				}
+				return count > 0 ? (double)sum / count : 0.0;
+			};
+			
+			//? Draw E-CPU header
+			const double e_pct = cluster_avg(0, e_cores);
+			out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "E-CPU" + Fx::ub + " "
+				+ Draw::Meter{b_width - 10, "cpu"}(e_pct)
+				+ Theme::g("cpu").at(clamp((long long)e_pct, 0ll, 100ll)) + Theme::c("div_line") + Symbols::v_line;
+			cy++;
+			
+			//? Draw P-CPU header
+			const double p_pct = cluster_avg(e_cores, int(core_types.size()));
+			out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "P-CPU" + Fx::ub + " "
+				+ Draw::Meter{b_width - 10, "cpu"}(p_pct)
+				+ Theme::g("cpu").at(clamp((long long)p_pct, 0ll, 100ll)) + Theme::c("div_line") + Symbols::v_line;
+			cy++;
+		}
+		
+		//? Draw cores using helper lambda
+		
+		//? Helper lambda to draw a single core line
+		auto draw_core = [&](int n) {
+			const bool enabled = is_cpu_enabled(n);
 			const char label = core_label(n);
 			const auto& label_color = not enabled ? Theme::c("inactive_fg")
 				: label == 'P' ? Theme::c("core_p_fg")
@@ -943,8 +983,6 @@ namespace Cpu {
 			if (show_temps and not hide_cores) {
 				const auto core_temps = safeVal(cpu.temp, n + 1);
 				if (!core_temps.empty()) {
-					// FIXME: This should be checked during collection and just not be made available with
-					// something like `std::nullopt`.
 					const auto last_temp = core_temps.back();
 					const auto [temp, unit] = celsius_to(last_temp, temp_scale);
 					const auto temp_color = enabled ? Theme::g("temp").at(clamp(last_temp * 100 / safe_cpu_temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
@@ -957,21 +995,48 @@ namespace Cpu {
 						);
 					}
 					fmt::format_to(
-						std::back_inserter(out),
-						"{}{}{}{}",
-						temp_color,
-						rjust(std::to_string(temp), 4),
-						Theme::c(enabled ? "main_fg" : "inactive_fg"),
-						unit
+							std::back_inserter(out),
+							"{}{}{}{}",
+							temp_color,
+							rjust(std::to_string(temp), 4),
+							Theme::c(enabled ? "main_fg" : "inactive_fg"),
+							unit
 					);
 				}
 			}
 
 			out += Theme::c("div_line") + Symbols::v_line;
-
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
-				if (++cc >= b_columns) break;
-				cy = 1; cx = (b_width / b_columns) * cc;
+		};
+		
+		if (has_clusters) {
+			//? Draw E-cores first (indices 0 to e_cores-1)
+			for (const auto& n : iota(0, e_cores)) {
+				draw_core(n);
+				
+				if ((++cy > ceil((double)e_cores / b_columns) or cy == max_row) and n != e_cores - 1) {
+					if (++cc >= b_columns) break;
+					cy = 1; cx = (b_width / b_columns) * cc;
+				}
+			}
+			
+			//? Draw P-cores next (indices e_cores to end)
+			for (const auto& n : iota(e_cores, int(core_types.size()))) {
+				draw_core(n);
+				
+				if ((++cy > ceil((double)p_cores / b_columns) or cy == max_row) and n != int(core_types.size()) - 1) {
+					if (++cc >= b_columns) break;
+					cy = 1; cx = (b_width / b_columns) * cc;
+				}
+			}
+		} else {
+			//? Standard layout: all cores in columns
+			for (const auto& n : iota(0, Shared::coreCount)) {
+				draw_core(n);
+				
+				if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
+					if (++cc >= b_columns) break;
+					cy = 1; cx = (b_width / b_columns) * cc;
+				}
 			}
 		}
 

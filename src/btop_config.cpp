@@ -179,6 +179,11 @@ namespace Config {
 		{"show_coretemp", 		"#* Show temperatures for cpu cores also if check_temp is True and sensors has been found."},
 
 		{"show_core_type", 		"#* Label cores as P (performance) or E (efficiency) instead of C on hybrid cpus."},
+		{"cpu_cluster_cores", 	"#* Cluster P and E cores into separate sections on hybrid cpus.\n"
+								"#* When enabled, P/E cores are shown in grouped blocks with their\n"
+								"#* respective cluster frequency bars.\n"
+								"#* Requires show_core_type to be enabled.\n"
+								"#* Values: true, false"},
 
 		{"cpu_core_map",		"#* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.\n"
 								"#* Use lm-sensors or similar to see which cores are reporting temperatures on your machine.\n"
@@ -338,6 +343,7 @@ namespace Config {
 		{"check_temp", true},
 		{"show_coretemp", true},
 		{"show_core_type", true},
+		{"cpu_cluster_cores", false},
 		{"show_cpu_freq", true},
 		{"background_update", true},
 		{"mem_graphs", true},
