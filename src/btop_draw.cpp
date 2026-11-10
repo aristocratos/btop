@@ -881,7 +881,6 @@ namespace Cpu {
 			if (not has_clusters) {
 				out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
 				+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
-			}
 			if (show_temps) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
 				const auto temp_color = Theme::g("temp").at(clamp(safeVal(cpu.temp, 0).back() * 100 / safe_cpu_temp_max, 0ll, 100ll));
