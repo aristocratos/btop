@@ -648,6 +648,16 @@ namespace Menu {
 				"Show graphs for memory values.",
 				"",
 				"True or False."},
+		#ifdef __APPLE__
+			{"macos_activity_monitor",
+				"Use Activity Monitor memory accounting.",
+				"",
+				"False keeps the default active + wired usage.",
+				"True counts physical RAM minus free/cache.",
+				"Available includes reclaimable cache.",
+				"",
+				"Unavailable counters fall back with a warning."},
+		#endif
 			{"show_disks",
 				"Split memory box to also show disks.",
 				"",
@@ -1518,6 +1528,11 @@ static int optionsMenu(const string& key) {
 				else if (option == "base_10_sizes") {
 					recollect = true;
 				}
+				#ifdef __APPLE__
+				else if (option == "macos_activity_monitor") {
+					recollect = true;
+				}
+				#endif
 				else if (option == "save_config_on_exit" and not Config::getB("save_config_on_exit")) {
 					const bool old_write_new = Config::write_new;
 					Config::write_new = true;
