@@ -330,6 +330,10 @@ namespace Cpu {
 		return core_map;
 	}
 
+	auto get_core_types() -> vector<CoreType> {
+		return {};
+	}
+
 	auto get_battery() -> tuple<int, float, long, string> {
 		if (not has_battery) return {0, 0, 0, ""};
 
