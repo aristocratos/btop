@@ -1010,14 +1010,20 @@ namespace Cpu {
 			};
 			
 			const int col_width = b_width / b_columns;
+			auto draw_cluster_header = [&](const string_view label, const long long average) {
+				const auto average_text = rjust(to_string(average), 3);
+				const auto fixed_width = static_cast<int>(label.size() + 1 + average_text.size() + 1 + Symbols::v_line.size());
+				const auto meter_width = max(1, b_width - fixed_width);
+				out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + string(label) + Fx::ub + " "
+					+ Draw::Meter{meter_width, "cpu"}(average)
+					+ Theme::g("cpu").at(clamp(average, 0ll, 100ll)) + average_text + Theme::c("main_fg") + '%'
+					+ Theme::c("div_line") + Symbols::v_line;
+				cy++;
+			};
 			
 			//? Draw P-CPU header
 			const long long p_avg = cluster_avg(p_indices);
-			out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "P-CPU" + Fx::ub + " "
-				+ Draw::Meter{b_width - 11, "cpu"}(p_avg)
-				+ Theme::g("cpu").at(clamp(p_avg, 0ll, 100ll)) + rjust(to_string(p_avg), 3) + Theme::c("main_fg") + '%'
-				+ Theme::c("div_line") + Symbols::v_line;
-			cy++;
+			draw_cluster_header("P-CPU", p_avg);
 			
 			//? Draw P-cores (row-major: fill each row across columns, then move down)
 			const int p_rows = (int)ceil((double)p_indices.size() / b_columns);
@@ -1034,11 +1040,7 @@ namespace Cpu {
 			//? Draw E-CPU header
 			if (cy < max_row) {
 				const long long e_avg = cluster_avg(e_indices);
-				out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "E-CPU" + Fx::ub + " "
-					+ Draw::Meter{b_width - 11, "cpu"}(e_avg)
-					+ Theme::g("cpu").at(clamp(e_avg, 0ll, 100ll)) + rjust(to_string(e_avg), 3) + Theme::c("main_fg") + '%'
-					+ Theme::c("div_line") + Symbols::v_line;
-				cy++;
+				draw_cluster_header("E-CPU", e_avg);
 			}
 			
 			//? Draw E-cores (row-major)
