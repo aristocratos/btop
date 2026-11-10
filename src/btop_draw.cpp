@@ -2464,6 +2464,13 @@ namespace Draw {
 			const bool cluster_enabled = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores")
 				and core_types.size() == (size_t)Shared::coreCount
 				and v_contains(core_types, CoreType::Performance) and v_contains(core_types, CoreType::Efficiency);
+			const int cluster_width_limit = width - width / 3;
+			const auto cluster_width = [&](const int columns) {
+				const int column_width = b_column_size == 2 ? 21 + 12 * show_temp
+					: b_column_size == 1 ? 15 + 6 * show_temp
+					: 8 + 6 * show_temp;
+				return b_column_size == 0 ? column_width * columns + 1 : column_width * columns - (columns - 1);
+			};
 			
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
 			#ifdef GPU_SUPPORT
@@ -2477,13 +2484,14 @@ namespace Draw {
 					//? Adjust columns so both P and E sections fit vertically
 					const int available_rows = height - 5 - 2;  // -2 for P-CPU and E-CPU header bars
 					while (b_columns < Shared::coreCount) {
+						if (cluster_width(b_columns + 1) > cluster_width_limit) break;
 						int p_rows = (p_count + b_columns - 1) / b_columns;
 						int e_rows = (e_count + b_columns - 1) / b_columns;
 						if (p_rows + e_rows <= available_rows) break;
 						b_columns++;
 					}
 					//? Recalculate width after column adjustment
-					if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
+					b_width = cluster_width(b_columns);
 					//? Calculate height: P rows + E rows + 2 headers + 4 base + GPU
 					int p_rows = (p_count + b_columns - 1) / b_columns;
 					int e_rows = (e_count + b_columns - 1) / b_columns;
@@ -2500,12 +2508,13 @@ namespace Draw {
 					}
 					const int available_rows = height - 5 - 2;
 					while (b_columns < Shared::coreCount) {
+						if (cluster_width(b_columns + 1) > cluster_width_limit) break;
 						int p_rows = (p_count + b_columns - 1) / b_columns;
 						int e_rows = (e_count + b_columns - 1) / b_columns;
 						if (p_rows + e_rows <= available_rows) break;
 						b_columns++;
 					}
-					if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
+					b_width = cluster_width(b_columns);
 					int p_rows = (p_count + b_columns - 1) / b_columns;
 					int e_rows = (e_count + b_columns - 1) / b_columns;
 					b_height = min(height - 2, p_rows + e_rows + 4 + 1);
