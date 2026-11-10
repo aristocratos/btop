@@ -1010,20 +1010,29 @@ namespace Cpu {
 			};
 			
 			const int col_width = b_width / b_columns;
-			auto draw_cluster_header = [&](const string_view label, const long long average) {
+			string cluster_watts;
+			float cluster_watts_value = 0;
+			if (show_watts) {
+				cluster_watts_value = clamp(cpu.usage_watts, 0.0f, 999.0f);
+				cluster_watts = fmt::format(" {:>4.{}f}", cluster_watts_value, cluster_watts_value < 9.995f ? 2 : cluster_watts_value < 99.95f ? 1 : 0);
+				max_observed_pwr = max(max_observed_pwr, cluster_watts_value);
+			}
+			auto draw_cluster_header = [&](const string_view label, const long long average, const bool show_stats = false) {
 				const auto average_text = rjust(to_string(average), 3);
-				const auto fixed_width = static_cast<int>(label.size() + 1 + average_text.size() + 1 + Symbols::v_line.size());
+				const auto stats_width = show_stats and show_watts ? cluster_watts.size() + 1 : 0;
+				const auto fixed_width = static_cast<int>(label.size() + 1 + average_text.size() + 1 + stats_width + Symbols::v_line.size());
 				const auto meter_width = max(1, b_width - fixed_width);
 				out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + string(label) + Fx::ub + " "
 					+ Draw::Meter{meter_width, "cpu"}(average)
 					+ Theme::g("cpu").at(clamp(average, 0ll, 100ll)) + average_text + Theme::c("main_fg") + '%'
+					+ (show_stats and show_watts ? Theme::g("cached").at(clamp(cluster_watts_value / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cluster_watts + Theme::c("main_fg") + 'W' : "")
 					+ Theme::c("div_line") + Symbols::v_line;
 				cy++;
 			};
 			
 			//? Draw P-CPU header
 			const long long p_avg = cluster_avg(p_indices);
-			draw_cluster_header("P-CPU", p_avg);
+			draw_cluster_header("P-CPU", p_avg, true);
 			
 			//? Draw P-cores (row-major: fill each row across columns, then move down)
 			const int p_rows = (int)ceil((double)p_indices.size() / b_columns);
