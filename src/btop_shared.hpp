@@ -259,6 +259,9 @@ namespace Cpu {
 	//* Get battery info from /sys
 	auto get_battery() -> tuple<int, float, long, string>;
 
+	//* Get apple cpu name by id code
+	string apple_cpu_id_to_name(uint32_t code);
+
 	string trim_name(string);
 }
 

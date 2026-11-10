@@ -35,6 +35,48 @@ using namespace Tools;
 namespace Cpu {
     std::optional<std::string> container_engine;
 
+	string apple_cpu_id_to_name(unsigned int code) {
+		switch (code) {
+			case 8103:
+				return "Apple M1";
+			case 6000:
+				return "Apple M1 Pro";
+			case 6001:
+				return "Apple M1 Max";
+			case 6002:
+				return "Apple M1 Ultra";
+			case 8112:
+				return "Apple M2";
+			case 6020:
+				return "Apple M2 Pro";
+			case 6021:
+				return "Apple M2 Max";
+			case 6022:
+				return "Apple M2 Ultra";
+			case 8122:
+				return "Apple M3";
+			case 6030:
+				return "Apple M3 Pro";
+			case 6031:
+			case 6034:
+				return "Apple M3 Max";
+			case 8132:
+				return "Apple M4";
+			case 6040:
+				return "Apple M4 Pro";
+			case 6041:
+				return "Apple M4 Max";
+			case 8140:
+				return "Apple A18 Pro";
+			case 8142:
+				return "Apple M5";
+			case 6050:
+				return "Apple M5 Pro / Max";
+			default:
+				return "";
+		}
+	}
+
 	string trim_name(string name) {
 		auto name_vec = ssplit(name);
 
