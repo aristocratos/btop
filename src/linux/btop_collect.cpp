@@ -1116,29 +1116,14 @@ namespace Cpu {
 #endif
 
 	auto get_core_types() -> vector<CoreType> {
-		
 		//? AMD Zen 5 / Zen 5c hybrid cpus expose ranking in sysfs: cpuN/cpufreq/amd_pstate_highest_perf
 		//? Detect by finding the largest gap between unique ranking values
-		Logger::debug("AMD detection: starting");
 		const fs::path amd_root = "/sys/devices/system/cpu";
 		std::unordered_map<int, int> rankings;
-		Logger::debug("AMD: scanning for ranking files...");
 		for (int i = 0; i < Shared::coreCount; ++i) {
-			fs::path cpu_dir = fmt::format("{}/cpu{}", amd_root.string(), i);
-			fs::path rank_file = cpu_dir / "cpufreq/amd_pstate_highest_perf";
-			Logger::debug("AMD: checking cpu{} (file={}))", i, rank_file);
-			if (not fs::exists(rank_file)) {
-				Logger::debug("AMD: cpu{} missing rank file, skipping", i);
-				continue;
-			}
-			try {
-				const auto rank = to_int(readfile(rank_file, "-1"));
-				Logger::debug("AMD: cpu{} rank={}, adding to map", i, rank);
-				if (rank != -1U) rankings[i] = rank;
-				else Logger::debug("AMD: cpu{} rank=-1 (invalid)", i);
-			} catch (const std::exception& e) {
-				Logger::debug("AMD: cpu{} read exception: {}", i, e.what());
-			}
+			//? A missing or unreadable file parses as 0, which is never a real ranking
+			const auto rank = to_int(readfile(amd_root / fmt::format("cpu{}", i) / "cpufreq/amd_pstate_highest_perf"));
+			if (rank > 0) rankings[i] = static_cast<int>(rank);
 		}
 
 		if (rankings.size() >= 2) {
@@ -1171,8 +1156,6 @@ namespace Cpu {
 				}
 				if (rng::contains(types, CoreType::Efficiency)) return types;
 			}
-		} else {
-			Logger::debug("AMD: insufficient rankings ({})", rankings.size());
 		}
 
 		const auto is_hybrid = [](const vector<CoreType>& types) {
