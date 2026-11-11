@@ -1600,6 +1600,54 @@ namespace Net {
 
 }
 
+namespace Sensors {
+	int x = 1, y = 1, width = 20, height, min_width = 30, min_height = 5;
+	bool shown = false, redraw = true;
+	string box;
+
+	std::unordered_map<string, Draw::Graph> s_graphs;
+
+	string draw(const vector<sensor_info>& sensors, bool force_redraw, bool data_same) {
+		if (sensors.empty()) return "";
+		string out;
+		out.reserve(height * width);
+		if (force_redraw) redraw = true;
+
+		//* Draw the box outline and title
+		if (redraw) out += box;
+
+		const auto& temp_scale = Config::getS("temp_scale");
+		const auto& graph_symbol = Config::getS("graph_symbol_cpu");
+		const auto& graph_bg = Symbols::graph_symbols.at((graph_symbol == "default" ? Config::getS("graph_symbol") + "_up" : graph_symbol + "_up")).at(6);
+
+		const int inner = width - 2;
+		const int graph_width = max(8, inner / 2);
+		const int name_width = max(10, inner - graph_width - 6);
+		const int rows = height - 2;
+
+		//? Recreate graphs on redraw or if the set of sensors changed
+		if (redraw or s_graphs.size() != sensors.size()) {
+			s_graphs.clear();
+			for (const auto& sensor : sensors)
+				s_graphs[sensor.name] = Draw::Graph { graph_width, 1, "temp", sensor.temp, graph_symbol, false, false, (sensor.crit > 0 ? sensor.crit : 95), -23 };
+		}
+
+		for (int i = 0; const auto& sensor : sensors) {
+			if (i >= rows) break;
+			const auto [temp, unit] = celsius_to(sensor.temp.back(), temp_scale);
+			const auto temp_color = Theme::g("temp").at(clamp(sensor.temp.back() * 100 / (sensor.crit > 0 ? sensor.crit : 95), 0ll, 100ll));
+
+			out += Mv::to(y + 1 + i++, x + 1) + Theme::c("title") + uresize(sensor.name, name_width)
+				+ ' ' + Theme::c("inactive_fg") + graph_bg * graph_width + Mv::l(graph_width) + temp_color
+				+ s_graphs.at(sensor.name)(sensor.temp, data_same or redraw)
+				+ temp_color + rjust(to_string(temp), 4) + Theme::c("main_fg") + unit;
+		}
+
+		redraw = false;
+		return out;
+	}
+}
+
 namespace Proc {
 	int width_p = 55, height_p = 68;
 	int min_width = 44, min_height = 16;
@@ -2270,11 +2318,11 @@ namespace Draw {
 
 		Input::mouse_mappings.clear();
 
-		Cpu::x = Mem::x = Net::x = Proc::x = 1;
-		Cpu::y = Mem::y = Net::y = Proc::y = 1;
-		Cpu::width = Mem::width = Net::width = Proc::width = 0;
-		Cpu::height = Mem::height = Net::height = Proc::height = 0;
-		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = true;
+		Cpu::x = Mem::x = Net::x = Proc::x = Sensors::x = 1;
+		Cpu::y = Mem::y = Net::y = Proc::y = Sensors::y = 1;
+		Cpu::width = Mem::width = Net::width = Proc::width = Sensors::width = 0;
+		Cpu::height = Mem::height = Net::height = Proc::height = Sensors::height = 0;
+		Cpu::redraw = Mem::redraw = Net::redraw = Proc::redraw = Sensors::redraw = true;
 
 		Cpu::shown = boxes.contains("cpu");
 	#ifdef GPU_SUPPORT
@@ -2302,6 +2350,7 @@ namespace Draw {
 		Mem::shown = boxes.contains("mem");
 		Net::shown = boxes.contains("net");
 		Proc::shown = boxes.contains("proc");
+		Sensors::shown = boxes.contains("sensors") and Sensors::supported and Cpu::got_sensors and Config::getB("check_temp");
 
 		//* Calculate and draw cpu box outlines
 		if (Cpu::shown) {
@@ -2376,6 +2425,19 @@ namespace Draw {
 			box += createBox(b_x, b_y, b_width, b_height, "", false, cpu_title);
 		}
 
+		//* Calculate and draw sensors box outlines
+		if (Sensors::shown) {
+			using namespace Sensors;
+			//? Placed directly under the cpu box, or on top if cpu box is at bottom
+			width = Term::width;
+			min_width = 30;
+			min_height = 5;
+			height = clamp((int)ceil((double)Term::height * 0.15), min_height, max(min_height, Term::height - Cpu::height - 4));
+			x = 1;
+			y = cpu_bottom ? 1 : Cpu::height + 1;
+			box = createBox(x, y, width, height, Theme::c("cpu_box"), true, "sensors");
+		}
+
 	#ifdef GPU_SUPPORT
 		//* Calculate and draw gpu box outlines
 		if (Gpu::shown != 0) {
@@ -2436,20 +2498,20 @@ namespace Draw {
 
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
-			height = floor(static_cast<double>(Term::height) * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
+			height = floor(static_cast<double>(Term::height) * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height - (Sensors::shown ? Sensors::height : 0);
 		#else
-			height = floor(static_cast<double>(Term::height) * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100);
+			height = floor(static_cast<double>(Term::height) * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) - (Sensors::shown ? Sensors::height : 0);
 		#endif
 			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
 			if (mem_below_net and Net::shown)
 		#ifdef GPU_SUPPORT
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
-				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + (Sensors::shown ? Sensors::height : 0);
 		#else
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
 			else
-				y = cpu_bottom ? 1 : Cpu::height + 1;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + (Sensors::shown ? Sensors::height : 0);
 		#endif
 
 			if (show_disks) {
@@ -2500,16 +2562,16 @@ namespace Draw {
 			using namespace Net;
 			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
 		#ifdef GPU_SUPPORT
-			height = Term::height - Cpu::height - Gpu::total_height - Mem::height;
+			height = Term::height - Cpu::height - Gpu::total_height - Mem::height - (Sensors::shown ? Sensors::height : 0);
 		#else
-			height = Term::height - Cpu::height - Mem::height;
+			height = Term::height - Cpu::height - Mem::height - (Sensors::shown ? Sensors::height : 0);
 		#endif
 			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
 			if (mem_below_net and Mem::shown)
 			#ifdef GPU_SUPPORT
-				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height + (Sensors::shown ? Sensors::height : 0);
 			#else
-				y = cpu_bottom ? 1 : Cpu::height + 1;
+				y = (cpu_bottom ? 1 : Cpu::height + 1) + (Sensors::shown ? Sensors::height : 0);
 			#endif
 			else
 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
@@ -2534,15 +2596,15 @@ namespace Draw {
 			using namespace Proc;
 			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
 		#ifdef GPU_SUPPORT
-			height = Term::height - Cpu::height - Gpu::total_height;
+			height = Term::height - Cpu::height - Gpu::total_height - (Sensors::shown ? Sensors::height : 0);
 		#else
-			height = Term::height - Cpu::height;
+			height = Term::height - Cpu::height - (Sensors::shown ? Sensors::height : 0);
 		#endif
 			x = proc_left ? 1 : Term::width - width + 1;
 		#ifdef GPU_SUPPORT
-			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height;
+			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height + (Sensors::shown ? Sensors::height : 0);
 		#else
-			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
+			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + (Sensors::shown ? Sensors::height : 0);
 		#endif
 			select_max = height - 3;
 			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);

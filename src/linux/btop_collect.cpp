@@ -541,12 +541,15 @@ namespace Cpu {
 					const string pname = readfile(path / "name", path.filename());
 					for (const auto & file : fs::directory_iterator(path)) {
 						const string file_suffix = "input";
-						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						const string filename = file.path().filename();
 						string file_path = file.path();
 
-						if (!file_path.contains(file_suffix) or file_path.contains("nvme")) {
+						//? Only include actual temperature inputs, skip fan/power/voltage/nvme inputs
+						if (not filename.starts_with("temp") or not filename.ends_with("_input") or file_path.contains("nvme")) {
 							continue;
 						}
+
+						const int file_id = atoi(filename.c_str() + 4); // skip "temp" prefix
 
 						const string basepath = file_path.erase(file_path.find(file_suffix), file_suffix.length());
 						const string label = readfile(fs::path(basepath + "label"), "temp" + to_string(file_id));
@@ -1244,6 +1247,44 @@ namespace Cpu {
 		cpu.active_cpus = std::make_optional(detect_active_cpus());
 
 		return cpu;
+	}
+}
+
+namespace Sensors {
+	vector<sensor_info> current_sensors;
+	bool supported = true;
+	auto collect(bool no_update) -> vector<sensor_info>& {
+		if (not Config::getB("check_temp") or not Cpu::got_sensors) {
+			if (not current_sensors.empty()) current_sensors.clear();
+			return current_sensors;
+		}
+		if (no_update) return current_sensors;
+
+		//? Keep the temperature history of sensors that are still present in the scan
+		auto old_sensors = std::move(current_sensors);
+		current_sensors.clear();
+		current_sensors.reserve(Cpu::found_sensors.size());
+
+		for (const auto& [name, sensor] : Cpu::found_sensors) {
+			const int64_t temp = stol(readfile(sensor.path, "0")) / 1000;
+
+			deque<long long> temp_hist;
+			for (const auto& old : old_sensors) {
+				if (old.name == name) {
+					temp_hist = old.temp;
+					break;
+				}
+			}
+			if (temp_hist.size() > 20) temp_hist.pop_front();
+			temp_hist.push_back(temp);
+
+			current_sensors.push_back(sensor_info { name, temp_hist, sensor.crit });
+		}
+
+		//? Sort by name to keep a stable order between frames
+		rng::sort(current_sensors, [](const auto& a, const auto& b) { return a.name < b.name; });
+
+		return current_sensors;
 	}
 }
 

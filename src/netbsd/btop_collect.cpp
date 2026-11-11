@@ -1425,3 +1425,13 @@ namespace Tools {
 		return 0.0;
 	}
 }  // namespace Tools
+
+//* Temperature sensors are currently not collected on this platform,
+//* the sensors box is drawn empty if explicitly enabled.
+namespace Sensors {
+	vector<sensor_info> current_sensors;
+	bool supported = false;
+	auto collect(bool no_update) -> vector<sensor_info>& {
+		return current_sensors;
+	}
+}

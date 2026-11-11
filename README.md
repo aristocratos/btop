@@ -100,6 +100,7 @@ GPU monitoring added for Linux!
 Compile from git main to try it out.
 
 Use keys `5`, `6`, `7` and `0` to show/hide the gpu monitoring boxes. `5` = Gpu 1, `6` = Gpu 2, etc.
+Use key `s` to show/hide the sensors box, showing a graph and current value for every detected hardware temperature sensor, such as motherboard and GPU sensors.
 
 Gpu stats/graphs can also be displayed in the "Cpu box" (not as verbose), see the cpu options menu for info and configuration.
 
@@ -1379,7 +1380,7 @@ graph_symbol_net = "default"
 # Graph symbol to use for graphs in cpu box, "default", "braille", "block" or "tty".
 graph_symbol_proc = "default"
 
-#* Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace.
+#* Manually set which boxes to show. Available values are "cpu mem net proc sensors" and "gpu0" through "gpu5", separate values with whitespace.
 shown_boxes = "cpu mem net proc"
 
 #* Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs.
