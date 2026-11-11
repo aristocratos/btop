@@ -599,34 +599,61 @@ namespace Mem {
 		auto &mem = current_mem;
 		static bool snapped = (getenv("BTOP_SNAPPED") != nullptr);
 
-		int mib[4];
-		u_int memActive, memWire, cachedMem, freeMem;
+		int mib[5];
+		u_int memActive = 0, memWire = 0, freeMem = 0;
+		uint64_t cachedBytes = 0;
 		size_t len;
 
+		// active
    		len = 4; sysctlnametomib("vm.stats.vm.v_active_count", mib, &len);
 		len = sizeof(memActive);
 		sysctl(mib, 4, &(memActive), &len, nullptr, 0);
-		memActive *= Shared::pageSize;
 
+		// wired
 		len = 4; sysctlnametomib("vm.stats.vm.v_wire_count", mib, &len);
 		len = sizeof(memWire);
 		sysctl(mib, 4, &(memWire), &len, nullptr, 0);
-		memWire *= Shared::pageSize;
 
-		mem.stats.at("used") = memWire + memActive;
-		mem.stats.at("available") = Shared::totalMem - memActive - memWire;
+		// cached
+		len = 2;
+		if (sysctlnametomib("vfs.bufspace", mib, &len) == 0) {
+			uint64_t bufSpace = 0;
+			len = sizeof(bufSpace);
+			if (sysctl(mib, 2, &bufSpace, &len, nullptr, 0) == 0) {
+				cachedBytes += bufSpace;
+			}
+		}
 
-		len = sizeof(cachedMem);
-   		len = 4; sysctlnametomib("vm.stats.vm.v_cache_count", mib, &len);
-   		sysctl(mib, 4, &(cachedMem), &len, nullptr, 0);
-   		cachedMem *= Shared::pageSize;
-   		mem.stats.at("cached") = cachedMem;
+		len = 5;
+		if (sysctlnametomib("kstat.zfs.misc.arcstats.size", mib, &len) == 0) {
+			uint64_t arcSize = 0;
+			len = sizeof(arcSize);
+			if (sysctl(mib, 5, &arcSize, &len, nullptr, 0) == 0) {
+				uint64_t arcMin = 0;
+				len = 5;
+				if (sysctlnametomib("kstat.zfs.misc.arcstats.c_min", mib, &len) == 0) {
+					len = sizeof(arcMin);
+					sysctl(mib, 5, &arcMin, &len, nullptr, 0);
+				}
+				cachedBytes += (arcSize > arcMin) ? (arcSize - arcMin) : 0;
+			}
+		}
 
-		len = sizeof(freeMem);
+		// free
    		len = 4; sysctlnametomib("vm.stats.vm.v_free_count", mib, &len);
+		len = sizeof(freeMem);
    		sysctl(mib, 4, &(freeMem), &len, nullptr, 0);
-   		freeMem *= Shared::pageSize;
-   		mem.stats.at("free") = freeMem;
+
+		uint64_t activeBytes = (uint64_t)memActive * Shared::pageSize;
+		uint64_t wireBytes   = (uint64_t)memWire   * Shared::pageSize;
+		uint64_t freeBytes   = (uint64_t)freeMem   * Shared::pageSize;
+		uint64_t rawUsed     = activeBytes + wireBytes;
+		uint64_t usedBytes   = (cachedBytes < rawUsed) ? rawUsed - cachedBytes : 0;
+
+		mem.stats.at("used") = usedBytes;
+		mem.stats.at("available") = Shared::totalMem - usedBytes;
+   		mem.stats.at("cached") = cachedBytes;
+   		mem.stats.at("free") = freeBytes;
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
