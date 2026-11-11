@@ -168,6 +168,8 @@ namespace Config {
 
 		{"cpu_bottom",			"#* Show cpu box at bottom of screen instead of top."},
 
+		{"cpu_gpu_horizontal", "#* Show CPU and one visible GPU side by side when they fit, following cpu_bottom."},
+
 		{"show_uptime", 		"#* Shows the system uptime in the CPU box."},
 
 		{"show_cpu_watts",		"#* Shows the CPU package current power consumption in watts. Requires running `make setcap` or `make setuid` or running with sudo."},
@@ -331,6 +333,7 @@ namespace Config {
 		{"cpu_invert_lower", true},
 		{"cpu_single_graph", false},
 		{"cpu_bottom", false},
+		{"cpu_gpu_horizontal", false},
 		{"show_uptime", true},
 		{"show_cpu_watts", true},
 		{"check_temp", true},
