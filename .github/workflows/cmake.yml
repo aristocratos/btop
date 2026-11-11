@@ -132,7 +132,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
           arch: x86_64
           release: "15.1"
@@ -178,7 +178,7 @@ jobs:
           persist-credentials: false
 
       - name: Enter VM
-        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92 # v1.5.2
+        uses: vmactions/netbsd-vm@5957cf330aef2e6ddc63c604364c99ce2e02b91d # v1.5.3
         with:
           arch: x86_64
           release: "11.0"
