@@ -268,7 +268,9 @@ struct engines *discover_engines(const char *device)
 	memset(engines, 0, sizeof(*engines));
 
 	engines->num_engines = 0;
-	engines->device = device;
+	engines->device = strdup(device);
+	if (!engines->device)
+		goto err;
 	engines->discrete = !is_igpu(device);
 
 	d = opendir(sysfs_root);
@@ -368,6 +370,8 @@ struct engines *discover_engines(const char *device)
 	return engines;
 
 err:
+	if (engines)
+		free(engines->device);
 	free(engines);
 
 	return NULL;
@@ -403,6 +407,7 @@ void free_engines(struct engines *engines)
 	closedir(engines->root);
 
 	free(engines->class);
+	free(engines->device);
 	free(engines);
 }
 
