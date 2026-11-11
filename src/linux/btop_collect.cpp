@@ -2303,6 +2303,7 @@ static auto convert_ascii_escapes(const std::string& input) -> std::string {
 
 namespace Mem {
 	bool has_swap{};
+	bool has_zram{};
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
 	int disk_ios{};
@@ -2340,6 +2341,12 @@ namespace Mem {
 		auto& mem = current_mem;
 
 		mem.stats.at("swap_total") = 0;
+		mem.stats.at("zram_total") = 0;
+		mem.stats.at("zram_used") = 0;
+		mem.stats.at("zram_original") = 0;
+		mem.stats.at("zram_compressed") = 0;
+		mem.stats.at("disk_swap_total") = 0;
+		mem.stats.at("disk_swap_used") = 0;
 
 		//? Read ZFS ARC info from /proc/spl/kstat/zfs/arcstats
 		uint64_t arc_size = 0, arc_min_size = 0;
@@ -2405,6 +2412,43 @@ namespace Mem {
 
 		meminfo.close();
 
+		//? Read per-device swap info from /proc/swaps (sizes are in KiB)
+		const bool had_zram = has_zram;
+		has_zram = false;
+		if (show_swap or swap_disk) {
+			ifstream swaps(Shared::procPath / "swaps");
+			if (swaps.good()) {
+				swaps.ignore(SSmax, '\n');
+				for (string filename, type; swaps >> filename >> type;) {
+					uint64_t size = 0, used = 0;
+					swaps >> size >> used;
+					swaps.ignore(SSmax, '\n');
+					size <<= 10;
+					used <<= 10;
+
+					const string prefix = filename.starts_with("/dev/zram") ? "zram" : "disk_swap";
+					mem.stats.at(prefix + "_total") += size;
+					mem.stats.at(prefix + "_used") += used;
+
+					if (prefix == "zram") {
+						ifstream mm_stat(fs::path("/sys/block") / fs::path(filename).filename() / "mm_stat");
+						uint64_t original = 0, compressed = 0;
+						if (mm_stat >> original >> compressed) {
+							mem.stats.at("zram_original") += original;
+							mem.stats.at("zram_compressed") += compressed;
+						}
+					}
+				}
+			}
+		}
+		//? Use the same source for zram usage, percentages and compression stats
+		if (mem.stats.at("zram_original") > 0)
+			mem.stats.at("zram_used") = mem.stats.at("zram_original");
+		mem.stats.at("zram_free") = mem.stats.at("zram_total") - mem.stats.at("zram_used");
+		mem.stats.at("disk_swap_free") = mem.stats.at("disk_swap_total") - mem.stats.at("disk_swap_used");
+		has_zram = mem.stats.at("zram_total") > 0;
+		if (has_zram != had_zram) redraw = true;
+
 		//? Calculate percentages
 		for (const auto& name : mem_names) {
 			mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / totalMem));
@@ -2415,6 +2459,18 @@ namespace Mem {
 			for (const auto& name : swap_names) {
 				mem.percent.at(name).push_back(round((double)mem.stats.at(name) * 100 / mem.stats.at("swap_total")));
 				while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+			}
+			if (has_zram) {
+				for (const auto& name : zram_names) {
+					const auto total = mem.stats.at("zram_total");
+					mem.percent.at(name).push_back(total > 0 ? round((double)mem.stats.at(name) * 100 / total) : 0);
+					while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+				}
+				for (const auto& name : disk_swap_names) {
+					const auto total = mem.stats.at("disk_swap_total");
+					mem.percent.at(name).push_back(total > 0 ? round((double)mem.stats.at(name) * 100 / total) : 0);
+					while (cmp_greater(mem.percent.at(name).size(), width * 2)) mem.percent.at(name).pop_front();
+				}
 			}
 			has_swap = true;
 		}
@@ -2576,7 +2632,10 @@ namespace Mem {
 					}
 
 					//? Remove disks no longer mounted or filtered out
-					if (swap_disk and has_swap) found.push_back("swap");
+					if (swap_disk and has_swap) {
+						if (has_zram) found.push_back("zram");
+						found.push_back("swap");
+					}
 					for (auto it = disks.begin(); it != disks.end();) {
 						if (not v_contains(found, it->first))
 							it = disks.erase(it);
@@ -2593,7 +2652,7 @@ namespace Mem {
 				//? Get disk/partition stats
 				for (auto it = disks.begin(); it != disks.end(); ) {
 					auto &[mountpoint, disk] = *it;
-					if (v_contains(ignore_list, mountpoint) or disk.name == "swap") {
+					if (v_contains(ignore_list, mountpoint) or is_in(disk.name, "swap", "zram")) {
 						it = disks.erase(it);
 						continue;
 					}
@@ -2647,19 +2706,31 @@ namespace Mem {
 					if (disks.contains("/")) mem.disks_order.push_back("/");
 				#endif
 				if (swap_disk and has_swap) {
+					if (has_zram) {
+						mem.disks_order.push_back("zram");
+						if (not disks.contains("zram")) disks["zram"] = {"", "zram", "swap"};
+						disks.at("zram").total = mem.stats.at("zram_total");
+						disks.at("zram").used = mem.stats.at("zram_used");
+						disks.at("zram").free = mem.stats.at("zram_free");
+						disks.at("zram").original = mem.stats.at("zram_original");
+						disks.at("zram").compressed = mem.stats.at("zram_compressed");
+						disks.at("zram").used_percent = mem.percent.at("zram_used").back();
+						disks.at("zram").free_percent = mem.percent.at("zram_free").back();
+					}
 					mem.disks_order.push_back("swap");
 					if (not disks.contains("swap")) disks["swap"] = {"", "swap", "swap"};
-					disks.at("swap").total = mem.stats.at("swap_total");
-					disks.at("swap").used = mem.stats.at("swap_used");
-					disks.at("swap").free = mem.stats.at("swap_free");
-					disks.at("swap").used_percent = mem.percent.at("swap_used").back();
-					disks.at("swap").free_percent = mem.percent.at("swap_free").back();
+					const string prefix = has_zram ? "disk_swap" : "swap";
+					disks.at("swap").total = mem.stats.at(prefix + "_total");
+					disks.at("swap").used = mem.stats.at(prefix + "_used");
+					disks.at("swap").free = mem.stats.at(prefix + "_free");
+					disks.at("swap").used_percent = mem.percent.at(prefix + "_used").back();
+					disks.at("swap").free_percent = mem.percent.at(prefix + "_free").back();
 				}
 				for (const auto& name : last_found)
 					#ifdef SNAPPED
-						if (not is_in(name, "/mnt", "swap")) mem.disks_order.push_back(name);
+						if (not is_in(name, "/mnt", "swap", "zram")) mem.disks_order.push_back(name);
 					#else
-						if (not is_in(name, "/", "swap")) mem.disks_order.push_back(name);
+						if (not is_in(name, "/", "swap", "zram")) mem.disks_order.push_back(name);
 					#endif
 
 				//? Get disks IO

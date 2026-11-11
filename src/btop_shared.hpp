@@ -265,9 +265,11 @@ namespace Cpu {
 namespace Mem {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
-	extern bool has_swap, shown, redraw;
+	extern bool has_swap, has_zram, shown, redraw;
 	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
 	const array swap_names { "swap_used"s, "swap_free"s };
+	const array zram_names { "zram_used"s, "zram_free"s };
+	const array disk_swap_names { "disk_swap_used"s, "disk_swap_free"s };
 	extern int disk_ios;
 
 	struct disk_info {
@@ -278,6 +280,8 @@ namespace Mem {
 		int64_t total{};
 		int64_t used{};
 		int64_t free{};
+		uint64_t original{};
+		uint64_t compressed{};
 		int used_percent{};
 		int free_percent{};
 
@@ -290,10 +294,15 @@ namespace Mem {
 	struct mem_info {
 		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
-			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
+			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0},
+			{"zram_total", 0}, {"zram_used", 0}, {"zram_free", 0},
+			{"zram_original", 0}, {"zram_compressed", 0},
+			{"disk_swap_total", 0}, {"disk_swap_used", 0}, {"disk_swap_free", 0}};
 		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
-			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
+			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}},
+			{"zram_total", {}}, {"zram_used", {}}, {"zram_free", {}},
+			{"disk_swap_total", {}}, {"disk_swap_used", {}}, {"disk_swap_free", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
 	};

@@ -627,6 +627,7 @@ namespace Cpu {
 
 namespace Mem {
 	bool has_swap = false;
+	bool has_zram = false;
 	int disk_ios = 0;
 	vector<string> last_found;
 
