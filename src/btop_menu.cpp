@@ -820,7 +820,7 @@ namespace Menu {
 				"Processes sorting option.",
 				"",
 				"Possible values:",
-				"\"pid\", \"program\", \"arguments\", \"threads\",",
+				"\"pid\", \"name\", \"command\", \"threads\",",
 				"\"user\", \"memory\", \"cpu lazy\" and",
 				"\"cpu direct\".",
 				"",
