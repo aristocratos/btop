@@ -342,13 +342,19 @@ namespace Cpu {
 			has_battery = false;
 		} else {
 			has_battery = true;
-			size_t size = sizeof(seconds);
-			if (sysctlbyname("hw.acpi.battery.time", &seconds, &size, nullptr, 0) < 0) {
+			int minutes;
+			size_t size = sizeof(minutes);
+			if (sysctlbyname("hw.acpi.battery.time", &minutes, &size, nullptr, 0) < 0 || minutes < 0 || minutes > 10000) { // dead..7 days
 				seconds = 0;
+			} else {
+				seconds = minutes * 60;
 			}
-			size = sizeof(watts);
-			if (sysctlbyname("hw.acpi.battery.rate", &watts, &size, nullptr, 0) < 0) {
+			int rate;
+			size = sizeof(rate);
+			if (sysctlbyname("hw.acpi.battery.rate", &rate, &size, nullptr, 0) < 0 || rate < 20 || rate > 1000000) { // sysctl likes returning garbage
 				watts = -1;
+			} else {
+				watts = rate / 1000.0F;
 			}
 			int state;
 			size = sizeof(state);
