@@ -36,6 +36,11 @@ namespace Cpu {
     std::optional<std::string> container_engine;
 	vector<CoreType> core_types;
 
+	auto has_core_clusters() -> bool {
+		return core_types.size() == static_cast<size_t>(Shared::coreCount)
+			and v_contains(core_types, CoreType::Performance) and v_contains(core_types, CoreType::Efficiency);
+	}
+
 	string trim_name(string name) {
 		auto name_vec = ssplit(name);
 

@@ -1366,6 +1366,8 @@ static int optionsMenu(const string& key) {
 		}
 		int retval = Changed;
 		bool recollect{};
+		bool no_update{};
+		bool cpu_redraw{};
 		bool screen_redraw{};
 		bool theme_refresh{};
 
@@ -1533,6 +1535,16 @@ static int optionsMenu(const string& key) {
 				}
 				else if (option == "base_10_sizes") {
 					recollect = true;
+				}
+				else if (is_in(option, "show_core_type", "cpu_cluster_cores")) {
+					//? Core types are cached at startup; redraw without collecting new samples.
+					//? Recompute layout only when the other option is enabled and P/E clusters exist.
+					no_update = true;
+					const std::string_view other = (option == "show_core_type" ? "cpu_cluster_cores" : "show_core_type");
+					if (not (Cpu::has_core_clusters() and Config::getB(other))) {
+						screen_redraw = false;
+						cpu_redraw = true;
+					}
 				}
 				else if (option == "save_config_on_exit" and not Config::getB("save_config_on_exit")) {
 					const bool old_write_new = Config::write_new;
@@ -1749,7 +1761,11 @@ static int optionsMenu(const string& key) {
 			recollect = true;
 		}
 		if (recollect) {
-			Runner::run("all", false, true);
+			Runner::run("all", no_update, true);
+			retval = NoChange;
+		}
+		else if (cpu_redraw and Cpu::shown) {
+			Runner::run("cpu", true, true);
 			retval = NoChange;
 		}
 

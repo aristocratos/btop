@@ -261,6 +261,9 @@ namespace Cpu {
 	auto get_core_types() -> vector<CoreType>;
 	extern vector<CoreType> core_types;
 
+	//* True when all cores are classified and both P- and E-cores are present.
+	auto has_core_clusters() -> bool;
+
 	auto get_cpuHz() -> string;
 
 	//* Get battery info from /sys

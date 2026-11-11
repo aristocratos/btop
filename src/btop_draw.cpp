@@ -807,9 +807,7 @@ namespace Cpu {
 
 		//? Check if we should use clustered P/E layout
 		const auto& core_types = Cpu::core_types;
-		const bool has_clusters = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores")
-			and core_types.size() == (size_t)Shared::coreCount
-			and v_contains(core_types, CoreType::Performance) and v_contains(core_types, CoreType::Efficiency);
+		const bool has_clusters = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores") and has_core_clusters();
 		
 		try {
 			//? Cpu/Gpu graphs
@@ -2470,9 +2468,7 @@ namespace Draw {
 
 			//? Check if clustering is enabled (for height calculation)
 			const auto& core_types = Cpu::core_types;
-			const bool cluster_enabled = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores")
-				and core_types.size() == (size_t)Shared::coreCount
-				and v_contains(core_types, CoreType::Performance) and v_contains(core_types, CoreType::Efficiency);
+			const bool cluster_enabled = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores") and Cpu::has_core_clusters();
 			const int cluster_width_limit = width - width / 3;
 			const auto cluster_width = [&](const int columns) {
 				const int column_width = b_column_size == 2 ? 21 + 12 * show_temp
