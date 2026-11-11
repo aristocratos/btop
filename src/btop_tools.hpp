@@ -65,26 +65,135 @@ using std::tuple;
 using std::vector;
 using namespace fmt::literals;
 
+
+//? ------------------------------------------------- Helpers for 1-allocation string concatentation -----------------------------------------------------
+
+namespace Concat {
+
+template<size_t N>
+static inline consteval auto length(char const(&)[N]) noexcept { return N - 1; }
+static inline constexpr auto length(char) noexcept { return 1; }
+static inline constexpr auto length(char const* s) noexcept { return std::strlen(s); }
+static inline constexpr auto length(string_view a) noexcept { return a.length(); }
+static inline constexpr auto length(std::string const& a) noexcept { return a.length(); }
+
+// Functional form. Converting (a + b + c) into concat(a, b, c) may be too error-prone.
+template<class... Args>
+static inline constexpr string concat(Args&&... args) {
+	// Allocate the result string once.
+	string r;
+	r.reserve((... + length(std::forward<Args>(args))));
+	// Concatenate into the result string without allocations.
+	return (r += ... += std::forward<Args>(args));
+}
+
+// A helper class for building an expression tree from a chain of additions with minimum code changes to minimize errors.
+struct Concat {};
+
+// The expression tree node.
+template<class Left, class Right>
+struct Terms {
+	// Copyable but not reassignable.
+	Left* const left;
+	Right* const right;
+
+	// Append to a string.
+	friend constexpr string& operator+=(string& s, Terms terms) {
+		return append_to(s, 0, terms);
+	}
+
+	// Copy into a string.
+	constexpr operator string() const {
+		string r;
+		return r += *this;
+	}
+};
+
+static inline constexpr string& append_to(string& s, size_t suffix_len, Concat) {
+	// Allocate the buffer for the concatenation result once.
+	s.reserve(s.size() + suffix_len);
+	return s;
+}
+
+template<class... Ts>
+static inline constexpr string& append_to(string& s, size_t suffix_len, Terms<Ts...> terms) {
+	return append_to(s, length(*terms.right) + suffix_len, *terms.left) += *terms.right;
+}
+
+template<class Left, class Right>
+static inline constexpr Terms<Left, Right> make_terms(Left* left, Right* right) noexcept {
+	return {left, right};
+}
+
+template<class... Ts, class T>
+static inline constexpr auto operator+(Terms<Ts...>&& left, T&& right) noexcept {
+	return make_terms(&left, &right);
+}
+
+// The operator+ form to convert a string concatenation with multiple operator+ allocations into the expression template that
+// concatenates all the strings with one allocation.
+template<class Right>
+static inline constexpr auto operator+(Concat&& left, Right&& right) noexcept {
+	return make_terms(&left, &right);
+}
+
+// An operator+ adaptor to append into the output buffer directly without any intermediate objects.
+struct Append {
+	// Copyable but not reassignable.
+	string* const out;
+
+	constexpr explicit Append(string& out) noexcept
+		: out(&out)
+	{}
+
+	constexpr Append& clear() noexcept {
+		out->clear();
+		return *this;
+	}
+
+	constexpr Append& operator--() noexcept {
+		return clear();
+	}
+
+	template<class Right>
+	constexpr Append& operator+=(Right&& right) {
+		*out += std::forward<Right>(right);
+		return *this;
+	}
+
+	template<class Right>
+	constexpr Append& operator+(Right&& right) {
+		return *this += std::forward<Right>(right);
+	}
+};
+
+} // Concat
+
+using Concat::concat;
+using C = Concat::Concat;
+using A = Concat::Append;
+
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
 //* Collection of escape codes for text style and formatting
 namespace Fx {
-	extern const string e;	//* Escape sequence start
-	extern const string b;	//* Bold on/off
-	extern const string ub;	//* Bold off
-	extern const string d;	//* Dark on
-	extern const string ud;	//* Dark off
-	extern const string i;	//* Italic on
-	extern const string ui;	//* Italic off
-	extern const string ul;	//* Underline on
-	extern const string uul;//* Underline off
-	extern const string bl;	//* Blink on
-	extern const string ubl;//* Blink off
-	extern const string s;	//* Strike/crossed-out on
-	extern const string us;	//* Strike/crossed-out on/off
+
+	extern string_view const e;		//* Escape sequence start
+	extern string_view const b;		//* Bold on/off
+	extern string_view const ub;	//* Bold off
+	extern string_view const d;		//* Dark on
+	extern string_view const ud;	//* Dark off
+	extern string_view const i;		//* Italic on
+	extern string_view const ui;	//* Italic off
+	extern string_view const ul;	//* Underline on
+	extern string_view const uul;	//* Underline off
+	extern string_view const bl;	//* Blink on
+	extern string_view const ubl;	//* Blink off
+	extern string_view const s;		//* Strike/crossed-out on
+	extern string_view const us;	//* Strike/crossed-out on/off
 
 	//* Reset foreground/background color and text effects
-	extern const string reset_base;
+	extern string_view const reset_base;
 
 	//* Reset text effects and restore theme foregrund and background color
 	extern string reset;
@@ -98,31 +207,30 @@ namespace Fx {
 	//* Return a string with all colors and text styling removed
 	inline string uncolor(const string& s) { return std::regex_replace(s, color_regex, ""); }
 	// string uncolor(const string& s);
-
 }
 
 //* Collection of escape codes and functions for cursor manipulation
 namespace Mv {
 	//* Move cursor to <line>, <column>
-	inline string to(int line, int col) { return Fx::e + to_string(line) + ';' + to_string(col) + 'f'; }
+	static inline string to(int line, int col) { return fmt::format("{}{};{}f", Fx::e, line, col); }
 
 	//* Move cursor right <x> columns
-	inline string r(int x) { return Fx::e + to_string(x) + 'C'; }
+	static inline string r(int x) { return fmt::format("{}{}C", Fx::e, x); }
 
 	//* Move cursor left <x> columns
-	inline string l(int x) { return Fx::e + to_string(x) + 'D'; }
+	static inline string l(int x) { return fmt::format("{}{}D", Fx::e, x); }
 
 	//* Move cursor up x lines
-	inline string u(int x) { return Fx::e + to_string(x) + 'A'; }
+	static inline string u(int x) { return fmt::format("{}{}A", Fx::e, x); }
 
 	//* Move cursor down x lines
-	inline string d(int x) { return Fx::e + to_string(x) + 'B'; }
+	static inline string d(int x) { return fmt::format("{}{}B", Fx::e, x); }
 
 	//* Save cursor position
-	const string save = Fx::e + "s";
+	extern string_view const save;
 
 	//* Restore saved cursor position
-	const string restore = Fx::e + "u";
+	extern string_view const restore;
 }
 
 //* Collection of escape codes and functions for terminal manipulation
@@ -132,19 +240,19 @@ namespace Term {
 	extern atomic<int> height;
 	extern string fg, bg, current_tty;
 
-	extern const string hide_cursor;
-	extern const string show_cursor;
-	extern const string alt_screen;
-	extern const string normal_screen;
-	extern const string clear;
-	extern const string clear_end;
-	extern const string clear_begin;
-	extern const string mouse_on; //? Enable reporting of mouse position on click and release
-	extern const string mouse_off;
-	extern const string mouse_direct_on; //? Enable reporting of mouse position at any movement
-	extern const string mouse_direct_off;
-	extern const string sync_start; //? Start of terminal synchronized output
-	extern const string sync_end; //? End of terminal synchronized output
+	extern string_view const hide_cursor;
+	extern string_view const show_cursor;
+	extern string_view const alt_screen;
+	extern string_view const normal_screen;
+	extern string_view const clear;
+	extern string_view const clear_end;
+	extern string_view const clear_begin;
+	extern string_view const mouse_on; //? Enable reporting of mouse position on click and release
+	extern string_view const mouse_off;
+	extern string_view const mouse_direct_on; //? Enable reporting of mouse position at any movement
+	extern string_view const mouse_direct_off;
+	extern string_view const sync_start; //? Start of terminal synchronized output
+	extern string_view const sync_end; //? End of terminal synchronized output
 
 	//* Returns true if terminal has been resized and updates width and height
 	bool refresh(bool only_check=false);
