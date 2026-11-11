@@ -202,12 +202,14 @@ if(APPLE)
   target_link_libraries(libbtop
       $<LINK_LIBRARY:FRAMEWORK,CoreFoundation> $<LINK_LIBRARY:FRAMEWORK,IOKit>
   )
-  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" AND BTOP_GPU)
+  if(BTOP_GPU)
     target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
 
-    find_library(IOREPORT_LIB IOReport)
-    if(IOREPORT_LIB)
-      target_link_libraries(libbtop ${IOREPORT_LIB})
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" OR "arm64" IN_LIST CMAKE_OSX_ARCHITECTURES)
+      find_library(IOREPORT_LIB IOReport)
+      if(IOREPORT_LIB)
+        target_link_libraries(libbtop ${IOREPORT_LIB})
+      endif()
     endif()
   endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "MidnightBSD")

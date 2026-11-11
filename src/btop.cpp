@@ -230,7 +230,7 @@ void clean_quit(int sig) {
 	Gpu::Rsmi::shutdown();
 	Gpu::Asysfs::shutdown();
 	#ifdef __APPLE__
-	Gpu::AppleSilicon::shutdown();
+	Gpu::MacOS::shutdown();
 	#endif
 #endif
 
