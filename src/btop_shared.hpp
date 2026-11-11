@@ -190,6 +190,11 @@ namespace Gpu {
 	namespace Asysfs {
 		extern bool shutdown();
 	}
+	#ifdef __linux__
+	namespace Jetson {
+		extern bool shutdown();
+	}
+	#endif
 	#ifdef __APPLE__
 	namespace AppleSilicon {
 		extern bool shutdown();
