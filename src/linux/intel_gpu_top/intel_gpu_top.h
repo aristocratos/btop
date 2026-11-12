@@ -60,6 +60,13 @@ struct engines {
 	struct pmu_counter imc_writes;
 	unsigned int num_imc;
 
+	//* DG1 / integrated GPUs do not expose a RAPL ``energy-gpu`` perf event;
+	//* instead the i915 hwmon driver reports GPU temperature and energy.
+	bool hwmon_present;
+	char hwmon_path[64];
+	struct pmu_counter hwmon_energy; /* cumulative energy in microjoules */
+	int temp_milli;                  /* die temperature in milli-Celsius, -1 = unknown */
+
 	struct pmu_counter freq_req;
 	struct pmu_counter freq_req_gt[MAX_GTS];
 	struct pmu_counter freq_act;
