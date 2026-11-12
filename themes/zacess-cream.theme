@@ -49,3 +49,7 @@ theme[proc_banner_bg]="#ffd400"
 theme[proc_banner_fg]="#000000"
 theme[followed_bg]="#f9e79a"
 theme[followed_fg]="#000000"
+
+# Core type colors
+theme[core_p_fg]="#016969"
+theme[core_e_fg]="#016f1b"

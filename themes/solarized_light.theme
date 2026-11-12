@@ -87,3 +87,7 @@ theme[download_end]="#a3a8f7"
 theme[upload_start]="#701c45"
 theme[upload_mid]="#d33682"
 theme[upload_end]="#f56caf"
+
+# Core type colors
+theme[core_p_fg]="#b58900"
+theme[core_e_fg]="#d33682"
