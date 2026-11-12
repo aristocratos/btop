@@ -134,10 +134,23 @@ endif()
 target_compile_options(libbtop PUBLIC -Wall -Wextra -Wpedantic)
 
 include(CheckCXXCompilerFlag)
+include(CMakePushCheckState)
 
-if(NOT APPLE)
+cmake_push_check_state(RESET)
+set(CMAKE_REQUIRED_FLAGS "-fstack-clash-protection")
+check_cxx_source_compiles("
+  int main(int argc, char *argv[]) {
+    char buf[16384], *src = argv[0], *dst = buf;
+    while ((*dst++ = *src++) != 0) {}
+    return buf[argc];
+  }
+" HAS_FSTACK_CLASH_PROTECTION)
+cmake_pop_check_state()
+
+if(NOT APPLE AND HAS_FSTACK_CLASH_PROTECTION)
   target_compile_options(libbtop PUBLIC -fstack-clash-protection)
 endif()
+
 check_cxx_compiler_flag(-fstack-protector HAS_FSTACK_PROTECTOR)
 if(HAS_FSTACK_PROTECTOR)
   target_compile_options(libbtop PUBLIC -fstack-protector)
