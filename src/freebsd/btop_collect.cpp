@@ -331,6 +331,7 @@ namespace Cpu {
 	}
 
 	auto get_core_types() -> vector<CoreType> {
+		// Stub!
 		return {};
 	}
 
