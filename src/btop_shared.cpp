@@ -101,7 +101,22 @@ bool set_priority(pid_t pid, int priority) {
   return false;
 }
 
+	//* Per-process swap usage is currently only readable on Linux, and only if swap is enabled
+	bool proc_swap_available() {
+#if defined(__linux__)
+		return (Mem::collect(true).stats.at("swap_total") > 0);
+#else
+		return false;
+#endif
+	}
+
+	//* Sort key for the "memory" sorting option; follows the currently displayed column (proc_mem_mode)
+	uint64_t mem_sort_key(const proc_info& p, const int mem_mode) {
+		return (mem_mode == 1 ? p.swap : mem_mode == 2 ? p.mem + p.swap : p.mem);
+	}
+
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree) {
+		const auto mem_mode = (proc_swap_available() ? Config::getI("proc_mem_mode") : 0);
 		if (reverse) {
 			switch (v_index(sort_vector, sorting)) {
 			case 0: rng::stable_sort(proc_vec, rng::less{}, &proc_info::pid); 		break;
@@ -109,7 +124,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 2: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::less{}, &proc_info::threads);	break;
 			case 4: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::user); 		break;
-			case 5: rng::stable_sort(proc_vec, rng::less{}, &proc_info::mem); 		break;
+			case 5: rng::stable_sort(proc_vec, rng::less{}, [mem_mode](const proc_info& p) { return mem_sort_key(p, mem_mode); });	break;
 			case 6: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_p);		break;
 			case 7: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cpu_c);		break;
 			}
@@ -121,7 +136,7 @@ bool set_priority(pid_t pid, int priority) {
 			case 2: rng::stable_sort(proc_vec, rng::less{}, &proc_info::cmd); 		break;
 			case 3: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::threads);	break;
 			case 4: rng::stable_sort(proc_vec, rng::less{}, &proc_info::user);		break;
-			case 5: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::mem); 		break;
+			case 5: rng::stable_sort(proc_vec, rng::greater{}, [mem_mode](const proc_info& p) { return mem_sort_key(p, mem_mode); });	break;
 			case 6: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_p);   	break;
 			case 7: rng::stable_sort(proc_vec, rng::greater{}, &proc_info::cpu_c);   	break;
 			}
@@ -146,11 +161,12 @@ bool set_priority(pid_t pid, int priority) {
 	}
 
 	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused, int& c_index, const int index_max, bool collapsed) {
+		const auto mem_mode = (proc_swap_available() ? Config::getI("proc_mem_mode") : 0);
 		if (proc_vec.size() > 1 and not paused) {
 			if (reverse) {
 				switch (v_index(sort_vector, sorting)) {
 				case 3: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().threads < b.entry.get().threads; });	break;
-				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem < b.entry.get().mem; });	break;
+				case 5: rng::stable_sort(proc_vec, [mem_mode](const auto& a, const auto& b) { return mem_sort_key(a.entry.get(), mem_mode) < mem_sort_key(b.entry.get(), mem_mode); });	break;
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p < b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c < b.entry.get().cpu_c; });	break;
 				}
@@ -158,7 +174,7 @@ bool set_priority(pid_t pid, int priority) {
 			else {
 				switch (v_index(sort_vector, sorting)) {
 				case 3: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().threads > b.entry.get().threads; });	break;
-				case 5: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().mem > b.entry.get().mem; });	break;
+				case 5: rng::stable_sort(proc_vec, [mem_mode](const auto& a, const auto& b) { return mem_sort_key(a.entry.get(), mem_mode) > mem_sort_key(b.entry.get(), mem_mode); });	break;
 				case 6: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_p > b.entry.get().cpu_p; });	break;
 				case 7: rng::stable_sort(proc_vec, [](const auto& a, const auto& b) { return a.entry.get().cpu_c > b.entry.get().cpu_c; });	break;
 				}
@@ -244,6 +260,7 @@ bool set_priority(pid_t pid, int priority) {
 					cur_proc.cpu_p += p.cpu_p;
 					cur_proc.cpu_c += p.cpu_c;
 					cur_proc.mem += p.mem;
+					cur_proc.swap += p.swap;
 					cur_proc.threads += p.threads;
 				}
 				filter_found++;
@@ -253,6 +270,7 @@ bool set_priority(pid_t pid, int priority) {
 				cur_proc.cpu_p += p.cpu_p;
 				cur_proc.cpu_c += p.cpu_c;
 				cur_proc.mem += p.mem;
+				cur_proc.swap += p.swap;
 				cur_proc.threads += p.threads;
 			}
 		}
