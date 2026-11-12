@@ -521,7 +521,7 @@ namespace Mem {
 			if (fgets(poolName, len, poolPipe())) {
 				poolName[strcspn(poolName, "\n")] = 0;
 				Logger::debug("zpool found: {}", poolName);
-				Mem::zpools.push_back(std::regex_replace(poolName, toReplace, "%25"));
+				Mem::zpools.emplace_back(std::regex_replace(poolName, toReplace, "%25"));
 			}
 		}
 	}
@@ -718,7 +718,7 @@ namespace Mem {
 			}
 
 			//? Remove disks no longer mounted or filtered out
-			if (swap_disk and has_swap) found.push_back("swap");
+			if (swap_disk and has_swap) found.emplace_back("swap");
 			for (auto it = disks.begin(); it != disks.end();) {
 				if (not v_contains(found, it->first))
 					it = disks.erase(it);
@@ -752,11 +752,11 @@ namespace Mem {
 			//? Setup disks order in UI and add swap if enabled
 			mem.disks_order.clear();
 			if (snapped and disks.contains("/mnt"))
-				mem.disks_order.push_back("/mnt");
+				mem.disks_order.emplace_back("/mnt");
 			else if (disks.contains("/"))
-				mem.disks_order.push_back("/");
+				mem.disks_order.emplace_back("/");
 			if (swap_disk and has_swap) {
-				mem.disks_order.push_back("swap");
+				mem.disks_order.emplace_back("swap");
 				if (not disks.contains("swap"))
 					disks["swap"] = {"", "swap"};
 				disks.at("swap").total = mem.stats.at("swap_total");
