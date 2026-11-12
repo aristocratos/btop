@@ -1732,6 +1732,24 @@ namespace Proc {
 			// this fails for processes we don't own - same as in Linux
 			detailed.io_read = floating_humanizer(rusage.ri_diskio_bytesread);
 			detailed.io_write = floating_humanizer(rusage.ri_diskio_byteswritten);
+			detailed.mem_footprint_peak = rusage.ri_lifetime_max_phys_footprint;
+		}
+		else {
+			detailed.mem_footprint_peak = -1;
+		}
+
+		//? Compressed memory from the task VM info, the task name port is available without root for processes we own
+		detailed.mem_compressed = -1;
+		if (Config::getB("proc_mem_footprint")) {
+			mach_port_t task_name;
+			if (task_name_for_pid(mach_task_self(), pid, &task_name) == KERN_SUCCESS) {
+				task_vm_info_data_t vm_info;
+				mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+				if (task_info(task_name, TASK_VM_INFO, (task_info_t)&vm_info, &count) == KERN_SUCCESS) {
+					detailed.mem_compressed = vm_info.compressed;
+				}
+				mach_port_deallocate(mach_task_self(), task_name);
+			}
 		}
 	}
 
@@ -1741,6 +1759,7 @@ namespace Proc {
 		auto reverse = Config::getB("proc_reversed");
 		const auto &filter = Config::getS("proc_filter");
 		auto per_core = Config::getB("proc_per_core");
+		const bool mem_footprint = Config::getB("proc_mem_footprint");
 		auto tree = Config::getB("proc_tree");
 		auto show_detailed = Config::getB("show_detailed");
 		const auto pause_proc_list = Config::getB("pause_proc_list");
@@ -1885,6 +1904,15 @@ namespace Proc {
 						cpu_t = new_proc.cpu_t;
 					}
 
+					//? Physical footprint includes compressed memory, fails for other users' processes when not root
+					new_proc.footprint = 0;
+					if (mem_footprint) {
+						rusage_info_v2 rusage;
+						if (proc_pid_rusage(new_proc.pid, RUSAGE_INFO_V2, (void **)&rusage) == 0) {
+							new_proc.footprint = rusage.ri_phys_footprint;
+						}
+					}
+
 					//? Process cpu usage since last update
 					new_proc.cpu_p = clamp(round(((cpu_t - new_proc.cpu_t) * Shared::machTck) / ((cputimes - old_cputimes) * Shared::clkTck)) * cmult / 1000.0, 0.0, 100.0 * Shared::coreCount);
 
@@ -1921,6 +1949,7 @@ namespace Proc {
 							if (!keep_dead_proc_usage) {
 								r.cpu_p = 0.0;
 								r.mem = 0;
+								r.footprint = 0;
 							}
 						}
 					}
