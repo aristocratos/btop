@@ -563,6 +563,22 @@ namespace Cpu {
 	vector<Draw::Graph> temp_graphs;
 	vector<Draw::Graph> gpu_temp_graphs;
 	vector<Draw::Graph> gpu_mem_graphs;
+#ifdef __linux__
+	vector<Draw::Graph> freq_graphs;
+
+	static std::pair<string, char> format_frequency(const long long kHz, bool compact) {
+		double v; char prefix;
+		if (kHz >= 1e9)      { v = (double)kHz / 1e9; prefix = 'T'; }
+		else if (kHz >= 1e6) { v = (double)kHz / 1e6; prefix = 'G'; }
+		else                 { v = (double)kHz / 1e3; prefix = 'M'; }
+		const int dec = (v < 10 ? 2 :
+		                (v < 100 ? 1 : 0));
+		if (compact)
+			return {fmt::format("{:>3.{}f}", v, std::max(0, dec - 1)), prefix};
+		else
+			return {fmt::format("{:>4.{}f}", v, dec), prefix};
+	}
+#endif
 
     string draw(
 		const cpu_info& cpu,
@@ -602,6 +618,17 @@ namespace Cpu {
 		auto& temp_scale = Config::getS("temp_scale");
 		auto cpu_bottom = Config::getB("cpu_bottom");
 		const auto safe_cpu_temp_max = cpu.temp_max <= 0 ? 90 : cpu.temp_max;
+#ifdef __linux__
+		const string& freq_grad = (Theme::gradients.contains("freq") ? "freq" : "cpu");
+		const auto& core_freq_mode = Config::getS("show_core_freq");
+		const bool show_core_freq = (core_freq_mode != "off");
+		const bool core_freq_graph = (core_freq_mode == "graph");
+		const int freq_footprint = (not show_core_freq or b_column_size == 0 ? 0
+			: 6 + (core_freq_graph and b_column_size > 1 ? 6 : 0));
+#else
+		const int freq_footprint = 0;
+#endif
+		const int core_graph_width = 5 * b_column_size + extra_width - freq_footprint;
 
 		const string& title_left = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_left_down : Symbols::title_left);
 		const string& title_right = Theme::c("cpu_box") + (cpu_bottom ? Symbols::title_right_down : Symbols::title_right);
@@ -744,10 +771,10 @@ namespace Cpu {
 					+ Theme::c("main_fg") + graph_up_field + Mv::r(1) + "▲▼" + Mv::r(1) + graph_lo_field;
 			}
 
-			if (b_column_size > 0 or extra_width > 0) {
+			if (core_graph_width > 0) {
 				core_graphs.clear();
 				for (const auto& core_data : cpu.core_percent) {
-					core_graphs.emplace_back(5 * b_column_size + extra_width, 1, "cpu", core_data, graph_symbol);
+					core_graphs.emplace_back(core_graph_width, 1, "cpu", core_data, graph_symbol);
 				}
 			}
 
@@ -760,6 +787,17 @@ namespace Cpu {
 					}
 				}
 			}
+#ifdef __linux__
+			freq_graphs.clear();
+			if (show_core_freq and core_freq_graph and b_column_size > 1) {
+				for (const auto& n : iota(0, Shared::coreCount)) {
+					const auto fmin = safeVal(cpu.min_core_freq_kHz, n);
+					const auto fmax = safeVal(cpu.max_core_freq_kHz, n);
+					freq_graphs.emplace_back(5, 1, freq_grad, safeVal(cpu.core_freq_kHz, n),
+						graph_symbol, false, false, fmax - fmin, -fmin);
+				}
+			}
+#endif
 		}
 
 		//? Draw battery if enabled and present
@@ -915,12 +953,12 @@ namespace Cpu {
 			auto enabled = is_cpu_enabled(n);
 			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
 				+ ljust(to_string(n), core_width);
-			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
-				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
+			if (core_graph_width > 0 and cmp_less(n, core_graphs.size()))
+				out += Theme::c("inactive_fg") + graph_bg * core_graph_width + Mv::l(core_graph_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
 
 			out += enabled ? Theme::g("cpu").at(clamp(safeVal(cpu.core_percent, n).back(), 0ll, 100ll)) : Theme::c("inactive_fg");
-			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
+			out += rjust(to_string(safeVal(cpu.core_percent, n).back()), (b_column_size < 2 || core_graph_width < 0 ? 3 : 4)) + Theme::c(enabled ? "main_fg" : "inactive_fg") + '%';
 
 			if (show_temps and not hide_cores) {
 				const auto core_temps = safeVal(cpu.temp, n + 1);
@@ -948,6 +986,39 @@ namespace Cpu {
 					);
 				}
 			}
+
+#ifdef __linux__
+			if (show_core_freq and b_column_size > 0) {
+				const auto freqs = safeVal(cpu.core_freq_kHz, n);
+				if (not freqs.empty()) {
+					const auto fmin = safeVal(cpu.min_core_freq_kHz, n);
+					const auto fmax = safeVal(cpu.max_core_freq_kHz, n);
+					const auto range = (fmax > fmin ? fmax - fmin : 1);
+					const auto last_freq = freqs.back();
+					const auto freq_color = enabled
+						? Theme::g(freq_grad).at(clamp((last_freq - fmin) * 100 / range, 0ll, 100ll))
+						: Theme::c("inactive_fg");
+					if (core_freq_graph and b_column_size > 1 and cmp_less(n, freq_graphs.size())) {
+						fmt::format_to(
+							std::back_inserter(out),
+							" {}{}{}{}", Theme::c("inactive_fg"),
+							graph_bg * 5, Mv::l(5),
+							freq_graphs.at(n)(freqs, data_same or redraw)
+						);
+					}
+					const auto [freq_val, freq_prefix] =
+						format_frequency(last_freq, not hide_cores and (core_freq_graph or b_column_size < 2));
+					fmt::format_to(
+						std::back_inserter(out),
+						" {}{}{}{}",
+						freq_color,
+						freq_val,
+						Theme::c(enabled ? "main_fg" : "inactive_fg"),
+						freq_prefix
+					);
+				}
+			}
+#endif
 
 			out += Theme::c("div_line") + Symbols::v_line;
 

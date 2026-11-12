@@ -554,6 +554,12 @@ namespace Menu {
 				"Highest, the highest frequency.",
 				"",
 				"Average, sum and divide."},
+			{"show_core_freq",
+				"How per-core CPU frequency will be displayed.",
+				"",
+				"\"off\" = per-core frequency disabled",
+				"\"value\" = only the latest value is shown",
+				"\"graph\" = shown as a history graph"},
 		#endif
 			{"custom_cpu_name",
 				"Custom cpu model name in cpu percentage box.",
@@ -1318,6 +1324,7 @@ static int optionsMenu(const string& key) {
 			{"temp_scale", std::cref(Config::temp_scales)},
 		#ifdef __linux__
 			{"freq_mode", std::cref(Config::freq_modes)},
+			{"show_core_freq", std::cref(Config::show_core_freq_values)},
 		#endif
 			{"proc_sorting", std::cref(Proc::sort_vector)},
 			{"graph_symbol", std::cref(Config::valid_graph_symbols)},
@@ -1573,7 +1580,7 @@ static int optionsMenu(const string& key) {
 					else if (option == "base_10_bitrate") {
 						recollect = true;
 					}
-					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info", "show_core_freq") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
 						screen_redraw = true;
 					else if (option == "disable_presets" and optList.at(i) != "Off") {
 						atomic_wait(Runner::active);
