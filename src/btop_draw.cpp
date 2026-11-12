@@ -769,6 +769,7 @@ namespace Cpu {
 			static float old_watts{};	// defaults to = 0
 			static string old_status;
 			static Draw::Meter bat_meter {10, "cpu", true};
+			if (redraw) bat_meter = Draw::Meter{10, "cpu", true};
 			static const std::unordered_map<string, string> bat_symbols = {
 				{"charging", "▲"},
 				{"discharging", "▼"},
