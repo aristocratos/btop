@@ -1251,13 +1251,21 @@ namespace Mem {
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
 			//? Compressed pages occupy physical RAM and can't be handed out without decompressing, so they count as used
 			const uint64_t compressed = static_cast<uint64_t>(p.compressor_page_count) * Shared::pageSize;
-			mem.stats.at("free") = p.free_count * Shared::pageSize;
-			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
+			//? "used" the way Activity Monitor computes "Memory Used": everything that is neither free nor
+			//? cached files. Cached files = file-backed + purgeable, and free leaves out speculative pages
+			//? (the same split vm_stat prints). Summing active + wired + compressed misses the inactive app
+			//? pages and ~1 GiB the kernel puts in no category at all; this matched Activity Monitor within
+			//? 0.1 GiB at the same instant on an M3 Max with swap nearly full.
+			const auto page = static_cast<uint64_t>(Shared::pageSize);
+			const uint64_t free_pages = (p.free_count > p.speculative_count) ? p.free_count - p.speculative_count : 0;
+			const uint64_t free_b = free_pages * page;
+			const uint64_t cached_b = (static_cast<uint64_t>(p.external_page_count) + p.purgeable_count) * page;
+			mem.stats.at("free") = free_b;
+			mem.stats.at("cached") = cached_b;
 			mem.stats.at("compressed") = compressed;
-			mem.stats.at("used") = static_cast<uint64_t>(p.active_count + p.wire_count) * Shared::pageSize + compressed;
-			//? Saturate, page counts are sampled separately from hw.memsize so used can briefly exceed it
-			mem.stats.at("available") = (Shared::totalMem > mem.stats.at("used"))
-				? Shared::totalMem - mem.stats.at("used") : 0;
+			//? Saturate, page counts are sampled separately from hw.memsize
+			mem.stats.at("used") = (Shared::totalMem > free_b + cached_b) ? Shared::totalMem - free_b - cached_b : 0;
+			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 			has_compressed = true;
 		}
 
