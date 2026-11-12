@@ -393,8 +393,11 @@ namespace Input {
 				else if (key.starts_with("mouse_")) {
 					redraw = false;
 					const auto& [col, line] = mouse_pos;
-					const int y = (Config::getB("show_detailed") ? Proc::y + 8 : Proc::y);
-					const int height = (Config::getB("show_detailed") ? Proc::height - 8 : Proc::height);
+					const bool show_cwd = not Proc::detailed.cwd.empty() && Proc::height >= Proc::min_height + Proc::cwd_height;
+					const int cwd_h = show_cwd ? Proc::cwd_height : 0;
+					const int detail_h = Proc::base_detailed_height + cwd_h;
+					const int y = (Config::getB("show_detailed") ? Proc::y + detail_h : Proc::y);
+					const int height = (Config::getB("show_detailed") ? Proc::height - detail_h : Proc::height);
 					const auto in_proc_box = col >= Proc::x + 1 and col < Proc::x + Proc::width and line >= y + 1 and line < y + height - 1;
 					if (key == "mouse_click") {
 						if (in_proc_box) {
@@ -528,6 +531,27 @@ namespace Input {
 						return;
 					else if (old_selected != new_selected and (old_selected == 0 or new_selected == 0))
 						redraw = true;
+				}
+				else if (key == "J") {
+					if (
+						Config::getB("show_detailed") and
+						Config::getI("proc_selected") == 0 and
+						Proc::detailed.status != "Dead" and
+						Proc::detailed.entry.ppid > 0
+					) {
+						const int parent_pid = static_cast<int>(Proc::detailed.entry.ppid);
+
+						const bool following_detailed =
+							Config::getB("follow_process") and
+							Config::getI("followed_pid") == Config::getI("detailed_pid");
+
+						Config::set("detailed_pid", parent_pid);
+
+						if (following_detailed)
+							Config::set("followed_pid", parent_pid);
+
+						Config::set("update_following", true);
+					}
 				}
 				else keep_going = true;
 
