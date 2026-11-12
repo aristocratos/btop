@@ -27,6 +27,7 @@ tab-size = 4
 #include <mutex>
 #include <optional>
 #include <pthread.h>
+#include <langinfo.h>
 #include <span>
 #include <string_view>
 #ifdef __FreeBSD__
@@ -933,72 +934,57 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 	//? Config init
 	init_config(cli.low_color, cli.filter);
 
+	auto codeset_locale_check_case_ = [](std::string_view codeset) {
+		auto lambda_ascii_checkcase_helper_ = [](std::string_view str1, std::string_view str2) {
+			if (str1.size() != str2.size()) return false;
+
+			for (const auto [c1, c2] : std::ranges::views::zip(str1, str2)) {
+				char lower_c1 = (c1 >= 'A' && c1 <= 'Z') ? static_cast<char>(c1 + 32) : c1;
+				char lower_c2 = (c2 >= 'A' && c2 <= 'Z') ? static_cast<char>(c2 + 32) : c2;
+
+				if (lower_c1 != lower_c2) {
+					return false;
+				}
+			}
+			return true;
+		};
+
+		return lambda_ascii_checkcase_helper_(codeset, "utf-8")
+			or lambda_ascii_checkcase_helper_(codeset, "utf8");
+	};
+
 	//? Try to find and set a UTF-8 locale
-	if (std::setlocale(LC_ALL, "") != nullptr and not std::string_view { std::setlocale(LC_ALL, "") }.contains(";")
-	and str_to_upper(s_replace((string)std::setlocale(LC_ALL, ""), "-", "")).ends_with("UTF8")) {
+	if (const auto *loc = std::setlocale(LC_ALL, ""); loc != nullptr
+	and codeset_locale_check_case_(::nl_langinfo(CODESET))) {
+		std::locale::global(std::locale(loc));
 		Logger::debug("Using locale {}", std::locale().name());
 	}
 	else {
-		string found;
-		bool set_failure{};
-		for (const auto loc_env : array{"LANG", "LC_ALL", "LC_CTYPE"}) {
-			if (std::getenv(loc_env) != nullptr and str_to_upper(s_replace((string)std::getenv(loc_env), "-", "")).ends_with("UTF8")) {
-				found = std::getenv(loc_env);
-				if (std::setlocale(LC_ALL, found.c_str()) == nullptr) {
-					set_failure = true;
-					Logger::warning("Failed to set locale {} continuing anyway.", found);
-				}
-			}
-		}
-		if (found.empty()) {
-			if (setenv("LC_ALL", "", 1) == 0 and setenv("LANG", "", 1) == 0) {
-				try {
-					if (const auto loc = std::locale("").name(); not loc.empty() and loc != "*") {
-						for (auto& l : ssplit(loc, ';')) {
-							if (str_to_upper(s_replace(l, "-", "")).ends_with("UTF8")) {
-								found = l.substr(l.find('=') + 1);
-								if (std::setlocale(LC_ALL, found.c_str()) != nullptr) {
-									break;
-								}
-							}
-						}
-					}
-				}
-				catch (...) { found.clear(); }
-			}
-		}
-	//
 	#ifdef __APPLE__
-		if (found.empty()) {
-			CFLocaleRef cflocale = CFLocaleCopyCurrent();
-			CFStringRef id_value = (CFStringRef)CFLocaleGetValue(cflocale, kCFLocaleIdentifier);
-			auto loc_id = CFStringGetCStringPtr(id_value, kCFStringEncodingUTF8);
-			CFRelease(cflocale);
-			std::string cur_locale = (loc_id != nullptr ? loc_id : "");
-			if (cur_locale.empty()) {
-				Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
-			}
-			else if (std::setlocale(LC_ALL, string(cur_locale + ".UTF-8").c_str()) != nullptr) {
-				Logger::debug("Setting LC_ALL={}.UTF-8", cur_locale);
-			}
-			else if(std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
-				Logger::debug("Setting LC_ALL=en_US.UTF-8");
-			}
-			else {
-				Logger::warning("Failed to set macos locale, continuing anyway.");
-			}
+		CFLocaleRef cflocale = CFLocaleCopyCurrent();
+		CFStringRef id_value = (CFStringRef)CFLocaleGetValue(cflocale, kCFLocaleIdentifier);
+		auto loc_id = CFStringGetCStringPtr(id_value, kCFStringEncodingUTF8);
+		CFRelease(cflocale);
+		std::string cur_locale = (loc_id != nullptr ? loc_id : "");
+		if (cur_locale.empty()) {
+			Logger::warning("No UTF-8 locale detected! Some symbols might not display correctly.");
+		} else if (auto loc_str = string(cur_locale + ".UTF-8"); std::setlocale(LC_ALL, loc_str.c_str()) != nullptr) {
+			std::locale::global(std::locale(loc_str));
+			Logger::debug("Setting LC_ALL={}.UTF-8", cur_locale);
+		} else if (std::setlocale(LC_ALL, "en_US.UTF-8") != nullptr) {
+			std::locale::global(std::locale("en_US.UTF-8"));
+			Logger::debug("Setting LC_ALL=en_US.UTF-8");
+		} else {
+			Logger::warning("Failed to set macos locale, continuing anyway.");
 		}
 	#else
-		if (found.empty() and cli.force_utf) {
-			Logger::warning("No UTF-8 locale detected! Forcing start with --force-utf argument.");
-		} else if (found.empty()) {
+		if (cli.force_utf) {
+			Logger::warning("The locale might not be detected properly but UTF is forced anyway.");
+		} else {
 			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 	#endif
-		else if (not set_failure) {
-			Logger::debug("Setting LC_ALL={}", found);
-		}
 	}
 
 	//? Initialize terminal and set options
