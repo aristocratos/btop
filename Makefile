@@ -194,6 +194,26 @@ else ifeq ($(PLATFORM_LC),netbsd)
 	override ADDFLAGS += -lkvm -lprop
 	export MAKE = gmake
 	SU_GROUP := wheel
+else ifeq ($(PLATFORM_LC),sunos)
+	PLATFORM_DIR := sunos
+	#? psrinfo is always present on illumos/Solaris; getconf NPROCESSORS_ONLN has been reported as
+	#? unrecognized on at least one native Solaris configuration, silently falling back to a serial
+	#? (1-thread) build. Prefer psrinfo and only fall back to getconf if that somehow comes up empty too.
+	THREADS := $(shell psrinfo 2>/dev/null | wc -l | tr -d ' ')
+	ifeq ($(THREADS),0)
+		THREADS := $(shell getconf NPROCESSORS_ONLN 2>/dev/null || echo 1)
+	endif
+	override ADDFLAGS += -m64 -lkstat -lsocket -lnsl -static-libgcc -fno-stack-protector
+	#? -static-libstdc++ is opt-in (S10=true) rather than default: Oracle Solaris ships no static
+	#? libstdc++ at all, so forcing it broke native Solaris builds. It's genuinely needed for the
+	#? Solaris 10 cross-build (compiled on illumos, run on Solaris 10, which is missing several libc
+	#? functions s10compat.c provides), so S10=true still adds it here.
+	ifeq ($(S10),true)
+		override ADDFLAGS += -static-libstdc++
+	endif
+	#? Solaris 10's libc has no __stack_chk_guard/__stack_chk_fail, so don't probe for or enable the stack protector
+	override TESTFLAGS := $(filter-out -fstack-protector,$(TESTFLAGS))
+	SU_GROUP := root
 else
 $(error $(call red_i,ERROR: $(WHITE)Unsupported platform ($(PLATFORM))))
 endif
@@ -245,11 +265,19 @@ ifdef DEBUG
 	override OPTFLAGS := -O0 -g
 endif
 
-SOURCES	:= $(sort $(shell find $(SRCDIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
+#? $(wildcard) is a GNU Make builtin, not a call out to the system find(1) - sidesteps
+#? portability differences in find flags (e.g. -maxdepth is a GNU extension some
+#? platforms' native find, including Solaris's, does not support).
+SOURCES	:= $(sort $(wildcard $(SRCDIR)/*.$(SRCEXT)))
 
-SOURCES += $(sort $(shell find $(SRCDIR)/$(PLATFORM_DIR) -maxdepth 1 -type f -name *.$(SRCEXT)))
+SOURCES += $(sort $(wildcard $(SRCDIR)/$(PLATFORM_DIR)/*.$(SRCEXT)))
 
 OBJECTS	:= $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
+
+#? Solaris 10 compatibility shims for a binary built on illumos (build with: gmake S10=true)
+ifeq ($(PLATFORM_LC)$(S10),sunostrue)
+	OBJECTS += $(BUILDDIR)/s10compat.c.o
+endif
 
 ifeq ($(GPU_SUPPORT)$(INTEL_GPU_SUPPORT),truetrue)
 	IGT_OBJECTS := $(BUILDDIR)/igt_perf.c.o $(BUILDDIR)/intel_device_info.c.o $(BUILDDIR)/intel_name_lookup_shim.c.o $(BUILDDIR)/intel_gpu_top.c.o
@@ -469,6 +497,14 @@ $(BUILDDIR)/%.$(OBJEXT): $(SRCDIR)/%.$(SRCEXT) | rocm_smi directories config.h
 	@$(VERBOSE) || printf "$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $<\n"
 	@$(CXX) $(CXXFLAGS) $(INC) -MMD -c -o $@ $< || exit 1
 	@$(call green,$$($(PROGRESS))%$(call CUR_LEFT,10)$(call CUR_RIGHT,5)-> $(call file_with_size,$@,$(call CUR_LEFT,100)$(call CUR_RIGHT,38)) $(GREEN)($(WHITE)$(call step_duration,$$TSTAMP)$(GREEN)))
+
+#? Compile the Solaris 10 compatibility shims (plain C, built through the C++ driver so no separate C compiler is needed)
+.ONESHELL:
+$(BUILDDIR)/s10compat.c.o: $(SRCDIR)/$(PLATFORM_DIR)/s10compat.c | directories
+	@sleep 0.3 2>/dev/null || true
+	@$(QUIET) || $(call white,Compiling $<)
+	@$(VERBOSE) || printf "$(CXX) -x c -m64 -O2 -fno-stack-protector -Wall -Wextra -c -o $@ $<\n"
+	@$(CXX) -x c -m64 -O2 -fno-stack-protector -Wall -Wextra -c -o $@ $< || exit 1
 
 #? Compile intel_gpu_top C sources for Intel GPU support
 .ONESHELL:
