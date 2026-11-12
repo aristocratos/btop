@@ -401,6 +401,63 @@ namespace Gpu {
 			return -1;
 		}
 
+		//? SMC keys of the GPU thermal sensors present on this machine, filled in at init
+		vector<string> gpu_temp_smc_keys;
+
+		//? Lowest plausible reading for a powered GPU sensor. Right after boot some sensors
+		//? transiently report a tiny uninitialized value before they track real die temps,
+		//? and Apple Silicon never actually idles this cold, so treat anything lower as invalid.
+		constexpr long long gpu_temp_min = 10;
+		constexpr long long gpu_temp_max = 150;
+
+		//? Probe the "Tg<cluster><sensor>" SMC keyspace for GPU thermal sensors.
+		//? Walking every SMC key through "#KEY" finds the same sensors, but costs around
+		//? 0.5s on an M4 Pro since the machine exposes over 3200 keys. Probing just the
+		//? GPU keyspace finds the same 22 sensors in about 0.07s.
+		//? Only done once at init since every probe is an IOKit call.
+		static void discover_gpu_temp_smc_keys() {
+			constexpr std::string_view clusters = "01234567";
+			constexpr std::string_view sensors = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+			try {
+				Cpu::SMCConnection smc_conn;
+				for (const char cluster : clusters) {
+					for (const char sensor : sensors) {
+						const string key = fmt::format("Tg{}{}", cluster, sensor);
+						const long long temp = smc_conn.getTempByKey(key.c_str());
+						if (temp > gpu_temp_min and temp < gpu_temp_max)
+							gpu_temp_smc_keys.push_back(key);
+					}
+				}
+			}
+			catch (const std::runtime_error&) {
+				Logger::debug("Apple Silicon GPU: No SMC connection for temperature sensors");
+			}
+		}
+
+		//? Read GPU temperature from the SMC keys found at init, averaged over all sensors
+		//? to stay consistent with how the IOHID path above reports it
+		static long long get_gpu_temp_smc() {
+			if (gpu_temp_smc_keys.empty()) return -1;
+			try {
+				Cpu::SMCConnection smc_conn;
+				long long temp_sum = 0;
+				int temp_count = 0;
+				for (const auto& key : gpu_temp_smc_keys) {
+					const long long temp = smc_conn.getTempByKey(key.c_str());
+					if (temp > gpu_temp_min and temp < gpu_temp_max) {
+						temp_sum += temp;
+						temp_count++;
+					}
+				}
+				if (temp_count > 0)
+					return temp_sum / temp_count;
+				return -1;
+			}
+			catch (const std::runtime_error&) {
+				return -1;
+			}
+		}
+
 		template <bool is_init>
 		bool collect(gpu_info* gpus_slice) {
 			if (not initialized) return false;
@@ -438,6 +495,13 @@ namespace Gpu {
 					.encoder_utilization = false,
 					.decoder_utilization = false
 				};
+
+				//? M3 and later expose no GPU named IOHID thermal sensor, so fall back to
+				//? reading the GPU SMC keys directly
+				if (get_gpu_temp_iohid() < 0) {
+					discover_gpu_temp_smc_keys();
+					gpus_slice[0].supported_functions.temp_info = not gpu_temp_smc_keys.empty();
+				}
 			}
 
 			//? Take new IOReport sample and compute delta
@@ -553,6 +617,8 @@ namespace Gpu {
 			//? GPU temperature
 			if (gpus_slice[0].supported_functions.temp_info and Config::getB("check_temp")) {
 				long long temp = get_gpu_temp_iohid();
+				if (temp < 0)
+					temp = get_gpu_temp_smc();
 				if (temp > 0)
 					gpus_slice[0].temp.push_back(temp);
 			}
