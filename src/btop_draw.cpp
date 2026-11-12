@@ -805,6 +805,10 @@ namespace Cpu {
 			bat_pos = bat_len = 0;
 		}
 
+		//? Check if we should use clustered P/E layout
+		const auto& core_types = Cpu::core_types;
+		const bool has_clusters = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores") and has_core_clusters();
+		
 		try {
 			//? Cpu/Gpu graphs
 			out += Fx::ub + Mv::to(y + 1, x + 1);
@@ -871,8 +875,9 @@ namespace Cpu {
 				out += Mv::to(b_y, b_x + b_width - (freq_range ? 20 : 10)) + Fx::ub + Theme::c("div_line")
 					+ Symbols::h_line * ((freq_range ? 17 : 7) - cpuHz.size())
 					+ Symbols::title_left + Fx::b + Theme::c("title") + cpuHz + Fx::ub + Theme::c("div_line") + Symbols::title_right;
-
-			out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
+			//? Skip default CPU bar if we have P/E clusters - we'll draw P-CPU and E-CPU bars instead
+			if (not has_clusters) {
+				out += Mv::to(b_y + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + "CPU " + cpu_meter(safeVal(cpu.cpu_percent, "total"s).back())
 				+ Theme::g("cpu").at(clamp(safeVal(cpu.cpu_percent, "total"s).back(), 0ll, 100ll)) + rjust(to_string(safeVal(cpu.cpu_percent, "total"s).back()), 4) + Theme::c("main_fg") + '%';
 			if (show_temps) {
 				const auto [temp, unit] = celsius_to(safeVal(cpu.temp, 0).back(), temp_scale);
@@ -892,29 +897,50 @@ namespace Cpu {
 				out += Theme::g("cached").at(clamp(clamped_watts / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cwatts + Theme::c("main_fg") + cwatts_post;
 			}
 
-				out += Theme::c("div_line") + Symbols::v_line;
+					out += Theme::c("div_line") + Symbols::v_line;
+				}
 		} catch (const std::exception& e) {
 			throw std::runtime_error("graphs, clock, meter : " + string{e.what()});
 		}
 
 		int max_row = b_height - 3; // Subtracting one extra row for the load average (and power if enabled)
 		int n_gpus_to_show = 0;
-	#ifdef GPU_SUPPORT
+		#ifdef GPU_SUPPORT
 		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
-	#endif
+		#endif
 		max_row -= n_gpus_to_show;
-
+		
 		auto is_cpu_enabled = [&cpu](const std::int32_t num) -> bool {
 			return !cpu.active_cpus.has_value() || std::ranges::find(cpu.active_cpus.value(), num) != cpu.active_cpus.value().end();
 		};
-
+		
+		//? Label cores P/E on hybrid cpus, C otherwise
+		const bool show_core_type = Config::getB("show_core_type");
+		auto core_label = [&](const int num) -> char {
+			if (show_core_type and cmp_less(num, core_types.size())) {
+				switch (core_types.at(num)) {
+					case CoreType::Performance: return 'P';
+					case CoreType::Efficiency: return 'E';
+					case CoreType::Unknown: break;
+				}
+			}
+			return 'C';
+		};
+		
 		//? Core text and graphs
-		int cx = 0, cy = 1, cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
+		int cx = 0, cy = (has_clusters ? 0 : 1), cc = 0, core_width = (b_column_size == 0 ? 2 : 3);
 		if (Shared::coreCount >= 100) core_width++;
-		for (const auto& n : iota(0, Shared::coreCount)) {
-			auto enabled = is_cpu_enabled(n);
-			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + Theme::c(enabled ? "main_fg" : "inactive_fg") + (Shared::coreCount < 100 ? Fx::b + 'C' + Fx::ub : "")
-				+ ljust(to_string(n), core_width);
+		
+		//? Helper lambda to draw a single core line
+		auto draw_core = [&](int n) {
+			const bool enabled = is_cpu_enabled(n);
+			const char label = core_label(n);
+			const auto& label_color = not enabled ? Theme::c("inactive_fg")
+				: label == 'P' ? Theme::c("core_p_fg")
+				: label == 'E' ? Theme::c("core_e_fg")
+				: Theme::c("main_fg");
+			out += Mv::to(b_y + cy + 1, b_x + cx + 1) + label_color + (Shared::coreCount < 100 ? Fx::b + label + Fx::ub : "")
+				+ Theme::c(enabled ? "main_fg" : "inactive_fg") + label_color + ljust(to_string(n), core_width);
 			if ((b_column_size > 0 or extra_width > 0) and cmp_less(n, core_graphs.size()))
 				out += Theme::c("inactive_fg") + graph_bg * (5 * b_column_size + extra_width) + Mv::l(5 * b_column_size + extra_width)
 					+ core_graphs.at(n)(safeVal(cpu.core_percent, n), data_same or redraw);
@@ -925,8 +951,6 @@ namespace Cpu {
 			if (show_temps and not hide_cores) {
 				const auto core_temps = safeVal(cpu.temp, n + 1);
 				if (!core_temps.empty()) {
-					// FIXME: This should be checked during collection and just not be made available with
-					// something like `std::nullopt`.
 					const auto last_temp = core_temps.back();
 					const auto [temp, unit] = celsius_to(last_temp, temp_scale);
 					const auto temp_color = enabled ? Theme::g("temp").at(clamp(last_temp * 100 / safe_cpu_temp_max, 0ll, 100ll)) : Theme::c("inactive_fg");
@@ -939,21 +963,114 @@ namespace Cpu {
 						);
 					}
 					fmt::format_to(
-						std::back_inserter(out),
-						"{}{}{}{}",
-						temp_color,
-						rjust(std::to_string(temp), 4),
-						Theme::c(enabled ? "main_fg" : "inactive_fg"),
-						unit
+							std::back_inserter(out),
+							"{}{}{}{}",
+							temp_color,
+							rjust(std::to_string(temp), 4),
+							Theme::c(enabled ? "main_fg" : "inactive_fg"),
+							unit
 					);
 				}
 			}
 
 			out += Theme::c("div_line") + Symbols::v_line;
+		};
+		
+		if (has_clusters) {
+			//? ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			//? P/E Core Layout (matches PR 1505)
+			//?	┌─────────────────────────┐
+			//?	│ P-CPU ■■■■■■■■■  45%    │  <- P-core average
+			//?	│ P0 ▃▅▇ 45% │ P1 ▂▄▆ 32% │  <- Individual P-cores (row-major)
+			//?	│ E-CPU ■■■■■■■■■  12%    │  <- E-core average
+			//?	│ E0 ▁▃▅ 12% │ E1 ▂▄▆ 18% │  <- Individual E-cores (row-major)
+			//?	└─────────────────────────┘
+			//? ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+			
+			//? Collect core indices by type (handles interleaved P/E like AMD Zen)
+			vector<int> p_indices, e_indices;
+			for (int i = 0; i < (int)core_types.size(); i++) {
+				if (core_types[i] == CoreType::Performance) p_indices.push_back(i);
+				else if (core_types[i] == CoreType::Efficiency) e_indices.push_back(i);
+			}
+			
+			//? Helper lambda to calculate average utilization for a list of core indices
+			auto cluster_avg = [&](const vector<int>& indices) -> long long {
+				long long sum = 0;
+				int count = 0;
+				for (int i : indices) {
+					if (i < (int)cpu.core_percent.size()) {
+						sum += safeVal(cpu.core_percent, i).back();
+						count++;
+					}
+				}
+				return count > 0 ? sum / count : 0;
+			};
+			
+			const int col_width = b_width / b_columns;
+			string cluster_watts;
+			float cluster_watts_value = 0;
+			if (show_watts) {
+				cluster_watts_value = clamp(cpu.usage_watts, 0.0f, 999.0f);
+				cluster_watts = fmt::format(" {:>4.{}f}", cluster_watts_value, cluster_watts_value < 9.995f ? 2 : cluster_watts_value < 99.95f ? 1 : 0);
+				max_observed_pwr = max(max_observed_pwr, cluster_watts_value);
+			}
+			auto draw_cluster_header = [&](const string_view label, const long long average, const bool show_stats = false) {
+				const auto average_text = rjust(to_string(average), 3);
+				const auto stats_width = show_stats and show_watts ? cluster_watts.size() + 1 : 0;
+				const auto fixed_width = static_cast<int>(label.size() + 1 + average_text.size() + 1 + stats_width + Symbols::v_line.size());
+				const auto meter_width = max(1, b_width - fixed_width);
+				out += Mv::to(b_y + cy + 1, b_x + 1) + Theme::c("main_fg") + Fx::b + string(label) + Fx::ub + " "
+					+ Draw::Meter{meter_width, "cpu"}(average)
+					+ Theme::g("cpu").at(clamp(average, 0ll, 100ll)) + average_text + Theme::c("main_fg") + '%'
+					+ (show_stats and show_watts ? Theme::g("cached").at(clamp(cluster_watts_value / max_observed_pwr * 100.0f, 0.0f, 100.0f)) + cluster_watts + Theme::c("main_fg") + 'W' : "")
+					+ Theme::c("div_line") + Symbols::v_line;
+				cy++;
+			};
+			
+			//? Draw P-CPU header
+			const long long p_avg = cluster_avg(p_indices);
+			draw_cluster_header("P-CPU", p_avg, true);
+			
+			//? Draw P-cores (row-major: fill each row across columns, then move down)
+			const int p_rows = (int)ceil((double)p_indices.size() / b_columns);
+			int p_drawn = 0;
+			for (int row = 0; row < p_rows and p_drawn < (int)p_indices.size() and cy < max_row; ++row) {
+				for (int col = 0; col < b_columns and p_drawn < (int)p_indices.size(); ++col) {
+					cx = col * col_width;
+					draw_core(p_indices[p_drawn]);
+					p_drawn++;
+				}
+				cy++;
+			}
+			
+			//? Draw E-CPU header
+			if (cy < max_row) {
+				const long long e_avg = cluster_avg(e_indices);
+				draw_cluster_header("E-CPU", e_avg);
+			}
+			
+			//? Draw E-cores (row-major)
+			const int e_rows = (int)ceil((double)e_indices.size() / b_columns);
+			int e_drawn = 0;
+			for (int row = 0; row < e_rows and e_drawn < (int)e_indices.size() and cy < max_row; ++row) {
+				for (int col = 0; col < b_columns and e_drawn < (int)e_indices.size(); ++col) {
+					cx = col * col_width;
+					draw_core(e_indices[e_drawn]);
+					e_drawn++;
+				}
+				cy++;
+			}
+			cx = 0;
+		} else {
+			//? Standard layout: all cores in columns
+			for (const auto& n : iota(0, Shared::coreCount)) {
+				draw_core(n);
 
-			if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
-				if (++cc >= b_columns) break;
-				cy = 1; cx = (b_width / b_columns) * cc;
+				if ((++cy > ceil((double)Shared::coreCount / b_columns) or cy == max_row) and n != Shared::coreCount - 1) {
+					if (++cc >= b_columns) break;
+					cy = 1; cx = (b_width / b_columns) * cc;
+				}
 			}
 		}
 
@@ -2349,12 +2466,66 @@ namespace Draw {
 				b_column_size = 0;
 			}
 
+			//? Check if clustering is enabled (for height calculation)
+			const auto& core_types = Cpu::core_types;
+			const bool cluster_enabled = Config::getB("show_core_type") and Config::getB("cpu_cluster_cores") and Cpu::has_core_clusters();
+			const int cluster_width_limit = width - width / 3;
+			const auto cluster_width = [&](const int columns) {
+				const int column_width = b_column_size == 2 ? 21 + 12 * show_temp
+					: b_column_size == 1 ? 15 + 6 * show_temp
+					: 8 + 6 * show_temp;
+				return b_column_size == 0 ? column_width * columns + 1 : column_width * columns - (columns - 1);
+			};
+			
 			if (b_column_size == 0) b_width = (8 + 6 * show_temp) * b_columns + 1;
-		#ifdef GPU_SUPPORT
-			//gpus_extra_height = max(0, gpus_extra_height - 1);
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
-		#else
-			b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
+			#ifdef GPU_SUPPORT
+				if (cluster_enabled) {
+					//? Count P and E cores
+					int p_count = 0, e_count = 0;
+					for (auto t : core_types) {
+						if (t == CoreType::Performance) p_count++;
+						else if (t == CoreType::Efficiency) e_count++;
+					}
+					//? Adjust columns so both P and E sections fit vertically
+					const int available_rows = height - 5 - 2;  // -2 for P-CPU and E-CPU header bars
+					while (b_columns < Shared::coreCount) {
+						if (cluster_width(b_columns + 1) > cluster_width_limit) break;
+						int p_rows = (p_count + b_columns - 1) / b_columns;
+						int e_rows = (e_count + b_columns - 1) / b_columns;
+						if (p_rows + e_rows <= available_rows) break;
+						b_columns++;
+					}
+					//? Recalculate width after column adjustment
+					b_width = cluster_width(b_columns);
+					//? Calculate height: P rows + E rows + 2 headers + 4 base + GPU
+					int p_rows = (p_count + b_columns - 1) / b_columns;
+					int e_rows = (e_count + b_columns - 1) / b_columns;
+					b_height = min(height - 2, p_rows + e_rows + 4 + 1 + gpus_extra_height);
+				} else {
+					b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4 + gpus_extra_height);
+				}
+			#else
+				if (cluster_enabled) {
+					int p_count = 0, e_count = 0;
+					for (auto t : core_types) {
+						if (t == CoreType::Performance) p_count++;
+						else if (t == CoreType::Efficiency) e_count++;
+					}
+					const int available_rows = height - 5 - 2;
+					while (b_columns < Shared::coreCount) {
+						if (cluster_width(b_columns + 1) > cluster_width_limit) break;
+						int p_rows = (p_count + b_columns - 1) / b_columns;
+						int e_rows = (e_count + b_columns - 1) / b_columns;
+						if (p_rows + e_rows <= available_rows) break;
+						b_columns++;
+					}
+					b_width = cluster_width(b_columns);
+					int p_rows = (p_count + b_columns - 1) / b_columns;
+					int e_rows = (e_count + b_columns - 1) / b_columns;
+					b_height = min(height - 2, p_rows + e_rows + 4 + 1);
+				} else {
+					b_height = min(height - 2, (int)ceil((double)Shared::coreCount / b_columns) + 4);
+				}
 		#endif
 
 			b_x = x + width - b_width - 1;

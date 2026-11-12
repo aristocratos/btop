@@ -59,6 +59,8 @@ namespace Theme {
 		{ "inactive_fg", "#40" },
 		{ "graph_text", "#60" },
 		{ "meter_bg", "#40" },
+		{ "core_p_fg", "#cc" },
+		{ "core_e_fg", "#cc" },
 		{ "proc_misc", "#0de756" },
 		{ "cpu_box", "#556d59" },
 		{ "mem_box", "#6c6c4b" },
@@ -110,6 +112,8 @@ namespace Theme {
 		{ "inactive_fg", "\x1b[90m" },
 		{ "graph_text", "\x1b[90m" },
 		{ "meter_bg", "\x1b[90m" },
+		{ "core_p_fg", "\x1b[37m" },
+		{ "core_e_fg", "\x1b[37m" },
 		{ "proc_misc", "\x1b[92m" },
 		{ "cpu_box", "\x1b[32m" },
 		{ "mem_box", "\x1b[33m" },
@@ -277,7 +281,7 @@ namespace Theme {
 						}
 					}
 				}
-				if (not colors.contains(name) and not is_in(name, "meter_bg", "process_start", "process_mid", "process_end", "graph_text")) {
+				if (not colors.contains(name) and not is_in(name, "meter_bg", "process_start", "process_mid", "process_end", "graph_text", "core_p_fg", "core_e_fg")) {
 					Logger::debug("Missing color value for \"{}\". Using value from default.", name);
 					colors[name] = hex_to_color(color, t_to_256, depth);
 					rgbs[name] = hex_to_dec(color);
@@ -299,6 +303,12 @@ namespace Theme {
 			if (not colors.contains("graph_text")) {
 				colors["graph_text"] = colors.at("inactive_fg");
 				rgbs["graph_text"] = rgbs.at("inactive_fg");
+			}
+			for (const auto& name : {"core_p_fg", "core_e_fg"}) {
+				if (not colors.contains(name)) {
+					colors[name] = colors.at("main_fg");
+					rgbs[name] = rgbs.at("main_fg");
+				}
 			}
 		}
 
