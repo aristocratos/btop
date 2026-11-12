@@ -416,6 +416,27 @@ namespace Tools {
 		return out;
 	}
 
+	string format_frequency_mhz(double mhz) {
+		if (not std::isfinite(mhz) or mhz <= 0) return "";
+		string str;
+		if (mhz > 999'999) {
+			str = fmt::format("{:.1f}", mhz / 1'000'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " THz";
+		}
+		else if (mhz > 999) {
+			str = fmt::format("{:.1f}", mhz / 1'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " GHz";
+		}
+		else {
+			str = fmt::format("{:.0f} MHz", mhz);
+		}
+		return str;
+	}
+
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
