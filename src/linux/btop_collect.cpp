@@ -2549,6 +2549,19 @@ namespace Mem {
 									devname.resize(devname.size() - 1);
 									c++;
 								}
+								//? /dev/root is not always a symlink to the actual block device.
+								if (disks.at(mountpoint).stat.empty() && dev == "/dev/root") {
+									ifstream mountinfo(Shared::procPath / "self/mountinfo");
+									string mount_id, parent_id, device_id, root, mounted_at;
+									while (mountinfo >> mount_id >> parent_id >> device_id >> root >> mounted_at) {
+										mountinfo.ignore(SSmax, '\n');
+										if (convert_ascii_escapes(mounted_at) != mountpoint) continue;
+										const auto stat = fmt::format("/sys/dev/block/{}/stat", device_id);
+										if (fs::exists(stat, ec) and access(stat.c_str(), R_OK) == 0)
+											disks.at(mountpoint).stat = stat;
+										break;
+									}
+								}
 							}
 
 							//? If zfs_hide_datasets option was switched, refresh stat filepath

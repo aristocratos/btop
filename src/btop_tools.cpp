@@ -423,7 +423,7 @@ namespace Tools {
 		bool mega = Config::getB("base_10_sizes");
 
 		// Bitrates
-	    if(bit && per_second) {
+		if(bit && per_second) {
 			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
 			if(base_10_bitrate == "True") {
 				mega = true;
@@ -461,56 +461,43 @@ namespace Tools {
 		};
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
-		value *= 100 * mult;
+		double value_d = static_cast<double>(value);
+		value_d *= mult;
 
 		if (mega) {
-			while (value >= 100000) {
-				value /= 1000;
+			while (value_d >= 999.5) {
+				value_d /= 1000;
 				start++;
 			}
 		}
 		else {
-			while (value >= 102400) {
-				value >>= 10;
+			while (value_d >= 1023.5) {
+				value_d /= 1024;
 				start++;
-			}
-		}
-		if (out.empty()) {
-			out = fmt::format("{}", value);
-			if (not mega and out.size() == 4 and start > 0) {
-				out.pop_back();
-				out.insert(2, ".");
-			}
-			else if (out.size() == 3 and start > 0) {
-				out.insert(1, ".");
-			}
-			else if (out.size() >= 2) {
-				out.resize(out.size() - 2);
-			}
-			if (out.empty()) {
-				out = "0";
 			}
 		}
 
 		if (shorten) {
-			auto has_sep = out.find(".") != string::npos;
-			if (has_sep) {
-				out = fmt::format("{:.1f}", stod(out));
+			if (round(value_d*100)/100.0 >= 9.95) {
+				out = fmt::format("{:.0f}", value_d);
 			}
-			if (out.size() > 3) {
-				// if out is of the form xy.z
-				if (has_sep) {
-					out = fmt::format("{:.0f}", stod(out));
-				}
-				// if out is of the form xyzw (only when not using base 10)
-				else {
-					out = fmt::format("{:d}.0", out[0] - '0');
-					start++;
-				}
+			else {
+				out = fmt::format("{:.1f}", value_d);
 			}
-			out.push_back(units[start][0]);
+			out += units[start][0];
 		}
-		else out += " " + units[start];
+		else {
+			if (round(value_d*10)/10.0 >= 99.95) {
+				out = fmt::format("{:.0f}", value_d);
+			}
+			else if (round(value_d*100)/100.0 >= 9.995) {
+				out = fmt::format("{:.1f}", value_d);
+			}
+			else {
+				out = fmt::format("{:.2f}", value_d);
+			}
+			out += " " + units[start];
+		}
 
 		if (per_second) out += (bit) ? "ps" : "/s";
 		return out;
