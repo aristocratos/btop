@@ -128,6 +128,26 @@ jobs:
           path: bin/btop
           if-no-files-found: error
 
+  linux-gpu-arm:
+    name: Linux GPU (aarch64)
+    runs-on: ubuntu-26.04-arm
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.shared == 'true'
+    env:
+      STATIC: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # GPU support is on by default on aarch64: NVIDIA only, without the Intel igt objects
+      - name: Build
+        run: make
+
+      - name: Check GPU support is enabled
+        run: grep -q 'GPU_SUPPORT=true' obj/config.h
+
   osx:
     name: macOS 26
     runs-on: macos-26
