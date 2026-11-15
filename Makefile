@@ -103,13 +103,8 @@ ifeq ($(PLATFORM_LC)$(ARCH),macosarm64)
 	GPU_SUPPORT := true
 endif
 #? NVIDIA (NVML) GPU support also works on Linux ARM (e.g. Jetson, Grace, GB10 DGX Spark).
-#? Intel GPU support stays x86_64-only.
+#? Intel GPU support stays x86_64-only. Static builds are excluded as on x86_64.
 ifeq ($(PLATFORM_LC)$(ARCH),linuxaarch64)
-	ifneq ($(STATIC),true)
-		GPU_SUPPORT := true
-	endif
-endif
-ifeq ($(PLATFORM_LC)$(ARCH),linuxarm64)
 	ifneq ($(STATIC),true)
 		GPU_SUPPORT := true
 	endif
@@ -124,7 +119,7 @@ ifeq ($(GPU_SUPPORT),true)
 		override LDFLAGS += -ldl
 	endif
 endif
-ifeq ($(INTEL_GPU_SUPPORT),true)
+ifeq ($(GPU_SUPPORT)$(INTEL_GPU_SUPPORT),truetrue)
 	override ADDFLAGS += -DINTEL_GPU_SUPPORT
 endif
 
