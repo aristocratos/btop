@@ -791,7 +791,15 @@ namespace Cpu {
 					const auto slash = sensor.find_last_of('/');
 					const auto label = sensor.substr(slash == string::npos ? 0 : slash + 1);
 					if (label.starts_with("Core ")) {
-						sensor_by_core[std::stoi(label.substr(5))] = i;
+						try {
+							sensor_by_core[std::stoi(label.substr(5))] = i;
+						}
+						catch (const std::invalid_argument&) {
+							continue;
+						}
+						catch (const std::out_of_range&) {
+							continue;
+						}
 					}
 				}
 
