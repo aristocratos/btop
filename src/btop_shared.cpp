@@ -60,6 +60,8 @@ namespace Cpu {
 			case 6031:
 			case 6034:
 				return "Apple M3 Max";
+			case 6032:
+				return "Apple M3 Ultra";
 			case 8132:
 				return "Apple M4";
 			case 6040:
@@ -68,10 +70,18 @@ namespace Cpu {
 				return "Apple M4 Max";
 			case 8140:
 				return "Apple A18 Pro";
+			case 8150:
+				return "Apple A19 Pro";
 			case 8142:
 				return "Apple M5";
 			case 6050:
 				return "Apple M5 Pro / Max";
+			case 6051:
+				return "Apple M5 Max";
+			case 6052:
+				return "Apple M5 Ultra";
+			case 8152:
+				return "Apple M6";
 			default:
 				return "";
 		}
