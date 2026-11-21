@@ -1877,6 +1877,11 @@ namespace Proc {
 						new_proc.mem = pti.pti_resident_size;
 						cpu_t = pti.pti_total_user + pti.pti_total_system;
 
+						//? Physical footprint is what Activity Monitor and top report, resident size counts shared pages in every process
+						rusage_info_v2 rusage;
+						if (proc_pid_rusage(new_proc.pid, RUSAGE_INFO_V2, (rusage_info_t *)&rusage) == 0)
+							new_proc.mem = rusage.ri_phys_footprint;
+
 						if (new_proc.cpu_t == 0) new_proc.cpu_t = cpu_t;
 					} else {
 						// Reset memory value if process info cannot be accessed (bad permissions or zombie processes)
