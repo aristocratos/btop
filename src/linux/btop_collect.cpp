@@ -139,6 +139,75 @@ struct join_thread
 
 }
 
+#include <chrono>
+
+namespace Npu {
+	npu_info npu;
+	static uint64_t prev_busy_us = 0;
+	static auto prev_time = std::chrono::steady_clock::now();
+	static bool has_prev = false;
+
+	void init() {
+		namespace fs = std::filesystem;
+		const fs::path base = "/sys/class/accel/accel0/device";
+		if (!fs::exists(base / "npu_busy_time_us")) {
+			npu.available = false;
+			return;
+		}
+		npu.available = true;
+		if (std::ifstream f_max(base / "npu_max_frequency_mhz"); f_max.is_open()) {
+			f_max >> npu.max_freq_mhz;
+		}
+		if (std::ifstream f_busy(base / "npu_busy_time_us"); f_busy >> prev_busy_us) {
+			prev_time = std::chrono::steady_clock::now();
+			has_prev = true;
+		}
+	}
+
+	void collect() {
+		if (!npu.available) return;
+		namespace fs = std::filesystem;
+		const fs::path base = "/sys/class/accel/accel0/device";
+
+		uint64_t cur_busy_us = 0;
+		if (std::ifstream f_busy(base / "npu_busy_time_us"); !(f_busy >> cur_busy_us)) {
+			return;
+		}
+
+		long long cur_freq = 0;
+		if (std::ifstream f_freq(base / "npu_current_frequency_mhz"); f_freq.is_open()) {
+			f_freq >> cur_freq;
+		}
+		npu.freq_mhz = cur_freq;
+
+		uint64_t cur_mem = 0;
+		if (std::ifstream f_mem(base / "npu_memory_utilization"); f_mem.is_open()) {
+			f_mem >> cur_mem;
+		}
+		npu.mem_used = cur_mem;
+
+		const auto now = std::chrono::steady_clock::now();
+		if (!has_prev) {
+			prev_busy_us = cur_busy_us;
+			prev_time = now;
+			has_prev = true;
+			npu.usage = 0;
+			return;
+		}
+
+		const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(now - prev_time).count();
+		if (elapsed_us > 0 && cur_busy_us >= prev_busy_us) {
+			const double pct = (static_cast<double>(cur_busy_us - prev_busy_us) / static_cast<double>(elapsed_us)) * 100.0;
+			npu.usage = std::clamp<long long>(static_cast<long long>(pct + 0.5), 0, 100);
+		} else {
+			npu.usage = 0;
+		}
+
+		prev_busy_us = cur_busy_us;
+		prev_time = now;
+	}
+}
+
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
@@ -388,6 +457,8 @@ namespace Shared {
 		Cpu::core_mapping = Cpu::get_core_mapping();
 
 		Cpu::container_engine = detect_container();
+
+		Npu::init();
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
@@ -1242,6 +1313,7 @@ namespace Cpu {
 			current_cpu.usage_watts = get_cpuConsumptionWatts();
 
 		cpu.active_cpus = std::make_optional(detect_active_cpus());
+		if (not no_update) Npu::collect();
 
 		return cpu;
 	}
