@@ -1249,10 +1249,14 @@ namespace Mem {
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
-			mem.stats.at("free") = p.free_count * Shared::pageSize;
-			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
-			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
+			//? Used is all memory that is neither free nor reclaimable file cache: app, wired, compressed and firmware reserved memory
+			const int64_t total = Shared::totalMem;
+			const int64_t free_bytes = clamp<int64_t>(((int64_t)p.free_count - p.speculative_count) * Shared::pageSize, 0, total);
+			const int64_t cached_bytes = clamp<int64_t>(((int64_t)p.external_page_count + p.purgeable_count) * Shared::pageSize, 0, total - free_bytes);
+			mem.stats.at("free") = free_bytes;
+			mem.stats.at("cached") = cached_bytes;
+			mem.stats.at("used") = total - free_bytes - cached_bytes;
+			mem.stats.at("available") = free_bytes + cached_bytes;
 		}
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
