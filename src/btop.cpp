@@ -366,7 +366,13 @@ namespace Runner {
 	// TODO: This can be made a local without too much effort.
 	std::binary_semaphore do_work { 0 };
 	inline void thread_wait() { do_work.acquire(); }
-	inline void thread_trigger() { do_work.release(); }
+	inline void thread_trigger() {
+		//? Drop a pending trigger the runner hasn't picked up yet, so release()
+		//? never pushes the binary_semaphore above its max of 1 (UB, aborts with
+		//? _GLIBCXX_ASSERTIONS). Safe because only the main thread triggers.
+		(void)do_work.try_acquire();
+		do_work.release();
+	}
 
 	//* Wrapper for raising privileges when using SUID bit
 	class gain_priv {
