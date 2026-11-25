@@ -903,6 +903,7 @@ namespace Cpu {
 		n_gpus_to_show = show_gpu ? (gpus.size() - (gpu_always ? 0 : Gpu::shown)) : 0;
 	#endif
 		max_row -= n_gpus_to_show;
+		if (Npu::npu.available) max_row -= 1;
 
 		auto is_cpu_enabled = [&cpu](const std::int32_t num) -> bool {
 			return !cpu.active_cpus.has_value() || std::ranges::find(cpu.active_cpus.value(), num) != cpu.active_cpus.value().end();
@@ -1019,6 +1020,18 @@ namespace Cpu {
 			}
 		}
 	#endif
+
+		if (Npu::npu.available and cy < b_height - 1) {
+			const auto& npu = Npu::npu;
+			out += Mv::to(b_y + ++cy, b_x + 1) + Theme::c("main_fg") + Fx::b + "NPU  " + Fx::ub;
+			const int bar_w = b_width - 2 - 27;
+			if (b_columns > 1 and bar_w >= 4) {
+				out += Draw::Meter{bar_w, "cpu"}(static_cast<int>(clamp(npu.usage, 0ll, 100ll)));
+			}
+			out += Theme::g("cpu").at(clamp(npu.usage, 0ll, 100ll)) + rjust(to_string(npu.usage), 4) + Theme::c("main_fg") + '%'
+			    + ' ' + Theme::c("main_fg") + rjust(floating_humanizer(npu.mem_used, true), 6)
+			    + ' ' + Theme::c("hi_fg") + rjust(to_string(npu.freq_mhz), 5) + Theme::c("main_fg") + " MHz";
+		}
 
 		redraw = false;
 		return out + Fx::reset;
@@ -2312,6 +2325,7 @@ namespace Draw {
 				Config::getS("show_gpu_info") == "On" ? Gpu::count
 				: Config::getS("show_gpu_info") == "Auto" ? Gpu::count - Gpu::shown
 				: 0;
+			if (Npu::npu.available) gpus_extra_height += 1;
 		#endif
             const bool show_temp = (Config::getB("check_temp") and got_sensors);
 			width = round((double)Term::width * width_p / 100);

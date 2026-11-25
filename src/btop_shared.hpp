@@ -110,6 +110,19 @@ namespace Shared {
 
 #if defined(GPU_SUPPORT)
 
+namespace Npu {
+	struct npu_info {
+		bool available = false;
+		long long usage = 0;
+		long long freq_mhz = 0;
+		long long max_freq_mhz = 0;
+		uint64_t mem_used = 0;
+	};
+	extern npu_info npu;
+	void init();
+	void collect();
+}
+
 namespace Gpu {
 	extern vector<string> box;
 	extern int width, total_height, min_width, min_height;
