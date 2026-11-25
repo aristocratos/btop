@@ -357,6 +357,7 @@ namespace Runner {
 	atomic<bool> waiting (false);
 	atomic<bool> redraw (false);
 	atomic<bool> coreNum_reset (false);
+	atomic<bool> writing_output (false);
 
 	static inline auto set_active(bool value) noexcept {
 		active.store(value);
@@ -481,6 +482,8 @@ namespace Runner {
 
 			//? Atomic lock used for blocking non thread-safe actions in main thread
 			auto lck = active.lock();
+			//? Cleared here instead of after the write, so the runner still counts as blocked on output until it releases active
+			writing_output = false;
 
 			//? Set effective user if SUID bit is set
 			gain_priv powers{};
@@ -718,10 +721,16 @@ namespace Runner {
 
 			//? If overlay isn't empty, print output without color and then print overlay on top
 			const bool term_sync = Config::getB("terminal_sync");
+			//? Flag the write so a terminal that has stopped reading output (e.g. throttled by the OS while not visible)
+			//? isn't mistaken for a stalled runner thread
+			writing_output = true;
+			const auto write_start = uptime_micros();
 			cout << (term_sync ? Term::sync_start : "") << (conf.overlay.empty()
 					? output
 					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
 				<< (term_sync ? Term::sync_end : "") << flush;
+			if (const auto write_us = uptime_micros() - write_start; write_us > 10'000'000)
+				Logger::warning("Terminal didn't accept output for {}s", write_us / 1'000'000);
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
 		return {};
@@ -731,11 +740,15 @@ namespace Runner {
 	//* Runs collect and draw in a secondary thread, unlocks and locks config to update cached values
 	void run(const string& box, bool no_update, bool force_redraw) {
 		atomic_wait_for(active, true, 10'000);
+		//? Runner is waiting for the terminal to accept output, skip this update instead of warning
+		if (active and writing_output) return;
 		if (active) {
 			Logger::warning("Runner thread slow (>10s), waiting up to 30s...");
 			atomic_wait_for(active, true, 20'000);
 		}
 		if (active) {
+			//? Runner is waiting for the terminal to accept output, skip this update instead of exiting
+			if (writing_output) return;
 			Global::exit_error_msg = "Runner thread stalled for 30s, exiting.";
 			clean_quit(1);
 		}
@@ -783,6 +796,9 @@ namespace Runner {
 			clean_quit(1);
 		} else if (is_runner_busy) {
 			atomic_wait_for(active, true, 30'000);
+			//? Keep waiting if runner is blocked on a terminal that isn't accepting output
+			while (active and writing_output and not Global::quitting)
+				atomic_wait_for(active, true, 30'000);
 			if (active) {
 				set_active(false);
 				if (Global::quitting) {
