@@ -81,3 +81,7 @@ theme[download_end]="#CC3E28"
 theme[upload_start]="#55"
 theme[upload_mid]="#00"
 theme[upload_end]="#CC3E28"
+
+# Core type colors
+theme[core_p_fg]="#CC3E28"
+theme[core_e_fg]="#00"

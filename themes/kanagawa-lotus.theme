@@ -84,3 +84,7 @@ theme[upload_end]="#D7474B"
 theme[process_start]="#6E915F"
 theme[process_mid]="#CC6D00"
 theme[process_end]="#C84053"
+
+# Core type colors
+theme[core_p_fg]="#C84053"
+theme[core_e_fg]="#597B75"

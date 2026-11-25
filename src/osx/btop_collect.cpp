@@ -712,6 +712,7 @@ namespace Shared {
 		Cpu::cpuName = Cpu::get_cpuName();
 		Cpu::got_sensors = Cpu::get_sensors();
 		Cpu::core_mapping = Cpu::get_core_mapping();
+		Cpu::core_types = Cpu::get_core_types();
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
@@ -955,6 +956,27 @@ namespace Cpu {
 		}
 
 		return core_map;
+	}
+
+	auto get_core_types() -> vector<CoreType> {
+		int p_cores = 0, e_cores = 0;
+		size_t size = sizeof(int);
+
+		//? On Apple Silicon: perflevel0 = Performance cores, perflevel1 = Efficiency cores
+		//? E-cores are enumerated first (indices 0 to e_cores-1), P-cores second
+		if (sysctlbyname("hw.perflevel0.physicalcpu", &p_cores, &size, nullptr, 0) != 0) p_cores = 0;
+		size = sizeof(int);
+		if (sysctlbyname("hw.perflevel1.physicalcpu", &e_cores, &size, nullptr, 0) != 0) e_cores = 0;
+
+		//? Not a hybrid Apple Silicon CPU (Intel Mac or detection failed)
+		if (p_cores == 0 or e_cores == 0) return {};
+
+		vector<CoreType> types(Shared::coreCount, CoreType::Unknown);
+		for (int i = 0; i < e_cores and i < Shared::coreCount; i++) types[i] = CoreType::Efficiency;
+		for (int i = e_cores; i < e_cores + p_cores and i < Shared::coreCount; i++) types[i] = CoreType::Performance;
+
+		Logger::debug("Hybrid Apple Silicon cpu: {} performance and {} efficiency cores", p_cores, e_cores);
+		return types;
 	}
 
 	class IOPSInfo_Wrap {

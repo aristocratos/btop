@@ -254,6 +254,16 @@ namespace Cpu {
 	auto get_core_mapping() -> std::unordered_map<int, int>;
 	extern std::unordered_map<int, int> core_mapping;
 
+	//* Core types of hybrid cpus (Intel P/E cores, ARM big.LITTLE)
+	enum class CoreType : std::uint8_t { Unknown, Performance, Efficiency };
+
+	//* Get the type of each core indexed by cpu id, empty if the cpu isn't hybrid or detection isn't supported
+	auto get_core_types() -> vector<CoreType>;
+	extern vector<CoreType> core_types;
+
+	//* True when all cores are classified and both P- and E-cores are present.
+	auto has_core_clusters() -> bool;
+
 	auto get_cpuHz() -> string;
 
 	//* Get battery info from /sys

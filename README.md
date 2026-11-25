@@ -1464,6 +1464,9 @@ cpu_sensor = "Auto"
 #* Show temperatures for cpu cores also if check_temp is True and sensors has been found.
 show_coretemp = true
 
+#* Label cores as P (performance) or E (efficiency) instead of C on hybrid cpus.
+show_core_type = true
+
 #* Set a custom mapping between core and coretemp, can be needed on certain cpus to get correct temperature for correct core.
 #* Use lm-sensors or similar to see which cores are reporting temperatures on your machine.
 #* Format "x:y" x=core with wrong temp, y=core with correct temp, use space as separator between multiple entries.

@@ -105,3 +105,7 @@ theme[followed_bg]="#7587A6"
 
 # Followed process foreground color
 theme[followed_fg]="#A7A7A7"
+
+# Core type colors
+theme[core_p_fg]="#CF6A4C"
+theme[core_e_fg]="#8F9D6A"

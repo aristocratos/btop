@@ -540,6 +540,7 @@ namespace Runner {
 						if (coreNum_reset) {
 							coreNum_reset = false;
 							Cpu::core_mapping = Cpu::get_core_mapping();
+							Cpu::core_types = Cpu::get_core_types();
 							Global::resized = true;
 							Input::interrupt();
 							continue;

@@ -93,3 +93,7 @@ theme[download_end]="#00FFFF"
 theme[upload_start]="#FF7F00"
 theme[upload_mid]=""
 theme[upload_end]="#FFF86B"
+
+# Core type colors
+theme[core_p_fg]="#FF7F00"
+theme[core_e_fg]="#B46718"

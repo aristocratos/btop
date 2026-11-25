@@ -90,3 +90,6 @@ theme[process_start]="#8da101"
 theme[process_mid]="#df69ba"
 theme[process_end]="#f85552"
 
+# Core type colors
+theme[core_p_fg]="#df69ba"
+theme[core_e_fg]="#8da101"

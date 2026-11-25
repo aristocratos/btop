@@ -80,3 +80,7 @@ theme[download_end]="#d1302c"
 theme[upload_start]="#268ad0"
 theme[upload_mid]="#6c71c4"
 theme[upload_end]="#d1302c"
+
+# Core type colors
+theme[core_p_fg]="#d1302c"
+theme[core_e_fg]="#268ad0"

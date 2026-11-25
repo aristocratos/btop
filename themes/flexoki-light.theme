@@ -108,3 +108,7 @@ theme[proc_banner_fg]="#FFFCF0"
 # Process following attributes
 theme[followed_bg]="#205EA6"
 theme[followed_fg]="#FFFCF0"
+
+# Core type colors
+theme[core_p_fg]="#BC5215"
+theme[core_e_fg]="#66800B"
