@@ -295,23 +295,28 @@ namespace Gpu {
 		uint32_t device_count = 0;
 	}
 
-	//? AMD sysfs (consumer GPU / iGPU) data collection — fallback when amd-smi/rocm-smi
-	//? cannot enumerate (e.g. APUs without /dev/kfd, or systems without ROCm libs installed).
-	//? Reads only standard amdgpu DRM sysfs nodes; no library dependency.
+	//? DRM sysfs data collection for AMD GPUs and Apple AGX.
+	//? AMD devices use this as a fallback when amd-smi/rocm-smi cannot enumerate them.
 	namespace Asysfs {
+		enum class device_vendor {
+			amd,
+			apple,
+		};
+
 		struct device_paths {
 			std::filesystem::path device;
 			std::filesystem::path hwmon;
 			std::filesystem::path power;            //? empty if no power sensor
+			std::filesystem::path frequency;        //? empty if no current clock source
+			device_vendor vendor;
 			uint32_t pci_device_id;
 			bool has_temp;
-			bool has_freq;
 			bool has_busy;
 			bool has_vram;
 		};
 
 		bool initialized = false;
-		bool init();
+		bool init(bool use_amd, bool use_apple);
 		bool shutdown();
 		template <bool is_init> bool collect(gpu_info* gpus_slice);
 		uint32_t device_count = 0;
@@ -398,8 +403,8 @@ namespace Shared {
 
 		if (shown_gpus.contains("amd")) {
 			Gpu::Rsmi::init();
-			Gpu::Asysfs::init(); //? self-skips when rocm-smi already enumerated devices
 		}
+		Gpu::Asysfs::init(shown_gpus.contains("amd"), shown_gpus.contains("apple"));
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
@@ -2054,17 +2059,27 @@ namespace Gpu {
 			return {};
 		}
 
-		bool init() {
+		//? Pick the first devfreq current-frequency node below the DRM device.
+		static std::filesystem::path find_devfreq_frequency(const std::filesystem::path& device) {
+			const auto devfreq_dir = device / "devfreq";
+			std::error_code ec;
+			if (not std::filesystem::is_directory(devfreq_dir, ec)) return {};
+			for (const auto& entry : std::filesystem::directory_iterator(devfreq_dir, ec)) {
+				const auto cur_freq = entry.path() / "cur_freq";
+				if (std::filesystem::exists(cur_freq)) return cur_freq;
+			}
+			return {};
+		}
+
+		bool init(bool use_amd, bool use_apple) {
 			if (initialized) return false;
-			//? Self-skip when rocm-smi already enumerated AMD devices — avoids double-counting on
-			//? systems where both backends would succeed.
-			if (Rsmi::device_count > 0) return false;
+			if (not use_amd and not use_apple) return false;
 			devices.clear();
 
 			const std::filesystem::path drm_root("/sys/class/drm");
 			std::error_code ec;
 			if (not std::filesystem::is_directory(drm_root, ec)) {
-				Logger::debug("amdgpu sysfs: /sys/class/drm not present");
+				Logger::debug("GPU sysfs: /sys/class/drm not present");
 				return false;
 			}
 
@@ -2074,24 +2089,29 @@ namespace Gpu {
 				const auto device_link = entry.path() / "device";
 				if (not std::filesystem::exists(device_link)) continue;
 
-				//? Vendor must be exactly 0x1002 (AMD). The sysfs node ends with a newline,
-				//? so trim before comparing.
+				ec.clear();
+				const auto driver_link = std::filesystem::read_symlink(device_link / "driver", ec);
+				if (ec) continue;
+				const string driver = driver_link.filename().string();
+
 				string vendor = readfile(device_link / "vendor", "");
 				while (not vendor.empty() and (vendor.back() == '\n' or vendor.back() == ' ')) vendor.pop_back();
-				if (vendor != "0x1002") continue;
 
-				//? Driver must be amdgpu (rules out radeon-driver-only legacy GPUs which use a
-				//? different sysfs layout).
-				const auto driver_link = std::filesystem::read_symlink(device_link / "driver", ec);
-				if (ec or driver_link.filename().string() != "amdgpu") continue;
+				const bool is_amd = use_amd and Rsmi::device_count == 0
+					and vendor == "0x1002" and driver == "amdgpu";
+				const bool is_apple = use_apple and (driver == "asahi" or driver == "apple-gpu");
+				if (not is_amd and not is_apple) continue;
 
 				device_paths d{};
 				d.device = device_link;
-				try {
-					//? "device" file holds e.g. "0x150e\n" — base 0 lets stoul autodetect the 0x prefix.
-					d.pci_device_id = (uint32_t)std::stoul(readfile(device_link / "device", "0"), nullptr, 0);
-				} catch (const std::exception&) {
-					d.pci_device_id = 0;
+				d.vendor = is_apple ? device_vendor::apple : device_vendor::amd;
+				if (is_amd) {
+					try {
+						//? "device" file holds e.g. "0x150e\n" — base 0 lets stoul autodetect the 0x prefix.
+						d.pci_device_id = (uint32_t)std::stoul(readfile(device_link / "device", "0"), nullptr, 0);
+					} catch (const std::exception&) {
+						d.pci_device_id = 0;
+					}
 				}
 				d.hwmon = find_hwmon(device_link);
 
@@ -2100,19 +2120,21 @@ namespace Gpu {
 
 				if (not d.hwmon.empty()) {
 					d.has_temp = std::filesystem::exists(d.hwmon / "temp1_input");
-					d.has_freq = std::filesystem::exists(d.hwmon / "freq1_input");
+					const auto hwmon_frequency = d.hwmon / "freq1_input";
+					if (std::filesystem::exists(hwmon_frequency)) d.frequency = hwmon_frequency;
 					//? Prefer power1_average (filtered, EMA) over power1_input (instantaneous).
 					const auto avg = d.hwmon / "power1_average";
 					const auto inst = d.hwmon / "power1_input";
 					if (std::filesystem::exists(avg)) d.power = avg;
 					else if (std::filesystem::exists(inst)) d.power = inst;
 				}
+				if (d.frequency.empty()) d.frequency = find_devfreq_frequency(device_link);
 
 				//? Skip cards with no readable signals — virtual GPUs, fresh-bound devices,
 				//? or driver states where nothing useful is exposed yet. Otherwise btop would
 				//? render an empty GPU entry every tick.
-				if (not (d.has_busy or d.has_vram or d.has_temp or d.has_freq or not d.power.empty())) {
-					Logger::debug("amdgpu sysfs: skipping {} — no readable metrics", device_link.string());
+				if (not (d.has_busy or d.has_vram or d.has_temp or not d.frequency.empty() or not d.power.empty())) {
+					Logger::debug("GPU sysfs: skipping {} — no readable metrics", device_link.string());
 					continue;
 				}
 
@@ -2121,19 +2143,20 @@ namespace Gpu {
 
 			device_count = (uint32_t)devices.size();
 			if (device_count == 0) {
-				Logger::debug("amdgpu sysfs: no AMD cards found in /sys/class/drm");
+				Logger::debug("GPU sysfs: no matching cards found in /sys/class/drm");
 				return false;
 			}
 
 			gpus.resize(gpus.size() + device_count);
 			gpu_names.resize(Nvml::device_count + Rsmi::device_count + device_count);
 			for (uint32_t i = 0; i < device_count; ++i) {
-				gpu_names[Nvml::device_count + Rsmi::device_count + i] =
-					fmt::format("AMD GPU (1002:{:04x})", devices[i].pci_device_id);
+				gpu_names[Nvml::device_count + Rsmi::device_count + i] = devices[i].vendor == device_vendor::apple
+					? "Apple AGX Graphics"
+					: fmt::format("AMD GPU (1002:{:04x})", devices[i].pci_device_id);
 			}
 
 			initialized = true;
-			Logger::info("Using amdgpu sysfs for {} AMD GPU(s)", device_count);
+			Logger::info("Using DRM sysfs for {} GPU(s)", device_count);
 			Asysfs::collect<1>(gpus.data() + Nvml::device_count + Rsmi::device_count);
 			return true;
 		}
@@ -2157,7 +2180,7 @@ namespace Gpu {
 					gpu.supported_functions = {
 						.gpu_utilization = d.has_busy,
 						.mem_utilization = false,
-						.gpu_clock = d.has_freq,
+						.gpu_clock = not d.frequency.empty(),
 						.mem_clock = false, //? only DPM table is exposed via pp_dpm_mclk, not the current frequency
 						.pwr_usage = not d.power.empty(),
 						.pwr_state = false,
@@ -2190,8 +2213,8 @@ namespace Gpu {
 					}
 				}
 
-				if (d.has_freq) {
-					gpu.gpu_clock_speed = (unsigned int)(read_ll(d.hwmon / "freq1_input") / 1'000'000); //? Hz → MHz
+				if (not d.frequency.empty()) {
+					gpu.gpu_clock_speed = (unsigned int)(read_ll(d.frequency) / 1'000'000); //? Hz → MHz
 				}
 
 				if (d.has_vram) {
