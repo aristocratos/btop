@@ -151,9 +151,9 @@ namespace Gpu {
 	//* Per-device container for GPU info
 	struct gpu_info {
 		std::unordered_map<string, deque<long long>> gpu_percent = {
-			{"gpu-totals", {}},
-			{"gpu-vram-totals", {}},
-			{"gpu-pwr-totals", {}},
+			{"gpu-totals", {0}},
+			{"gpu-vram-totals", {0}},
+			{"gpu-pwr-totals", {0}},
 		};
 		unsigned int gpu_clock_speed; // MHz
 
