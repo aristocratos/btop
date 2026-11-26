@@ -1269,12 +1269,21 @@ namespace Mem {
 					mem_meters[name] = Draw::Meter{mem_meter, name};
 			}
 			if (show_swap and has_swap) {
-				for (const auto& name : swap_names) {
-					if (use_graphs)
-						mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name.substr(5), safeVal(mem.percent, name), graph_symbol};
-					else
-						mem_meters[name] = Draw::Meter{mem_meter, name.substr(5)};
+				const auto add_swap_meters = [&](const auto& names) {
+					for (const auto& name : names) {
+						const string type = name.ends_with("_used") ? "used" : "free";
+						if (use_graphs)
+							mem_graphs[name] = Draw::Graph{mem_meter, graph_height, type, safeVal(mem.percent, name), graph_symbol};
+						else
+							mem_meters[name] = Draw::Meter{mem_meter, type};
+					}
+				};
+				if (has_zram) {
+					add_swap_meters(zram_names);
+					add_swap_meters(disk_swap_names);
 				}
+				else
+					add_swap_meters(swap_names);
 			}
 
 			//? Disk meters and io graphs
@@ -1351,22 +1360,31 @@ namespace Mem {
 
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
-		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
+		if (show_swap and has_swap and not swap_disk) {
+			if (has_zram) {
+				comb_names.insert(comb_names.end(), zram_names.begin(), zram_names.end());
+				comb_names.insert(comb_names.end(), disk_swap_names.begin(), disk_swap_names.end());
+			}
+			else
+				comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
+		}
 		for (const auto& name : comb_names) {
 			if (cy > height - 4) break;
 			string title;
-			if (name == "swap_used") {
+			if (is_in(name, "swap_used", "zram_used", "disk_swap_used")) {
 				if (cy > height - 5) break;
 				if (height - cy > 6) {
 					if (graph_height > 0) out += Mv::to(y+1+cy, x+1+cx) + divider;
 					cy += 1;
 				}
-				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + "Swap:" + rjust(floating_humanizer(safeVal(mem.stats, "swap_total"s)), mem_width - 8)
+				const string swap_title = name == "zram_used" ? "Zram:" : "Swap:";
+				const string total_name = name == "zram_used" ? "zram_total" : name == "disk_swap_used" ? "disk_swap_total" : "swap_total";
+				out += Mv::to(y+1+cy, x+1+cx) + Theme::c("title") + Fx::b + swap_title + rjust(floating_humanizer(safeVal(mem.stats, total_name)), mem_width - 8)
 					+ Theme::c("main_fg") + Fx::ub;
 				cy += 1;
 				title = "Used";
 			}
-			else if (name == "swap_free")
+			else if (is_in(name, "swap_free", "zram_free", "disk_swap_free"))
 				title = "Free";
 
 			if (title.empty()) title = capitalize(name);
@@ -1444,11 +1462,12 @@ namespace Mem {
 					if (cy > height - 3) break;
 					const auto disk = safeVal(disks, mount);
 					if (disk.name.empty() or not disk_meters_used.contains(mount)) continue;
+					const bool is_zram = mount == "zram";
 					auto comb_val = (not disk.io_read.empty() ? disk.io_read.back() + disk.io_write.back() : 0ll);
 					const string human_io = (comb_val > 0 ? (disk.io_write.back() > 0 and big_disk ? "▼"s : ""s) + (disk.io_read.back() > 0 and big_disk ? "▲"s : ""s)
 											+ floating_humanizer(comb_val, true) : "");
 					const string human_total = floating_humanizer(disk.total, not big_disk);
-					const string human_used = floating_humanizer(disk.used, not big_disk);
+					const string human_used = floating_humanizer(is_zram and disk.original > 0 ? disk.original : disk.used, not big_disk);
 					const string human_free = floating_humanizer(disk.free, not big_disk);
 
 					out += Mv::to(y+1+cy, x+1+cx) + divider + Theme::c("title") + Fx::b + uresize(disk.name, disks_width - 8) + Mv::to(y+1+cy, x+cx + disks_width - human_total.size())
@@ -1463,13 +1482,22 @@ namespace Mem {
 						if (++cy > height - 3) break;
 					}
 
-					out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Used:" + rjust(to_string(disk.used_percent) + '%', 4) : "U") + ' '
+					out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? (is_zram ? " Data:" : " Used:") + rjust(to_string(disk.used_percent) + '%', 4) : (is_zram ? "D" : "U")) + ' '
 						+ disk_meters_used.at(mount)(disk.used_percent) + rjust(human_used, (big_disk ? 9 : 5));
 					if (++cy > height - 3) break;
 
 					if (disk_meters_free.contains(mount) and cmp_less_equal(disks.size() * 3 + (show_io_stat ? disk_ios : 0), height - 1)) {
-						out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
-						+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
+						if (is_zram and (disk.original > 0 or disk.compressed > 0)) {
+							const string ratio = disk.original > 0 and disk.compressed > 0
+								? " " + fmt::format("{:.2f}x", (double)disk.original / disk.compressed) : "";
+							const string compression = floating_humanizer(disk.compressed, not big_disk) + ratio;
+							out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Comp:" : "C")
+								+ Mv::to(y+1+cy, x+cx + disks_width - compression.size()) + trans(compression);
+						}
+						else {
+							out += Mv::to(y+1+cy, x+1+cx) + (big_disk ? " Free:" + rjust(to_string(disk.free_percent) + '%', 4) : "F") + ' '
+							+ disk_meters_free.at(mount)(disk.free_percent) + rjust(human_free, (big_disk ? 9 : 5));
+						}
 						cy++;
 						if (cmp_less_equal(disks.size() * 4 + (show_io_stat ? disk_ios : 0), height - 1)) cy++;
 					}
@@ -2461,8 +2489,9 @@ namespace Draw {
 			else
 				mem_width = width - 1;
 
-			item_height = has_swap and not swap_disk ? 6 : 4;
-			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
+			const int swap_sections = has_swap and not swap_disk ? (has_zram ? 2 : 1) : 0;
+			item_height = 4 + 2 * swap_sections;
+			if (height - (2 + swap_sections) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)
 				mem_size = 2;
@@ -2473,7 +2502,7 @@ namespace Draw {
 			if (mem_size == 1) mem_meter += 6;
 
 			if (mem_graphs) {
-				graph_height = max(1, (int)round((double)((height - (has_swap and not swap_disk ? 2 : 1)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
+				graph_height = max(1, (int)round((double)((height - (1 + swap_sections)) - (mem_size == 3 ? 2 : 1) * item_height) / item_height));
 				if (graph_height > 1) mem_meter += 6;
 			}
 			else

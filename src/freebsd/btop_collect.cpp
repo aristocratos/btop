@@ -464,6 +464,7 @@ namespace Cpu {
 
 namespace Mem {
 	bool has_swap = false;
+	bool has_zram = false;
 	vector<string> fstab;
 	fs::file_time_type fstab_time;
 	int disk_ios = 0;
