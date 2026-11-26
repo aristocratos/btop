@@ -1289,7 +1289,7 @@ See [GPU compatibility](#gpu-compatibility) section for more about compiling wit
 
 ## Testing
 
-Testing requires [CMake](cmake.org). Tests are build by default and can be run with `ctest --test-dir <build>`.
+Testing requires [CMake](https://cmake.org). Tests are built by default and can be run with `ctest --test-dir <build>`.
 
 If you want to disable building tests, pass `-DBUILD_TESTING=OFF` to the configure step.
 
