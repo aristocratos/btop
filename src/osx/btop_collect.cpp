@@ -438,6 +438,11 @@ namespace Gpu {
 					.encoder_utilization = false,
 					.decoder_utilization = false
 				};
+
+				//? Seed deques so draw never calls .back() on an empty one before the first real sample
+				gpus_slice[0].gpu_percent.at("gpu-totals").push_back(0);
+				gpus_slice[0].gpu_percent.at("gpu-pwr-totals").push_back(0);
+				gpus_slice[0].gpu_percent.at("gpu-vram-totals").push_back(0);
 			}
 
 			//? Take new IOReport sample and compute delta
