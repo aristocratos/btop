@@ -213,7 +213,7 @@ void clean_quit(int sig) {
 	Global::quitting = true;
 	Runner::stop();
 	if (Global::_runner_started) {
-	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
+	#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__ || defined __sun
 		if (pthread_join(Runner::runner_id, nullptr) != 0) {
 			Logger::warning("Failed to join _runner thread on exit!");
 		}
@@ -253,7 +253,7 @@ void clean_quit(int sig) {
 
 	const auto excode = (sig != -1 ? sig : 0);
 
-#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__
+#if defined __APPLE__ || defined __OpenBSD__ || defined __NetBSD__ || defined __sun
 	_Exit(excode);
 #else
 	quick_exit(excode);
@@ -285,6 +285,23 @@ static void _crash_handler(const int sig) {
 	// Re-raise the signal to get default behavior (core dump)
 	std::signal(sig, SIG_DFL);
 	std::raise(sig);
+}
+
+//* Install a signal handler that stays installed.
+//* On Solaris/illumos signal() has System V semantics: the handler is reset to SIG_DFL after its first delivery.
+//* btop wakes Input::poll() with SIGUSR1 (Input::interrupt), so the second wake-up, e.g. during a resize, would
+//* hit the default action and terminate the process. sigaction() gives the persistent, BSD-style behaviour that
+//* glibc's signal() has on Linux.
+static void install_signal_handler(const int sig, void (*handler)(int)) {
+#if defined __sun
+	struct sigaction sa {};
+	sa.sa_handler = handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+	sigaction(sig, &sa, nullptr);
+#else
+	std::signal(sig, handler);
+#endif
 }
 
 static void _signal_handler(const int sig) {
@@ -1046,12 +1063,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 
 	//? Setup signal handlers for CTRL-C, CTRL-Z, resume and terminal resize
 	std::atexit(_exit_handler);
-	std::signal(SIGINT, _signal_handler);
-	std::signal(SIGTSTP, _signal_handler);
-	std::signal(SIGCONT, _signal_handler);
-	std::signal(SIGWINCH, _signal_handler);
-	std::signal(SIGUSR1, _signal_handler);
-	std::signal(SIGUSR2, _signal_handler);
+	install_signal_handler(SIGINT, _signal_handler);
+	install_signal_handler(SIGTSTP, _signal_handler);
+	install_signal_handler(SIGCONT, _signal_handler);
+	install_signal_handler(SIGWINCH, _signal_handler);
+	install_signal_handler(SIGUSR1, _signal_handler);
+	install_signal_handler(SIGUSR2, _signal_handler);
 	// Add crash handlers to restore terminal on crash
 	std::signal(SIGSEGV, _crash_handler);
 	std::signal(SIGABRT, _crash_handler);
