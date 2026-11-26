@@ -458,36 +458,68 @@ namespace Cpu {
 	};
 
 	string get_cpuName() {
-		string name;
-		ifstream cpuinfo(Shared::procPath / "cpuinfo");
-		if (cpuinfo.good()) {
-			for (string instr; getline(cpuinfo, instr, ':') and not instr.starts_with("model name");)
-				cpuinfo.ignore(SSmax, '\n');
-			if (cpuinfo.bad()) return name;
-			else if (not cpuinfo.eof()) {
-				cpuinfo.ignore(1);
-				getline(cpuinfo, name);
-			}
-			else if (fs::exists("/sys/devices")) {
-				for (const auto& d : fs::directory_iterator("/sys/devices")) {
-					if (string(d.path().filename()).starts_with("arm")) {
-						name = d.path().filename();
-						break;
-					}
-				}
-				if (not name.empty()) {
-					auto name_vec = ssplit(name, '_');
-					if (name_vec.size() < 2) return capitalize(name);
-					else return capitalize(name_vec.at(1)) + (name_vec.size() > 2 ? ' ' + capitalize(name_vec.at(2)) : "");
-				}
+    string name;
 
-			}
+    ifstream cpuinfo(Shared::procPath / "cpuinfo");
+    if (cpuinfo.good()) {
+        for (string instr; getline(cpuinfo, instr, ':')
+                and not instr.starts_with("model name");) {
+            cpuinfo.ignore(SSmax, '\n');
+        }
 
-			name = trim_name(name);
-		}
+        if (cpuinfo.bad()) {
+            Logger::warning("Failed reading {}", Shared::procPath / "cpuinfo");
+        }
+        else if (not cpuinfo.eof()) {
+            cpuinfo.ignore(1);
+            getline(cpuinfo, name);
+        }
+    }
 
-		return name;
-	}
+    if (name.empty() and fs::exists("/sys/firmware/devicetree/base/compatible")) {
+        const string compatible = readfile("/sys/firmware/devicetree/base/compatible", "");
+        static const std::regex apple_cpu_regex(R"(apple,t([0-9]+))");
+        std::smatch match;
+        if (std::regex_search(compatible, match, apple_cpu_regex)) {
+            const auto cpu_id = static_cast<unsigned int>(std::stoul(match[1].str()));
+            Logger::debug("Matched Apple CPU ID: {}", cpu_id);
+            name = apple_cpu_id_to_name(cpu_id);
+            Logger::debug("Resolved Apple CPU name: '{}'", name);
+        }
+    }
+
+	if (name.empty() and fs::exists("/sys/firmware/devicetree/base/compatible")) {
+        const string compatible = readfile("/sys/firmware/devicetree/base/compatible", "");
+        static const std::regex apple_cpu_regex(R"(apple,t([0-9]+))");
+        std::smatch match;
+        if (std::regex_search(compatible, match, apple_cpu_regex)) {
+            const auto cpu_id = static_cast<unsigned int>(std::stoul(match[1].str()));
+            Logger::debug("Matched Apple CPU ID: {}", cpu_id);
+            name = apple_cpu_id_to_name(cpu_id);
+            Logger::debug("Resolved Apple CPU name: '{}'", name);
+        }
+    }
+
+    if (name.empty() and fs::exists("/sys/devices")) {
+        for (const auto& d : fs::directory_iterator("/sys/devices")) {
+            if (string(d.path().filename()).starts_with("arm")) {
+                name = d.path().filename();
+                break;
+            }
+        }
+
+        if (not name.empty()) {
+            auto name_vec = ssplit(name, '_');
+            if (name_vec.size() < 2)
+                return capitalize(name);
+
+            return capitalize(name_vec.at(1))
+                + (name_vec.size() > 2 ? ' ' + capitalize(name_vec.at(2)) : "");
+        }
+    }
+
+    return trim_name(name);
+}
 
 	bool get_sensors() {
 		bool got_cpu = false, got_coretemp = false;
@@ -1100,7 +1132,7 @@ namespace Cpu {
                }) |
                std::views::join | std::ranges::to<std::vector<std::int32_t>>();
     }
-
+	
 	auto collect(bool no_update) -> cpu_info& {
 		if (Runner::stopping or (no_update and not current_cpu.cpu_percent.at("total").empty())) return current_cpu;
 		auto& cpu = current_cpu;
