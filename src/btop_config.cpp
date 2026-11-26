@@ -250,7 +250,7 @@ namespace Config {
 
 		{"show_battery_watts",	"#* Show power stats of battery next to charge indicator."},
 
-		{"log_level", 			"#* Set loglevel for \"~/.local/state/btop.log\" levels are: \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
+		{"log_level", 			"#* Set loglevel for \"~/.local/state/btop.log\" levels are: \"DISABLED\" \"ERROR\" \"WARNING\" \"INFO\" \"DEBUG\".\n"
 								"#* The level set includes all lower levels, i.e. \"DEBUG\" will show all logging info."},
 		{"save_config_on_exit",  "#* Automatically save current settings to config file on exit."},
 	#ifdef GPU_SUPPORT

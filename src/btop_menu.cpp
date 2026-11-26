@@ -394,7 +394,7 @@ namespace Menu {
 			{"log_level",
 				"Set loglevel for error.log",
 				"",
-				"\"ERROR\", \"WARNING\", \"INFO\" and \"DEBUG\".",
+				"\"DISABLED\", \"ERROR\", \"WARNING\", \"INFO\" and \"DEBUG\".",
 				"",
 				"The level set includes all lower levels,",
 				"i.e. \"DEBUG\" will show all logging info."},
