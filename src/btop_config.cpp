@@ -112,11 +112,11 @@ namespace Config {
 #ifdef GPU_SUPPORT
 		{"graph_symbol_gpu", 	"# Graph symbol to use for graphs in gpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
 #endif
-		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_mem", 	"# Graph symbol to use for graphs in mem box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"graph_symbol_net", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_net", 	"# Graph symbol to use for graphs in net box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
-		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in cpu box, \"default\", \"braille\", \"block\" or \"tty\"."},
+		{"graph_symbol_proc", 	"# Graph symbol to use for graphs in proc box, \"default\", \"braille\", \"block\" or \"tty\"."},
 
 		{"shown_boxes", 		"#* Manually set which boxes to show. Available values are \"cpu mem net proc\" and \"gpu0\" through \"gpu5\", separate values with whitespace."},
 
