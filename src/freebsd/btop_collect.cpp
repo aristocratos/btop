@@ -1352,6 +1352,17 @@ namespace Proc {
 		}
 
 		numpids = (int)current_procs.size() - filter_found;
+
+		if (Config::getB("proc_grouping") and not tree) {
+			static vector<proc_info> grouped_view;
+			grouped_view = current_procs;
+			group_processes_by_name(grouped_view);
+			proc_sorter(grouped_view, sorting, reverse, false);
+			expand_grouped_procs(grouped_view);
+			numpids = (int)grouped_view.size();
+			return grouped_view;
+		}
+
 		return current_procs;
 	}
 }  // namespace Proc

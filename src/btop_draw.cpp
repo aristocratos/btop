@@ -2053,6 +2053,7 @@ namespace Proc {
 				selected_pid = (int)p.pid;
 				selected_name = p.name;
 				selected_depth = p.depth;
+				selected_grouped = p.group_count > 1 and not p.group_member;
 			}
 
 			//? Update graphs for processes with above 0.0% cpu usage, delete if below 0.1% 10x times
@@ -2111,9 +2112,17 @@ namespace Proc {
 
 			//? Normal view line
 			if (not proc_tree) {
+				string pid_field = rjust(to_string(p.pid), 8);
+				string name_prefix = "    ";
+				if (p.group_count > 1)
+					pid_field = string(7, ' ') + (p.group_expanded ? "▼" : "▶");
+				else if (p.group_member)
+					name_prefix = "    - ";
+				const string name_field = name_prefix
+					+ (p.group_count > 1 ? p.name + " (" + to_string(p.group_count) + ")" : p.name);
 				out += Mv::to(y+2+lc, x+1)
-					+ g_color + rjust(to_string(p.pid), 8) + ' '
-					+ c_color + ljust(p.name, prog_size, true) + ' ' + end
+					+ g_color + pid_field + ' '
+					+ c_color + ljust(name_field, prog_size, true) + ' ' + end
 					+ (cmd_size > 0 ? g_color + ljust(san_cmd, cmd_size, true, p_wide_cmd[p.pid]) + Mv::to(y+2+lc, x+11+prog_size+cmd_size) + ' ' : "");
 			}
 			//? Tree view line
@@ -2236,6 +2245,7 @@ namespace Proc {
 
 		if (selected == 0 and selected_pid != 0) {
 			selected_pid = 0;
+			selected_grouped = false;
 			selected_name.clear();
 		}
 		redraw = false;

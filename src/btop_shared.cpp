@@ -22,6 +22,7 @@ tab-size = 4
 #include <ranges>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "btop_config.hpp"
@@ -143,6 +144,84 @@ bool set_priority(pid_t pid, int priority) {
 				}
 			}
 		}
+	}
+
+	std::unordered_set<string> expanded_proc_groups;
+	bool selected_grouped = false;
+
+	void toggle_proc_group(const string& name) {
+		if (name.empty())
+			return;
+		if (expanded_proc_groups.contains(name))
+			expanded_proc_groups.erase(name);
+		else
+			expanded_proc_groups.insert(name);
+	}
+
+	void group_processes_by_name(vector<proc_info>& proc_vec) {
+		struct Acc {
+			proc_info head;
+			vector<proc_info> members;
+			bool init = false;
+		};
+		std::unordered_map<string, Acc> buckets;
+		vector<string> order;
+		order.reserve(proc_vec.size());
+		for (const auto& p : proc_vec) {
+			if (p.filtered)
+				continue;
+			auto& b = buckets[p.name];
+			if (not b.init) {
+				b.init = true;
+				order.push_back(p.name);
+				b.head = p;
+				b.head.group_count = 1;
+				b.head.group_member = false;
+				b.head.group_expanded = false;
+				b.head.group_members.clear();
+			}
+			else {
+				b.head.mem += p.mem;
+				b.head.cpu_p += p.cpu_p;
+				b.head.cpu_c += p.cpu_c;
+				b.head.threads += p.threads;
+				++b.head.group_count;
+				if (p.pid < b.head.pid)
+					b.head.pid = p.pid;
+			}
+			if (expanded_proc_groups.contains(p.name))
+				b.members.push_back(p);
+		}
+		vector<proc_info> grouped;
+		grouped.reserve(order.size());
+		for (const auto& name : order) {
+			auto& b = buckets.at(name);
+			if (b.head.group_count > 1 and expanded_proc_groups.contains(name))
+				b.head.group_members = std::move(b.members);
+			else
+				b.head.group_members.clear();
+			grouped.push_back(std::move(b.head));
+		}
+		proc_vec = std::move(grouped);
+	}
+
+	void expand_grouped_procs(vector<proc_info>& proc_vec) {
+		vector<proc_info> out;
+		out.reserve(proc_vec.size());
+		for (auto& p : proc_vec) {
+			auto members = std::move(p.group_members);
+			p.group_members.clear();
+			p.group_expanded = p.group_count > 1 and not members.empty();
+			out.push_back(std::move(p));
+			for (auto& m : members) {
+				m.group_member = true;
+				m.group_count = 0;
+				m.group_expanded = false;
+				m.group_members.clear();
+				out.push_back(std::move(m));
+			}
+		}
+		proc_vec = std::move(out);
 	}
 
 	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused, int& c_index, const int index_max, bool collapsed) {

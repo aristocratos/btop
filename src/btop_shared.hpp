@@ -370,6 +370,7 @@ namespace Proc {
 	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth, toggle_children, collapse_all;
 	extern int scroll_pos;
 	extern string selected_name;
+	extern bool selected_grouped;
 	extern atomic<bool> resized;
 
 	//? Contains the valid sorting options for processes
@@ -401,6 +402,10 @@ namespace Proc {
 		size_t tree_index{};
 		bool collapsed{};
 		bool filtered{};
+		size_t group_count{};
+		bool group_member{};
+		bool group_expanded{};
+		vector<proc_info> group_members{};
 	};
 
 	//* Container for process info box
@@ -436,6 +441,11 @@ namespace Proc {
 
 	//* Sort vector of proc_info's
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
+
+	//* Aggregate processes with the same program name (flat group-by-name)
+	void group_processes_by_name(vector<proc_info>& proc_vec);
+	void expand_grouped_procs(vector<proc_info>& proc_vec);
+	void toggle_proc_group(const string& name);
 
 	//* Recursive sort of process tree
 	void tree_sort(vector<tree_proc>& proc_vec, const string& sorting, bool reverse, bool paused,

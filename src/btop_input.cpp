@@ -348,6 +348,11 @@ namespace Input {
 					no_update = false;
 					Config::set("update_following", true);
 				}
+				else if (key == "g") {
+					Config::flip("proc_grouping");
+					no_update = false;
+					Config::set("update_following", true);
+				}
 				else if (key == "E" and Config::getB("proc_tree")) {
 					atomic_wait(Runner::active);
 					Proc::collapse_all = 1;
@@ -459,7 +464,13 @@ namespace Input {
 						keep_going = true;
 				}
 				else if (is_in(key, "enter", "info_enter")) {
-					if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
+					if (key == "enter" and Config::getB("proc_grouping") and not Config::getB("proc_tree")
+						and Proc::selected_grouped and Config::getI("proc_selected") > 0) {
+						Proc::toggle_proc_group(Proc::selected_name);
+						no_update = false;
+						Config::set("update_following", true);
+					}
+					else if (Config::getI("proc_selected") == 0 and not Config::getB("show_detailed")) {
 						return;
 					}
 					else if (Config::getI("proc_selected") > 0 and Config::getI("detailed_pid") != Config::getI("selected_pid")) {

@@ -128,6 +128,7 @@ namespace Config {
 		{"proc_reversed",		"#* Reverse sorting order, True or False."},
 
 		{"proc_tree",			"#* Show processes as a tree."},
+		{"proc_grouping",		"#* Group processes with the same program name and sum CPU/mem (flat view only)."},
 
 		{"proc_colors", 		"#* Use the cpu graph colors in the process list."},
 
@@ -320,6 +321,7 @@ namespace Config {
 		{"rounded_corners", true},
 		{"proc_reversed", false},
 		{"proc_tree", false},
+		{"proc_grouping", false},
 		{"proc_colors", true},
 		{"proc_gradient", true},
 		{"proc_per_core", false},
