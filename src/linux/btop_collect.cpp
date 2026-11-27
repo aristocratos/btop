@@ -457,6 +457,23 @@ namespace Cpu {
 			{"guest_nice", 0}
 	};
 
+	//? Apple Silicon has no "model name" in /proc/cpuinfo, but the device tree model names the chip,
+	//? e.g. "Apple Mac Studio (M1 Max, 2022)" or "Apple MacBook Pro (14-inch, M1 Pro, 2021)".
+	string get_appleChipName() {
+		string model = readfile("/sys/firmware/devicetree/base/model");
+		model = model.substr(0, model.find('\0'));
+		const auto open = model.find('(');
+		const auto close = model.rfind(')');
+		if (not model.starts_with("Apple ") or open == string::npos or close == string::npos or close < open) return "";
+
+		for (const auto& part : ssplit(model.substr(open + 1, close - open - 1), ',')) {
+			const string chip { trim(part) };
+			if (chip.size() > 1 and (chip[0] == 'M' or chip[0] == 'A') and isdigit(chip[1]))
+				return "Apple " + chip;
+		}
+		return "";
+	}
+
 	string get_cpuName() {
 		string name;
 		ifstream cpuinfo(Shared::procPath / "cpuinfo");
@@ -468,7 +485,7 @@ namespace Cpu {
 				cpuinfo.ignore(1);
 				getline(cpuinfo, name);
 			}
-			else if (fs::exists("/sys/devices")) {
+			else if (name = get_appleChipName(); name.empty() and fs::exists("/sys/devices")) {
 				for (const auto& d : fs::directory_iterator("/sys/devices")) {
 					if (string(d.path().filename()).starts_with("arm")) {
 						name = d.path().filename();
