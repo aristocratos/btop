@@ -1041,22 +1041,54 @@ namespace Cpu {
 		return consumption;
 	}
 
+	//? Apple Silicon has no RAPL. The SMC reports power through the macsmc_hwmon driver instead,
+	//? but it has no CPU-only reading, so "Total System Power" is the closest one available.
+	fs::path find_smc_power_input()
+	{
+		std::error_code ec;
+		for (const auto& dir : fs::directory_iterator("/sys/class/hwmon", ec)) {
+			if (readfile(dir.path() / "name") != "macsmc_hwmon") continue;
+			for (const auto& file : fs::directory_iterator(dir.path(), ec)) {
+				const string filename = file.path().filename();
+				if (not filename.starts_with("power") or not filename.ends_with("_label")) continue;
+				if (readfile(file.path()) == "Total System Power") {
+					return dir.path() / (filename.substr(0, filename.size() - 5) + "input");
+				}
+			}
+		}
+		return {};
+	}
+
 	float get_cpuConsumptionWatts()
 	{
 		static long long previous_usage = 0;
 		static long long previous_timestamp = 0;
+		static fs::path smc_power_input;
 
 		if (previous_usage == 0)
 		{
 			previous_usage = get_cpuConsumptionUJoules();
 			previous_timestamp = get_monotonicTimeUSec();
-			supports_watts = (previous_usage > 0);
+			if (previous_usage <= 0)
+				smc_power_input = find_smc_power_input();
+			supports_watts = (previous_usage > 0 or not smc_power_input.empty());
 			return 0;
 		}
 
 		if (!supports_watts)
 		{
 			return -1;
+		}
+
+		if (not smc_power_input.empty())
+		{
+			//? hwmon reports power in microwatts
+			try {
+				return stoll(readfile(smc_power_input, "0")) / 1'000'000.0F;
+			}
+			catch (const std::invalid_argument&) { }
+			catch (const std::out_of_range&) { }
+			return 0;
 		}
 
 		auto current_timestamp = get_monotonicTimeUSec();
