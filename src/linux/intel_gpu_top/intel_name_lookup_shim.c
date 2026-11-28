@@ -83,7 +83,8 @@ char *get_intel_device_name(const char *device_id) {
     char dev_name[256];
     char full_name[256];
     const struct intel_device_info *info = intel_get_device_info(devid);
-    if (info) {
+    // Unknown IDs get the generic entry with graphics_ver 0
+    if (info && info->graphics_ver) {
         if (info->codename == NULL) {
             strcpy(dev_name, "(unknown)");
         } else {
