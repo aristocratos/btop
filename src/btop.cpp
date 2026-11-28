@@ -694,9 +694,9 @@ namespace Runner {
 			//! DEBUG stats -->
 			if (Global::debug and not Menu::active) {
 				output += fmt::format("{pre}{box:5.5} {collect:>12.12} {draw:>12.12}{post}",
-					"pre"_a = debug_bg + Theme::c("title") + Fx::b,
+					"pre"_a = concat(debug_bg, Theme::c("title"), Fx::b),
 					"box"_a = "box", "collect"_a = "collect", "draw"_a = "draw",
-					"post"_a = Theme::c("main_fg") + Fx::ub
+					"post"_a = concat(Theme::c("main_fg"), Fx::ub)
 				);
 				static auto loc = std::locale(std::locale::classic(), new MyNumPunct);
 			#ifdef GPU_SUPPORT
@@ -720,7 +720,7 @@ namespace Runner {
 			const bool term_sync = Config::getB("terminal_sync");
 			cout << (term_sync ? Term::sync_start : "") << (conf.overlay.empty()
 					? output
-					: (output.empty() ? "" : Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
+					: (output.empty() ? output : C{} + Fx::ub + Theme::c("inactive_fg") + Fx::uncolor(output)) + conf.overlay)
 				<< (term_sync ? Term::sync_end : "") << flush;
 		}
 		//* ----------------------------------------------- THREAD LOOP -----------------------------------------------
