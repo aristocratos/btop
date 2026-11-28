@@ -317,6 +317,17 @@ namespace Gpu {
 		uint32_t device_count = 0;
 		vector<device_paths> devices;
 	}
+
+	//? Apple AGX GPU (drm/asahi, "aurora" kernel). Reads utilisation from the driver's agx_stats and
+	//? gpu_memory sysfs files; on G17 the driver reports power, temperature and frequency as
+	//? "unsupported", so only utilisation and memory are exported.
+	namespace Agx {
+		bool initialized = false;
+		bool init();
+		template <bool is_init> bool collect(gpu_info* gpus_slice);
+		uint32_t device_count = 0;
+		vector<std::filesystem::path> devices;
+	}
 }
 
 #endif // GPU_SUPPORT
@@ -403,6 +414,10 @@ namespace Shared {
 
 		if (shown_gpus.contains("intel")) {
 			Gpu::Intel::init();
+		}
+
+		if (shown_gpus.contains("apple")) {
+			Gpu::Agx::init();
 		}
 
 		if (not Gpu::gpu_names.empty()) {
@@ -2211,6 +2226,107 @@ namespace Gpu {
 		template bool collect<1>(gpu_info*);
 	}
 
+	namespace Agx {
+		//? readfile() joins lines without separators; the key/value parser needs the newlines.
+		static string slurp(const std::filesystem::path& path) {
+			std::ifstream file(path);
+			return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+		}
+
+		//? Value of "<key> <integer>" in a sysfs key/value dump; nullopt for a missing key or a
+		//? non-numeric value such as "unsupported".
+		static std::optional<long long> value_of(const string& text, const string& key) {
+			const string needle = key + ' ';
+			for (size_t pos = text.find(needle); pos != string::npos; pos = text.find(needle, pos + 1)) {
+				if (pos != 0 and text[pos - 1] != '\n') continue;
+				try {
+					return std::stoll(text.substr(pos + needle.size()));
+				} catch (const std::exception&) {
+					return std::nullopt;
+				}
+			}
+			return std::nullopt;
+		}
+
+		bool init() {
+			if (initialized) return false;
+			devices.clear();
+
+			std::error_code ec;
+			for (const auto& entry : std::filesystem::directory_iterator("/sys/class/drm", ec)) {
+				if (not Asysfs::is_card_node(entry.path().filename().string())) continue;
+				const auto device = entry.path() / "device";
+				if (std::filesystem::exists(device / "agx_stats")) devices.push_back(device);
+			}
+			device_count = (uint32_t)devices.size();
+			if (device_count == 0) {
+				Logger::debug("apple agx: no agx_stats found in /sys/class/drm");
+				return false;
+			}
+
+			const size_t offset = Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count;
+			gpus.resize(gpus.size() + device_count);
+			gpu_names.resize(offset + device_count);
+			for (uint32_t i = 0; i < device_count; ++i) {
+				//? uevent carries e.g. "OF_COMPATIBLE_0=apple,agx-g17s".
+				string name = "Apple GPU";
+				const string uevent = slurp(devices[i] / "uevent");
+				if (const auto pos = uevent.find("OF_COMPATIBLE_0=apple,"); pos != string::npos) {
+					name += " (" + uevent.substr(pos + 22, uevent.find('\n', pos) - pos - 22) + ")";
+				}
+				gpu_names[offset + i] = name;
+			}
+
+			initialized = true;
+			Logger::info("Using drm/asahi agx_stats for {} Apple GPU(s)", device_count);
+			Agx::collect<1>(gpus.data() + offset);
+			return true;
+		}
+
+		template <bool is_init> bool collect(gpu_info* gpus_slice) {
+			if (not initialized) return false;
+
+			for (uint32_t i = 0; i < device_count; ++i) {
+				gpu_info& gpu = gpus_slice[i];
+				const auto& dev = devices[i];
+
+				if constexpr (is_init) {
+					gpu.supported_functions = {
+						.gpu_utilization = true,
+						.mem_utilization = false,
+						.gpu_clock = false,
+						.mem_clock = false,
+						.pwr_usage = false,
+						.pwr_state = false,
+						.temp_info = false,
+						.mem_total = true,
+						.mem_used = true,
+						.pcie_txrx = false,
+						.encoder_utilization = false,
+						.decoder_utilization = false,
+					};
+					gpu.pwr_max_usage = 0;
+				}
+
+				//? Utilisation is "unsupported" while the firmware has no fresh sample (stale/idle-off).
+				const auto util = value_of(slurp(dev / "agx_stats"), "util_device_percent");
+				gpu.gpu_percent.at("gpu-totals").push_back(std::clamp(util.value_or(0), 0LL, 100LL));
+
+				const string memory = slurp(dev / "gpu_memory");
+				gpu.mem_total = value_of(memory, "limit").value_or(0);
+				gpu.mem_used = value_of(memory, "user_resident").value_or(0) + value_of(memory, "kernel_resident").value_or(0);
+				if (gpu.mem_total > 0) {
+					gpu.gpu_percent.at("gpu-vram-totals").push_back(
+						std::clamp((long long)std::round((double)gpu.mem_used * 100.0 / (double)gpu.mem_total), 0LL, 100LL));
+				}
+			}
+			return true;
+		}
+
+		template bool collect<0>(gpu_info*);
+		template bool collect<1>(gpu_info*);
+	}
+
 	//? Collect data from GPU-specific libraries
 	auto collect(bool no_update) -> vector<gpu_info>& {
 		if (Runner::stopping or (no_update and not gpus.empty())) return gpus;
@@ -2222,6 +2338,7 @@ namespace Gpu {
 		Rsmi::collect<0>(gpus.data() + Nvml::device_count); // size = Rsmi::device_count
 		Asysfs::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count); // size = Asysfs::device_count
 		Intel::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count); // size = Intel::device_count
+		Agx::collect<0>(gpus.data() + Nvml::device_count + Rsmi::device_count + Asysfs::device_count + Intel::device_count); // size = Agx::device_count
 
 		//* Calculate average usage
 		long long avg = 0;
