@@ -48,6 +48,7 @@ namespace Config {
 	extern const vector<string> temp_scales;
 #ifdef __linux__
 	extern const vector<string> freq_modes;
+	extern const vector<string> show_core_freq_values;
 #endif
 #ifdef GPU_SUPPORT
 	extern const  vector<string> show_gpu_values;
