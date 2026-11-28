@@ -888,7 +888,10 @@ namespace Cpu {
 			}
 		}
 
-		sensor_future = std::async(std::launch::async, collect_sensors);
+		//? Only launch a new collection once the previous result has been consumed,
+		//? assigning over a still running std::async future blocks until it finishes
+		if (not sensor_future.valid())
+			sensor_future = std::async(std::launch::async, collect_sensors);
 	}
 
 	string get_cpuHz() {
