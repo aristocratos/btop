@@ -1256,21 +1256,11 @@ namespace Gpu {
 
 			//? Dynamic loading & linking
 			//? Try possible library names for libnvidia-ml.so
+			//? The runtime SONAME goes first, the unversioned name is usually only a development symlink
 			const array libNvAlts = {
-				"libnvidia-ml.so",
 				"libnvidia-ml.so.1",
+				"libnvidia-ml.so",
 			};
-
-			for (const auto& l : libNvAlts) {
-				nvml_dl_handle = dlopen(l, RTLD_LAZY);
-				if (nvml_dl_handle != nullptr) {
-					break;
-				}
-			}
- 			if (!nvml_dl_handle) {
-				Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: {}", dlerror());
- 				return false;
- 			}
 
 			auto load_nvml_sym = [&](const char sym_name[]) {
 				auto sym = dlsym(nvml_dl_handle, sym_name);
@@ -1281,7 +1271,9 @@ namespace Gpu {
 				} else return sym;
 			};
 
-            #define LOAD_SYM(NAME)  if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
+			//? With reset = true, every function pointer is set back to nullptr instead of being loaded
+			auto load_nvml_syms = [&](bool reset) {
+            #define LOAD_SYM(NAME)  if (reset) NAME = nullptr; else if ((NAME = (decltype(NAME))load_nvml_sym(#NAME)) == nullptr) return false
 
 		    LOAD_SYM(nvmlErrorString);
 		    LOAD_SYM(nvmlInit);
@@ -1302,13 +1294,38 @@ namespace Gpu {
 			LOAD_SYM(nvmlDeviceGetDecoderUtilization);
 
             #undef LOAD_SYM
+				return true;
+			};
 
-			//? Function calls
-			nvmlReturn_t result = nvmlInit();
-    		if (result != NVML_SUCCESS) {
-    			Logger::debug("Failed to initialize NVML, NVIDIA GPUs will not be detected: {}", nvmlErrorString(result));
-    			return false;
-    		}
+			//? A library that loads can still fail to initialize, e.g. on WSL2 where a candidate name
+			//? can resolve to the native Linux driver library instead of the WSL one in /usr/lib/wsl/lib,
+			//? so unload it and try the next candidate
+			nvmlReturn_t result = NVML_SUCCESS;
+			string load_error, init_error;
+			for (const auto& l : libNvAlts) {
+				nvml_dl_handle = dlopen(l, RTLD_LAZY);
+				if (nvml_dl_handle == nullptr) {
+					if (auto err = dlerror(); err != nullptr) load_error = err;
+					continue;
+				}
+				if (load_nvml_syms(false)) {
+					result = nvmlInit();
+					if (result == NVML_SUCCESS) break;
+					init_error = nvmlErrorString(result);
+					Logger::debug("NVML: Failed to initialize {}: {}", l, init_error);
+				}
+				//? Don't leave any function pointer pointing into the library that is unloaded below
+				load_nvml_syms(true);
+				dlclose(nvml_dl_handle);
+				nvml_dl_handle = nullptr;
+			}
+			if (!nvml_dl_handle) {
+				if (not init_error.empty())
+					Logger::debug("Failed to initialize NVML, NVIDIA GPUs will not be detected: {}", init_error);
+				else if (not load_error.empty())
+					Logger::info("Failed to load libnvidia-ml.so, NVIDIA GPUs will not be detected: {}", load_error);
+				return false;
+			}
 
 			//? Device count
 			result = nvmlDeviceGetCount(&device_count);
