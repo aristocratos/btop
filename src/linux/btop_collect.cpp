@@ -541,10 +541,12 @@ namespace Cpu {
 					const string pname = readfile(path / "name", path.filename());
 					for (const auto & file : fs::directory_iterator(path)) {
 						const string file_suffix = "input";
-						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
+						const string filename = file.path().filename();
+						const int file_id = atoi(filename.c_str() + 4); // skip "temp" prefix
 						string file_path = file.path();
 
-						if (!file_path.contains(file_suffix) or file_path.contains("nvme")) {
+						//? hwmon devices can also have fan, in, curr and power inputs, which are not temperatures
+						if (not filename.starts_with("temp") or not filename.ends_with("_input") or file_path.contains("nvme")) {
 							continue;
 						}
 
